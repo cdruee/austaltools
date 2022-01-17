@@ -137,34 +137,34 @@ def read_nc(ncfile, lat, lon):
     return values
 
 # ----------------------------------------------------
-
-def sun_rise_set(time: dt.datetime, lat):
-    # if arguments are scalars, convert to arrays
-    try:
-        _ = len(time)
-        scalar = False
-    except TypeError:
-        time = np.array([time])
-        scalar = True
-     #
-    # Sonnenstand
-    B = np.pi*lat/180.
-    T = np.array([x.timetuple()[7] for x in time])      # day of year
-    deklination = 0.4095 * np.sin(0.016906 * (T - 80.086))
-    zeitdifferenz = 12 * np.arccos((np.sin(-0.0145)
-        - np.sin(B) * np.sin(deklination))/
-                                        (np.cos(B)*np.cos(deklination)))/np.pi
-    zeitgleichung = -0.171 * np.sin(0.0337 * np.sin((0.0337 * T + 0.465)
-        - 0.1299 * np.sin(0.01787 * T - 0.168)))
-    #
-    # auf/unter UTC
-    s_rise = 12. - zeitdifferenz - zeitgleichung
-    s_set  = 12. + zeitdifferenz - zeitgleichung
-
-    if scalar:
-        s_rise = s_rise[0]
-        s_set = s_set[0]
-    return s_rise,s_set
+#
+#def sun_rise_set(time: dt.datetime, lat):
+#    # if arguments are scalars, convert to arrays
+#    try:
+#        _ = len(time)
+#        scalar = False
+#    except TypeError:
+#        time = np.array([time])
+#        scalar = True
+#     #
+#    # Sonnenstand
+#    B = np.pi*lat/180.
+#    T = np.array([x.timetuple()[7] for x in time])      # day of year
+#    deklination = 0.4095 * np.sin(0.016906 * (T - 80.086))
+#    zeitdifferenz = 12 * np.arccos((np.sin(-0.0145)
+#        - np.sin(B) * np.sin(deklination))/
+#                                        (np.cos(B)*np.cos(deklination)))/np.pi
+#    zeitgleichung = -0.171 * np.sin(0.0337 * np.sin((0.0337 * T + 0.465)
+#        - 0.1299 * np.sin(0.01787 * T - 0.168)))
+#    #
+#    # auf/unter UTC
+#    s_rise = 12. - zeitdifferenz - zeitgleichung
+#    s_set  = 12. + zeitdifferenz - zeitgleichung
+#
+#    if scalar:
+#        s_rise = s_rise[0]
+#        s_set = s_set[0]
+#    return s_rise,s_set
 
 # ----------------------------------------------------
 
@@ -515,25 +515,25 @@ def klug_manier_stability_class(time,z0,L):
         # | V (sehr labil)     |  -4    -5  -7   -10  -14  -22  -34  -45  -56
         #
         if z0[i] <= 0.013:
-            divs = [ -14.3,  -5.7, 0.,  10.9,  50.0]
+            divs = [ -50.0, -14.3,  -5.7, 0.,  10.9,  50.0]
         elif z0[i] <= 0.028:
-            divs = [ -18.5,  -7.2, 0.,  14.0,  62.0]
+            divs = [ -64.0, -18.5,  -7.2, 0.,  14.0,  62.0]
         elif z0[i] <= 0.066:
-            divs = [ -26.7, -10.2, 0.,  20.0,  88.0]
+            divs = [ -90.0, -26.7, -10.2, 0.,  20.0,  88.0]
         elif z0[i] <= 0.133:
-            divs = [ -35.3, -14.3, 0.,  26.5, 119.9]
+            divs = [-119.9, -35.3, -14.3, 0.,  26.5, 119.9]
         elif z0[i] <= 0.28:
-            divs = [ -47.7, -19.8, 0.,  37.2, 165.9]
+            divs = [-161.9, -47.7, -19.8, 0.,  37.2, 165.9]
         elif z0[i] <= 0.66:
-            divs = [ -77.3, -31.4, 0.,  62.1, 277.6]
+            divs = [-259.7, -77.3, -31.4, 0.,  62.1, 277.6]
         elif z0[i] <= 1.20:
-            divs = [-116.6, -48.2, 0., 100.7, 445.0]
+            divs = [-391.2,-116.6, -48.2, 0., 100.7, 445.0]
         elif z0[i] <= 1.71:
-            divs = [-154.6, -63.9, 0., 139.5, 618.1]
+            divs = [-518.7,-154.6, -63.9, 0., 139.5, 618.1]
         else:
-            divs = [-192.9, -79.5, 0., 182.9, 808.7]
+            divs = [-649.9,-192.9, -79.5, 0., 182.9, 808.7]
         #
-        k = [4, 5, 6, 1, 2]
+        k = [3, 4, 5, 6, 1, 2]
         for j,d in enumerate(divs):
            if L[i] <= d:
                KM_class[i] = k[j]
@@ -548,7 +548,7 @@ def klug_manier_stability_class(time,z0,L):
 
 # ----------------------------------------------------
 
-def pasquill_guifford_scheme(time, ff, tcc, lat, lon, ceil):
+def pasquill_taylor_scheme(time, ff, tcc, lat, lon, ceil):
     # if arguments are scalars, convert to arrays
     if pd.api.types.is_scalar(time):
         scalar = True
@@ -561,7 +561,6 @@ def pasquill_guifford_scheme(time, ff, tcc, lat, lon, ceil):
     # auf/unter UTC
     s_rise, _, s_set = m.fast_rise_transit_set(time,lat,lon)
     s_ele, _ = m.fast_sun_position(time, lat, lon)
-    hour = np.array([(x.hour + x.minute/60.) for x in time])
     class_letter={1: 'A',
                   2: 'B',
                   3: 'C',
@@ -712,6 +711,73 @@ def taylor_insolation_class(solar_altitude):
 
 # ----------------------------------------------------
 
+def pasquill_guifford_stability_class(time,z0,L):
+
+    # if arguments are scalars, convert to arrays
+    try:
+        n = len(time)
+        scalar = False
+    except TypeError:
+        time = np.array([time])
+        z0 = np.array([z0])
+        L =  np.array([L])
+        n = len(time)
+        scalar = True
+    sclass = np.zeros(time.shape)
+    for i in range(n):
+
+        # Class Boundaries scraped from Golder (1972) Fig 5
+        # converted from 1/L to L and interpolated to
+        # autal2000 roughness classes
+        #
+        # z0 (m)   A/B       B/C       C/D                D/E        E/F
+        #0.01    -9.33    -15.15    -41.78 99999.00    143.77    48.38
+        #0.02   -10.02    -16.92    -48.84 99999.00    149.95    58.94
+        #0.05   -11.20    -20.53    -63.48 99999.00    192.55    77.07
+        #0.1    -12.43    -25.09    -82.41 99999.00    235.50    92.79
+        #0.2    -14.15    -32.50   -116.55 99999.00    280.87   109.74
+        #0.5    -17.65    -63.51   -236.14 99999.00    349.35   135.75
+        #1      -23.19   -118.71   -442.97 99999.00    453.35   175.27
+        #1.5    -28.73   -173.91   -649.79 99999.00    557.36   214.80
+        #2      -19.25   -229.11   -856.62 99999.00    661.36   254.32
+        #
+        # according to EPA (link?)
+        # class G is neglected for regulatory modeling
+        #
+        if z0[i] <= 0.013:
+            divs = [ -41.78,  -15.15,   -9.33, 0.,  48.38, 143.77]
+        elif z0[i] <= 0.028:
+            divs = [ -48.84,  -16.92,  -10.02, 0.,  58.94, 149.95]
+        elif z0[i] <= 0.066:
+            divs = [ -63.48,  -20.53,  -11.20, 0.,  77.07, 192.55]
+        elif z0[i] <= 0.133:
+            divs = [-116.55,  -25.09,  -12.43, 0.,  92.79, 235.50]
+        elif z0[i] <= 0.28:
+            divs = [-442.97,  -32.50,  -14.15, 0., 109.74, 280.87]
+        elif z0[i] <= 0.66:
+            divs = [-236.14,  -63.51,  -17.65, 0., 135.75, 349.35]
+        elif z0[i] <= 1.20:
+            divs = [-442.97, -118.71,  -23.19, 0., 175.27, 453.35]
+        elif z0[i] <= 1.71:
+            divs = [-649.79, -173.91,  -28.73, 0., 214.80, 557.36]
+        else:
+            divs = [ -856.62, -229.11, -19.25, 0., 254.32, 661.36]
+        #
+        k = [3, 4, 5, 6, 1, 2]
+        for j,d in enumerate(divs):
+           if L[i] <= d:
+               sclass[i] = k[j]
+               break
+        else:
+            sclass[i] = 3
+
+    if scalar:
+        if len(time)>1: raise ValueError
+        sclass = sclass[0]
+    return sclass
+
+# ----------------------------------------------------
+
 def main():
     '''
     main routine
@@ -732,21 +798,25 @@ def main():
                              H = v['sshf'],
                              E = v['slhf'])
     v['kmc'] = klug_manier_stability_class(v['time'], v['fsr'], v['Lo'])
-    v['pgs'] = pasquill_guifford_scheme(v['time'], v['ff'], v['tcc'], lat, lon, v['cbh'])
+    v['pts'] = pasquill_taylor_scheme(v['time'], v['ff'], v['tcc'], lat, lon, v['cbh'])
+    v['pgc'] = pasquill_guifford_stability_class(v['time'], v['fsr'], v['Lo'])
 
     import pandas as pd
     data = pd.DataFrame(v)
-    print(pd.crosstab(data['kms'],
-                      data['pgs'],
+    print(pd.crosstab(data['kmc'],
+                      data['pgc'],
                       margins = True))
 
-    print(skm.classification_report(data['pgs'], data['kms']))
+    print(skm.classification_report(data['kmc'], data['pgc']))
 
     from matplotlib import pyplot as plt
     fig, ax = plt.subplots()
-    ax.plot(v['time'], v['kmc'], label='MOL class')
-    ax.plot(v['time'], v['kms'], label='K/M')
-    ax.plot(v['time'], v['pgs'], label='P/G')
+    ax.plot(v['time'], v['kmc']-0.05, label='L KM')
+    ax.plot(v['time'], v['pgc']+0.0 , label='L PG')
+    ax.plot(v['time'], v['kms']+0.05, label='K/M')
+    ax.plot(v['time'], v['pts']+0.1 , label='P/G')
+#
+#    ax.plot(v['time'], m.radiation.fast_sun_position(v['time'],lat,lon)[0]/10, label='sun')
 #
 #    ax.plot(v['time'], v['t2m'], label='dry')
 #    ax.plot(v['time'], v['d2m'], label='wet')
