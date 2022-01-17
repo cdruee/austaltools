@@ -551,72 +551,110 @@ def klug_manier_stability_class(time,z0,L):
 
 # ----------------------------------------------------
 
-def pasquill_turner_scheme(time: dt.datetime, ff, N_tot, lat, N_low=None):
+def pasquill_turner_scheme(time, ff, N_tot, lat, lon, N_low=None):
     # if arguments are scalars, convert to arrays
-    try:
-        n = len(time)
-        scalar = False
-    except TypeError:
-        time = np.array([time])
-        ff = np.array([ff])
-        N_tot =  np.array([N_tot])
-        if N_low is not None:
-            N_low =  np.array([N_low])
-        n = len(time)
+    if pd.api.types.is_scalar(time):
         scalar = True
-
+        time = pd.Series(pd.to_datetime(time))
+        ff = pd.Series(pd.to_datetime(ff))
+        N_tot = pd.Series(pd.to_datetime(N_tot)) / 8 # octa -> 1
+        if N_low is not None:
+            N_low = pd.Series(pd.to_datetime(N_low))  / 8 # octa -> 1
+        else:
+            N_low = N_tot
+    else:
+        scalar = False
+        N_tot = N_tot / 8. # octa -> 1
+        if N_low is not None:
+            N_low = N_low / 8. # octa -> 1
+        else:
+            N_low = N_tot
     # auf/unter UTC
-    s_rise,s_set = sun_rise_set(time,lat)
-    hour = np.array([x.hour for x in time])
-    class_number={'A': 1,
-                  'B': 2,
-                  'C': 3,
-                  'D': 4,
-                  'E': 5,
-                  'F': 6,}
-    pt = np.zeros(time.shape)
-    for i in range(n):
+    s_rise,_,s_set = m.fast_rise_transit_set(time,lat,lon)
+    hour = np.array([(x.hour + x.minute/60.) for x in time])
+    class_letter={1: 'A',
+                  2: 'B',
+                  3: 'C',
+                  4: 'D',
+                  5: 'E',
+                  6: 'F',
+                  7: 'G'}
+    pt = pd.Series(np.nan,index=time.index)
+    for i in range(len(time)):
         rad_index = None
         #
         #1. If the total cloud1 cover is 10/10 and the ceiling is less than
         #   7000 feet, use net radiation index equal to 0 (whether day or night).
-        if N_tot > 0.9 and N_low >= 0.125:
+        if N_tot[i] > 0.9 and N_low[i] >= 0.125:
             rad_index = 0
 
         #2. For nighttime: (from one hour before sunset to one hour after sunrise):
         #  (a) If total cloud cover < 4/10, use net radiation index equal to -2.
         #  (b) If total cloud cover > 4/10, use net radiation index equal to -1.
-        elif hour[i] >= sun_rise[i] - 1 and hour[i] >= sun_rise[i] + 1:
-            if N <= 0.4:
+        elif ((s_rise[i] < s_set[i] and # 0 UTC is night
+               (hour[i] <= s_rise[i] - 1 or hour[i] >= s_set[i] + 1)) or
+              (s_rise[i] > s_set[i] and # 0 UTC is day
+               (hour[i] <= s_rise[i] - 1 and hour[i] >= s_set[i] + 1))):
+            if N_tot[i] <= 0.4:
                 rad_index = -2
             else:
                 rad_index = -1
         #
         #3. For daytime:
         else:
+            #(a) Determine the insolation class number as a function of solar
+            #    altitude from Table 6-5.
+            insolation_class = taylor_insolation_class(time[i],lat,lon)
 
-        #  (a) Determine the insolation class number as a function of solar
-        #      altitude from Table 6-5.
+            #(b) If total cloud cover <5/10, use the net radiation index in
+            #    Table 6-4 corresponding to the isolation class number.
+            if N_tot[i] <= 0.5:
+                rad_index = insolation_class
 
-        #  (b) If total cloud cover <5/10, use the net radiation index in
-        #      Table 6-4 corresponding to the isolation class number.
-        #  (c) If cloud cover >5/10, modify the insolation class number using
-        #      the following six steps.
-        #     (1) Ceiling <7000 ft, subtract 2.
-        #     (2) Ceiling >7000 ft but <16000 ft, subtract 1.
-        #     (3) total cloud cover equal 10/10, subtract 1.
-        #         (This will only apply to ceilings >7000 ft
-        #          since cases with 10/10 coverage below 7000 ft
-        #          are considered in item 1 above.)
-        #     (4) If insolation class number has not been modified by
-        #         steps (1), (2), or (3) above, assume modified
-        #         class number equal to insolation class number.
-        #     (5) If modified insolation class number is less than 1,
-        #         let it equal 1.
-        #     (6) Use the net radiation index in Table 6-4 corresponding
-        #         to the modified insolation class number.
-            pass
-    return pt
+            #(c) If cloud cover >5/10, modify the insolation class number using
+            #    the following six steps.
+            else:
+                #(1) Ceiling <7000 ft, subtract 2.
+                if N_low[i] >= 0.125:
+                    mod_ins_class = insolation_class - 2
+
+                #(2) Ceiling >7000 ft but <16000 ft, subtract 1.
+#                elif N_med[i] >= 0.125:
+#                    mod_ins_class = insolation_class - 1
+
+                #(3) total cloud cover equal 10/10, subtract 1.
+                #    (This will only apply to ceilings >7000 ft
+                #     since cases with 10/10 coverage below 7000 ft
+                #     are considered in item 1 above.)
+                elif N_tot[i] > 0.9:
+                    mod_ins_class = insolation_class - 1
+
+                #(4) If insolation class number has not been modified by
+                #    steps (1), (2), or (3) above, assume modified
+                #    class number equal to insolation class number.
+                else:
+                    mod_ins_class = insolation_class
+
+                #(5) If modified insolation class number is less than 1,
+                #    let it equal 1.
+                if mod_ins_class < 1:
+                    mod_ins_class = 1
+
+                #(6) Use the net radiation index in Table 6-4 corresponding
+                #    to the modified insolation class number.
+                rad_index = mod_ins_class
+
+        # use index in Table 6-4
+        pt[i] = turners_key(ff[i], rad_index)
+
+        # For EPA regulatory modeling applications, stability categories
+        # 6 and 7 (F and G) are combined and considered category 6.
+        if pt[i] > 6:
+            pt[i] = 6
+
+    if scalar:
+        pt=pt.iloc[0]
+    return 7-pt # turn class values around to match K/M
 
 def turners_key(ff,NRI):
     ff = _check('ff', ff, 'float', ge=0.)
@@ -666,16 +704,30 @@ def turners_key(ff,NRI):
         raise ValueError('illegal NRI value: %i'%NRI)
     return key
 
-#def taylor_insolation_class(time, lat, lon)
-
-        #                 Table 6-5
-        #  Insolation Class as a Function of Solar Altitude
-        #  Solar Altitude X (degrees)   Insolation   Insolation Class Number
-        #    60 < X                      strong       4
-        #    35 < X <= 60                moderate     3
-        #    15 < X <= 35                slight       2
-        #         X <= 15                weak         1
-
+def taylor_insolation_class(time, lat, lon):
+    #                 Table 6-5
+    #  Insolation Class as a Function of Solar Altitude
+    #  Solar Altitude X (degrees)   Insolation   Insolation Class Number
+    #    60 < X                      strong       4
+    #    35 < X <= 60                moderate     3
+    #    15 < X <= 35                slight       2
+    #         X <= 15                weak         1
+#    zenith, _, _ = m.spa_sun_position(time, lat, lon)
+#    solar_altitude = 90. - zenith
+    solar_altitude, _ = m.fast_sun_position(time, lat, lon)
+#    if solar_altitude <= 0:
+#        # added 0 to cover all cases
+#        res = 0
+#    el
+    if solar_altitude <= 15:
+        res = 1
+    elif solar_altitude <= 35:
+        res = 2
+    elif solar_altitude <= 60:
+        res = 3
+    else:
+        res = 4
+    return res
 
 # ----------------------------------------------------
 
@@ -699,6 +751,7 @@ def main():
                              H = v['sshf'],
                              E = v['slhf'])
     v['kmc'] = klug_manier_stability_class(v['time'], v['fsr'], v['Lo'])
+    v['pts'] = pasquill_turner_scheme(v['time'], v['ff'], v['tcc'], lat, lon, v['lmcc'])
 
     import pandas as pd
     data = pd.DataFrame(v)
@@ -712,6 +765,7 @@ def main():
     fig, ax = plt.subplots()
     ax.plot(v['time'], v['kmc'], label='MOL class')
     ax.plot(v['time'], v['kms'], label='K/M')
+    ax.plot(v['time'], v['pts'], label='P/T')
 #
 #    ax.plot(v['time'], v['t2m'], label='dry')
 #    ax.plot(v['time'], v['d2m'], label='wet')
@@ -746,10 +800,10 @@ def main():
 #
 #    ax.set_xlim(dt.datetime(2018, 6, 1),
 #                dt.datetime(2018, 6, 6))
-#    ax.set_xlim(dt.datetime(2018, 6, 24),
-#                dt.datetime(2018, 6, 30))
-    ax.set_xlim(dt.datetime(2018, 10, 1),
-                dt.datetime(2018, 10, 6))
+    ax.set_xlim(dt.datetime(2018, 6, 24),
+                dt.datetime(2018, 6, 30))
+#    ax.set_xlim(dt.datetime(2018, 10, 1),
+#                dt.datetime(2018, 10, 6))
     plt.legend(loc="upper left")
     plt.show()
 
