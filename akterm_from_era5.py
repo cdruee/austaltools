@@ -112,13 +112,13 @@ def read_nc(ncfile, lat, lon):
     epoch = dt.datetime(1900, 1, 1, 0, 0, tzinfo=dt.timezone.utc)
     values['time'] = pd.to_datetime(
             [epoch + dt.timedelta(hours=int(x)) for x in lp['time']])
-    for val in ['lcc', 'mcc', 'tcc']:
-        values[val] = lp[val][:, pi, pj].data * 8.           # 1 -> octa
-    for val in ['sshf', 'slhf']:
-        values[val] = lp[val][:, pi, pj].data / -3600.       # -J/hm² -> W/m²
     for val in ['u10', 'v10', 'sp', 'zust', 'fsr',
-                't2m', 'd2m']:
-        values[val] = lp[val][:, pi, pj].data
+                't2m', 'd2m', 'cbh']:
+        values[val] = pd.Series(lp[val][:, pi, pj].data)
+    for val in ['sshf', 'slhf']:
+        values[val] = pd.Series(lp[val][:, pi, pj].data / -3600.)       # -J/hm² -> W/m²
+    for val in ['lcc', 'mcc', 'tcc']:
+        values[val] = pd.Series(lp[val][:, pi, pj].data)
 
 #
 #    values['ff'] = np.sqrt(values['u10']*values['u10'] +
@@ -168,15 +168,12 @@ def sun_rise_set(time: dt.datetime, lat):
 
 # ----------------------------------------------------
 
-def klug_manier_scheme(time: dt.datetime, ff, N_tot, lat, lon, N_low=None):
+def klug_manier_scheme(time: dt.datetime, ff, tcc, lat, lon, lcc=None):
     # Einlesen
     monat = np.array([x.month for x in time])
     stund = np.array([x.hour for x in time])
-    tcc  = N_tot/8.                               # octa -> 1
-    if N_low is None:
-        lcc = tcc                             # 1
-    else:
-        lcc = N_low/8.                        # octa -> 1
+    if lcc is None:
+        lcc = tcc    # 1
 
     # auf/unter UTC
     print(dt.datetime.now())
@@ -211,7 +208,7 @@ def klug_manier_scheme(time: dt.datetime, ff, N_tot, lat, lon, N_low=None):
     # erniedrigten Gesamtbedeckung auszugehen.
     for i,_ in enumerate(time):
         if lcc[i] < 0.125:
-            tcc[i] = np.max((0., tcc[i] - 0.375))
+            tcc.iloc[i] = np.max((0., tcc[i] - 0.375))
     #
     # K_N for night conditions
     kn = np.zeros(stund.shape)
@@ -551,26 +548,19 @@ def klug_manier_stability_class(time,z0,L):
 
 # ----------------------------------------------------
 
-def pasquill_turner_scheme(time, ff, N_tot, lat, lon, N_low=None):
+def pasquill_guifford_scheme(time, ff, tcc, lat, lon, ceil):
     # if arguments are scalars, convert to arrays
     if pd.api.types.is_scalar(time):
         scalar = True
         time = pd.Series(pd.to_datetime(time))
-        ff = pd.Series(pd.to_datetime(ff))
-        N_tot = pd.Series(pd.to_datetime(N_tot)) / 8 # octa -> 1
-        if N_low is not None:
-            N_low = pd.Series(pd.to_datetime(N_low))  / 8 # octa -> 1
-        else:
-            N_low = N_tot
+        ff = pd.Series(ff)
+        tcc = pd.Series(tcc)
+        ceil = pd.Series(ceil)
     else:
         scalar = False
-        N_tot = N_tot / 8. # octa -> 1
-        if N_low is not None:
-            N_low = N_low / 8. # octa -> 1
-        else:
-            N_low = N_tot
     # auf/unter UTC
-    s_rise,_,s_set = m.fast_rise_transit_set(time,lat,lon)
+    s_rise, _, s_set = m.fast_rise_transit_set(time,lat,lon)
+    s_ele, _ = m.fast_sun_position(time, lat, lon)
     hour = np.array([(x.hour + x.minute/60.) for x in time])
     class_letter={1: 'A',
                   2: 'B',
@@ -582,20 +572,18 @@ def pasquill_turner_scheme(time, ff, N_tot, lat, lon, N_low=None):
     pt = pd.Series(np.nan,index=time.index)
     for i in range(len(time)):
         rad_index = None
+        insolation_class = None
         #
         #1. If the total cloud1 cover is 10/10 and the ceiling is less than
         #   7000 feet, use net radiation index equal to 0 (whether day or night).
-        if N_tot[i] > 0.9 and N_low[i] >= 0.125:
+        if tcc[i] > 0.9 and ceil[i] <= (7000*0.3048):
             rad_index = 0
 
         #2. For nighttime: (from one hour before sunset to one hour after sunrise):
         #  (a) If total cloud cover < 4/10, use net radiation index equal to -2.
         #  (b) If total cloud cover > 4/10, use net radiation index equal to -1.
-        elif ((s_rise[i] < s_set[i] and # 0 UTC is night
-               (hour[i] <= s_rise[i] - 1 or hour[i] >= s_set[i] + 1)) or
-              (s_rise[i] > s_set[i] and # 0 UTC is day
-               (hour[i] <= s_rise[i] - 1 and hour[i] >= s_set[i] + 1))):
-            if N_tot[i] <= 0.4:
+        elif s_ele[i] < 0. :
+            if tcc[i] <= 0.4:
                 rad_index = -2
             else:
                 rad_index = -1
@@ -604,29 +592,29 @@ def pasquill_turner_scheme(time, ff, N_tot, lat, lon, N_low=None):
         else:
             #(a) Determine the insolation class number as a function of solar
             #    altitude from Table 6-5.
-            insolation_class = taylor_insolation_class(time[i],lat,lon)
+            insolation_class = taylor_insolation_class(s_ele[i])
 
             #(b) If total cloud cover <5/10, use the net radiation index in
             #    Table 6-4 corresponding to the isolation class number.
-            if N_tot[i] <= 0.5:
+            if tcc[i] < 0.5:
                 rad_index = insolation_class
 
             #(c) If cloud cover >5/10, modify the insolation class number using
             #    the following six steps.
             else:
                 #(1) Ceiling <7000 ft, subtract 2.
-                if N_low[i] >= 0.125:
+                if ceil[i] <= (7000*0.3048):
                     mod_ins_class = insolation_class - 2
 
                 #(2) Ceiling >7000 ft but <16000 ft, subtract 1.
-#                elif N_med[i] >= 0.125:
-#                    mod_ins_class = insolation_class - 1
+                elif ceil[i] > (7000*0.3048) and ceil[i] < (16000*0.3048):
+                    mod_ins_class = insolation_class - 1
 
                 #(3) total cloud cover equal 10/10, subtract 1.
                 #    (This will only apply to ceilings >7000 ft
                 #     since cases with 10/10 coverage below 7000 ft
                 #     are considered in item 1 above.)
-                elif N_tot[i] > 0.9:
+                elif tcc[i] > 0.9:
                     mod_ins_class = insolation_class - 1
 
                 #(4) If insolation class number has not been modified by
@@ -704,7 +692,7 @@ def turners_key(ff,NRI):
         raise ValueError('illegal NRI value: %i'%NRI)
     return key
 
-def taylor_insolation_class(time, lat, lon):
+def taylor_insolation_class(solar_altitude):
     #                 Table 6-5
     #  Insolation Class as a Function of Solar Altitude
     #  Solar Altitude X (degrees)   Insolation   Insolation Class Number
@@ -712,13 +700,6 @@ def taylor_insolation_class(time, lat, lon):
     #    35 < X <= 60                moderate     3
     #    15 < X <= 35                slight       2
     #         X <= 15                weak         1
-#    zenith, _, _ = m.spa_sun_position(time, lat, lon)
-#    solar_altitude = 90. - zenith
-    solar_altitude, _ = m.fast_sun_position(time, lat, lon)
-#    if solar_altitude <= 0:
-#        # added 0 to cover all cases
-#        res = 0
-#    el
     if solar_altitude <= 15:
         res = 1
     elif solar_altitude <= 35:
@@ -737,7 +718,7 @@ def main():
     '''
     lat = 49.9
     lon = 6.07
-    v = read_nc('era5_cc_eu_2018.nc', lat, lon)
+    v = read_nc('era5_c2_eu_2018.nc', lat, lon)
     v['lmcc'] = np.maximum(v['lcc'], v['mcc'])
     v['kms'] = klug_manier_scheme(v['time'], v['ff'], v['tcc'], lat, lon, v['lmcc'])
 
@@ -751,21 +732,21 @@ def main():
                              H = v['sshf'],
                              E = v['slhf'])
     v['kmc'] = klug_manier_stability_class(v['time'], v['fsr'], v['Lo'])
-    v['pts'] = pasquill_turner_scheme(v['time'], v['ff'], v['tcc'], lat, lon, v['lmcc'])
+    v['pgs'] = pasquill_guifford_scheme(v['time'], v['ff'], v['tcc'], lat, lon, v['cbh'])
 
     import pandas as pd
     data = pd.DataFrame(v)
     print(pd.crosstab(data['kms'],
-                      data['kmc'],
+                      data['pgs'],
                       margins = True))
 
-    print(skm.classification_report(data['kmc'], data['kms']))
+    print(skm.classification_report(data['pgs'], data['kms']))
 
     from matplotlib import pyplot as plt
     fig, ax = plt.subplots()
     ax.plot(v['time'], v['kmc'], label='MOL class')
     ax.plot(v['time'], v['kms'], label='K/M')
-    ax.plot(v['time'], v['pts'], label='P/T')
+    ax.plot(v['time'], v['pgs'], label='P/G')
 #
 #    ax.plot(v['time'], v['t2m'], label='dry')
 #    ax.plot(v['time'], v['d2m'], label='wet')
@@ -800,10 +781,10 @@ def main():
 #
 #    ax.set_xlim(dt.datetime(2018, 6, 1),
 #                dt.datetime(2018, 6, 6))
-    ax.set_xlim(dt.datetime(2018, 6, 24),
-                dt.datetime(2018, 6, 30))
-#    ax.set_xlim(dt.datetime(2018, 10, 1),
-#                dt.datetime(2018, 10, 6))
+#    ax.set_xlim(dt.datetime(2018, 6, 24),
+#                dt.datetime(2018, 6, 30))
+    ax.set_xlim(dt.datetime(2018, 10, 1),
+                dt.datetime(2018, 10, 6))
     plt.legend(loc="upper left")
     plt.show()
 
