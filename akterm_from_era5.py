@@ -64,37 +64,8 @@ def read_nc(ncfile, lat, lon):
     dims['lat'] = lp['latitude'][:].data
     dims['lon'] = lp['longitude'][:].data
 
-#    arr={}
-#    arr['lat'] =  np.repeat(
-#            np.expand_dims(dims['lat'],axis=1),
-#            dims['lat'].size,
-#            axis=1)
-#    arr['lon'] =  np.repeat(
-#            np.expand_dims(dims['lon'],axis=0),
-#            dims['lat'].size,
-#            axis=0)
-#
-#    # claculate distances to target position
-#    arr['dist'] = np.empty(arr['lat'].shape)
-#    ni, nj = arr['dist'].shape
-#    for i in range(ni):
-#        for j in range(nj):
-#              arr['dist'][i][j] = spheric_distance(
-#                    lat,
-#                    lon,
-#                    arr['lat'][i][j],
-#                    arr['lon'][i][j])
-#    # fin three nearest points
-#    pos=[]
-#    for i in range(3):
-#        pos.append(np.unravel_index(np.nanargmin(arr['dist'], axis=None),
-#                           arr['dist'].shape))
-#        arr['dist'][pos[-1]] = np.nan
 
     # target position in grid coordinates:
-#    delta={}
-#    delta['lat'] = np.diff(a=dims['lat'], n=1).mean()
-#    delta['lon'] = np.diff(a=dims['lon'], n=1).mean()
     idx = {'lat':-1, 'lon':-1}
     tgt = {'lat':lat, 'lon':lon}
     for l in ['lat', 'lon']:
@@ -145,38 +116,11 @@ def read_nc(ncfile, lat, lon):
     # val(x,y) = w1*val(x1,y1) + w2*val(x2,y2) + w3*val(x3,y3)
     # https://en.wikipedia.org/wiki/Barycentric_coordinate_system
     #
-    # find aqdqate set of weights
-    if (y[1]-y[2])*(x[0]-x[2]) + (x[2]-x[1])*(y[0]-y[2]) == 0:
-        print('(y[1]-y[2]): %f'%(y[1]-y[2]))
-        print('(x[0]-x[2]): %f'%(x[0]-x[2]))
-        print('(x[2]-x[1]): %f'%(x[2]-x[1]))
-        print('(y[0]-y[2]): %f'%(y[0]-y[2]))
-#        print(': %f'%)
     w0 = (((y[1]-y[2])*(lon-x[2]) + (x[2]-x[1])*(lat-y[2])) /
           ((y[1]-y[2])*(x[0]-x[2]) + (x[2]-x[1])*(y[0]-y[2])))
     w1 = (((y[2]-y[0])*(lon-x[2]) + (x[0]-x[2])*(lat-y[2])) /
           ((y[1]-y[2])*(x[0]-x[2]) + (x[2]-x[1])*(y[0]-y[2])))
     w2 = 1 - (w0 + w1)
-#    elif lon != x[1] or lat != y[1]:
-#        w0 = (((y[0]-y[1])*(lon-x[1]) + (x[1]-x[0])*(lat-y[1])) /
-#              ((y[0]-y[1])*(x[2]-x[1]) + (x[1]-x[0])*(y[2]-y[1])))
-#        w1 = (((y[1]-y[2])*(lon-x[1]) + (x[2]-x[1])*(lat-y[1])) /
-#              ((y[0]-y[1])*(x[2]-x[1]) + (x[1]-x[0])*(y[2]-y[1])))
-#        w2 = 1 - (w0 + w1)
-#    elif lon != x[0] or lat != y[0]:
-#        w0 = (((y[2]-y[0])*(lon-x[0]) + (x[0]-x[2])*(lat-y[0])) /
-#              ((y[2]-y[0])*(x[1]-x[0]) + (x[0]-x[2])*(y[1]-y[0])))
-#        w1 = (((y[0]-y[1])*(lon-x[0]) + (x[1]-x[0])*(lat-y[0])) /
-#              ((y[2]-y[0])*(x[1]-x[0]) + (x[0]-x[2])*(y[1]-y[0])))
-#        w2 = 1 - (w0 + w1)
-#    # if no weights can be calcultated,
-#    # interploate nearlinear between two neares points
-#    else:
-#        w0 =  (np.sqrt((lon-x[0])**2 + (lat-y[0])**2)/
-#               np.sqrt((x[1]-x[0])**2 + (y[1]-y[0])**2))
-#        w1 =  (np.sqrt((x[1]-lon)**2 + (y[1]-lat)**2)/
-#               np.sqrt((x[1]-x[0])**2 + (y[1]-y[0])**2))
-#        w2 = 0.
 
     values = pd.DataFrame()
     epoch = dt.datetime(1900, 1, 1, 0, 0, tzinfo=dt.timezone.utc)
@@ -207,39 +151,10 @@ def read_nc(ncfile, lat, lon):
 #
 #   Therefore: u10 = u*/k * ln(z/z0)
     values['ff'] = values['zust']/kappa*np.log(10./values['fsr'])
-    values['dd'] = np.arctan2((-values['v10']),(-values['u10']))
+    values['dd'] = np.rad2deg(np.arctan2((-values['v10']),(-values['u10'])))
 
     return values
 
-# ----------------------------------------------------
-#
-#def sun_rise_set(time: dt.datetime, lat):
-#    # if arguments are scalars, convert to arrays
-#    try:
-#        _ = len(time)
-#        scalar = False
-#    except TypeError:
-#        time = np.array([time])
-#        scalar = True
-#     #
-#    # Sonnenstand
-#    B = np.pi*lat/180.
-#    T = np.array([x.timetuple()[7] for x in time])      # day of year
-#    deklination = 0.4095 * np.sin(0.016906 * (T - 80.086))
-#    zeitdifferenz = 12 * np.arccos((np.sin(-0.0145)
-#        - np.sin(B) * np.sin(deklination))/
-#                                        (np.cos(B)*np.cos(deklination)))/np.pi
-#    zeitgleichung = -0.171 * np.sin(0.0337 * np.sin((0.0337 * T + 0.465)
-#        - 0.1299 * np.sin(0.01787 * T - 0.168)))
-#    #
-#    # auf/unter UTC
-#    s_rise = 12. - zeitdifferenz - zeitgleichung
-#    s_set  = 12. + zeitdifferenz - zeitgleichung
-#
-#    if scalar:
-#        s_rise = s_rise[0]
-#        s_set = s_set[0]
-#    return s_rise,s_set
 
 # ----------------------------------------------------
 
@@ -872,7 +787,7 @@ def main():
     '''
     lat = 49.75
     lon = 6.66
-    v = read_nc('era5_ak_eu_2018.nc', lat, lon)
+    v = read_nc('data/era5_ak_eu_2018.nc', lat, lon)
     v['lmcc'] = np.maximum(v['lcc'], v['mcc'])
     v['kms'] = klug_manier_scheme(v['time'], v['ff'], v['tcc'], lat, lon, v['lmcc'])
 
