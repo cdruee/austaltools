@@ -14,23 +14,9 @@ import readmet
 
 import logging
 
-#kappa = 0.4
-#gn = 9.81
-#def _to_K(Tv, Kelvin=None):
-#  if Kelvin is None :
-#    if Tv < 200:
-#      return Tv + 273.15
-#    else:
-#      return Tv
-#  elif Kelvin == True:
-#    return Tv
-#  else:
-#    return Tv + 273.15
 import metlib as m
-#from m.constants import kappa, gn
 kappa = m.constants.kappa
 gn = m.constants.gn
-#from m.temperature import _to_K
 _check = m._utils._check
 
 # ----------------------------------------------------
@@ -60,15 +46,15 @@ def spheric_distance(lat1, lon1, lat2, lon2):
 
 def read_nc(ncfile, lat, lon):
     '''
-    read nc file and return:
-        dimensions:
-            lat
-            lon
-        values:
-            temperature in °C
-            pressure-level height in gpdm
-            u in m/s
-            v in m/s
+    read ERA5 nc file and interpolate values to position (lat, lon)
+        and recalculate 10 wind speed anddirection (ff/dd) using
+        actual surface roughness
+        values: 'time',
+                'u10', 'v10', 'sp', 'zust', 'fsr',
+                't2m', 'd2m', 'cbh', 'sshf', 'slhf',
+                'lcc', 'mcc', 'tcc',
+                'sshf', 'slhf',
+                'ff', 'dd'
     '''
     import netCDF4
 
@@ -78,32 +64,74 @@ def read_nc(ncfile, lat, lon):
     dims['lat'] = lp['latitude'][:].data
     dims['lon'] = lp['longitude'][:].data
 
-    arr={}
-    arr['lat'] =  np.repeat(
-            np.expand_dims(dims['lat'],axis=1),
-            dims['lat'].size,
-            axis=1)
-    arr['lon'] =  np.repeat(
-            np.expand_dims(dims['lon'],axis=0),
-            dims['lat'].size,
-            axis=0)
+#    arr={}
+#    arr['lat'] =  np.repeat(
+#            np.expand_dims(dims['lat'],axis=1),
+#            dims['lat'].size,
+#            axis=1)
+#    arr['lon'] =  np.repeat(
+#            np.expand_dims(dims['lon'],axis=0),
+#            dims['lat'].size,
+#            axis=0)
+#
+#    # claculate distances to target position
+#    arr['dist'] = np.empty(arr['lat'].shape)
+#    ni, nj = arr['dist'].shape
+#    for i in range(ni):
+#        for j in range(nj):
+#              arr['dist'][i][j] = spheric_distance(
+#                    lat,
+#                    lon,
+#                    arr['lat'][i][j],
+#                    arr['lon'][i][j])
+#    # fin three nearest points
+#    pos=[]
+#    for i in range(3):
+#        pos.append(np.unravel_index(np.nanargmin(arr['dist'], axis=None),
+#                           arr['dist'].shape))
+#        arr['dist'][pos[-1]] = np.nan
 
-    # claculate distances to target position
-    arr['dist'] = np.empty(arr['lat'].shape)
-    ni, nj = arr['dist'].shape
-    for i in range(ni):
-        for j in range(nj):
-              arr['dist'][i][j] = spheric_distance(
-                    lat,
-                    lon,
-                    arr['lat'][i][j],
-                    arr['lon'][i][j])
-    # fin three nearest points
-    pos=[]
-    for i in range(3):
-        pos.append(np.unravel_index(np.nanargmin(arr['dist'], axis=None),
-                           arr['dist'].shape))
-        arr['dist'][pos[-1]] = np.nan
+    # target position in grid coordinates:
+#    delta={}
+#    delta['lat'] = np.diff(a=dims['lat'], n=1).mean()
+#    delta['lon'] = np.diff(a=dims['lon'], n=1).mean()
+    idx = {'lat':-1, 'lon':-1}
+    tgt = {'lat':lat, 'lon':lon}
+    for l in ['lat', 'lon']:
+        dl = np.sort(dims[l])
+        for i,v in enumerate(dl):
+            ii = i
+            if v >= tgt[l]:
+                break
+        else:
+            raise ValueError('target position out of grid')
+        idx[l] = ii + (tgt[l]-dl[ii])/(dl[ii+1]-dl[ii])
+    logging.info(idx)
+    pos=[None,None,None]
+    if np.modf(idx['lon'])[0] <= 0.5:
+        if np.modf(idx['lat'])[0] <= 0.5:
+            # SW corner
+            pos[0]=(np.int(idx['lon']    ), np.int(idx['lat']    ))
+            pos[1]=(np.int(idx['lon'] + 1), np.int(idx['lat']    ))
+            pos[2]=(np.int(idx['lon']    ), np.int(idx['lat'] + 1))
+        else:
+            # NW corner
+            pos[0]=(np.int(idx['lon']    ), np.int(idx['lat']    ))
+            pos[1]=(np.int(idx['lon'] + 1), np.int(idx['lat'] + 1))
+            pos[2]=(np.int(idx['lon']    ), np.int(idx['lat'] + 1))
+    else:
+        if np.modf(idx['lat'])[0] <= 0.5:
+            # SE corner
+            pos[0]=(np.int(idx['lon']    ), np.int(idx['lat']    ))
+            pos[1]=(np.int(idx['lon'] + 1), np.int(idx['lat']    ))
+            pos[2]=(np.int(idx['lon'] + 1), np.int(idx['lat'] + 1))
+        else:
+            # NE corner
+            pos[0]=(np.int(idx['lon'] + 1), np.int(idx['lat']    ))
+            pos[1]=(np.int(idx['lon'] + 1), np.int(idx['lat'] + 1))
+            pos[2]=(np.int(idx['lon']    ), np.int(idx['lat'] + 1))
+
+
     x=[]
     y=[]
     for pp in pos:
@@ -117,12 +145,38 @@ def read_nc(ncfile, lat, lon):
     # val(x,y) = w1*val(x1,y1) + w2*val(x2,y2) + w3*val(x3,y3)
     # https://en.wikipedia.org/wiki/Barycentric_coordinate_system
     #
+    # find aqdqate set of weights
+    if (y[1]-y[2])*(x[0]-x[2]) + (x[2]-x[1])*(y[0]-y[2]) == 0:
+        print('(y[1]-y[2]): %f'%(y[1]-y[2]))
+        print('(x[0]-x[2]): %f'%(x[0]-x[2]))
+        print('(x[2]-x[1]): %f'%(x[2]-x[1]))
+        print('(y[0]-y[2]): %f'%(y[0]-y[2]))
+#        print(': %f'%)
     w0 = (((y[1]-y[2])*(lon-x[2]) + (x[2]-x[1])*(lat-y[2])) /
           ((y[1]-y[2])*(x[0]-x[2]) + (x[2]-x[1])*(y[0]-y[2])))
     w1 = (((y[2]-y[0])*(lon-x[2]) + (x[0]-x[2])*(lat-y[2])) /
           ((y[1]-y[2])*(x[0]-x[2]) + (x[2]-x[1])*(y[0]-y[2])))
     w2 = 1 - (w0 + w1)
-
+#    elif lon != x[1] or lat != y[1]:
+#        w0 = (((y[0]-y[1])*(lon-x[1]) + (x[1]-x[0])*(lat-y[1])) /
+#              ((y[0]-y[1])*(x[2]-x[1]) + (x[1]-x[0])*(y[2]-y[1])))
+#        w1 = (((y[1]-y[2])*(lon-x[1]) + (x[2]-x[1])*(lat-y[1])) /
+#              ((y[0]-y[1])*(x[2]-x[1]) + (x[1]-x[0])*(y[2]-y[1])))
+#        w2 = 1 - (w0 + w1)
+#    elif lon != x[0] or lat != y[0]:
+#        w0 = (((y[2]-y[0])*(lon-x[0]) + (x[0]-x[2])*(lat-y[0])) /
+#              ((y[2]-y[0])*(x[1]-x[0]) + (x[0]-x[2])*(y[1]-y[0])))
+#        w1 = (((y[0]-y[1])*(lon-x[0]) + (x[1]-x[0])*(lat-y[0])) /
+#              ((y[2]-y[0])*(x[1]-x[0]) + (x[0]-x[2])*(y[1]-y[0])))
+#        w2 = 1 - (w0 + w1)
+#    # if no weights can be calcultated,
+#    # interploate nearlinear between two neares points
+#    else:
+#        w0 =  (np.sqrt((lon-x[0])**2 + (lat-y[0])**2)/
+#               np.sqrt((x[1]-x[0])**2 + (y[1]-y[0])**2))
+#        w1 =  (np.sqrt((x[1]-lon)**2 + (y[1]-lat)**2)/
+#               np.sqrt((x[1]-x[0])**2 + (y[1]-y[0])**2))
+#        w2 = 0.
 
     values = pd.DataFrame()
     epoch = dt.datetime(1900, 1, 1, 0, 0, tzinfo=dt.timezone.utc)
@@ -810,14 +864,14 @@ def h_eff(has,z0s):
         ha.append(d0 + z0*(( href - d0)/z0)**ps)
     return ha
 
-# ----------------------------------------------------
+# =======================================================================
 
 def main():
     '''
     main routine
     '''
-    lat = 49.9
-    lon = 6.07
+    lat = 49.75
+    lon = 6.66
     v = read_nc('era5_ak_eu_2018.nc', lat, lon)
     v['lmcc'] = np.maximum(v['lcc'], v['mcc'])
     v['kms'] = klug_manier_scheme(v['time'], v['ff'], v['tcc'], lat, lon, v['lmcc'])
@@ -898,11 +952,13 @@ def main():
 #    dims, values = read_nc(tupl, pp)
 #    plot_ztw(dims, values, tupl, arrow_dist, file)
 
-    x = readmet.akterm.DataFile()
-    x.data = pd.DataFrame({'FF': v['ff'], 'DD': v['dd'], 'KM': v['kms']})
-    x.data.index=v['time']
-    x.heights = h_eff(10., v['fsr'].mean())
-    x.write('out.akterm')
+    for x in ['kms', 'kmc', 'pts', 'pgc']:
+        logging.info('writing output file for: '+x)
+        df = pd.DataFrame({'FF': v['ff'], 'DD': v['dd'], 'KM': v[x],
+                           'time': pd.to_datetime(v['time'], utc=True)})
+        df = df.set_index('time')
+        ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean())
+        ak.write('out_'+x+'.akterm')
 
 # ----------------------------------------------------
 # initalize: call main routine
