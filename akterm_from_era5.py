@@ -5,11 +5,12 @@ Created on Fri Dec 17 13:36:08 2021
 
 @author: clemens
 """
-
 import numpy as np
 import pandas as pd
 import datetime as dt
 from sklearn import metrics as skm
+import readmet
+
 
 import logging
 
@@ -87,6 +88,7 @@ def read_nc(ncfile, lat, lon):
             dims['lat'].size,
             axis=0)
 
+    # claculate distances to target position
     arr['dist'] = np.empty(arr['lat'].shape)
     ni, nj = arr['dist'].shape
     for i in range(ni):
@@ -96,30 +98,48 @@ def read_nc(ncfile, lat, lon):
                     lon,
                     arr['lat'][i][j],
                     arr['lon'][i][j])
+    # fin three nearest points
+    pos=[]
+    for i in range(3):
+        pos.append(np.unravel_index(np.nanargmin(arr['dist'], axis=None),
+                           arr['dist'].shape))
+        arr['dist'][pos[-1]] = np.nan
+    x=[]
+    y=[]
+    for pp in pos:
+        pi, pj = pp
+        plat = dims['lat'][pi]
+        plon = dims['lon'][pj]
+        logging.info(str((pi,pj,plon,plat)))
+        x.append(plon)
+        y.append(plat)
+    # calculate barycentric weights so that
+    # val(x,y) = w1*val(x1,y1) + w2*val(x2,y2) + w3*val(x3,y3)
+    # https://en.wikipedia.org/wiki/Barycentric_coordinate_system
+    #
+    w0 = (((y[1]-y[2])*(lon-x[2]) + (x[2]-x[1])*(lat-y[2])) /
+          ((y[1]-y[2])*(x[0]-x[2]) + (x[2]-x[1])*(y[0]-y[2])))
+    w1 = (((y[2]-y[0])*(lon-x[2]) + (x[0]-x[2])*(lat-y[2])) /
+          ((y[1]-y[2])*(x[0]-x[2]) + (x[2]-x[1])*(y[0]-y[2])))
+    w2 = 1 - (w0 + w1)
 
-    pos = np.unravel_index(np.argmin(arr['dist'], axis=None),
-                           arr['dist'].shape)
-    print(pos)
-    pi, pj = pos
-    plat = dims['lat'][pi]
-    plon = dims['lon'][pj]
-    print((pi,pj),(plon,plat))
-
-#    from matplotlib import pyplot as plt
-#    plt.imshow(arr['dist'])
 
     values = pd.DataFrame()
     epoch = dt.datetime(1900, 1, 1, 0, 0, tzinfo=dt.timezone.utc)
     values['time'] = pd.to_datetime(
             [epoch + dt.timedelta(hours=int(x)) for x in lp['time']])
     for val in ['u10', 'v10', 'sp', 'zust', 'fsr',
-                't2m', 'd2m', 'cbh']:
-        values[val] = pd.Series(lp[val][:, pi, pj].data)
+                't2m', 'd2m', 'cbh', 'sshf', 'slhf',
+                'lcc', 'mcc', 'tcc']:
+        logging.info('interpolating value: %s'%val)
+        v=[None,None,None]
+        for i in range(3):
+            v[i] = pd.Series(lp[val][:, pi, pj].data)
+        values[val] = w0*v[0] + w1*v[1] + w2*v[2]
+#
+#   surface fluxes are in J/hm² down, convert to W/m² up:
     for val in ['sshf', 'slhf']:
-        values[val] = pd.Series(lp[val][:, pi, pj].data / -3600.)       # -J/hm² -> W/m²
-    for val in ['lcc', 'mcc', 'tcc']:
-        values[val] = pd.Series(lp[val][:, pi, pj].data)
-
+        values[val] = values[val] / (-3600.)
 #
 #    values['ff'] = np.sqrt(values['u10']*values['u10'] +
 #                           values['v10']*values['v10'])
@@ -133,6 +153,7 @@ def read_nc(ncfile, lat, lon):
 #
 #   Therefore: u10 = u*/k * ln(z/z0)
     values['ff'] = values['zust']/kappa*np.log(10./values['fsr'])
+    values['dd'] = np.arctan2((-values['v10']),(-values['u10']))
 
     return values
 
@@ -176,9 +197,7 @@ def klug_manier_scheme(time: dt.datetime, ff, tcc, lat, lon, lcc=None):
         lcc = tcc    # 1
 
     # auf/unter UTC
-    print(dt.datetime.now())
     s_auf,_,s_unter = m.radiation.fast_rise_transit_set(time, lat, lon)
-    print(dt.datetime.now())
     #
     # Ausbreitungsklassen
     #
@@ -206,9 +225,12 @@ def klug_manier_scheme(time: dt.datetime, ff, tcc, lat, lon, lcc=None):
     # *) Bei den Fällen mit einer Gesamtbedeckung, die ausschließ-
     # lich aus hohen Wolken (Cirren) besteht, ist von einer um 3/8
     # erniedrigten Gesamtbedeckung auszugehen.
-    for i,_ in enumerate(time):
-        if lcc[i] < 0.125:
-            tcc.iloc[i] = np.max((0., tcc[i] - 0.375))
+    # #this doesn't work if tcc is column of a data frame:
+    # for i,_ in enumerate(time):
+    #     if lcc[i] < 0.125:
+    #         tcc.iloc[i] = np.max((0., tcc[i] - 0.375))
+    # #this does:
+    tcc = [np.max((0., x - 0.375))  if y < 0.125 else x for x,y in zip(tcc,lcc)]
     #
     # K_N for night conditions
     kn = np.zeros(stund.shape)
@@ -777,6 +799,18 @@ def pasquill_guifford_stability_class(time,z0,L):
     return sclass
 
 # ----------------------------------------------------
+def h_eff(has,z0s):
+    z0_vals=[0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1., 1.5, 2]
+    href = 250
+    d0s = m.wind.displacement_factor*z0s
+    ps = np.log((has-d0s)/z0s)/np.log((href-d0s)/z0s)
+    ha=[]
+    for z0 in z0_vals:
+        d0 = m.wind.displacement_factor*z0
+        ha.append(d0 + z0*(( href - d0)/z0)**ps)
+    return ha
+
+# ----------------------------------------------------
 
 def main():
     '''
@@ -809,12 +843,12 @@ def main():
 
     print(skm.classification_report(data['kmc'], data['pgc']))
 
-    from matplotlib import pyplot as plt
-    fig, ax = plt.subplots()
-    ax.plot(v['time'], v['kmc']-0.05, label='L KM')
-    ax.plot(v['time'], v['pgc']+0.0 , label='L PG')
-    ax.plot(v['time'], v['kms']+0.05, label='K/M')
-    ax.plot(v['time'], v['pts']+0.1 , label='P/G')
+#    from matplotlib import pyplot as plt
+#    fig, ax = plt.subplots()
+#    ax.plot(v['time'], v['kmc']-0.05, label='L KM')
+#    ax.plot(v['time'], v['pgc']+0.0 , label='L PG')
+#    ax.plot(v['time'], v['kms']+0.05, label='K/M')
+#    ax.plot(v['time'], v['pts']+0.1 , label='P/G')
 #
 #    ax.plot(v['time'], m.radiation.fast_sun_position(v['time'],lat,lon)[0]/10, label='sun')
 #
@@ -853,10 +887,10 @@ def main():
 #                dt.datetime(2018, 6, 6))
 #    ax.set_xlim(dt.datetime(2018, 6, 24),
 #                dt.datetime(2018, 6, 30))
-    ax.set_xlim(dt.datetime(2018, 10, 1),
-                dt.datetime(2018, 10, 6))
-    plt.legend(loc="upper left")
-    plt.show()
+#    ax.set_xlim(dt.datetime(2018, 10, 1),
+#                dt.datetime(2018, 10, 6))
+#    plt.legend(loc="upper left")
+#    plt.show()
 
 #    from datetime import datetime as dt
 #    tupl = tuple('era_eu_2018' %H:%M').timetuple())[0:5]
@@ -864,6 +898,11 @@ def main():
 #    dims, values = read_nc(tupl, pp)
 #    plot_ztw(dims, values, tupl, arrow_dist, file)
 
+    x = readmet.akterm.DataFile()
+    x.data = pd.DataFrame({'FF': v['ff'], 'DD': v['dd'], 'KM': v['kms']})
+    x.data.index=v['time']
+    x.heights = h_eff(10., v['fsr'].mean())
+    x.write('out.akterm')
 
 # ----------------------------------------------------
 # initalize: call main routine
