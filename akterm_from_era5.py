@@ -178,7 +178,7 @@ def main():
     '''
     lat = 49.75
     lon = 6.66
-    v = read_nc('data/era5_ak_eu_2018.nc', lat, lon)
+    v = read_nc('../data/era5_ak_eu_2018.nc', lat, lon)
     v['lmcc'] = np.maximum(v['lcc'], v['mcc'])
     v['kms'] = klug_manier_scheme(v['time'], v['ff'], v['tcc'], lat, lon, v['lmcc'])
 
