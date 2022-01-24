@@ -19,7 +19,6 @@ _check = m._utils._check
 
 from dispersion import klug_manier_scheme, pasquill_taylor_scheme
 from dispersion import klug_manier_stability_class, obukhov_length
-from dispersion import taylor_insolation_class
 from dispersion import pasquill_guifford_stability_class
 
 # ----------------------------------------------------
@@ -179,6 +178,11 @@ def main():
     lat = 49.75
     lon = 6.66
     v = read_nc('../data/era5_ak_eu_2018.nc', lat, lon)
+
+#    v = pd.DataFrame(v)
+    v.index = v['time']
+    v.sort_index(inplace=True)
+   
     v['lmcc'] = np.maximum(v['lcc'], v['mcc'])
     v['kms'] = klug_manier_scheme(v['time'], v['ff'], v['tcc'], lat, lon, v['lmcc'])
 
@@ -195,74 +199,25 @@ def main():
     v['pts'] = pasquill_taylor_scheme(v['time'], v['ff'], v['tcc'], lat, lon, v['cbh'])
     v['pgc'] = pasquill_guifford_stability_class(v['time'], v['fsr'], v['Lo'])
 
-    import pandas as pd
-    data = pd.DataFrame(v)
+    w = pd.DataFrame(index=pd.date_range(start=v.index[0], 
+                                         end=v.index[-1],
+                                         freq='1h')) 
+    
+
+    v = v.drop(columns='time')
+    w['time'] = pd.Series(w.index)
+    data = w.join(v, how='left')
     print(pd.crosstab(data['kmc'],
                       data['pgc'],
                       margins = True))
 
     print(skm.classification_report(data['kmc'], data['pgc']))
 
-#    from matplotlib import pyplot as plt
-#    fig, ax = plt.subplots()
-#    ax.plot(v['time'], v['kmc']-0.05, label='L KM')
-#    ax.plot(v['time'], v['pgc']+0.0 , label='L PG')
-#    ax.plot(v['time'], v['kms']+0.05, label='K/M')
-#    ax.plot(v['time'], v['pts']+0.1 , label='P/G')
-#
-#    ax.plot(v['time'], m.radiation.fast_sun_position(v['time'],lat,lon)[0]/10, label='sun')
-#
-#    ax.plot(v['time'], v['t2m'], label='dry')
-#    ax.plot(v['time'], v['d2m'], label='wet')
-#    ax.plot(v['time'], v['Tv'], label='virt')
-#
-#    ax.plot(v['time'], v['rho'], label='rho')
-#
-#    ax.plot(v['time'], v['sp'], label='p_sfc')
-#
-#    ax.plot(v['time'], v['zust'], label='u*')
-#
-#    ax.plot(v['time'], v['ff'], label='ff')
-#    ax.plot(v['time'], v['zust']/0.4*np.log(10./v['fsr']) , label='u_neutral')
-#
-#    ax.plot(v['time'], v['sshf'], label='H')
-#    ax.plot(v['time'], v['slhf'], label='E')
-#    ax.plot(v['time'], (v['sshf']+0.06*v['slhf']), label='H_v')
-#
-#    ax.plot(v['time'], 2/v['Lm'], label='zeta')
-#    ax.set_ylim(-2,3)
-#
-#    ax.plot(v['time'], v['Lm'], label='L*')
-#    ax.set_ylim(-300,200)
-#    plt.hlines([ -77.3, -31.4, 0.,  62.1, 277.6],
-#               dt.datetime(2018, 6, 1),
-#               dt.datetime(2018, 6, 6))
-#
-#    ax.plot(v['time'], v['fsr'], label='z_0')
-#
-#    ax.plot(v['time'], v['tcc'], label='cloud total')
-#    ax.plot(v['time'], v['lmcc'], label='cloud med/low')
-#
-#    ax.set_xlim(dt.datetime(2018, 6, 1),
-#                dt.datetime(2018, 6, 6))
-#    ax.set_xlim(dt.datetime(2018, 6, 24),
-#                dt.datetime(2018, 6, 30))
-#    ax.set_xlim(dt.datetime(2018, 10, 1),
-#                dt.datetime(2018, 10, 6))
-#    plt.legend(loc="upper left")
-#    plt.show()
-
-#    from datetime import datetime as dt
-#    tupl = tuple('era_eu_2018' %H:%M').timetuple())[0:5]
-#
-#    dims, values = read_nc(tupl, pp)
-#    plot_ztw(dims, values, tupl, arrow_dist, file)
 
     for x in ['kms', 'kmc', 'pts', 'pgc']:
         logging.info('writing output file for: '+x)
-        df = pd.DataFrame({'FF': v['ff'], 'DD': v['dd'], 'KM': v[x],
-                           'time': pd.to_datetime(v['time'], utc=True)})
-        df = df.set_index('time')
+        df = pd.DataFrame({'FF': data['ff'], 'DD': data['dd'], 'KM': data[x]},
+                           index=data.index)
         ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean())
         ak.write('out_'+x+'.akterm')
 
