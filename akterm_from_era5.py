@@ -18,8 +18,7 @@ gn = m.constants.gn
 _check = m._utils._check
 
 from dispersion import klug_manier_scheme, pasquill_taylor_scheme
-from dispersion import klug_manier_stability_class, obukhov_length
-from dispersion import pasquill_guifford_stability_class
+from dispersion import stabilty_class, obukhov_length
 
 # ----------------------------------------------------
 
@@ -177,14 +176,16 @@ def main():
     '''
     lat = 49.75
     lon = 6.66
+    ele = 260
     v = read_nc('../data/era5_ak_eu_2018.nc', lat, lon)
 
 #    v = pd.DataFrame(v)
     v.index = v['time']
     v.sort_index(inplace=True)
-   
+
     v['lmcc'] = np.maximum(v['lcc'], v['mcc'])
-    v['kms'] = klug_manier_scheme(v['time'], v['ff'], v['tcc'], lat, lon, v['lmcc'])
+    v['kms'] = klug_manier_scheme(v['time'], v['ff'], v['tcc'],
+                                  lat, lon, ele, v['lmcc'])
 
     v['rho'] = v['sp']/(287*v['t2m'])
     v['Tv'] = [m.Humidity(t=v['t2m'][i],
@@ -195,14 +196,18 @@ def main():
                              Tv = v['Tv'],
                              H = v['sshf'],
                              E = v['slhf'])
-    v['kmc'] = klug_manier_stability_class(v['time'], v['fsr'], v['Lo'])
     v['pts'] = pasquill_taylor_scheme(v['time'], v['ff'], v['tcc'], lat, lon, v['cbh'])
-    v['pgc'] = pasquill_guifford_stability_class(v['time'], v['fsr'], v['Lo'])
 
-    w = pd.DataFrame(index=pd.date_range(start=v.index[0], 
+    v['kmc'] = stabilty_class('KM',v['time'], v['fsr'], v['Lo'].copy())
+
+    PG = stabilty_class('PG',v['time'], v['fsr']*0+0.52, v['Lo'])
+    # convert to corresponding AK number (class F&G->1)
+    v['pgc'] = [max((1,7-x)) for x in PG]
+
+    w = pd.DataFrame(index=pd.date_range(start=v.index[0],
                                          end=v.index[-1],
-                                         freq='1h')) 
-    
+                                         freq='1h'))
+
 
     v = v.drop(columns='time')
     w['time'] = pd.Series(w.index)
