@@ -5,6 +5,9 @@ Created on Fri Dec 17 13:36:08 2021
 
 @author: clemens
 """
+import os
+import argparse
+
 import numpy as np
 import pandas as pd
 import datetime as dt
@@ -19,7 +22,7 @@ _check = m._utils._check
 
 from dispersion import klug_manier_scheme, pasquill_taylor_scheme
 from dispersion import stabilty_class, obukhov_length
-
+from dispersion import vdi_3872_6_standard_wind
 # ----------------------------------------------------
 
 def spheric_distance(lat1, lon1, lat2, lon2):
@@ -78,7 +81,7 @@ def read_nc(ncfile, lat, lon):
         else:
             raise ValueError('target position out of grid')
         idx[l] = ii + (tgt[l]-dl[ii])/(dl[ii+1]-dl[ii])
-    logging.info(idx)
+    logging.debug(idx)
     pos=[None,None,None]
     if np.modf(idx['lon'])[0] <= 0.5:
         if np.modf(idx['lat'])[0] <= 0.5:
@@ -110,7 +113,7 @@ def read_nc(ncfile, lat, lon):
         pi, pj = pp
         plat = dims['lat'][pi]
         plon = dims['lon'][pj]
-        logging.info(str((pi,pj,plon,plat)))
+        logging.debug(str((pi,pj,plon,plat)))
         x.append(plon)
         y.append(plat)
     # calculate barycentric weights so that
@@ -174,17 +177,81 @@ def main():
     '''
     main routine
     '''
-    lat = 49.75
-    lon = 6.66
-    ele = 260
-    v = read_nc('../data/era5_ak_eu_2018.nc', lat, lon)
+    #
+    # defaults
+    #
+    logging_default=logging.INFO
+    # defaults
+    year=2018
+    station=5100
+    path='/localdata/druee/modelle/austal/era/data'
+    #
+    # command line args
+    #
+    parser = argparse.ArgumentParser(description='Climate data aggregation')
+    verb=parser.add_mutually_exclusive_group()
+    verb.add_argument('--debug', dest='verb', action='store_const',
+                       const=logging.DEBUG, help='show informative output')
+    verb.add_argument('-v','--verbose', dest='verb', action='store_const',
+                       const=logging.INFO, help='show detailed output')
+    parser.add_argument('-y','--year', dest='year', metavar='YEAR',
+                       help='year of interest [%04i]'%year)
+    parser.add_argument('-s','--station', dest='station', metavar='NR',
+                       help='DWD station code [%05i]'%station)
+    parser.add_argument('-p','--path', metavar='PATH',
+                       help='path to the data files')
+    args = parser.parse_args()
+    #
+    # logging level
+    #
+    if args.verb != None:
+      logging.root.setLevel(args.verb)
+    else:
+      logging.root.setLevel(logging_default)
+    if args.year != None:
+      year=int(args.year)
+    if args.station != None:
+      station=int(args.station)
+    if args.path != None:
+      path=args.path
 
-#    v = pd.DataFrame(v)
+    sstr = '{:05d}'.format(station)
+    stninfo = os.path.join(path,'TU_Stundenwerte_Beschreibung_Stationen.txt')
+    logging.info ("read station info from: %s"%stninfo)
+    with open(stninfo,'r') as f:
+        #skip header
+        f.readline()
+        f.readline()
+        for l in f.readlines():
+            if l[0:5] == sstr:
+                ele = float(l[31:40])
+                lat = float(l[41:50])
+                lon = float(l[51:60])
+                nam = (l[61:102]).strip()
+                break
+        else:
+            raise ValueError('station not found: %i'%station)
+    logging.info ("station name: %s"%nam)
+    logging.debug ("(lat,lon),ele: (%5f, %5f), %5f"%(lat, lon,ele))
+
+#    lat = 49.75
+#    lon = 6.66
+#    ele = 260
+
+    ncfile = os.path.join(path,'era5_ak_eu_%04i.nc'%year)
+
+    v = read_nc(ncfile, lat, lon)
     v.index = v['time']
     v.sort_index(inplace=True)
 
     v['lmcc'] = np.maximum(v['lcc'], v['mcc'])
-    v['kms'] = klug_manier_scheme(v['time'], v['ff'], v['tcc'],
+    z0 =v['fsr'].mean()
+    logging.info("roughness length: %6f m"%(z0))
+    v['v10'] = vdi_3872_6_standard_wind(v['ff'],
+                                        hap=10.0 + 7.*z0,
+                                        z0p=z0)
+
+    v['kms'] = klug_manier_scheme(v['time'], v['v10'], v['tcc'],
                                   lat, lon, ele, v['lmcc'])
 
     v['rho'] = v['sp']/(287*v['t2m'])
@@ -200,7 +267,7 @@ def main():
 
     v['kmc'] = stabilty_class('KM',v['time'], v['fsr'], v['Lo'].copy())
 
-    PG = stabilty_class('PG',v['time'], v['fsr']*0+0.52, v['Lo'])
+    PG = stabilty_class('PG',v['time'], v['fsr'], v['Lo'])
     # convert to corresponding AK number (class F&G->1)
     v['pgc'] = [max((1,7-x)) for x in PG]
 
@@ -224,7 +291,7 @@ def main():
         df = pd.DataFrame({'FF': data['ff'], 'DD': data['dd'], 'KM': data[x]},
                            index=data.index)
         ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean())
-        ak.write('out_'+x+'.akterm')
+        ak.write('out_{:05d}_{:04d}_'.format(station,year)+x+'.akterm')
 
 # ----------------------------------------------------
 # initalize: call main routine
