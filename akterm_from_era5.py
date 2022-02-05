@@ -327,7 +327,7 @@ def main():
     v.sort_index(inplace=True)
 
     if OUTPUT_RAW != '':
-        v.to_csv('exctracted_era5_{:05d}_{:04d}_.csv'.format(station,year),
+        v.to_csv('exctracted_era5_{:05d}_{:04d}.csv'.format(station,year),
                  float_format='%.2f', index=False, na_rep='-999')
 
     v['lmcc'] = np.maximum(v['lcc'], v['mcc'])
