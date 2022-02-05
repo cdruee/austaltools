@@ -24,6 +24,13 @@ from dispersion import klug_manier_scheme, pasquill_taylor_scheme
 from dispersion import stabilty_class, obukhov_length
 from dispersion import vdi_3872_6_standard_wind
 # ----------------------------------------------------
+# possible defaults: fixed_057 fixed_010 model_mean model_uv10 model_fsr
+WIND_VARIANT = os.environ.get('WIND_VARIANT', 'model_uv10')
+# possible defaults: barycentric nearest mean
+INTER_VARIANT = os.environ.get('INTER_VARIANT', 'barycentric')
+# possible values: empty or non-empty string:
+OUTPUT_RAW = os.environ.get('OUTPUT_RAW', '')
+# ----------------------------------------------------
 
 def spheric_distance(lat1, lon1, lat2, lon2):
     """
@@ -68,20 +75,36 @@ def read_nc(ncfile, lat, lon):
     dims['lat'] = lp['latitude'][:].data
     dims['lon'] = lp['longitude'][:].data
 
+    # make sure dims are ascending:
+    flip = {'lon': False, 'lat': False}
+    for l in 'lat','lon':
+        if not np.all(np.diff(dims[l]) >= 0):
+            dims[l] = np.flip(dims[l])
+            flip[l] = True
 
     # target position in grid coordinates:
+#    idx = {'lat':-1, 'lon':-1}
+#    tgt = {'lat':lat, 'lon':lon}
+#    for l in ['lat', 'lon']:
+#        dl = np.sort(dims[l])
+#        for i,v in enumerate(dl):
+#            print(i,v)
+#            ii = i
+#            if v >= tgt[l]:
+#                break
+#        else:
+#            raise ValueError('target position out of grid')
+#        idx[l] = ii + (tgt[l]-dl[ii])/(dl[ii+1]-dl[ii])
+
     idx = {'lat':-1, 'lon':-1}
     tgt = {'lat':lat, 'lon':lon}
     for l in ['lat', 'lon']:
-        dl = np.sort(dims[l])
-        for i,v in enumerate(dl):
-            ii = i
-            if v >= tgt[l]:
-                break
-        else:
-            raise ValueError('target position out of grid')
-        idx[l] = ii + (tgt[l]-dl[ii])/(dl[ii+1]-dl[ii])
-    logging.debug(idx)
+        # position of largest dims value smaller than tgt
+        ii = np.argmax(np.where(dims[l]<=tgt[l], dims[l], -999))
+        # add fraction
+        idx[l] = ii + (tgt[l]-dims[l][ii])/(dims[l][ii+1]-dims[l][ii])
+
+    logging.info('idx: %s'%str(idx))
     pos=[None,None,None]
     if np.modf(idx['lon'])[0] <= 0.5:
         if np.modf(idx['lat'])[0] <= 0.5:
@@ -91,40 +114,53 @@ def read_nc(ncfile, lat, lon):
             pos[2]=(np.int(idx['lon']    ), np.int(idx['lat'] + 1))
         else:
             # NW corner
-            pos[0]=(np.int(idx['lon']    ), np.int(idx['lat']    ))
+            pos[0]=(np.int(idx['lon']    ), np.int(idx['lat'] + 1))
             pos[1]=(np.int(idx['lon'] + 1), np.int(idx['lat'] + 1))
-            pos[2]=(np.int(idx['lon']    ), np.int(idx['lat'] + 1))
+            pos[2]=(np.int(idx['lon']    ), np.int(idx['lat']    ))
     else:
         if np.modf(idx['lat'])[0] <= 0.5:
             # SE corner
-            pos[0]=(np.int(idx['lon']    ), np.int(idx['lat']    ))
-            pos[1]=(np.int(idx['lon'] + 1), np.int(idx['lat']    ))
-            pos[2]=(np.int(idx['lon'] + 1), np.int(idx['lat'] + 1))
-        else:
-            # NE corner
             pos[0]=(np.int(idx['lon'] + 1), np.int(idx['lat']    ))
             pos[1]=(np.int(idx['lon'] + 1), np.int(idx['lat'] + 1))
-            pos[2]=(np.int(idx['lon']    ), np.int(idx['lat'] + 1))
+            pos[2]=(np.int(idx['lon']    ), np.int(idx['lat']    ))
+        else:
+            # NE corner
+            pos[0]=(np.int(idx['lon'] + 1), np.int(idx['lat'] + 1))
+            pos[1]=(np.int(idx['lon']    ), np.int(idx['lat'] + 1))
+            pos[2]=(np.int(idx['lon'] + 1), np.int(idx['lat']    ))
+
+    pi, pj = pos[0]
+    logging.info(str((pi,pj,dims['lon'][pi],dims['lat'][pj])))
 
 
-    x=[]
-    y=[]
-    for pp in pos:
-        pi, pj = pp
-        plat = dims['lat'][pi]
-        plon = dims['lon'][pj]
-        logging.debug(str((pi,pj,plon,plat)))
-        x.append(plon)
-        y.append(plat)
-    # calculate barycentric weights so that
-    # val(x,y) = w1*val(x1,y1) + w2*val(x2,y2) + w3*val(x3,y3)
-    # https://en.wikipedia.org/wiki/Barycentric_coordinate_system
-    #
-    w0 = (((y[1]-y[2])*(lon-x[2]) + (x[2]-x[1])*(lat-y[2])) /
-          ((y[1]-y[2])*(x[0]-x[2]) + (x[2]-x[1])*(y[0]-y[2])))
-    w1 = (((y[2]-y[0])*(lon-x[2]) + (x[0]-x[2])*(lat-y[2])) /
-          ((y[1]-y[2])*(x[0]-x[2]) + (x[2]-x[1])*(y[0]-y[2])))
-    w2 = 1 - (w0 + w1)
+    if INTER_VARIANT == 'barycentric':
+        # calculate barycentric weights so that
+        # val(x,y) = w1*val(x1,y1) + w2*val(x2,y2) + w3*val(x3,y3)
+        # https://en.wikipedia.org/wiki/Barycentric_coordinate_system
+        #
+        x=[]
+        y=[]
+        for pp in pos:
+            pi, pj = pp
+            x.append(dims['lon'][pi])
+            y.append(dims['lat'][pj])
+        w0 = (((y[1]-y[2])*(lon-x[2]) + (x[2]-x[1])*(lat-y[2])) /
+              ((y[1]-y[2])*(x[0]-x[2]) + (x[2]-x[1])*(y[0]-y[2])))
+        w1 = (((y[2]-y[0])*(lon-x[2]) + (x[0]-x[2])*(lat-y[2])) /
+              ((y[1]-y[2])*(x[0]-x[2]) + (x[2]-x[1])*(y[0]-y[2])))
+        w2 = 1 - (w0 + w1)
+    elif INTER_VARIANT == 'mean':
+        w0 = 1./3.
+        w1 = 1./3.
+        w2 = 1./3.
+    elif INTER_VARIANT == 'nearest':
+        w0 = 1.
+        w1 = 0.
+        w2 = 0.
+    else:
+        raise ValueError('unknown interpolation variant: %s'%INTER_VARIANT)
+    logging.info('interpolation variant: %s'%INTER_VARIANT)
+    logging.info('weights: %6.2f %6.2f %6.2f'%(w0,w1,w2))
 
     values = pd.DataFrame()
     epoch = dt.datetime(1900, 1, 1, 0, 0, tzinfo=dt.timezone.utc)
@@ -135,8 +171,13 @@ def read_nc(ncfile, lat, lon):
                 'lcc', 'mcc', 'tcc']:
         logging.info('interpolating value: %s'%val)
         v=[None,None,None]
-        for i in range(3):
-            v[i] = pd.Series(lp[val][:, pi, pj].data)
+        for i,pp in enumerate(pos):
+            pi, pj = pp
+            if flip['lon']:
+                pi = len(dims['lon']) - 1 - pi
+            if flip['lat']:
+                pj = len(dims['lat']) - 1 - pj
+            v[i] = pd.Series(lp[val][:, pj, pi].data)
         values[val] = w0*v[0] + w1*v[1] + w2*v[2]
 #
 #   surface fluxes are in J/hm² down, convert to W/m² up:
@@ -154,8 +195,26 @@ def read_nc(ncfile, lat, lon):
 #   https://confluence.ecmwf.int/display/FUG/9.3+Surface+Wind
 #
 #   Therefore: u10 = u*/k * ln(z/z0)
-    values['ff'] = values['zust']/kappa*np.log(10./values['fsr'])
-    values['dd'] = np.rad2deg(np.arctan2((-values['v10']),(-values['u10'])))
+    if WIND_VARIANT=='fixed_057':
+        z0 = 0.57
+        values['fsr'] = z0
+        values['ff'] = values['zust']/kappa*np.log((10.+7.*z0)/z0)
+    elif WIND_VARIANT=='fixed_010':
+        z0 = 0.10
+        values['fsr'] = z0
+        values['ff'] = values['zust']/kappa*np.log((10.+7.*z0)/z0)
+    elif WIND_VARIANT=='model_mean':
+        z0 = np.nanmean(values['zust'])
+        values['fsr'] = z0
+        values['ff'] = values['zust']/kappa*np.log((10.+7.*z0)/z0)
+    elif WIND_VARIANT=='model_uv10':
+        values['ff'] = np.sqrt(values['u10']**2 + values['v10']**2)
+    elif WIND_VARIANT=='model_fsr':
+        values['ff'] = values['zust']/kappa*np.log((10.+7.*values['fsr'])/values['fsr'])
+    else:
+        raise ValueError('unknown wind variant: %s'%WIND_VARIANT)
+    logging.info('wind variant: %s'%WIND_VARIANT)
+    values['dd'] = np.rad2deg(np.arctan2((-values['u10']),(-values['v10'])))
 
     return values
 
@@ -196,53 +255,80 @@ def main():
                        const=logging.INFO, help='show detailed output')
     parser.add_argument('-y','--year', dest='year', metavar='YEAR',
                        help='year of interest [%04i]'%year)
-    parser.add_argument('-s','--station', dest='station', metavar='NR',
-                       help='DWD station code [%05i]'%station)
     parser.add_argument('-p','--path', metavar='PATH',
                        help='path to the data files')
+    locpars = parser.add_mutually_exclusive_group()
+    locpars.add_argument('-s','--station', dest='station', metavar='NR',
+                       help='position by DWD station code [%05i]'%station)
+    locpars.add_argument('-l','--latlon', dest='latlon', metavar='DEGRESS DEGREES',
+                       help='position by geographic location')
+    parser.add_argument('-e','--elevation', dest='ele', metavar='METERS',
+                       help='suface elevation only allowed with -l')
     args = parser.parse_args()
     #
     # logging level
     #
     if args.verb != None:
-      logging.root.setLevel(args.verb)
+        logging.root.setLevel(args.verb)
     else:
-      logging.root.setLevel(logging_default)
+        logging.root.setLevel(logging_default)
+    if args.station and args.ele:
+        raise argparse.ArgumentError('-s and -e are mutually exclusive ...')
     if args.year != None:
-      year=int(args.year)
+        year=int(args.year)
     if args.station != None:
-      station=int(args.station)
+        station=int(args.station)
+    if args.latlon != None:
+        lat=float(args.latlon[0])
+        lon=float(args.latlon[1])
+        station = None
+    if args.ele != None:
+        ele = float(args.ele)
     if args.path != None:
-      path=args.path
-
-    sstr = '{:05d}'.format(station)
-    stninfo = os.path.join(path,'TU_Stundenwerte_Beschreibung_Stationen.txt')
-    logging.info ("read station info from: %s"%stninfo)
-    with open(stninfo,'r') as f:
-        #skip header
-        f.readline()
-        f.readline()
-        for l in f.readlines():
-            if l[0:5] == sstr:
-                ele = float(l[31:40])
-                lat = float(l[41:50])
-                lon = float(l[51:60])
-                nam = (l[61:102]).strip()
-                break
-        else:
-            raise ValueError('station not found: %i'%station)
-    logging.info ("station name: %s"%nam)
-    logging.debug ("(lat,lon),ele: (%5f, %5f), %5f"%(lat, lon,ele))
+        path=args.path
 
 #    lat = 49.75
 #    lon = 6.66
 #    ele = 260
+
+    if not station is None:
+#        sstr = '{:05d}'.format(station)
+#        stninfo = os.path.join(path,'TU_Stundenwerte_Beschreibung_Stationen.txt')
+#        logging.info ("read station info from: %s"%stninfo)
+#        with open(stninfo,'r') as f:
+#            #skip header
+#            f.readline()
+#            f.readline()
+#            for l in f.readlines():
+#                if l[0:5] == sstr:
+#                    ele = float(l[31:40])
+#                    lat = float(l[41:50])
+#                    lon = float(l[51:60])
+#                    nam = (l[61:102]).strip()
+#                    break
+#            else:
+#                raise ValueError('station not found: %i'%station)
+#        logging.info ("station name: %s"%nam)
+
+        import dwd_stationinfo
+        lat, lon, ele, nam = dwd_stationinfo.dwd_stationinfo(station)
+
+        logging.info ("station name: %s"%nam)
+        logging.info ("lat,lon : %f, %f"%(lat, lon))
+    else:
+        station=0
+    logging.debug ("(lat,lon),ele: (%5f, %5f), %5f"%(lat, lon,ele))
+
 
     ncfile = os.path.join(path,'era5_ak_eu_%04i.nc'%year)
 
     v = read_nc(ncfile, lat, lon)
     v.index = v['time']
     v.sort_index(inplace=True)
+
+    if OUTPUT_RAW != '':
+        v.to_csv('exctracted_era5_{:05d}_{:04d}_.csv'.format(station,year),
+                 float_format='%.2f', index=False, na_rep='-999')
 
     v['lmcc'] = np.maximum(v['lcc'], v['mcc'])
     z0 =v['fsr'].mean()
@@ -279,11 +365,11 @@ def main():
     v = v.drop(columns='time')
     w['time'] = pd.Series(w.index)
     data = w.join(v, how='left')
-    print(pd.crosstab(data['kmc'],
-                      data['pgc'],
-                      margins = True))
-
-    print(skm.classification_report(data['kmc'], data['pgc']))
+#    print(pd.crosstab(data['kmc'],
+#                      data['pgc'],
+#                      margins = True))
+#
+#    print(skm.classification_report(data['kmc'], data['pgc']))
 
 
     for x in ['kms', 'kmc', 'pts', 'pgc']:
