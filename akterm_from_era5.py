@@ -330,40 +330,57 @@ def main():
         v.to_csv('exctracted_era5_{:05d}_{:04d}.csv'.format(station,year),
                  float_format='%.2f', index=False, na_rep='-999')
 
+    logging.debug ('lmcc')
     v['lmcc'] = np.maximum(v['lcc'], v['mcc'])
     z0 =v['fsr'].mean()
     logging.info("roughness length: %6f m"%(z0))
+
+    logging.debug ('v10')
     v['v10'] = vdi_3872_6_standard_wind(v['ff'],
                                         hap=10.0 + 7.*z0,
                                         z0p=z0)
 
+    logging.debug ('kms')
     v['kms'] = klug_manier_scheme(v['time'], v['v10'], v['tcc'],
                                   lat, lon, ele, v['lmcc'])
 
-    v['rho'] = v['sp']/(287*v['t2m'])
+    logging.debug ('rho')
+    v['rho'] = m.gas_rho(p=v['sp'], T=v['t2m'])
+    logging.debug ('Tv')
     v['Tv'] = [m.Humidity(t=v['t2m'][i],
                           p=v['sp'][i],
                           td=v['d2m'][i]).tvirt() for i in range(v['t2m'].size)]
-    v['Lo'] = obukhov_length(ust=v['zust'],
+    logging.debug ('Lo')
+    # calculate u* from "ff" and roughness instead of model-provided "zust"
+    v['ust'] = v['ff']*kappa/(np.log((10+7*v['fsr'])/v['fsr']))
+    v['Lo'] = obukhov_length(ust=v['ust'],
                              rho=v['rho'],
                              Tv = v['Tv'],
                              H = v['sshf'],
                              E = v['slhf'])
+    if OUTPUT_RAW != '':
+        v[['time','v10','rho','Tv','Lo','ust']].to_csv('calculated_era5_{:05d}_{:04d}.csv'.format(station,year),
+                 float_format='%.2f', index=False, na_rep='-999')
+
+    logging.debug ('pts')
     v['pts'] = pasquill_taylor_scheme(v['time'], v['ff'], v['tcc'], lat, lon, v['cbh'])
 
+    logging.debug ('kmc')
     v['kmc'] = stabilty_class('KM',v['time'], v['fsr'], v['Lo'].copy())
 
+    logging.debug ('pgc')
     PG = stabilty_class('PG',v['time'], v['fsr'], v['Lo'])
     # convert to corresponding AK number (class F&G->1)
     v['pgc'] = [max((1,7-x)) for x in PG]
 
+    logging.debug ('w')
     w = pd.DataFrame(index=pd.date_range(start=v.index[0],
                                          end=v.index[-1],
                                          freq='1h'))
 
-
+    logging.debug ('v')
     v = v.drop(columns='time')
-    w['time'] = pd.Series(w.index)
+    w['time'] = w.index.to_series
     data = w.join(v, how='left')
 #    print(pd.crosstab(data['kmc'],
 #                      data['pgc'],
