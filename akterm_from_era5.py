@@ -11,7 +11,6 @@ import argparse
 import numpy as np
 import pandas as pd
 import datetime as dt
-from sklearn import metrics as skm
 import logging
 
 import readmet
@@ -262,6 +261,8 @@ def main():
                        help='position by DWD station code [%05i]'%station)
     locpars.add_argument('-l','--latlon', dest='latlon', metavar='DEGRESS DEGREES',
                        help='position by geographic location')
+    parser.add_argument('-n','--name', dest='name', metavar='NAME',
+                       help='name for the position')
     parser.add_argument('-e','--elevation', dest='ele', metavar='METERS',
                        help='suface elevation only allowed with -l')
     args = parser.parse_args()
@@ -272,52 +273,35 @@ def main():
         logging.root.setLevel(args.verb)
     else:
         logging.root.setLevel(logging_default)
-    if args.station and args.ele:
-        raise argparse.ArgumentError('-s and -e are mutually exclusive ...')
+    if args.path != None:
+        path=args.path
     if args.year != None:
         year=int(args.year)
     if args.station != None:
         station=int(args.station)
     if args.latlon != None:
-        lat=float(args.latlon[0])
-        lon=float(args.latlon[1])
         station = None
-    if args.ele != None:
-        ele = float(args.ele)
-    if args.path != None:
-        path=args.path
+    if args.latlon is not None and args.name is None:
+      raise parser.error('-n is required if -l is specified')
+    if station is not None and args.name is not None:
+      logging.warning('-n is given along with -s and will override station name')
+    if args.station and args.ele:
+        raise argparse.ArgumentError('-s and -e are mutually exclusive ...')
 
-#    lat = 49.75
-#    lon = 6.66
-#    ele = 260
-
-    if not station is None:
-#        sstr = '{:05d}'.format(station)
-#        stninfo = os.path.join(path,'TU_Stundenwerte_Beschreibung_Stationen.txt')
-#        logging.info ("read station info from: %s"%stninfo)
-#        with open(stninfo,'r') as f:
-#            #skip header
-#            f.readline()
-#            f.readline()
-#            for l in f.readlines():
-#                if l[0:5] == sstr:
-#                    ele = float(l[31:40])
-#                    lat = float(l[41:50])
-#                    lon = float(l[51:60])
-#                    nam = (l[61:102]).strip()
-#                    break
-#            else:
-#                raise ValueError('station not found: %i'%station)
-#        logging.info ("station name: %s"%nam)
-
+    if station is not None:
         import dwd_stationinfo
         lat, lon, ele, nam = dwd_stationinfo.dwd_stationinfo(station)
-
-        logging.info ("station name: %s"%nam)
-        logging.info ("lat,lon : %f, %f"%(lat, lon))
     else:
-        station=0
-    logging.debug ("(lat,lon),ele: (%5f, %5f), %5f"%(lat, lon,ele))
+        lat, lon = [float(x) for x in args.latlon]
+        if args.ele:
+            ele = float(args.ele)
+        else:
+            ele = 232.
+            logging.warning('-e not given with -l, assuming median elevation: %f m'%ele)
+        station = 0
+    if args.name is not None:
+        nam = args.name
+    logging.info('selected position: %.2f %.2f %.0f (%s)'%(lat,lon,ele,nam))
 
 
     ncfile = os.path.join(path,'era5_ak_eu_%04i.nc'%year)
