@@ -19,6 +19,8 @@ kappa = m.constants.kappa
 gn = m.constants.gn
 _check = m._utils._check
 
+from dwd_stationinfo import dwd_stationinfo,slugify
+
 from dispersion import klug_manier_scheme, pasquill_taylor_scheme
 from dispersion import stabilty_class, obukhov_length
 from dispersion import vdi_3872_6_standard_wind
@@ -289,8 +291,7 @@ def main():
         raise argparse.ArgumentError('-s and -e are mutually exclusive ...')
 
     if station is not None:
-        import dwd_stationinfo
-        lat, lon, ele, nam = dwd_stationinfo.dwd_stationinfo(station)
+        lat, lon, ele, nam = dwd_stationinfo(station)
     else:
         lat, lon = [float(x) for x in args.latlon]
         if args.ele:
@@ -378,7 +379,9 @@ def main():
         df = pd.DataFrame({'FF': data['ff'], 'DD': data['dd'], 'KM': data[x]},
                            index=data.index)
         ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean())
-        ak.write('out_{:05d}_{:04d}_'.format(station,year)+x+'.akterm')
+        outname = 'out_{:s}_{:04d}_'.format(slugify(nam),year)+x+'.akterm'
+        logging.info('writing putput file: %s'%outname)
+        ak.write(outname)
 
 # ----------------------------------------------------
 # initalize: call main routine
