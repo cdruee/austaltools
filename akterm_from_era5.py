@@ -158,6 +158,8 @@ def read_nc(ncfile, lat, lon):
         w0 = 1.
         w1 = 0.
         w2 = 0.
+        logging.debug("extracting position %.4f / %.4f "%(dims['lon'][pos[0][0]],
+                                                          dims['lat'][pos[0][1]]))
     else:
         raise ValueError('unknown interpolation variant: %s'%INTER_VARIANT)
     logging.info('interpolation variant: %s'%INTER_VARIANT)
