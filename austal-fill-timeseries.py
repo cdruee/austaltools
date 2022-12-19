@@ -8,7 +8,7 @@ import pandas as pd
 import readmet
 import yaml
 
-VERSION='0.1.0'
+VERSION='0.1.1'
 
 def parse_time_string(string):
     logging.debug('parse_time_string: %s' % string)
@@ -125,21 +125,22 @@ def parse_cycle(c_id, c_info, time, dt):
                 if s_type == 'const':
                     sequ_value.append(s_value)
                 elif s_type == 'ramp':
-                    x = ((s_value - value_last) *
+                    x = (value_last +
+                         (s_value - value_last) *
                          (time_pointer - time_last) / s_delta)
                     sequ_value.append(x)
                 else:
                     raise ValueError('unknown sequence element: %s' % s_type)
-                time_pointer = pd.to_timedelta(time_pointer + dt)
+                time_pointer = time_pointer + dt
 
             time_last = time_pointer
             value_last = s_value
     sequence = pd.Series(sequ_value, index=sequ_time)
     logging.debug(format(sequence))
 
-    if any([x < sequence.index[-1][0] for x in start.diff()[1:]]):
+    if any([x < sequence.index[-1] for x in start.diff()[1:]]):
         logging.warning('sequence longer than start interval: %s' % c_id)
-    if (start.values[-1] + sequence.index[-1][0]) > time.values[-1]:
+    if (start.values[-1] + sequence.index[-1]) > time.values[-1]:
         logging.warning('total length > time period to fill: %s' % c_id)
 
     # generate cycle:
@@ -160,6 +161,7 @@ def get_cycle(file,time):
     dt = time.diff()[1:].unique()
     if len(dt) > 1:
         raise ValueError('time intervals are not uniform')
+    dt = pd.Timedelta(dt[0])
 
     # read cycle file
     with open(file, 'r') as f:
