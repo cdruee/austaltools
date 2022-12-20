@@ -8,25 +8,26 @@ import pandas as pd
 import readmet
 import yaml
 
-VERSION='0.1.1'
+from ._version import __version__
+
 
 def parse_time_string(string):
     logging.debug('parse_time_string: %s' % string)
     for x in string:
-        if x not in ['-',',','/'] and not x.isdigit():
+        if x not in ['-', ',', '/'] and not x.isdigit():
             raise ValueError('parse time: illegal character in string: %s' % x)
     if '/' in string and ',' in string:
-            raise ValueError('parse time: list and step are mutally exclusive')
+        raise ValueError('parse time: list and step are mutally exclusive')
     if '-' in string and ',' in string:
-            raise ValueError('parse time: list and range are mutally exclusive')
+        raise ValueError('parse time: list and range are mutally exclusive')
     if '/' in string:
-        rang,step = string.split('/',1)
+        rang, step = string.split('/', 1)
         step = int(step)
     else:
         rang = string
         step = 1
     if '-' in rang:
-        start_stop = [int(x) for x in rang.split('-',1)]
+        start_stop = [int(x) for x in rang.split('-', 1)]
         discrete = None
     elif ',' in rang:
         start_stop = None
@@ -46,6 +47,7 @@ def parse_time_string(string):
         res = discrete
     return res
 
+
 def parse_time_unit(string):
     if string.lower() in ['month', 'months']:
         period = 'months'
@@ -58,6 +60,7 @@ def parse_time_unit(string):
     else:
         raise ValueError('parse unit: unknown: %s' % string)
     return period
+
 
 def parse_time(info, name='', multi=True):
     if "time" not in info.keys():
@@ -75,6 +78,7 @@ def parse_time(info, name='', multi=True):
             count = count[0]
     return count, unit
 
+
 def parse_cycle(c_id, c_info, time, dt):
     if "source" not in c_info.keys():
         raise ValueError('cycle has no start info: %s' % c_id)
@@ -87,7 +91,7 @@ def parse_cycle(c_id, c_info, time, dt):
     if "at" not in s_info.keys():
         raise ValueError('start has no at info: %s' % c_id)
     a_count, a_unit = parse_time(s_info['at'], name='at', multi=True)
-    a_time = [time[0] + pd.DateOffset(**{a_unit:x}) for x in a_count]
+    a_time = [time[0] + pd.DateOffset(**{a_unit: x}) for x in a_count]
     logging.debug('a_time: ' + format(a_time))
 
     if "offset" not in s_info.keys():
@@ -96,7 +100,7 @@ def parse_cycle(c_id, c_info, time, dt):
     else:
         o_count, o_unit = parse_time(s_info['offset'],
                                      name='offset', multi=True)
-        o_time = [pd.DateOffset(**{o_unit:x}) for x in o_count]
+        o_time = [pd.DateOffset(**{o_unit: x}) for x in o_count]
     logging.debug('o_time: ' + format(o_time))
     start = pd.Series([x + y for x in a_time for y in o_time])
     logging.debug('start: ' + format(start))
@@ -112,13 +116,13 @@ def parse_cycle(c_id, c_info, time, dt):
         logging.debug(format(s_item))
         if len(s_item) > 1:
             raise ValueError('sequence item entry #%d not unique: %s' %
-                             (i,c_id))
-        for  s_type, s_info in s_item.items():
+                             (i, c_id))
+        for s_type, s_info in s_item.items():
             if "value" not in s_info.keys():
                 raise ValueError('start has no at info: %s' % c_id)
             s_value = s_info['value']
             s_count, s_unit = parse_time(s_info,
-                                            name='sequence', multi=False)
+                                         name='sequence', multi=False)
             s_delta = pd.Timedelta(value=s_count, unit=s_unit)
             while time_pointer < time_last + s_delta:
                 sequ_time.append(time_pointer)
@@ -147,13 +151,13 @@ def parse_cycle(c_id, c_info, time, dt):
     # copy sequence to each start time
     cycle = pd.Series(0, index=time, name=c_id)
     for x in start:
-        for dx,y in sequence.items():
+        for dx, y in sequence.items():
             cycle[x + dx] = y
 
     return source, cycle
 
 
-def get_cycle(file,time):
+def get_cycle(file, time):
     # test and evaluate time
     if not type(time) in [list, pd.Series]:
         raise ValueError('time is not list-like')
@@ -187,6 +191,7 @@ def get_cycle(file,time):
 
     return res
 
+
 def do_fill(action, path, cycle_file, source_id,
             output, hour_begin, hour_end, holiday_week, holiday_month,
             **kwargs):
@@ -205,7 +210,7 @@ def do_fill(action, path, cycle_file, source_id,
     values = zeitreihe.data
     if action == 'list':
         logging.info('listing sources in file')
-        print('source IDs: '+' '.join(sids))
+        print('source IDs: ' + ' '.join(sids))
         return
     elif action in ['week-5', 'week-6']:
         logging.info('filling work weeks for source: %s' % source_id)
@@ -221,15 +226,15 @@ def do_fill(action, path, cycle_file, source_id,
         if holiday_week is None:
             holiday_week = []
         time = pd.to_datetime(values['te'])
-        for i,t in enumerate(time):
+        for i, t in enumerate(time):
             if t.month in holiday_month:
                 continue
             if t.week in holiday_week:
                 continue
             if ((action == 'week-5' and 0 <= t.weekday() < 5) or
-                (action == 'week-6' and 0 <= t.weekday() < 6)):
+                    (action == 'week-6' and 0 <= t.weekday() < 6)):
                 if hour_begin <= t.hour <= hour_end:
-                    values.loc[i,source_id] = float(output[0])
+                    values.loc[i, source_id] = float(output[0])
     elif action in ['cycle']:
         cyclefile = os.path.join(path, cycle_file)
         logging.info('filling cycles from: %s' % cyclefile)
@@ -245,89 +250,90 @@ def do_fill(action, path, cycle_file, source_id,
     zeitreihe.write(name)
 
 
-
 def main():
     # defaults
-    default={'hour-begin': 8,
-             'hour-end': 16,
-             'cycle-file': 'cycle.yaml',
-             'holiday-week': [25, 26, 27, 28, 29, 30, 52],
-             'holiday-month': [7],
-             'path': '.'
-             }
+    default = {'hour-begin': 8,
+               'hour-end': 16,
+               'cycle-file': 'cycle.yaml',
+               'holiday-week': [25, 26, 27, 28, 29, 30, 52],
+               'holiday-month': [7],
+               'path': '.'
+               }
     parser = argparse.ArgumentParser(description='fill source-strentgh ' +
-                                     'columns in "zeitreihe.dmna"')
+                                                 'columns in "zeitreihe.dmna"')
     verb = parser.add_mutually_exclusive_group()
     verb.add_argument('--debug', dest='verb', action='store_const',
-                       const=logging.DEBUG, help='show informative output')
-    verb.add_argument('-v','--verbose', dest='verb', action='store_const',
-                       const=logging.INFO, help='show detailed output')
+                      const=logging.DEBUG, help='show informative output')
+    verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
+                      const=logging.INFO, help='show detailed output')
     sched = parser.add_mutually_exclusive_group(required=True)
-    sched.add_argument('-l','--list',
+    sched.add_argument('-l', '--list',
                        action='store_const', dest='action', const='list',
                        help='list source column IDs in file' +
-                       'and exit without midifying "zeitreihe.dmna".' +
-                       '[default]')
-    sched.add_argument('-c','--cycle',
+                            'and exit without midifying "zeitreihe.dmna".' +
+                            '[default]')
+    sched.add_argument('-c', '--cycle',
                        action='store_const', dest='action', const='cycle',
                        help='use production cycle from file')
-    sched.add_argument('-w','--week-5',
+    sched.add_argument('-w', '--week-5',
                        action='store_const', dest='action', const='week-5',
                        help='source active Mon-Fri')
-    sched.add_argument('-W','--week-6',
+    sched.add_argument('-W', '--week-6',
                        action='store_const', dest='action', const='week-6',
                        help='source active Mon-Sat')
-    parser.add_argument('-b','--hour-begin', metavar='HOUR',
+    parser.add_argument('-b', '--hour-begin', metavar='HOUR',
                         nargs=1,
                         help='daily work begin time in hours 0-23. ' +
-                        'Only relevant with -w or -W. ' +
-                        '[%02i]'%default['hour-begin'],
+                             'Only relevant with -w or -W. ' +
+                             '[%02i]' % default['hour-begin'],
                         default=default['hour-begin'])
-    parser.add_argument('-e','--hour-end', metavar='HOUR',
+    parser.add_argument('-e', '--hour-end', metavar='HOUR',
                         nargs=1,
                         help='daily work end time in hours, ' +
-                        '0-23. Only relevant with -w or -W .' +
-                        '[%02i]'%default['hour-end'],
+                             '0-23. Only relevant with -w or -W .' +
+                             '[%02i]' % default['hour-end'],
                         default=default['hour-end'])
     hold = parser.add_mutually_exclusive_group()
-    hold.add_argument('-u','--holiday-week', nargs="+",
-                        help='work-free weeks 1-52 as space-delimited list. ' +
-                        'Only relevant with -w or -W. [' +
-                        ' '.join(['%d' % x for x in default['holiday-week']]) +
-                        ']',
-                        default=default['holiday-week'])
-    hold.add_argument('-U','--holiday-month', nargs="+",
-                        help='work-free months 1-12 as space-delimited list. ' +
-                        'Only relevant with -w or -W. ' +
-                        ' '.join(['%d' % x for x in default['holiday-month']]) +
-                        ']',
-                        default=default['holiday-month'])
-    parser.add_argument('-f','--cycle-file', nargs=1,
-                       help='emission-cycle description file. ' +
-                       'only relevant with -c. ' +
-                       '[%s]'%default['cycle-file'],
-                       default=default['cycle-file'])
-    parser.add_argument('-s','--source-id', nargs=1,
-                       help='source ID. Required if more than one source. ' +
-                       'list IDs in file with -l.',
-                       default=None)
+    hold.add_argument('-u', '--holiday-week', nargs="+",
+                      help='work-free weeks 1-52 as space-delimited list. ' +
+                           'Only relevant with -w or -W. [' +
+                           ' '.join(['%d' % x
+                                     for x in default['holiday-week']]) +
+                           ']',
+                      default=default['holiday-week'])
+    hold.add_argument('-U', '--holiday-month', nargs="+",
+                      help='work-free months 1-12 as space-delimited list. ' +
+                           'Only relevant with -w or -W. ' +
+                           ' '.join(['%d' % x
+                                     for x in default['holiday-month']]) +
+                           ']',
+                      default=default['holiday-month'])
+    parser.add_argument('-f', '--cycle-file', nargs=1,
+                        help='emission-cycle description file. ' +
+                             'only relevant with -c. ' +
+                             '[%s]' % default['cycle-file'],
+                        default=default['cycle-file'])
+    parser.add_argument('-s', '--source-id', nargs=1,
+                        help='source ID. Required if more than one source. ' +
+                             'list IDs in file with -l.',
+                        default=None)
     parser.add_argument('-o', '--output', nargs=1,
-                       help='output of the source in g/s. ' +
-                       'Only relevant with -w or -W. ',
-                       default=None)
+                        help='output of the source in g/s. ' +
+                             'Only relevant with -w or -W. ',
+                        default=None)
     parser.add_argument('path', metavar='PATH', nargs='?',
-                       help='directory where "zeitreihe.dmna" is stored '
-                       '[%s]'%default['path'],
-                       default=default['path'])
+                        help='directory where "zeitreihe.dmna" is stored '
+                             '[%s]' % default['path'],
+                        default=default['path'])
     args = parser.parse_args()
     #
     # logging level
     #
-    if args.verb != None:
+    if args.verb is not None:
         logging.getLogger().setLevel(args.verb)
     else:
         logging.getLogger().setLevel(logging.WARNING)
-    logging.info(os.path.basename(__file__)+' version: '+VERSION)
+    logging.info(os.path.basename(__file__) + ' version: ' + __version__)
 
     do_fill(**vars(args))
 
