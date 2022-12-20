@@ -1,8 +1,14 @@
-__pycache__
 *~
-
 *.akterm
 *.png
 *.csv
 *.nc
 *.log
+
+__pycache__
+
+austal_tools.egg-info/
+build/
+.tox/
+.pytest_cache/
+.idea/
