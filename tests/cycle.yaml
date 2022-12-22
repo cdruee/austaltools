@@ -1,0 +1,38 @@
+cycle1:
+  source: 01.so2
+  start:
+    at:
+      time: 3-9
+      unit: month
+    offset:
+      time: 1,3
+      unit: week
+  sequence:
+  - ramp:
+      time: 1
+      unit: day
+      value: 1.0
+  - const:
+      time: 12
+      unit: hour
+      value: 1.0
+  - ramp:
+      time: 12
+      unit: hour
+      value: 0.5
+  - const:
+      time: 12
+      unit: hour
+      value: 0.5
+
+cycle2:
+  source: 01.so2
+  start:
+    at:
+      time: 0
+      unit: day
+  sequence:
+  - const:
+      time: 366
+      unit: day
+      value: 1.0

@@ -8,7 +8,7 @@ import pandas as pd
 import readmet
 import yaml
 
-from ._version import __version__
+from _version import __version__
 
 
 def parse_time_string(string):
@@ -17,9 +17,9 @@ def parse_time_string(string):
         if x not in ['-', ',', '/'] and not x.isdigit():
             raise ValueError('parse time: illegal character in string: %s' % x)
     if '/' in string and ',' in string:
-        raise ValueError('parse time: list and step are mutally exclusive')
+        raise ValueError('parse time: list and step are mutually exclusive')
     if '-' in string and ',' in string:
-        raise ValueError('parse time: list and range are mutally exclusive')
+        raise ValueError('parse time: list and range are mutually exclusive')
     if '/' in string:
         rang, step = string.split('/', 1)
         step = int(step)
@@ -105,41 +105,52 @@ def parse_cycle(c_id, c_info, time, dt):
     start = pd.Series([x + y for x in a_time for y in o_time])
     logging.debug('start: ' + format(start))
 
-    if "sequence" not in c_info.keys():
+    if "sequence" not in c_info.keys() and "list" not in c_info.keys():
         raise ValueError('cycle has no sequence info: %s' % c_id)
-    sequ_time = []
-    sequ_value = []
-    time_pointer = pd.Timedelta(0)
-    time_last = time_pointer
-    value_last = 0
-    for i, s_item in enumerate(c_info['sequence']):
-        logging.debug(format(s_item))
-        if len(s_item) > 1:
-            raise ValueError('sequence item entry #%d not unique: %s' %
-                             (i, c_id))
-        for s_type, s_info in s_item.items():
-            if "value" not in s_info.keys():
-                raise ValueError('start has no at info: %s' % c_id)
-            s_value = s_info['value']
-            s_count, s_unit = parse_time(s_info,
-                                         name='sequence', multi=False)
-            s_delta = pd.Timedelta(value=s_count, unit=s_unit)
-            while time_pointer < time_last + s_delta:
-                sequ_time.append(time_pointer)
-                if s_type == 'const':
-                    sequ_value.append(s_value)
-                elif s_type == 'ramp':
-                    x = (value_last +
-                         (s_value - value_last) *
-                         (time_pointer - time_last) / s_delta)
-                    sequ_value.append(x)
-                else:
-                    raise ValueError('unknown sequence element: %s' % s_type)
-                time_pointer = time_pointer + dt
+    if "sequence" in c_info.keys() and "list" in c_info.keys():
+        raise ValueError('cycle list and sequence are ' +
+                         'mutually exclusive: %s' % c_id)
+    if "sequence" in c_info.keys():
+        sequ_time = []
+        sequ_value = []
+        time_pointer = pd.Timedelta(0)
+        time_last = time_pointer
+        value_last = 0
+        for i, s_item in enumerate(c_info['sequence']):
+            logging.debug(format(s_item))
+            if len(s_item) > 1:
+                raise ValueError('sequence item entry #%d not unique: %s' %
+                                 (i, c_id))
+            for s_type, s_info in s_item.items():
+                if "value" not in s_info.keys():
+                    raise ValueError('sequence no value info: %s' % c_id)
+                s_value = s_info['value']
+                s_count, s_unit = parse_time(s_info,
+                                             name='sequence', multi=False)
+                s_delta = pd.Timedelta(value=s_count, unit=s_unit)
+                while time_pointer < time_last + s_delta:
+                    sequ_time.append(time_pointer)
+                    if s_type == 'const':
+                        sequ_value.append(s_value)
+                    elif s_type == 'ramp':
+                        x = (value_last +
+                             (s_value - value_last) *
+                             (time_pointer - time_last) / s_delta)
+                        sequ_value.append(x)
+                    else:
+                        raise ValueError('unknown sequence element: %s' %
+                                         s_type)
+                    time_pointer = time_pointer + dt
 
-            time_last = time_pointer
-            value_last = s_value
-    sequence = pd.Series(sequ_value, index=sequ_time)
+                time_last = time_pointer
+                value_last = s_value
+        sequence = pd.Series(sequ_value, index=sequ_time)
+    if "list" in c_info.keys():
+        if not isinstance(c_info['list'], list):
+            raise ValueError('list does not contain list: %s' % c_id)
+        sequ_value = [float(x) for x in c_info['list']]
+        sequ_time = [i * dt for i in range(len(sequ_value))]
+        sequence = pd.Series(sequ_value, index=sequ_time)
     logging.debug(format(sequence))
 
     if any([x < sequence.index[-1] for x in start.diff()[1:]]):
@@ -157,6 +168,7 @@ def parse_cycle(c_id, c_info, time, dt):
     return source, cycle
 
 
+# noinspection SpellCheckingInspection
 def get_cycle(file, time):
     # test and evaluate time
     if not type(time) in [list, pd.Series]:
@@ -172,7 +184,7 @@ def get_cycle(file, time):
         yinfo = yaml.safe_load(f)
     logging.debug(format(yinfo))
 
-    # pepare output
+    # prepare output
     res = pd.DataFrame(index=time)
 
     # get cycle info
@@ -192,6 +204,7 @@ def get_cycle(file, time):
     return res
 
 
+# noinspection SpellCheckingInspection
 def do_fill(action, path, cycle_file, source_id,
             output, hour_begin, hour_end, holiday_week, holiday_month,
             **kwargs):
@@ -199,7 +212,7 @@ def do_fill(action, path, cycle_file, source_id,
         raise ValueError('path not given')
     name = os.path.join(path, 'zeitreihe.dmna')
     zeitreihe = readmet.dmna.DataFile(file=name)
-    if (zeitreihe.filetype != 'timeseries'):
+    if zeitreihe.filetype != 'timeseries':
         raise ValueError('is not dmna timeseries format: %s' % name)
     logging.info('working on file: %s' % name)
     variables = zeitreihe.variables
@@ -243,13 +256,14 @@ def do_fill(action, path, cycle_file, source_id,
             if c in values.columns:
                 values[c] = cycle[c].values
             else:
-                raise ValueError('source not in zeireihe: %s' % c)
+                raise ValueError('source not in zeitreihe: %s' % c)
     else:
         raise ValueError('unknown action: %s' % action)
     zeitreihe.data = values
     zeitreihe.write(name)
 
 
+# noinspection SpellCheckingInspection
 def main():
     # defaults
     default = {'hour-begin': 8,
@@ -259,7 +273,7 @@ def main():
                'holiday-month': [7],
                'path': '.'
                }
-    parser = argparse.ArgumentParser(description='fill source-strentgh ' +
+    parser = argparse.ArgumentParser(description='fill source-strength ' +
                                                  'columns in "zeitreihe.dmna"')
     verb = parser.add_mutually_exclusive_group()
     verb.add_argument('--debug', dest='verb', action='store_const',
@@ -270,7 +284,7 @@ def main():
     sched.add_argument('-l', '--list',
                        action='store_const', dest='action', const='list',
                        help='list source column IDs in file' +
-                            'and exit without midifying "zeitreihe.dmna".' +
+                            'and exit without modifying "zeitreihe.dmna".' +
                             '[default]')
     sched.add_argument('-c', '--cycle',
                        action='store_const', dest='action', const='cycle',
