@@ -8,7 +8,7 @@ import pandas as pd
 import readmet
 import yaml
 
-from _version import __version__
+from ._version import __version__
 
 
 def parse_time_string(string):
