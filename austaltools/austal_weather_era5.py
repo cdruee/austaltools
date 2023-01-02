@@ -264,7 +264,7 @@ def main():
     # defaults
     year = 2018
     station = 5100
-    path = '/localdata/druee/modelle/austal/era/data'
+    path = '/usr/share/austaltools/data/era'
     #
     # command line args
     #
@@ -292,7 +292,7 @@ def main():
                         help='name for the position')
     parser.add_argument('-e', '--elevation', dest='ele',
                         metavar='METERS',
-                        help='suface elevation only allowed with -l')
+                        help='surface elevation only allowed with -l')
     args = parser.parse_args()
     #
     # logging level
@@ -341,7 +341,7 @@ def main():
     v.sort_index(inplace=True)
 
     if OUTPUT_RAW != '':
-        v.to_csv('exctracted_era5_{:05d}_{:04d}.csv'.format(station, year),
+        v.to_csv('extracted_era5_{:05d}_{:04d}.csv'.format(station, year),
                  float_format='%.2f', index=False, na_rep='-999')
 
     logging.debug('lmcc')
@@ -414,7 +414,7 @@ def main():
                            'KM': data[x]},
                           index=data.index)
         ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean())
-        outname = ('out_{:s}_{:04d}_'.format(slugify(nam), year) +
+        outname = ('era5_{:s}_{:04d}_'.format(slugify(nam), year) +
                    x + '.akterm')
         logging.info('writing putput file: %s' % outname)
         ak.write(outname)
