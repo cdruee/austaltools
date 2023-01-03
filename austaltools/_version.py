@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 __title__ = 'austaltools'
-__description__ = ('Tools for use with austal.')
+__description__ = 'Tools for use with austal.'
 __url__ = ''
-__version__ = '0.2.5'
+__version__ = '0.2.6'
 __author__ = u'Clemens Drüe'
 __author_email__ = 'druee@uni-trier.de'
 __license__ = 'EUPL-1.2'

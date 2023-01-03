@@ -32,7 +32,6 @@ setup(
             for x in glob.iglob(v['__title__'] + '/[a-zA-Z]*py')
         ],
     },
-    test_suite='tests',
     author=v['__author__'],
     author_email=v['__author_email__'],
     license=v['__license__'],
@@ -41,7 +40,10 @@ setup(
         'numpy',
         'pandas',
         'pyyaml',
-        'meteolib'
-    ]
+        'meteolib',
+        'readmet'
+    ],
+    description=v['__description__'],
+    long_description=open('README.md').read()
 )
-#    long_description=open('README.txt').read(),
+

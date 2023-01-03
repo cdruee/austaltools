@@ -319,7 +319,7 @@ def main():
         raise argparse.ArgumentError('-s and -e are mutually exclusive')
 
     if station is not None:
-        lat, lon, ele, nam = dwd_stationinfo(station)
+        lat, lon, ele, nam = dwd_stationinfo(station, path=path)
     else:
         lat, lon = [float(x) for x in args.latlon]
         if args.ele:
