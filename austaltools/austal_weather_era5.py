@@ -35,7 +35,8 @@ WIND_VARIANT = os.environ.get('WIND_VARIANT', 'model_uv10')
 INTER_VARIANT = os.environ.get('INTER_VARIANT', 'barycentric')
 # possible values: empty or non-empty string:
 OUTPUT_RAW = os.environ.get('OUTPUT_RAW', '')
-
+# possible values: all kms kmc pts pgc empty or non-empty string:
+CLASS_SCHEME = os.environ.get('OUTPUT_RAW', 'kms')
 
 # ----------------------------------------------------
 
@@ -408,16 +409,17 @@ def main():
     #    print(skm.classification_report(data['kmc'], data['pgc']))
 
     for x in ['kms', 'kmc', 'pts', 'pgc']:
-        logging.info('writing output file for: ' + x)
-        df = pd.DataFrame({'FF': data['ff'],
-                           'DD': data['dd'],
-                           'KM': data[x]},
-                          index=data.index)
-        ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean())
-        outname = ('era5_{:s}_{:04d}_'.format(slugify(nam), year) +
-                   x + '.akterm')
-        logging.info('writing putput file: %s' % outname)
-        ak.write(outname)
+        if x in ['all', 'CLASS_SCHEME']:
+            logging.info('writing output file for: ' + x)
+            df = pd.DataFrame({'FF': data['ff'],
+                               'DD': data['dd'],
+                               'KM': data[x]},
+                              index=data.index)
+            ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean())
+            outname = ('era5_{:s}_{:04d}_'.format(slugify(nam), year) +
+                       x + '.akterm')
+            logging.info('writing putput file: %s' % outname)
+            ak.write(outname)
 
 
 # ----------------------------------------------------
