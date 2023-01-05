@@ -286,6 +286,7 @@ def main():
                          metavar='NR',
                          help='position by DWD station code [%05i]' % station)
     locpars.add_argument('-l', '--latlon', dest='latlon',
+                         nargs=2,
                          metavar='DEGRESS DEGREES',
                          help='position by geographic location')
     parser.add_argument('-n', '--name', dest='name',
