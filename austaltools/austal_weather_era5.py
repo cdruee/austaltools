@@ -359,9 +359,9 @@ def main():
                                   lat, lon, ele, v['lmcc'])
 
     logging.debug('rho')
-    v['rho'] = m.gas_rho(p=v['sp'], T=v['t2m'])
+    v['rho'] = m.humidity.gas_rho(p=v['sp'], T=v['t2m'])
     logging.debug('Tv')
-    v['Tv'] = [m.Humidity(t=v['t2m'][i],
+    v['Tv'] = [m.humidity.Humidity(t=v['t2m'][i],
                           p=v['sp'][i],
                           td=v['d2m'][i]).tvirt()
                for i in range(v['t2m'].size)]
