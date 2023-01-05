@@ -409,7 +409,7 @@ def main():
     #    print(skm.classification_report(data['kmc'], data['pgc']))
 
     for x in ['kms', 'kmc', 'pts', 'pgc']:
-        if x in ['all', 'CLASS_SCHEME']:
+        if x in ['all', CLASS_SCHEME]:
             logging.info('writing output file for: ' + x)
             df = pd.DataFrame({'FF': data['ff'],
                                'DD': data['dd'],
