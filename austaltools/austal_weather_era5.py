@@ -184,17 +184,21 @@ def read_nc(ncfile, lat, lon):
         [epoch + dt.timedelta(hours=int(x)) for x in lp['time']])
     for val in ['u10', 'v10', 'sp', 'zust', 'fsr',
                 't2m', 'd2m', 'cbh', 'sshf', 'slhf',
-                'lcc', 'mcc', 'tcc']:
-        logging.info('interpolating value: %s' % val)
-        v = [None, None, None]
-        for i, pp in enumerate(pos):
-            pi, pj = pp
-            if flip['lon']:
-                pi = len(dims['lon']) - 1 - pi
-            if flip['lat']:
-                pj = len(dims['lat']) - 1 - pj
-            v[i] = pd.Series(lp[val][:, pj, pi].data)
-        values[val] = w0 * v[0] + w1 * v[1] + w2 * v[2]
+                'lcc', 'mcc', 'tcc', 'tp']:
+        if val in lp.keys():
+            logging.info('interpolating value: %s' % val)
+            v = [None, None, None]
+            for i, pp in enumerate(pos):
+                pi, pj = pp
+                if flip['lon']:
+                    pi = len(dims['lon']) - 1 - pi
+                if flip['lat']:
+                    pj = len(dims['lat']) - 1 - pj
+                v[i] = pd.Series(lp[val][:, pj, pi].data)
+            values[val] = w0 * v[0] + w1 * v[1] + w2 * v[2]
+        else:
+            logging.warning('no values found for: %s' % val)
+            values[val] = pd.Series(np.nan, index=values.index)
     #
     #   surface fluxes are in J/hm² down, convert to W/m² up:
     for val in ['sshf', 'slhf']:
