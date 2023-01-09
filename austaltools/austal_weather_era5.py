@@ -296,7 +296,7 @@ def main():
     parser.add_argument('-e', '--elevation', dest='ele',
                         metavar='METERS',
                         help='surface elevation only allowed with -l')
-    parser.add_argument('-p', '--precip', dest='precip',
+    parser.add_argument('-p', '--precip', dest='prec',
                         action='store_true',
                         help='add precipitaion columns to output file')
     args = parser.parse_args()
@@ -350,7 +350,7 @@ def main():
         v.to_csv('extracted_era5_{:05d}_{:04d}.csv'.format(station, year),
                  float_format='%.2f', index=False, na_rep='-999')
 
-    if args.verb and 'tp' not in v.keys():
+    if args.prec and 'tp' not in v.keys():
         raise ValueError('no precipitation in nc file')
 
     logging.debug('lmcc')
@@ -419,18 +419,20 @@ def main():
     for x in ['kms', 'kmc', 'pts', 'pgc']:
         if x in ['all', CLASS_SCHEME]:
             logging.info('writing output file for: ' + x)
-            if args.precip:
+            if args.prec:
                 df = pd.DataFrame({'FF': data['ff'],
                                    'DD': data['dd'],
                                    'KM': data[x]},
                                     index=data.index)
+                ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean())
             else:
                 df = pd.DataFrame({'FF': data['ff'],
                                    'DD': data['dd'],
                                    'KM': data[x],
                                    'PP': data['tp']},
                                     index=data.index)
-            ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean())
+                ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean(),
+                                             prec=True )
             outname = ('era5_{:s}_{:04d}_'.format(slugify(nam), year) +
                    x + '.akterm')
             logging.info('writing putput file: %s' % outname)
