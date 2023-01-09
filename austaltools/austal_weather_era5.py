@@ -279,7 +279,7 @@ def main():
     parser.add_argument('-y', '--year', dest='year',
                         metavar='YEAR',
                         help='year of interest [%04i]' % year)
-    parser.add_argument('-p', '--path',
+    parser.add_argument('-P', '--path',
                         metavar='PATH',
                         help='path to the data files')
     locpars = parser.add_mutually_exclusive_group()
@@ -296,7 +296,7 @@ def main():
     parser.add_argument('-e', '--elevation', dest='ele',
                         metavar='METERS',
                         help='surface elevation only allowed with -l')
-    parser.add_argument('-r', '--rain', dest='prec',
+    parser.add_argument('-p', '--precip', dest='prec',
                         action='store_true',
                         help='add precipitation columns to output file')
     args = parser.parse_args()
@@ -341,6 +341,7 @@ def main():
                  (lat, lon, ele, nam))
 
     ncfile = os.path.join(path, 'era5_ak_eu_%04i.nc' % year)
+    logging.info('reading data from; %s' % ncfile)
 
     v = read_nc(ncfile, lat, lon)
     v.index = v['time']
