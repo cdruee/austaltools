@@ -74,7 +74,8 @@ def read_nc(ncfile, lat, lon):
                 't2m', 'd2m', 'cbh', 'sshf', 'slhf',
                 'lcc', 'mcc', 'tcc',
                 'sshf', 'slhf',
-                'ff', 'dd'
+                'ff', 'dd',
+                'tp'
     '''
     import netCDF4
 
@@ -295,6 +296,9 @@ def main():
     parser.add_argument('-e', '--elevation', dest='ele',
                         metavar='METERS',
                         help='surface elevation only allowed with -l')
+    parser.add_argument('-p', '--precip', dest='precip',
+                        action='store_true',
+                        help='add precipitaion columns to output file')
     args = parser.parse_args()
     #
     # logging level
@@ -345,6 +349,9 @@ def main():
     if OUTPUT_RAW != '':
         v.to_csv('extracted_era5_{:05d}_{:04d}.csv'.format(station, year),
                  float_format='%.2f', index=False, na_rep='-999')
+
+    if args.verb and 'tp' not in v.keys():
+        raise ValueError('no precipitation in nc file')
 
     logging.debug('lmcc')
     v['lmcc'] = np.maximum(v['lcc'], v['mcc'])
@@ -412,13 +419,20 @@ def main():
     for x in ['kms', 'kmc', 'pts', 'pgc']:
         if x in ['all', CLASS_SCHEME]:
             logging.info('writing output file for: ' + x)
-            df = pd.DataFrame({'FF': data['ff'],
-                               'DD': data['dd'],
-                               'KM': data[x]},
-                              index=data.index)
+            if args.precip:
+                df = pd.DataFrame({'FF': data['ff'],
+                                   'DD': data['dd'],
+                                   'KM': data[x]},
+                                    index=data.index)
+            else:
+                df = pd.DataFrame({'FF': data['ff'],
+                                   'DD': data['dd'],
+                                   'KM': data[x],
+                                   'PP': data['tp']},
+                                    index=data.index)
             ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean())
             outname = ('era5_{:s}_{:04d}_'.format(slugify(nam), year) +
-                       x + '.akterm')
+                   x + '.akterm')
             logging.info('writing putput file: %s' % outname)
             ak.write(outname)
 
