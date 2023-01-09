@@ -296,9 +296,9 @@ def main():
     parser.add_argument('-e', '--elevation', dest='ele',
                         metavar='METERS',
                         help='surface elevation only allowed with -l')
-    parser.add_argument('-p', '--precip', dest='prec',
+    parser.add_argument('-r', '--rain', dest='prec',
                         action='store_true',
-                        help='add precipitaion columns to output file')
+                        help='add precipitation columns to output file')
     args = parser.parse_args()
     #
     # logging level
