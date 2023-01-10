@@ -36,7 +36,7 @@ INTER_VARIANT = os.environ.get('INTER_VARIANT', 'barycentric')
 # possible values: empty or non-empty string:
 OUTPUT_RAW = os.environ.get('OUTPUT_RAW', '')
 # possible values: all kms kmc pts pgc empty or non-empty string:
-CLASS_SCHEME = os.environ.get('OUTPUT_RAW', 'kms')
+CLASS_SCHEME = os.environ.get('CLASS_SCHEME', 'kms')
 
 # ----------------------------------------------------
 
@@ -71,15 +71,28 @@ def read_nc(ncfile, lat, lon):
         actual surface roughness
         values: 'time',
                 'u10', 'v10', 'sp', 'zust', 'fsr',
-                't2m', 'd2m', 'cbh', 'sshf', 'slhf',
-                'lcc', 'mcc', 'tcc',
-                'sshf', 'slhf',
-                'ff', 'dd',
-                'tp'
+                 't2m', 'd2m', 'cbh', 'sshf', 'slhf',
+                 'lcc', 'tcc'
+        optional: 'mcc', 'tp'
     '''
     import netCDF4
 
+    _VAR_NEEDED = ['u10', 'v10', 'sp', 'zust', 'fsr',
+                 't2m', 'd2m', 'cbh', 'sshf', 'slhf',
+                 'lcc', 'tcc']
+    _VAR_OPTIONAL = ['mcc',  'tp']
+
     lp = netCDF4.Dataset(ncfile)
+
+    for x in _VAR_NEEDED:
+        if x not in lp.variables:
+            raise ValueError('needed variable not in input data: %s' % x)
+    all_variables = _VAR_NEEDED
+    for x in _VAR_OPTIONAL:
+        if x not in lp.variables:
+            logging.warning('optional variable not in input data: %s' % x)
+        else:
+            all_variables.append(x)
 
     dims = {'lat': lp['latitude'][:].data,
             'lon': lp['longitude'][:].data}
@@ -176,33 +189,32 @@ def read_nc(ncfile, lat, lon):
         raise ValueError('unknown interpolation variant: %s' %
                          INTER_VARIANT)
     logging.info('interpolation variant: %s' % INTER_VARIANT)
-    logging.info('weights: %6.2f %6.2f %6.2f' % (w0, w1, w2))
+    logging.debug('weights: %6.2f %6.2f %6.2f' % (w0, w1, w2))
 
     values = pd.DataFrame()
     epoch = dt.datetime(1900, 1, 1, 0, 0, tzinfo=dt.timezone.utc)
     values['time'] = pd.to_datetime(
         [epoch + dt.timedelta(hours=int(x)) for x in lp['time']])
-    for val in ['u10', 'v10', 'sp', 'zust', 'fsr',
-                't2m', 'd2m', 'cbh', 'sshf', 'slhf',
-                'lcc', 'mcc', 'tcc', 'tp']:
-        if val in lp.keys():
-            logging.info('interpolating value: %s' % val)
-            v = [None, None, None]
-            for i, pp in enumerate(pos):
-                pi, pj = pp
-                if flip['lon']:
-                    pi = len(dims['lon']) - 1 - pi
-                if flip['lat']:
-                    pj = len(dims['lat']) - 1 - pj
-                v[i] = pd.Series(lp[val][:, pj, pi].data)
-            values[val] = w0 * v[0] + w1 * v[1] + w2 * v[2]
-        else:
-            logging.warning('no values found for: %s' % val)
-            values[val] = pd.Series(np.nan, index=values.index)
+    for val in all_variables:
+        logging.info('interpolating value: %s' % val)
+        v = [None, None, None]
+        for i, pp in enumerate(pos):
+            pi, pj = pp
+            if flip['lon']:
+                pi = len(dims['lon']) - 1 - pi
+            if flip['lat']:
+                pj = len(dims['lat']) - 1 - pj
+            v[i] = pd.Series(lp[val][:, pj, pi].data)
+        values[val] = w0 * v[0] + w1 * v[1] + w2 * v[2]
     #
     #   surface fluxes are in J/hm² down, convert to W/m² up:
     for val in ['sshf', 'slhf']:
-        values[val] = values[val] / (-3600.)
+        if val in all_variables:
+            values[val] = values[val] / (-3600.)
+    #   total precipitation is m (per hour) , convert to mm:
+    for val in ['tp']:
+        if val in all_variables:
+            values[val] = values[val] * 1000
     #
     #    values['ff'] = np.sqrt(values['u10']*values['u10'] +
     #                           values['v10']*values['v10'])
@@ -248,11 +260,11 @@ def read_nc(ncfile, lat, lon):
 def h_eff(has, z0s):
     z0_vals = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1., 1.5, 2]
     href = 250
-    d0s = m.wind.displacement_factor * z0s
+    d0s = m.wind.DISPLACEMENT_FACTOR * z0s
     ps = np.log((has - d0s) / z0s) / np.log((href - d0s) / z0s)
     ha = []
     for z0 in z0_vals:
-        d0 = m.wind.displacement_factor * z0
+        d0 = m.wind.DISPLACEMENT_FACTOR * z0
         ha.append(d0 + z0 * ((href - d0) / z0) ** ps)
     return ha
 
@@ -352,14 +364,18 @@ def main():
     v.sort_index(inplace=True)
 
     if OUTPUT_RAW != '':
-        v.to_csv('extracted_era5_{:05d}_{:04d}.csv'.format(station, year),
-                 float_format='%.2f', index=False, na_rep='-999')
+        raw_name = 'extracted_era5_{:05d}_{:04d}.csv'.format(station, year)
+        logging.info('writing raw data to: %s' % raw_name)
+        v.to_csv(raw_name, float_format='%.2f', index=False, na_rep='-999')
 
     if args.prec and 'tp' not in v.keys():
         raise ValueError('no precipitation in nc file')
 
     logging.debug('lmcc')
-    v['lmcc'] = np.maximum(v['lcc'], v['mcc'])
+    if 'mcc' in v.keys():
+        v['lmcc'] = np.maximum(v['lcc'], v['mcc'])
+    else:
+        v['lmcc'] = v['lcc']
     z0 = v['fsr'].mean()
     logging.info("roughness length: %6f m" % (z0))
 
@@ -427,17 +443,17 @@ def main():
             if args.prec:
                 df = pd.DataFrame({'FF': data['ff'],
                                    'DD': data['dd'],
-                                   'KM': data[x]},
-                                    index=data.index)
-                ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean())
-            else:
-                df = pd.DataFrame({'FF': data['ff'],
-                                   'DD': data['dd'],
                                    'KM': data[x],
                                    'PP': data['tp']},
                                     index=data.index)
                 ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean(),
                                              prec=True )
+            else:
+                df = pd.DataFrame({'FF': data['ff'],
+                                   'DD': data['dd'],
+                                   'KM': data[x]},
+                                    index=data.index)
+                ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean())
             outname = ('era5_{:s}_{:04d}_'.format(slugify(nam), year) +
                    x + '.akterm')
             logging.info('writing putput file: %s' % outname)
