@@ -65,7 +65,7 @@ def spheric_distance(lat1, lon1, lat2, lon2):
 
 # ----------------------------------------------------
 def read_nc(ncfile, lat, lon):
-    '''
+    """
     read ERA5 nc file and interpolate values to position (lat, lon)
         and recalculate 10 wind speed anddirection (ff/dd) using
         actual surface roughness
@@ -74,12 +74,12 @@ def read_nc(ncfile, lat, lon):
                  't2m', 'd2m', 'cbh', 'sshf', 'slhf',
                  'lcc', 'tcc'
         optional: 'mcc', 'tp'
-    '''
+    """
     import netCDF4
 
     _VAR_NEEDED = ['u10', 'v10', 'sp', 'zust', 'fsr',
-                 't2m', 'd2m', 'cbh', 'sshf', 'slhf',
-                 'lcc', 'tcc']
+                   't2m', 'd2m', 'cbh', 'sshf', 'slhf',
+                   'lcc', 'tcc']
     _VAR_OPTIONAL = ['mcc',  'tp']
 
     lp = netCDF4.Dataset(ncfile)
@@ -272,9 +272,9 @@ def h_eff(has, z0s):
 # =======================================================================
 
 def main():
-    '''
+    """
     main routine
-    '''
+    """
     #
     # defaults
     #
@@ -338,7 +338,8 @@ def main():
         logging.warning('-n is given along with -s and ' +
                         'will override station name')
     if args.station and args.ele:
-        raise argparse.ArgumentError('-s and -e are mutually exclusive')
+        raise argparse.ArgumentError(
+            None, message='-s and -e are mutually exclusive')
 
     if station is not None:
         lat, lon, ele, nam = dwd_stationinfo(station, path=path)
@@ -354,7 +355,7 @@ def main():
     if args.name is not None:
         nam = args.name
     logging.info('selected position: %.2f %.2f %.0f (%s)' %
-                 (lat, lon, ele, nam))
+                 (lat, lon, ele, format(nam)))
 
     ncfile = os.path.join(path, 'era5_ak_eu_%04i.nc' % year)
     logging.info('reading data from; %s' % ncfile)
@@ -377,7 +378,7 @@ def main():
     else:
         v['lmcc'] = v['lcc']
     z0 = v['fsr'].mean()
-    logging.info("roughness length: %6f m" % (z0))
+    logging.info("roughness length: %6f m" % z0)
 
     logging.debug('v10')
     v['v10'] = vdi_3872_6_standard_wind(v['ff'],
@@ -392,8 +393,8 @@ def main():
     v['rho'] = m.humidity.gas_rho(p=v['sp'], T=v['t2m'])
     logging.debug('Tv')
     v['Tv'] = [m.humidity.Humidity(t=v['t2m'][i],
-                          p=v['sp'][i],
-                          td=v['d2m'][i]).tvirt()
+                                   p=v['sp'][i],
+                                   td=v['d2m'][i]).tvirt()
                for i in range(v['t2m'].size)]
     logging.debug('Lo')
     # calculate u* from "ff" and roughness instead of model-provided "zust"
@@ -417,10 +418,10 @@ def main():
         'KM', v['time'], v['fsr'], v['Lo'].copy())
 
     logging.debug('pgc')
-    PG = stabilty_class(
+    pg = stabilty_class(
         'PG', v['time'], v['fsr'], v['Lo'])
     # convert to corresponding AK number (class F&G->1)
-    v['pgc'] = [max((1, 7 - x)) for x in PG]
+    v['pgc'] = [max((1, 7 - x)) for x in pg]
 
     logging.debug('w')
     w = pd.DataFrame(index=pd.date_range(start=v.index[0],
@@ -445,17 +446,17 @@ def main():
                                    'DD': data['dd'],
                                    'KM': data[x],
                                    'PP': data['tp']},
-                                    index=data.index)
+                                  index=data.index)
                 ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean(),
-                                             prec=True )
+                                             prec=True)
             else:
                 df = pd.DataFrame({'FF': data['ff'],
                                    'DD': data['dd'],
                                    'KM': data[x]},
-                                    index=data.index)
+                                  index=data.index)
                 ak = readmet.akterm.DataFile(data=df, z0=v['fsr'].mean())
             outname = ('era5_{:s}_{:04d}_'.format(slugify(nam), year) +
-                   x + '.akterm')
+                       x + '.akterm')
             logging.info('writing putput file: %s' % outname)
             ak.write(outname)
 

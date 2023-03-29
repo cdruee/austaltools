@@ -28,8 +28,10 @@ def parse_austal_outputname(filename: str):
 
     :return: information about file contents:
       - substance: name of pollutant (xx for unknown/not specified)
-      - averaging: duration of averaging interval (accumulation, year, day or hour)
-      - rank: rank of output value in list of all averages of the same length
+      - averaging: duration of averaging interval
+        (accumulation, year, day or hour)
+      - rank: rank of output value in list of all averages
+        of the same length
       - kind: type of output (load, stdev or index)
       - grid: number of grid. 0 if not given / no staggered grids.
     :rtype: dict

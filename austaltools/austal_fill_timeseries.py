@@ -1,7 +1,6 @@
 #!/bin/env python3
 
 import argparse
-import numpy as np
 import os
 import logging
 
@@ -161,7 +160,7 @@ def parse_cycle(c_id, c_info, time, dt):
 
     # generate cycle:
     # copy sequence to each start time
-    cycle = pd.Series(0, index=time, name=c_id, dtype=np.float)
+    cycle = pd.Series(0, index=time, name=c_id, dtype=float)
     for x in start:
         for dx, y in sequence.items():
             cycle[x + dx] = y

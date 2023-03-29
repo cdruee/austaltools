@@ -42,10 +42,10 @@ setup(
         'pyyaml',
         'meteolib',
         'readmet',
-        'matplotlib'
+        'matplotlib',
+        'netCDF4'
     ],
     description=v['__description__'],
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
 )
-
