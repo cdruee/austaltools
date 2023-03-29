@@ -41,7 +41,8 @@ setup(
         'pandas',
         'pyyaml',
         'meteolib',
-        'readmet'
+        'readmet',
+        'matplotlib'
     ],
     description=v['__description__'],
     long_description=open('README.md').read(),
