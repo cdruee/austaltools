@@ -5,6 +5,7 @@ create basic plot for austal result files
 import argparse
 import logging
 import os
+import re
 
 import matplotlib.colors
 import matplotlib.pyplot as plt
@@ -39,7 +40,7 @@ def parse_austal_outputname(filename: str):
     # strip path and extension
     name = os.path.splitext(os.path.basename(filename))[0]
 
-    res = {}
+    res = {"name": name}
     # name of substance
     if "-" not in name:
         raise ValueError("not a valid output name: %s" % name)
@@ -121,6 +122,15 @@ def cli() -> dict:
                         action='store_true',
                         default=False,
                         help='recreate (overwrite) plotfile if it exists.')
+    parser.add_argument('-s', '--stdvs',
+                        metavar="STDVs",
+                        nargs='?',
+                        const=1.,
+                        help='hash areas where the data are not ' +
+                             'significant. Sigingicant is defined as ' +
+                             'larder than `STDVs` times the standard ' +
+                             'deviation caculated by austal. ' +
+                             'If missing, `STDVs` defaults to 1.0.')
     varg = parser.add_mutually_exclusive_group()
     varg.add_argument('-v', '--verbose', action='count',
                       help='increase output verbosity')
@@ -172,6 +182,21 @@ def main():
         dat = dat[:, :, 0]
     unit = bytes(datafile.header["unit"], "latin-1").decode()
 
+    stdvs = float(args["stdvs"])
+    if stdvs > 0:
+        stdfile = re.sub(r'(.+-...)[sz]([0-9]{0,2}\.dmna)',
+                         r'\1s\2', infile)
+        stdfile_path = os.path.join(args['working_dir'], stdfile)
+        logger.info('reading stdev from %s' % infile_path)
+        errorfile = readmet.dmna.DataFile(stdfile_path)
+        std = errorfile.data[errorfile.variables[0]]
+        if len(std.shape) == 3:
+            std = std[:, :, 0]
+        if dat.shape != std.shape:
+            raise ValueError('stdv shape does not match data shape')
+        std[std==0] = 1.E-19
+        signi = dat / (stdvs * std)
+
     # try to load topography
     topo_path = os.path.join(args['working_dir'],
                              "zg%02d.dmna" % info["grid"])
@@ -201,6 +226,21 @@ def main():
                        )
     plt.colorbar(img, label=unit, extend='both')
     logging.debug('label=: %s' % unit)
+
+    if stdvs > 0:
+        # whites = matplotlib.colors.ListedColormap(
+        #     [(1, 1, 1, 0.4),
+        #      (1, 1, 1, 0.2),
+        #      (1, 1, 1, 0.1),
+        #      (1, 1, 1, 0.0)])
+        # cmap = whites,
+
+        plt.contourf(datx, daty, signi.T, origin="lower",
+                     levels=[0, 1, 2],
+                     colors=['white', 'white', 'white', 'white'],
+                     hatches=['+', '..', '..', None],
+                     extend='both',
+                     alpha=0)
 
     con = plt.contour(topx, topy, topz.T, origin="lower",
                       colors='black',
