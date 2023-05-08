@@ -213,9 +213,9 @@ def main():
     fig.set_size_inches(11, 8)
 
     cmap = args["colormap"]
-    scale = 10 ** (np.round(np.log10(np.max(dat))) - 1)
+    scale = 10 ** (np.ceil(np.log10(np.max(dat))) - 1)
     logging.debug('scale: %f' % scale)
-    levels = np.array([1, 2, 5, 10, 20, 50, 100, 200, 500, 1000]
+    levels = np.array([10, 20, 50, 100, 200, 500, 1000]
                       ) / 1000 * scale
 
     img = plt.contourf(datx, daty, dat.T, origin="lower",
