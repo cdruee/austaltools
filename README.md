@@ -183,3 +183,21 @@ options:
   -e METERS, --elevation METERS
                         suface elevation only allowed with -l
 ```
+
+## Reading buildings from a Geojson file and put them into `austal.txt`
+```
+usage: austal-buildings-geojson.py [-h] [--debug | -v] [-f FILE] [-z ZVALUE] [-o OUTPUT] [PATH]
+
+get buildings from geojson and convert to "austal.txt"
+
+positional arguments:
+  PATH                  directory where "zeitreihe.dmna" is stored [.]
+
+options:
+  -h, --help            show this help message and exit
+  --debug               show informative output
+  -v, --verbose         show detailed output
+  -f FILE, --file FILE  file containing building info[haeuser.geojson]
+  -z ZVALUE, --zvalue ZVALUE
+                        name of property that gives building height[height]
+```
