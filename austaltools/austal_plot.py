@@ -47,7 +47,7 @@ def parse_austal_outputname(filename: str):
     res["substance"], what = name.split('-')
     #
     avg_char = what[0]
-    if avg_char.startswith('dep'):
+    if what.startswith('dep'):
         res["averaging"] = 'accumulation'
     elif avg_char in ['y', 'j']:
         res["averaging"] = 'year'
@@ -125,6 +125,7 @@ def cli() -> dict:
     parser.add_argument('-s', '--stdvs',
                         metavar="STDVs",
                         nargs='?',
+                        default=0.,
                         const=1.,
                         help='hash areas where the data are not ' +
                              'significant. Sigingicant is defined as ' +
@@ -167,6 +168,7 @@ def main():
         infile = infile + '.dmna'
     # analyze file name:
     info = parse_austal_outputname(infile)
+    logger.debug("info: %s" % format(info))
     # warn, if not a file containing "additional load"
     if info["kind"] != "load":
         logger.warning(
@@ -202,10 +204,13 @@ def main():
                              "zg%02d.dmna" % info["grid"])
     if os.path.exists(topo_path):
         logger.info('reading topography from %s' % topo_path)
-    topofile = readmet.dmna.DataFile(topo_path)
-    topz = topofile.data[""]
-    topx = topofile.axes(ax="x")
-    topy = topofile.axes(ax="y")
+        have_topo = True
+        topofile = readmet.dmna.DataFile(topo_path)
+        topz = topofile.data[""]
+        topx = topofile.axes(ax="x")
+        topy = topofile.axes(ax="y")
+    else:
+        have_topo = False
 
     # --------------------------------
     matplotlib.rcParams.update({'font.size': 16})
@@ -242,11 +247,13 @@ def main():
                      extend='both',
                      alpha=0)
 
-    con = plt.contour(topx, topy, topz.T, origin="lower",
-                      colors='black',
-                      linewidths=0.75
-                      )
-    ax.clabel(con, con.levels, inline=True, fontsize=10)
+    if have_topo:
+        con = plt.contour(topx, topy, topz.T, origin="lower",
+                          colors='black',
+                          linewidths=0.75
+                          )
+        ax.clabel(con, con.levels, inline=True, fontsize=10)
+
     ax.set_xlabel("x in m")
     ax.set_ylabel("y in m")
 
