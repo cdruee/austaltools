@@ -8,12 +8,20 @@ import os
 import re
 
 import matplotlib.colors
+import matplotlib.patches
 import matplotlib.pyplot as plt
 import numpy as np
 import readmet
 
 logger = logging.getLogger()
 logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
+
+try:
+    from ._tools import find_austxt, get_austxt, get_buildings, Building
+except ImportError:
+    from _tools import find_austxt, get_austxt, get_buildings, Building
+
+
 # -------------------------------------------------------------------------
 
 DEFAULT_WORKING_DIR = "."
@@ -106,10 +114,27 @@ def cli() -> dict:
                              'In this directory the file `austal.txt` ' +
                              'is expected. Defaults to "%s"' %
                              DEFAULT_WORKING_DIR)
+    parser.add_argument('-b', '--no-buildings',
+                        dest='buildings',
+                        action='store_false',
+                        help='do not show the buildings ' +
+                             'defined in config file')
+    parser.add_argument('-l', '--low-colors',
+                        dest='fewcols',
+                        action='store_true',
+                        help='use only few discrete colors ' +
+                             'for better print results')
     parser.add_argument('-c', '--colormap',
                         default=DEFAULT_COLORMAP,
                         help='name of colormap to use. Defaults to "%s"' %
                              DEFAULT_COLORMAP)
+    parser.add_argument('-d', '--display',
+                        default='contour',
+                        choices=['contour', 'grid'],
+                        help='choose kind of display. ' +
+                             '`contour` produces filled contours, ' +
+                             '`grid` produces coloured grid cells. ' +
+                             'Defaults to `contour`')
     parser.add_argument('-p', '--plot',
                         metavar="PLOTFILE",
                         nargs='?',
@@ -169,6 +194,19 @@ def main():
     # analyze file name:
     info = parse_austal_outputname(infile)
     logger.debug("info: %s" % format(info))
+
+    have_buildings = args['buildings']
+    if have_buildings:
+        # get config:
+        austxt = find_austxt(os.path.dirname(infile))
+        logger.debug("conf file: %s" % format(austxt))
+        conf = get_austxt(austxt)
+        logger.debug("conf: %s" % format(conf))
+        buildings = get_buildings(conf)
+        logging.info('buildings in config: %d' % len(buildings))
+        if len(buildings) == 0:
+            have_buildings = False
+
     # warn, if not a file containing "additional load"
     if info["kind"] != "load":
         logger.warning(
@@ -180,6 +218,13 @@ def main():
     dat = datafile.data[datafile.variables[0]]
     datx = datafile.axes(ax="x")
     daty = datafile.axes(ax="y")
+    try:
+        dd = float(datafile.header['delta'][0])
+    except ValueError:
+        dd = datx[1] - datx[0]
+        logger.warning('grid spacing "delta" not in data file, ' +
+                       'guessing: %fm ' % dd)
+
     if len(dat.shape) == 3:
         dat = dat[:, :, 0]
     unit = bytes(datafile.header["unit"], "latin-1").decode()
@@ -217,29 +262,49 @@ def main():
     fig, ax = plt.subplots()
     fig.set_size_inches(11, 8)
 
-    cmap = args["colormap"]
+    cmap_name = args["colormap"]
     scale = 10 ** (np.ceil(np.log10(np.max(dat))) - 1)
     logging.debug('scale: %f' % scale)
     levels = np.array([10, 20, 50, 100, 200, 500, 1000]
                       ) / 1000 * scale
-
-    img = plt.contourf(datx, daty, dat.T, origin="lower",
-                       levels=levels,
-                       norm=matplotlib.colors.PowerNorm(gamma=0.33),
-                       cmap=cmap,
-                       extend='both'
-                       )
-    plt.colorbar(img, label=unit, extend='both')
+    if args['fewcols']:
+        norm = matplotlib.colors.BoundaryNorm(boundaries=levels,
+                                              ncolors=len(levels) + 2,
+                                              extend='both')
+        cmap = plt.get_cmap(cmap_name, len(levels) + 1)
+    else:
+        norm = matplotlib.colors.PowerNorm(gamma=0.33,
+                                           vmin=levels[0], vmax=levels[-1])
+        cmap = plt.get_cmap(cmap_name)
+    if args['display'] == "contour":
+        img = plt.contourf([x + dd / 2. for x in datx],
+                           [y + dd / 2. for y in daty],
+                           dat.T,
+                           origin="lower",
+                           levels=levels,
+                           norm=norm,
+                           cmap=cmap,
+                           extend='both'
+                           )
+        plt.colorbar(img, label=unit, extend='both')
+    elif args['display'] == "grid":
+        img = plt.pcolor([x + dd / 2. for x in datx],
+                         [y + dd / 2. for y in daty],
+                         dat.T,
+                         shading="nearest",
+                         norm=norm,
+                         cmap=cmap,
+                         )
+        plt.colorbar(img, label=unit, extend='both', boundaries=levels)
     logging.debug('label=: %s' % unit)
 
     if stdvs > 0:
-        # whites = matplotlib.colors.ListedColormap(
-        #     [(1, 1, 1, 0.4),
-        #      (1, 1, 1, 0.2),
-        #      (1, 1, 1, 0.1),
-        #      (1, 1, 1, 0.0)])
-        # cmap = whites,
-
+        plt.contourf(datx, daty, signi.T, origin="lower",
+                     levels=[0, 1, 2],
+                     colors=['white', 'white', 'white', 'white'],
+                     hatches=['+', '..', '..', None],
+                     extend='both',
+                     alpha=0)
         plt.contourf(datx, daty, signi.T, origin="lower",
                      levels=[0, 1, 2],
                      colors=['white', 'white', 'white', 'white'],
@@ -253,6 +318,19 @@ def main():
                           linewidths=0.75
                           )
         ax.clabel(con, con.levels, inline=True, fontsize=10)
+
+    if have_buildings:
+        for bb in buildings:
+            ax.add_patch(
+                matplotlib.patches.Rectangle(
+                    xy=(bb.x, bb.y),
+                    width=bb.a,
+                    height=bb.b,
+                    angle=bb.w,
+                    fill=True,
+                    color="black",
+                )
+            )
 
     ax.set_xlabel("x in m")
     ax.set_ylabel("y in m")
