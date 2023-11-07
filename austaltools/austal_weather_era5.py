@@ -224,7 +224,7 @@ def read_nc(ncfile, lat, lon):
     #   computed not by using the roughness length of the tile itself,
     #   but instead assuming a roughness length for short grass (=0.03m),
     #   the surface over which (by WMO convention) winds should be measured
-    #   https://confluence.ecmwf.int/display/FUG/9.3+Surface+Wind
+    #   https://confluence.ecmwf.int/display/FUG/Section+9.3+Surface+Wind
     #
     #   Therefore: u10 = u*/k * ln(z/z0)
     if WIND_VARIANT == 'fixed_057':

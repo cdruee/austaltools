@@ -20,6 +20,10 @@ try:
     from ._tools import find_austxt, get_austxt, get_buildings, Building
 except ImportError:
     from _tools import find_austxt, get_austxt, get_buildings, Building
+try:
+    from ._version import __version__
+except ImportError:
+    from _version import __version__
 
 
 # -------------------------------------------------------------------------
@@ -174,7 +178,8 @@ def cli() -> dict:
     elif arglist['quiet'] is not None:
         logging_numeric = max(0, logging_numeric - arglist['quiet'])
     logger.setLevel(logging_levels[logging_numeric])
-    logging.info('logging level: {:s}'.format(
+    logger.info(os.path.basename(__file__) + ' version: ' + __version__)
+    logger.info('logging level: {:s}'.format(
         logging.getLevelName(logging.root.getEffectiveLevel())))
 
     logger.debug(format(arglist))

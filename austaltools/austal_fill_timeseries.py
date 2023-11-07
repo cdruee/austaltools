@@ -10,9 +10,11 @@ import yaml
 
 from ._version import __version__
 
+logging.basicConfig()
+logger = logging.getLogger()
 
 def parse_time_string(string):
-    logging.debug('parse_time_string: %s' % string)
+    logger.debug('parse_time_string: %s' % string)
     for x in string:
         if x not in ['-', ',', '/'] and not x.isdigit():
             raise ValueError('parse time: illegal character in string: %s' % x)
@@ -66,11 +68,11 @@ def parse_time(info, name='', multi=True):
     if "time" not in info.keys():
         raise ValueError('no time info: %s' % name)
     count = parse_time_string(format(info['time']))
-    logging.debug('count: ' + format(count))
+    logger.debug('count: ' + format(count))
     if "unit" not in info.keys():
         raise ValueError('no unit info: %s' % name)
     unit = parse_time_unit(info['unit'])
-    logging.debug('unit: ' + format(unit))
+    logger.debug('unit: ' + format(unit))
     if not multi:
         if len(count) > 1:
             raise ValueError('multiple times defined: %s' % name)
@@ -92,18 +94,18 @@ def parse_cycle(c_id, c_info, time, dt):
         raise ValueError('start has no at info: %s' % c_id)
     a_count, a_unit = parse_time(s_info['at'], name='at', multi=True)
     a_time = [time[0] + pd.DateOffset(**{a_unit: x}) for x in a_count]
-    logging.debug('a_time: ' + format(a_time))
+    logger.debug('a_time: ' + format(a_time))
 
     if "offset" not in s_info.keys():
-        logging.info('cycle start has no offset info: %s' % c_id)
+        logger.info('cycle start has no offset info: %s' % c_id)
         o_time = [pd.DateOffset(0)]
     else:
         o_count, o_unit = parse_time(s_info['offset'],
                                      name='offset', multi=True)
         o_time = [pd.DateOffset(**{o_unit: x}) for x in o_count]
-    logging.debug('o_time: ' + format(o_time))
+    logger.debug('o_time: ' + format(o_time))
     start = pd.Series([x + y for x in a_time for y in o_time])
-    logging.debug('start: ' + format(start))
+    logger.debug('start: ' + format(start))
 
     if "sequence" not in c_info.keys() and "list" not in c_info.keys():
         raise ValueError('cycle has no sequence info: %s' % c_id)
@@ -117,7 +119,7 @@ def parse_cycle(c_id, c_info, time, dt):
         time_last = time_pointer
         value_last = 0
         for i, s_item in enumerate(c_info['sequence']):
-            logging.debug(format(s_item))
+            logger.debug(format(s_item))
             if len(s_item) > 1:
                 raise ValueError('sequence item entry #%d not unique: %s' %
                                  (i, c_id))
@@ -151,12 +153,12 @@ def parse_cycle(c_id, c_info, time, dt):
         sequ_value = [float(x) for x in c_info['list']]
         sequ_time = [i * dt for i in range(len(sequ_value))]
         sequence = pd.Series(sequ_value, index=sequ_time)
-    logging.debug(format(sequence))
+    logger.debug(format(sequence))
 
     if any([x < sequence.index[-1] for x in start.diff()[1:]]):
-        logging.warning('sequence longer than start interval: %s' % c_id)
+        logger.warning('sequence longer than start interval: %s' % c_id)
     if (start.values[-1] + sequence.index[-1]) > time.values[-1]:
-        logging.warning('total length > time period to fill: %s' % c_id)
+        logger.warning('total length > time period to fill: %s' % c_id)
 
     # generate cycle:
     # copy sequence to each start time
@@ -182,7 +184,7 @@ def get_cycle(file, time):
     # read cycle file
     with open(file, 'r') as f:
         yinfo = yaml.safe_load(f)
-    logging.debug(format(yinfo))
+    logger.debug(format(yinfo))
 
     # prepare output
     res = pd.DataFrame(index=time)
@@ -191,7 +193,7 @@ def get_cycle(file, time):
     if not isinstance(yinfo, dict):
         raise ValueError('cyclefile top-level is not associative list')
     for c_id, c_info in yinfo.items():
-        logging.info('working on cycle: %s' % c_id)
+        logger.info('working on cycle: %s' % c_id)
         source, cycle = parse_cycle(c_id, c_info, time, dt)
 
         # add cyle as column or add values to existing column
@@ -214,7 +216,7 @@ def do_fill(action, path, cycle_file, source_id,
     zeitreihe = readmet.dmna.DataFile(file=name)
     if zeitreihe.filetype != 'timeseries':
         raise ValueError('is not dmna timeseries format: %s' % name)
-    logging.info('working on file: %s' % name)
+    logger.info('working on file: %s' % name)
     variables = zeitreihe.variables
     sids = []
     for x in variables:
@@ -222,11 +224,11 @@ def do_fill(action, path, cycle_file, source_id,
             sids.append(x)
     values = zeitreihe.data
     if action == 'list':
-        logging.info('listing sources in file')
+        logger.info('listing sources in file')
         print('source IDs: ' + ' '.join(sids))
         return
     elif action in ['week-5', 'week-6']:
-        logging.info('filling work weeks for source: %s' % source_id)
+        logger.info('filling work weeks for source: %s' % source_id)
         if source_id not in sids:
             if len(sids) == 1:
                 source_id = sids[0]
@@ -250,7 +252,7 @@ def do_fill(action, path, cycle_file, source_id,
                     values.loc[i, source_id] = float(output[0])
     elif action in ['cycle']:
         cyclefile = os.path.join(path, cycle_file)
-        logging.info('filling cycles from: %s' % cyclefile)
+        logger.info('filling cycles from: %s' % cyclefile)
         cycle = get_cycle(cyclefile, zeitreihe.data['te'])
         for c in cycle.columns:
             if c in values.columns:
@@ -344,10 +346,10 @@ def main():
     # logging level
     #
     if args.verb is not None:
-        logging.getLogger().setLevel(args.verb)
+        logger.setLevel(args.verb)
     else:
-        logging.getLogger().setLevel(logging.WARNING)
-    logging.info(os.path.basename(__file__) + ' version: ' + __version__)
+        logger.setLevel(logging.WARNING)
+    logger.info(os.path.basename(__file__) + ' version: ' + __version__)
 
     do_fill(**vars(args))
 
