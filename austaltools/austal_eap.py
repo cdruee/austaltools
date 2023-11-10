@@ -163,9 +163,11 @@ def same_sense_rotation(val, ref):
     if all(ref_diff >= 0):
         sense = +1
     elif all(ref_diff <= 0):
-        sense = +1
+        sense = -1
     else:
-        raise ValueError("wind reference not sorted")
+        #raise ValueError("wind reference not sorted")
+        logger.warning("wind reference not sorted: %s" % str(ref))
+        sense = 0
     if all(val_diff >= 0) and sense > 0:
         res = True
     elif all(val_diff <= 0) and sense < 0:
@@ -190,7 +192,7 @@ def find_eap(u_grid, v_grid, u_ref, v_ref):
     # check if wind grid sizes do match:
     if not (np.shape(u_grid) == np.shape(v_grid)):
         raise ValueError('wind grid shapes do not match')
-    nx, ny, nz, nstab, ndir = np.shape(u_ref)
+    nx, ny, nz, nstab, ndir = np.shape(u_grid)
     # check if refence wind grid sizes do match:
     if not (np.shape(u_ref) == np.shape(v_ref)):
         raise ValueError('wind grid shapes do not match')
@@ -219,18 +221,20 @@ def find_eap(u_grid, v_grid, u_ref, v_ref):
     # points.
     for iz in range(nz):
         for istab in range(nstab):
-            _, dd_ref = meteolib.wind.uv2dir(u_ref[iz, istab, :],
+            ff_ref, dd_ref = meteolib.wind.uv2dir(u_ref[iz, istab, :],
                                              v_ref[iz, istab, :])
-            for ix in range(nx):
-                for iy in range(ny):
-                    if keep[ix, iy, iz, istab]:
+            if any(ff_ref < 0.5):
+               keep[:, :, iz, istab, :] = np.nan
+            else:
+                for ix in range(nx):
+                    for iy in range(ny):
                         ff_val, dd_val = meteolib.wind.uv2dir(
                             u_grid[ix, iy, iz, istab, :],
                             v_grid[ix, iy, iz, istab, :]
                         )
-                        if not same_sense_rotation(dd_val, dd_ref):
-                            keep[ix, iy, iz, istab, :] = np.nan
                         if any(ff_val < 0.5):
+                            keep[ix, iy, iz, istab, :] = np.nan
+                        elif not same_sense_rotation(dd_val, dd_ref):
                             keep[ix, iy, iz, istab, :] = np.nan
     u_keep = u_grid * keep
     v_keep = v_grid * keep
@@ -319,7 +323,8 @@ def calc_ref_1d(levels, dirs):
         3.8
     ]
     # reference height (where wind gets almost geostrophic)
-    h_ref = 250  # after Namlyso
+    #h_ref = 250  # after Namlyso
+    h_ref = np.nanmax(levels)
     # Obukhov-length
     val_Lob = [_dispersion.KM2021.get_center(x, z0=z0)
                for x in range(5)]
@@ -332,11 +337,15 @@ def calc_ref_1d(levels, dirs):
         ww = meteolib.wind.DiabaticWind(z0=z0,
                                         u=val_v_g[istab],
                                         z=h_ref,
-                                        zoL=val_Lob[istab] / h_ref)
+                                        zoL=h_ref / val_Lob[istab])
         for idir, wdir in enumerate(dirs):
             for iz,z in enumerate(levels):
-                ff = ww.u(z)
+                if z < (ww.z0 + ww.d):
+                    ff = 0
+                else:
+                    ff = ww.u(z)
                 dd = wdir
+                logger.debug(str([istab,idir,z,ff,dd]))
                 (u_ref[iz, istab, idir],
                  v_ref[iz, istab, idir]) = meteolib.wind.dir2uv(ff, wdir)
     return u_ref, v_ref
