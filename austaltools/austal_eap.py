@@ -445,8 +445,8 @@ def calc_ref_1d(levels, dirs):
         3.8
     ]
     # reference height (where wind gets almost geostrophic)
-    #h_ref = 250  # after Namlyso
-    h_ref = np.nanmax(levels)
+    h_ref = 250  # after Namlyso
+    #h_ref = np.nanmax(levels)
     # Obukhov-length
     l_ob = [_dispersion.KM2021.get_center(x, z0=z0)
                for x in range(6)]
@@ -464,6 +464,8 @@ def calc_ref_1d(levels, dirs):
             for iz,z in enumerate(levels):
                 if z < (ww.z0 + ww.d):
                     ff = 0
+                elif z > h_ref:
+                    ff = ww.u(h_ref)
                 else:
                     ff = ww.u(z)
                 dd = wdir
@@ -502,8 +504,13 @@ def main():
     for lvl in range(n_lvl):
         eaps[lvl, :] = find_eap(g[:, :, lvl])
         logger.info('level %2i: EAP %s' % (lvl, str(eaps[lvl, :])))
-    selected_level = 10
-    if 'plot' in args:
+    for lvl in range(n_lvl):
+        if not all(eaps[lvl, :] == -1):
+            selected_level = lvl
+            break
+    else:
+        selected_level=-1
+    if 'plot' in args and selected_level >= 0:
         plot_g(args,axes['x'], axes['y'],
                g[:,:,selected_level],
                eaps[selected_level,:])
