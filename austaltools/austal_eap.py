@@ -257,8 +257,7 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref):
     # speed is below 0,5 m · s–1. The rest of the steps
     # are performed only for the remaining grid
     # points.
-    #FIXME
-    for iz in range(11):
+    for iz in range(nz):
         for istab in range(nstab):
             ff_ref, dd_ref = meteolib.wind.uv2dir(u_ref[iz, istab, :],
                                              v_ref[iz, istab, :])
