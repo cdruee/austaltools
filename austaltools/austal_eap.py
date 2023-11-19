@@ -445,8 +445,16 @@ def calc_ref_1d(levels, dirs):
         3.8
     ]
     # reference height (where wind gets almost geostrophic)
-    h_ref = 250  # after Namlyso
-    #h_ref = np.nanmax(levels)
+    #h_ref = 250  # after Namlyso
+    # inversion heights afetr VDI 3783 Blatt 8 (2002) Tab.4
+    val_z_i = [
+        250,
+        250,
+        800,
+        800,
+        1100,
+        1100
+    ]
     # Obukhov-length
     l_ob = [_dispersion.KM2021.get_center(x, z0=z0)
                for x in range(6)]
@@ -456,8 +464,13 @@ def calc_ref_1d(levels, dirs):
     v_ref = np.full((len(levels), len(val_v_g), len(dirs)), np.nan)
 
     for istab in range(6):
+        # VDI 3783 Blatt 8 (2002)
+        # Prandtl layer is 0.1 the inversion height z_i
+        # Wind speed reaches 80% v_g at top of the Prandtl layer
+        h_ref = val_z_i[istab] * 0.1
+        ffref = val_v_g[istab] * 0.8
         ww = meteolib.wind.DiabaticWind(z0=z0,
-                                        u=val_v_g[istab],
+                                        u=ffref,
                                         z=h_ref,
                                         zoL=h_ref / l_ob[istab])
         for idir, wdir in enumerate(dirs):
