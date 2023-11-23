@@ -457,13 +457,13 @@ def calc_ref_1d(levels, dirs):
     ]
     # Obukhov-length
     l_ob = [_dispersion.KM2021.get_center(x, z0=z0)
-               for x in range(6)]
+               for x in range(N_CLASS)]
 
     # shape of reference wind profiles: (nz, nstab, ndir)
-    u_ref = np.full((len(levels), len(val_v_g), len(dirs)), np.nan)
-    v_ref = np.full((len(levels), len(val_v_g), len(dirs)), np.nan)
+    u_ref = np.full((len(levels), N_CLASS, len(dirs)), np.nan)
+    v_ref = np.full((len(levels), N_CLASS, len(dirs)), np.nan)
 
-    for istab in range(6):
+    for istab in range(N_CLASS):
         # VDI 3783 Blatt 8 (2002)
         # Prandtl layer is 0.1 the inversion height z_i
         # Wind speed reaches 80% v_g at top of the Prandtl layer
@@ -488,29 +488,81 @@ def calc_ref_1d(levels, dirs):
     return u_ref, v_ref
 
 
-def read_ref(file):
-    cfdf = pd.read_table(file, skiprows=1, nrows=0, sep='\s+',
+def read_ref(file,levels, dirs):
+    ndir = len(dirs)
+    nlev = len(levels)
+
+    # isd have the form wS0DD
+    x = pd.read_table(file, skiprows=1, nrows=0, sep='\s+',
                          skipinitialspace=True,
                          quotechar="'", engine="python")
-    cf1d = [x.replace('\'', '') for x in list(cfdf.columns)]
+    ref_id = [x.replace('\'', '') for x in list(x.columns)]
+    # stab is zero-based: 0...5
+    ref_stab = [int(x[1:2]) - 1 for x in ref_id]
+    ref_dir = [float(x[3:5]) * 10 for x in ref_id]
+
     df = pd.read_table(file, skiprows=2, header=None, index_col=0,
                        sep='\s+',
                        engine="python")
-    ff_1d = df[[2 * x + 1 for x in range(len(cf1d))]]
-    ff_1d.columns = cf1d
-    dd_1d = df[[2 * x + 2 for x in range(len(cf1d))]]
-    dd_1d.columns = cf1d
-    return ff_1d, dd_1d
+    ref_ff = df[[2 * x + 1 for x in range(len(ref_id))]]
+    ref_ff.columns = ref_id
+    ref_dd = df[[2 * x + 2 for x in range(len(ref_id))]]
+    ref_dd.columns = ref_id
+    #FIXME is that choice OK?
+    #we can only safely use levels above max value of z0
+    ref_min_z_level = min(df.index[df.index > 2 ])
 
+    # shape of reference wind profiles: (nz, nstab, ndir)
+    u_ref = np.full((nlev, N_CLASS, ndir), np.nan)
+    v_ref = np.full((nlev, N_CLASS, ndir), np.nan)
+
+    for istab in range(N_CLASS):
+        for idir,dir in enumerate(dirs):
+            # find reference profile with same class and nearest direction
+            diff_min = 360.
+            for i,id in enumerate(ref_id):
+                # difference in -180 .. 180
+                diff_dir = (((dir - ref_dir[i]) + 180.) % 360.) - 180.
+                if ref_stab[i] == istab and abs(diff_dir) < abs(diff_min):
+                    # this is the selected reference profile:
+                    rf = ref_ff[id][ref_min_z_level:]
+                    rd = ref_dd[id][ref_min_z_level:] + diff_dir
+
+            for ilev,lev in enumerate(levels):
+                if lev > 0:
+                    # get indices of reference heights neighbouring lev
+                    if lev <= min(rf.index):
+                        i1 = 0
+                        i2 = 1
+                    elif lev >= max(rf.index):
+                        i1 = len(rf.index) - 2
+                        i2 = len(rf.index) - 1
+                    else:
+                        i1 = np.searchsorted(np.array(rf.index), lev, 'left')
+                        i2 = np.searchsorted(np.array(rf.index), lev, 'right')
+                    # convert to reference heights (index of ref dataframe)
+                    z1 = np.array(rf.index)[i1]
+                    z2 = np.array(rf.index)[i2]
+                    ww = meteolib.wind.LogWind(u=rf[z1], z=z1,
+                                               u2=rf[z2], z2=z2)
+                    ff = ww.u(lev)
+                    dd = np.interp([lev],[z1,z2], rd[[z1,z2]].values)[0]
+                else:
+                    ff = 0.
+                    dd = np.array(rd.index)[0]
+                u_ref[ilev,istab,idir], v_ref[ilev,istab,idir] = meteolib.wind.dir2uv(ff, dd)
+    return u_ref, v_ref
 
 def main():
     args = cli()
-    #ff_1d, dd_1d = read_ref('/local/data/druee/software/austaltools/TAL-Anemo/Ref1d.dat')
+
     wdir = wind_library(args["path"])
     file_info = wind_files(wdir)
     u_grid, v_grid, axes = read_wind(file_info, path=wdir)
-    dirs = sorted(list(set(file_info[2])))
-    u_ref, v_ref = calc_ref_1d(axes['z'], dirs)
+    dirs = [float(x) * 10. for x in sorted(list(set(file_info[2]))) ]
+    #FIXME add cmdline param
+    #u_ref, v_ref = calc_ref_1d(axes['z'], dirs)
+    u_ref, v_ref = read_ref('/local/data/druee/software/austaltools/TAL-Anemo/Ref1d.dat', axes['z'], dirs)
     g, gd, gf = calc_quality_measure(u_grid, v_grid, u_ref, v_ref)
     n_lvl = len(axes['z'])
     eaps = np.full((n_lvl, 2),np.nan)
@@ -523,6 +575,9 @@ def main():
             break
     else:
         selected_level=-1
+    #FIXME
+    selected_level = 4
+    logger.info(f'selected_level: {selected_level}')
     if 'plot' in args and selected_level >= 0:
         plot_g(args,axes['x'], axes['y'],
                g[:,:,selected_level],
