@@ -475,7 +475,6 @@ def read_ref(file,levels, dirs):
 def cli():
     # defaults
     default = {
-        'path': _tools.DEFAULT_WORKING_DIR
     }
     parser = argparse.ArgumentParser(
         description='find substitute anemometer position ' +
@@ -519,10 +518,6 @@ def cli():
                         help='minimum wind speed below which data are '
                              'exluded. ' +
                              'Defaults to %f' % MIN_FF)
-    parser.add_argument('path', metavar='PATH', nargs='?',
-                        help='directory where "zeitreihe.dmna" is stored '
-                             '[%s]' % default['path'],
-                        default=default['path'])
 
     verb = parser.add_mutually_exclusive_group()
     verb.add_argument('--debug', dest='verb', action='store_const',
