@@ -64,7 +64,7 @@ def get_buildings(conf):
         for i in range(number):
             res.append(Building(*[val[p][i] for p in pars]))
     else:
-        logging.warning('no buildings in cofig')
+        logger.warning('no buildings in cofig')
     return res
 
 
@@ -204,11 +204,12 @@ def add_arguents_common_plot(parser: argparse.ArgumentParser
                              '`grid` produces coloured grid cells. ' +
                              'Defaults to `contour`')
     parser.add_argument('-p', '--plot',
-                        metavar="PLOTFILE",
+                        metavar="FILE",
                         nargs='?',
                         const='__default__',
-                        help='save plot to a file. If given without' +
-                             '`PLOT`, the file name defaults to ' +
+                        help='save plot to a file. If `FILE` is "-" ' +
+                             'the plot is shown on screen. If `FILE` is ' +
+                             'missing, the file name defaults to ' +
                              'the data file name with extension `png`'
                         )
     parser.add_argument('-f', '--force',
@@ -277,14 +278,26 @@ def common_plot(args: dict,
             raise ValueError('lenghts of x and y do not match shape of z')
     else:
         raise ValueError('dat must be dict')
+
+    levels = None
     if scale is None:
-        dmin = np.floor(np.nanmin(dat) * 10) / 10
-        dmax = np.ceil(np.nanmax(dat) * 10) / 10
-    else:
+        dmin = np.nanmin(datz)
+        dmax = np.nanmax(datz)
+    elif isinstance(scale,float):
+        dmin = 0.
+        dmax = scale
+    elif len(scale) == 2:
         dmin, dmax = scale
-    data_range = dmax - dmin
-    logging.debug('data_range: %f' % data_range)
-    levels = np.arange(dmin, dmax, data_range / 10)
+    elif len(scale) > 2:
+        levels = np.array(scale)
+    if levels is None:
+        data_range = dmax - dmin
+        order = 10**np.floor(np.log10(data_range))
+        dmin = np.floor(dmin / order) * order
+        dmax = np.ceil(dmax / order) * order
+        logger.info('data_range: %f' % data_range)
+        levels = np.arange(dmin, dmax, data_range / 10)
+
     if args['fewcols']:
         cmap = plt.get_cmap(cmap_name, len(levels) + 1)
     else:
@@ -307,7 +320,7 @@ def common_plot(args: dict,
         plt.colorbar(img, label=unit, extend='both', boundaries=levels)
     else:
         raise ValueError('argument display missing or invalid')
-    logging.debug('label=: %s' % unit)
+    logger.debug('unit: %s' % unit)
 
     # ---------------------------
     # overlay dots e.g. to mark significance
@@ -317,10 +330,13 @@ def common_plot(args: dict,
             dotx = dots['x']
             doty = dots['y']
             dotz = dots['z']
-        elif isinstance(dots.np.ndarray):
+        elif isinstance(dots,np.ndarray):
             dotz = dots
             if np.shape(dotz) != np.shape(datz):
                 raise ValueError('dots shape does not equal dat shape')
+            else:
+                dotx = datx
+                doty = daty
         else:
             raise ValueError('dots must be dict or ndarray')
         plt.contourf(dotx, doty, dotz.T, origin="lower",
@@ -340,11 +356,14 @@ def common_plot(args: dict,
     # overlay topography as isolines
     #
     if topo is not None:
+        logger.debug('adding topography')
         if isinstance(topo, dict):
+            logger.debug('... from data in arguments')
             topx = topo["x"]
             topy = topo["y"]
             topz = topo["z"]
         elif isinstance(topo, str):
+            logger.debug('... from file: %s' % topo)
             if os.path.exists(topo):
                 topo_path = topo
             elif os.path.exist(os.path.join(args['working_dir'], topo)):
@@ -397,9 +416,10 @@ def common_plot(args: dict,
     ax.set_xlabel("x in m")
     ax.set_ylabel("y in m")
 
-    if args["plot"] == True:
+    if args["plot"] == "__show__":
+        logger.info('showing plot')
         plt.show()
-    else:
+    elif args["plot"] not in [None, ""]:
         if os.path.sep in args["plot"]:
             outname = args["plot"]
         else:

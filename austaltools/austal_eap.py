@@ -38,8 +38,8 @@ logging.getLogger('readmet.dmna').setLevel(logging.ERROR)
 N_CLASS = 6
 N_EGDE_NODES = 3
 MIN_FF = 0.5
-MIN_XY = 400 * 400
-DEFAULT_COLORMAP = "YlOrRd"
+MAX_HEIGHT = 100.
+#MIN_XY = 400 * 400
 
 # -------------------------------------------------------------------------
 
@@ -87,7 +87,7 @@ def wind_files(path):
     find wind library files
     :param path: path where to search. Wind library files are expected
     to be in this path or in the subdirectory 'lib' of this path.
-    :return: tuple of lists containing names, stability classes,
+    :return: dict of lists containing names, stability classes,
     general wind directions, and grid indexes of all files.
     """
     wn = re.compile("w[0-9asnwe]{7}\.dmna")
@@ -104,31 +104,33 @@ def wind_files(path):
     logger.debug('stabilty classes: %s' % str(f_stab))
     logger.debug('wind directions: %s' % str(f_wdir))
     logger.debug('grid indexes: %s' % str(f_grid))
-    return f_name, f_stab, f_wdir, f_grid
+    return {'name': f_name, 'stab': f_stab, 'wdir': f_wdir, 'grid': f_grid}
 
 
 def read_wind(file_info, path='.', grid=0):
     """
     read wind library files
 
-    :param file_info: tuple of lists containing names, stability classes,
+    :param file_info: dict of lists containing names, stability classes,
     general wind directions, and grid indexes of all files.
-    :type file_info: tuple
+    :type file_info: dict
     :param path: Wind library files are expected
     to be in this path
     :param grid: index of the grid for which to read the wind data
     :return: u_grid, v_grid, axes
     :rtype: tuple of (np.ndarray, np,dnarray, dict of lists of float)
     """
-    f_name, f_stab, f_wdir, f_grid = file_info
-    if grid not in f_grid:
+    if grid not in file_info['grid']:
         raise ValueError('grid %i not available in data')
-    ndir = len(set(f_wdir))
-    dirs = sorted(list(set(f_wdir)))
-    nstab = len(set(f_stab))
-    stabs = sorted(list(set(f_stab)))
+    else:
+        logger.info('reading grid: %i' % grid)
+    ndir = len(set(file_info['wdir']))
+    dirs = sorted(list(set(file_info['wdir'])))
+    nstab = len(set(file_info['stab']))
+    stabs = sorted(list(set(file_info['stab'])))
 
-    axes = readmet.dmna.DataFile(os.path.join(path, f_name[0])).axes()
+    axes = readmet.dmna.DataFile(
+        os.path.join(path, file_info['name'][0])).axes()
     nx = len(axes['x'])
     ny = len(axes['y'])
     nz = len(axes['z'])
@@ -136,10 +138,11 @@ def read_wind(file_info, path='.', grid=0):
     u_grid = np.full((nx, ny, nz, nstab, ndir), np.nan)
     v_grid = np.full((nx, ny, nz, nstab, ndir), np.nan)
 
-    for i in progress(range(len(f_name)), desc="reading wind fields"):
-        igrd, wdir, stab = analyze_name(f_name[i])
+    for i in progress(range(len(file_info['name'])),
+                      desc="reading wind fields"):
+        igrd, wdir, stab = analyze_name(file_info['name'][i])
         if grid == igrd:
-            filename = os.path.join(path, f_name[i])
+            filename = os.path.join(path, file_info['name'][i])
             logger.debug('loading file: %s' % filename)
             dmna = readmet.dmna.DataFile(filename)
             istab = stabs.index(stab)
@@ -176,12 +179,17 @@ def same_sense_rotation(val, ref):
     return res
 
 
-def calc_quality_measure(u_grid, v_grid, u_ref, v_ref):
+def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
+                         nedge=N_EGDE_NODES, minff=MIN_FF,
+                         maxlev=-1):
     """
     :param u_grid: np.array of wind field eastward components
     :param v_grid: np.array of wind field northward components
     :param u_ref: np.array of reference wind eastward component
     :param v_ref: np.array of reference wind northward component
+    :param nedge: number of excluded edge nodes
+    :param minff: exclude data below this minimum wind speed
+    :param maxlev: index of highest level to evaluate. <0 = evaluate all
 
     shape of wind fields: (nx, ny, nz, nstab, ndir)
     shape of reference wind profiles: (nz, nstab, ndir)
@@ -192,6 +200,10 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref):
     if not (np.shape(u_grid) == np.shape(v_grid)):
         raise ValueError('wind grid shapes do not match')
     nx, ny, nz, nstab, ndir = np.shape(u_grid)
+    if 0<= maxlev < nz:
+        nz_eval = maxlev
+    else:
+        nz_eval = nz
     # check if reference wind grid sizes do match:
     if not (np.shape(u_ref) == np.shape(v_ref)):
         raise ValueError('wind grid shapes do not match')
@@ -205,10 +217,10 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref):
     # 1) Only grid points inside the largest calculation
     # area without the three outer boundary points are
     # considered.
-    keep[:3, :, :, :, :] = np.nan
-    keep[:, :3, :, :, :] = np.nan
-    keep[-3:, :, :, :, :] = np.nan
-    keep[:, -3:, :, :, :] = np.nan
+    keep[:nedge, :, :, :, :] = np.nan
+    keep[:, :nedge, :, :, :] = np.nan
+    keep[-nedge:, :, :, :, :] = np.nan
+    keep[:, -nedge:, :, :, :] = np.nan
 
     # VDI 3783 pt 16 sct 6.1
     # 2) All grid points are rejected at which the wind
@@ -218,15 +230,15 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref):
     # speed is below 0,5 m · s–1. The rest of the steps
     # are performed only for the remaining grid
     # points.
-    for ibar in progress(range(nz * nstab),
+    for ibar in progress(range(nz_eval * nstab),
                          desc="do quality measure "):
-            iz = ibar // nstab
-            istab = ibar % nstab
-
+        iz = ibar // nstab
+        istab = ibar % nstab
+        if iz <= nz_eval:
             ff_ref, dd_ref = meteolib.wind.uv2dir(u_ref[iz, istab, :],
                                              v_ref[iz, istab, :])
             logger.debug('lvl: %4.0f, AK: %1i' % (iz,istab))
-            if any(ff_ref < 0.5):
+            if any(ff_ref < minff):
                keep[:, :, iz, istab, :] = np.nan
             else:
                 for ix in range(nx):
@@ -235,10 +247,12 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref):
                             u_grid[ix, iy, iz, istab, :],
                             v_grid[ix, iy, iz, istab, :]
                         )
-                        if any(ff_val < 0.5):
+                        if any(ff_val < minff):
                             keep[ix, iy, iz, istab, :] = np.nan
                         elif not same_sense_rotation(dd_val, dd_ref):
                             keep[ix, iy, iz, istab, :] = np.nan
+    for iz in range(nz_eval + 1, nz):
+        keep[:, :, iz, istab, :] = np.nan
     u_keep = u_grid * keep
     v_keep = v_grid * keep
 
@@ -255,12 +269,15 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref):
     sumr2 = np.sum(np.sum(u_ref ** 2 + v_ref ** 2, axis=2), axis=1)
     gd = np.full((nx, ny, nz), np.nan)
     for iz in range(nz):
-        for iy in range(ny):
-            for ix in range(nx):
-                cov_wr = sumwr[ix, iy, iz] - sumw[ix, iy, iz] * sumr[iz]
-                var_r = sumr2[iz] - sumr[iz] ** 2
-                war_w = sumw2[ix, iy, iz] - sumw[ix, iy, iz] ** 2
-                gd[ix, iy, iz] = (cov_wr ** 2) / (var_r * war_w)
+        if iz <= nz_eval:
+            for iy in range(ny):
+                for ix in range(nx):
+                    cov_wr = sumwr[ix, iy, iz] - sumw[ix, iy, iz] * sumr[iz]
+                    var_r = sumr2[iz] - sumr[iz] ** 2
+                    war_w = sumw2[ix, iy, iz] - sumw[ix, iy, iz] ** 2
+                    gd[ix, iy, iz] = (cov_wr ** 2) / (var_r * war_w)
+        else:
+            gd[:, :, iz] = np.nan
 
     ff_grid = np.sqrt(u_keep ** 2 + v_keep ** 2)
     ff_ref3d = np.broadcast_to(np.sqrt(u_ref ** 2 + v_ref ** 2), np.shape(ff_grid))
@@ -465,6 +482,12 @@ def cli():
                     'according to VDI 3783 Part 16 ' +
                     'from a wind library generated by austal')
     parser = _tools.add_arguents_common_plot(parser)
+    parser.add_argument('-g', '--grid',
+                        metavar='ID',
+                        nargs = '?',
+                        default=0,
+                        help='ID (number) of the grid to evaluate. '
+                             'Defaults to 0')
     parser.add_argument('-z', '--height',
                         metavar='METERS',
                         nargs = '?',
@@ -472,15 +495,40 @@ def cli():
                         help='effective anemometer height, i.e. height ' +
                              'to evaluate EAP at in m. '
                              'Defaults to 10.0')
+    parser.add_argument('-r', '--reference',
+                        default='simple',
+                        choices=['simple', 'file'],
+                        help='choose kind of reference profile. ' +
+                             '`simple` produces a log wind profile, ' +
+                             '`file` reads reference profile from file. ' +
+                             'Defaults to `simple`')
+    parser.add_argument('--edge-nodes',
+                        default=N_EGDE_NODES,
+                        nargs='?',
+                        help='number of edge nodes along each side, ' +
+                             'where data are exluded. ' +
+                             'Defaults to %i' % N_EGDE_NODES)
+    parser.add_argument('--max-height',
+                        default=MAX_HEIGHT,
+                        nargs='?',
+                        help='maximum height to evaluate EAP. ' +
+                             'Defaults to %f' % MAX_HEIGHT)
+    parser.add_argument('--min-ff',
+                        default=MIN_FF,
+                        nargs='?',
+                        help='minimum wind speed below which data are '
+                             'exluded. ' +
+                             'Defaults to %f' % MIN_FF)
+    parser.add_argument('path', metavar='PATH', nargs='?',
+                        help='directory where "zeitreihe.dmna" is stored '
+                             '[%s]' % default['path'],
+                        default=default['path'])
+
     verb = parser.add_mutually_exclusive_group()
     verb.add_argument('--debug', dest='verb', action='store_const',
                       const=logging.DEBUG, help='show informative output')
     verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
                       const=logging.INFO, help='show detailed output')
-    parser.add_argument('path', metavar='PATH', nargs='?',
-                        help='directory where "zeitreihe.dmna" is stored '
-                             '[%s]' % default['path'],
-                        default=default['path'])
     args = parser.parse_args()
     #
     # logging level
@@ -491,11 +539,17 @@ def cli():
         logger.setLevel(logging.WARNING)
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
 
+    logger.debug(format(args))
     return vars(args)
 
 
 def main():
+    #
+    # process user interface
     args = cli()
+    #
+    #
+    # define how progress ist displayed, depeding on logging level
     global progress
     if  'tqdm' in globals() and 10 < logger.getEffectiveLevel() <= 30:
         def progress(itr, desc=""):
@@ -506,29 +560,59 @@ def main():
         def progress(itr, desc="", *args, **kwargs):
             return itr
 
+    #
+    # read the wind library data
+    #
     wdir = wind_library(args["path"])
     file_info = wind_files(wdir)
-    u_grid, v_grid, axes = read_wind(file_info, path=wdir)
-    dirs = [float(x) * 10. for x in sorted(list(set(file_info[2]))) ]
-    #FIXME add cmdline param
-    #u_ref, v_ref = calc_ref_1d(axes['z'], dirs)
-    u_ref, v_ref = read_ref('/local/data/druee/software/austaltools/TAL-Anemo/Ref1d.dat', axes['z'], dirs)
-    g, gd, gf = calc_quality_measure(u_grid, v_grid, u_ref, v_ref)
+    dirs = [float(x) * 10. for x in sorted(list(set(file_info['wdir']))) ]
+    u_grid, v_grid, axes = read_wind(file_info, path=wdir,
+                                     grid=args['grid'])
+    #
+    # get the reference profile
+    #
+    if args['reference'] == 'simple':
+        u_ref, v_ref = calc_ref(axes['z'], dirs)
+    elif args['reference'] == 'file':
+        u_ref, v_ref = read_ref('/local/data/druee/software/austaltools/TAL-Anemo/Ref1d.dat', axes['z'], dirs)
+    else:
+        raise ValueError('unknown kind of reference: %s' % args['reference'])
+    #
+    # find EAPs for each level
+    #
     n_lvl = len(axes['z'])
+    mx_height = float(args['max_height'])
+    mx_lvl = np.argmax(axes['z']*(np.array(axes['z']) <= mx_height))
+    logging.info('evaluation limited to %.0fm = level %i' %
+                 (mx_height, mx_lvl))
+    g, gd, gf = calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
+                                     nedge=args['edge_nodes'],
+                                     minff=args['min_ff'],
+                                     maxlev=mx_lvl)
     eaps = []
     for lvl in range(n_lvl):
-        eaps.append(find_eap(g[:, :, lvl]))
-        logger.info('level %2i: EAP %s' % (lvl, eaps[lvl]))
-    for lvl in range(n_lvl):
-        if not eaps[lvl] == (-1,-1):
-            selected_level = lvl
-            break
+        if lvl <= mx_lvl:
+            eaps.append(find_eap(g[:, :, lvl]))
+            logger.info('level %2i: EAP %s' % (lvl, eaps[lvl]))
+        else:
+            eaps.append((-1,-1))
+    #
+    # select level closest to height
+    #
+    if args['height'] is None:
+        wind_height = 0.
     else:
-        selected_level=-1
-    #FIXME
-    selected_level = 4
+        wind_height = float(args['height'])
+    dz_old = np.nanmax(axes['z'])
+    selected_level = -1
+    for lvl in range(mx_lvl):
+        dz = abs(axes['z'][lvl] - wind_height)
+        if not eaps[lvl] == (-1,-1) and dz < dz_old:
+            selected_level = lvl
+            dz_old = dz
     logger.info(f'selected_level: {selected_level}')
-    if 'plot' in args and selected_level >= 0:
+
+    if args['plot'] is not None and selected_level >= 0:
         dat_dict = {
             'x': axes['x'],
             'y': axes['y'],
@@ -541,9 +625,40 @@ def main():
         dmin = np.floor(np.nanmin(dat_dict['z'])*10)/10
         dmax = np.ceil(np.nanmax(dat_dict['z'])*10)/10
         scale = (dmin, dmax)
-        if args['plot'] == "__default__":
+        if args['plot'] == '-':
+            args['plot'] = '__show__'
+            logger.debug('select to show plot')
+        elif args['plot'] == '__default__':
             args['plot'] = "eap_quality_measure"
+            logger.debug('select to write plort to default filename')
+        else:
+            logger.debug('select to write plort to custom filename')
         _tools.common_plot(args,dat=dat_dict, mark=pos_dict, scale=scale)
+
+    # print('Bibliotheksverzeichnis ist "',TRIM(cLib),'"')
+    # print()
+    # print('-----------------------------------------------------------------------------------------------')
+    # print('Mindestanforderungen fuer Eignung von Modellgitterpunkten als Ersatz-Anemometerstandort:')
+    # print('Anzahl nicht ausgewerteter Randpunkte im aeusseren Gitter: ',nRandPkte)
+    # print('Windgeschwindigkeit immer groesser oder gleich ..........: ',ffmin,' m/s')
+    # print('-----------------------------------------------------------------------------------------------')
+    # print()
+    # print('===============================================================================================================')
+    # print('==================    Objektiv bestimmte Ersatz-Anemometerorte im Gitter 1 je Modellebene:    =================')
+    # print('===============================================================================================================')
+    # print()
+    # print('...............................................................................................'
+    # print('Empfohlener Ersatzanemometerort: Gebiets-ID = ', ID_c_1st
+    # print('                                   Gesamt-G = ', GG_c_1st
+    # print('                                   EAP-Punkt:'
+    # print('                                    i-Index = ', ji_1st
+    # print('                                    j-Index = ', jj_1st
+    # print('                                      x (m) = ', xx_1st
+    # print('                                      y (m) = ', yy_1st
+    # print('                                         gd = ', gd_1st
+    # print('                                         gf = ', gf_1st
+    # print('                                          g = ', gg_1st
+    # print('...............................................................................................'
 
 if __name__ == "__main__":
     main()
