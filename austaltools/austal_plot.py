@@ -147,10 +147,10 @@ def cli() -> dict:
                              '`PLOT`, the file name defaults to ' +
                              'the data file name with extension `png`'
                         )
-    parser.add_argument('-r', '--recreate',
+    parser.add_argument('-f', '--force',
                         action='store_true',
                         default=False,
-                        help='recreate (overwrite) plotfile if it exists.')
+                        help='force overwriting plotfile if it exists.')
     parser.add_argument('-s', '--stdvs',
                         metavar="STDVs",
                         nargs='?',
