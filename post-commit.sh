@@ -6,9 +6,9 @@
 PYTHON="/usr/bin/env python3"
 SCRIPT=$( basename $0 )
 
-NEWVER="v"$( $PYTHON setup.py --version )
+NEWVER=$( $PYTHON setup.py --version )
 
-OLDVERS=$( git tag | grep -E '^v[0-9]*\.[0-9]*\.[0-9]*.*' | sort -V )
+OLDVERS=$( git tag | grep -E '[0-9]*\.[0-9]*\.[0-9]*.*' | sort -V )
 
 # check if current version is new
 OLDVER=$( echo -e "$OLDVERS" | sort -V | tail -1 )

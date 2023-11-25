@@ -9,15 +9,6 @@ v_path = os.path.join(*'austaltools/_version.py'.split('/'))
 with open(v_path) as v_file:
     exec(v_file.read(), v)
 
-print(v)
-print({v['__title__']: v['__title__']})
-print([
-        '%s=%s:main' % (
-                os.path.splitext(os.path.basename(x))[0].replace('_', '-'),
-                v['__title__'].replace('-', '_') + '.' +
-                os.path.splitext(os.path.basename(x))[0])
-        for x in glob.iglob(v['__title__'] + '/[a-zA-Z]*py')
-    ])
 setup(
     name=v['__title__'],
     version=v['__version__'],
