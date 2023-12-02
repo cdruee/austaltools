@@ -16,6 +16,10 @@ import readmet
 DEFAULT_WORKING_DIR = "."
 DEFAULT_COLORMAP = "YlOrRd"
 
+AUSTAL_POLLUTANTS_GAS = ["so2","nox","no","no2","nh3","hg0","hg","bzl","f","xx","odor",
+                         "odor_050", "odor_065", "odor_075", "odor_100", "odor_150"]
+AUSTAL_POLLUTANTS_DUST = ["pm","as","cd","hg","ni","pb","tl","ba","dx","xx",""]
+AUSTAL_CLASSES_DUST = ["%s_%s" % (x,y) for y in ["x","1","2","3","4"] for x in AUSTAL_POLLUTANTS_DUST]
 # -------------------------------------------------------------------------
 
 logger = logging.getLogger(__name__)
