@@ -12,3 +12,8 @@ build/
 .tox/
 .pytest_cache/
 .idea/
+/TAL-Anemo/
+/deb_dist/
+/austal/
+/austaltools.egg-info/
+/dist/
