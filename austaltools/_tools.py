@@ -19,7 +19,11 @@ DEFAULT_COLORMAP = "YlOrRd"
 AUSTAL_POLLUTANTS_GAS = ["so2","nox","no","no2","nh3","hg0","hg","bzl","f","xx","odor",
                          "odor_050", "odor_065", "odor_075", "odor_100", "odor_150"]
 AUSTAL_POLLUTANTS_DUST = ["pm","as","cd","hg","ni","pb","tl","ba","dx","xx",""]
-AUSTAL_CLASSES_DUST = ["%s_%s" % (x,y) for y in ["x","1","2","3","4"] for x in AUSTAL_POLLUTANTS_DUST]
+AUSTAL_POLLUTANTS_DUST_CLASSES = ["%s_%s" % (x,y)
+                                  for y in ["x","1","2","3","4"]
+                                  for x in AUSTAL_POLLUTANTS_DUST]
+Z0_CLASSES = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 1.5, 2.0]
+
 # -------------------------------------------------------------------------
 
 logger = logging.getLogger(__name__)
@@ -71,6 +75,19 @@ def get_buildings(conf):
         logger.warning('no buildings in cofig')
     return res
 
+def find_z0_class(z0):
+    """
+    return index of roughness-length class that matches z0 best
+    :param z0: actual roughness length
+    :return: index of matching roughness-length class
+    """
+    if z0 in Z0_CLASSES:
+        i = Z0_CLASSES.index(z0)
+    else:
+        lz0 = np.log(z0)
+        lclasses = np.log(Z0_CLASSES)
+        i = np.argmin(np.abs(lclasses - lz0))
+    return i
 
 def find_austxt(wdir='.'):
     if wdir == '':
@@ -299,7 +316,7 @@ def common_plot(args: dict,
         order = 10**np.floor(np.log10(data_range))
         dmin = np.floor(dmin / order) * order
         dmax = np.ceil(dmax / order) * order
-        logger.info('data_range: %f' % data_range)
+        logger.debug('data_range: %f' % data_range)
         levels = np.arange(dmin, dmax, data_range / 10)
 
     if args['fewcols']:
@@ -307,6 +324,10 @@ def common_plot(args: dict,
     else:
         cmap = plt.get_cmap(cmap_name)
     if args['display'] == "contour":
+        #
+        # Note to self: "TypeError: 'NoneType' object is not callable"
+        #               its pycharm's debugging mode, stupid
+        #
         img = plt.contourf(datx, daty,
                            datz.T,
                            origin="lower",
