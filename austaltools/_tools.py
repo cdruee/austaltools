@@ -72,7 +72,7 @@ def get_buildings(conf):
         for i in range(number):
             res.append(Building(*[val[p][i] for p in pars]))
     else:
-        logger.warning('no buildings in cofig')
+        logger.debug('no buildings in config')
     return res
 
 def find_z0_class(z0):
@@ -99,7 +99,7 @@ def find_austxt(wdir='.'):
             ausname = x
             break
     else:
-        raise IOError('austal.txt or austal200.txt not found')
+        raise IOError('austal.txt or austal2000.txt not found')
     logger.debug('austal config: %s' % ausname)
     return ausname
 
@@ -128,8 +128,9 @@ def get_austxt(path="austal.txt"):
             conf[key] = values
     # fill missing values with default 0
     for x in ['xq', 'yq', 'aq', 'bq', 'cq', 'wq',
-              'xb', 'yb', 'ab', 'bb', 'cb', 'wb',
-              'cb']:
+#              'xb', 'yb', 'ab', 'bb', 'cb', 'wb',
+#              'cb'
+              ]:
         if x not in conf:
             conf[x] = [0.]
     # fill other missing values with defaults
@@ -338,7 +339,7 @@ def common_plot(args: dict,
         plt.colorbar(img, label=unit, extend='both')
     elif args['display'] == "grid":
         img = plt.pcolor(datx, daty,
-                         dat.T,
+                         datz.T,
                          shading="nearest",
                          cmap=cmap,
                          )

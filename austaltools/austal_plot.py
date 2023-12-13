@@ -143,6 +143,16 @@ def main():
     args = cli()
     logger.debug("args: %s" % format(args))
 
+    # get the model configuration, if the file is present
+    try:
+        austxt = _tools.find_austxt(args['working_dir'])
+        logger.info("reading configuration file: %s" % austxt)
+        conf = _tools.get_austxt(austxt)
+    except OSError:
+        conf = None
+    logger.debug("conf: %s" % format(conf))
+
+
     infile = args['file']
     # make sure infile has an extension
     if not infile.endswith('.dmna'):
@@ -152,17 +162,10 @@ def main():
     logger.debug("info: %s" % format(info))
 
     if args['buildings']:
-        # get config:
-        austxt = _tools.find_austxt(os.path.dirname(infile))
-        logger.debug("conf file: %s" % format(austxt))
-        conf = _tools.get_austxt(austxt)
-        logger.debug("conf: %s" % format(conf))
-        buildings = _tools.get_buildings(conf)
-        logging.info('buildings in config: %d' % len(buildings))
-        if len(buildings) == 0:
-            buildings = []
-    else:
         buildings = None
+        if conf:
+            buildings = _tools.get_buildings(conf)
+            logging.info('buildings in config: %d' % len(buildings))
 
     # warn, if not a file containing "additional load"
     if info["kind"] != "load":
@@ -209,9 +212,11 @@ def main():
     topo_path = os.path.join(args['working_dir'],
                              "zg0%01d.dmna" % info["grid"])
     if os.path.exists(topo_path):
+        logger.info('reading terrain from %s' % infile_path)
         topo = topo_path
     else:
-        logging.error('file not found: %s' % topo_path)
+        if conf and "gh" in conf:
+            logging.warning('file not found: %s' % topo_path)
         topo = None
 
     if args['plot'] is None or args['plot'] == '-':
@@ -219,7 +224,7 @@ def main():
     elif args['plot'] == '__default__':
         args['plot'] = os.path.splitext(os.path.basename(infile_path))[0]
 
-    scale = 10 ** (np.ceil(np.log10(np.percentile(datz, 99))) )
+    scale = 10 ** (np.ceil(np.log10(np.percentile(datz, 97.5))) )
     logging.debug('scale: %f' % scale)
     levels = np.array([10, 20, 50, 100, 200, 500, 1000]
                       ) / 1000 * scale
