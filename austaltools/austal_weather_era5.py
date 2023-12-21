@@ -16,13 +16,24 @@ import logging
 import readmet
 import meteolib as m
 
-from ._dwd_stationinfo import dwd_stationinfo, slugify
+try:
+    from ._dwd_stationinfo import dwd_stationinfo, slugify
+except ImportError:
+    from _dwd_stationinfo import dwd_stationinfo, slugify
 
-from ._dispersion import klug_manier_scheme, pasquill_taylor_scheme
-from ._dispersion import stabilty_class, obukhov_length
-from ._dispersion import vdi_3872_6_standard_wind
+try:
+    from ._dispersion import klug_manier_scheme, pasquill_taylor_scheme
+    from ._dispersion import stabilty_class, obukhov_length
+    from ._dispersion import vdi_3872_6_standard_wind
+except ImportError:
+    from _dispersion import klug_manier_scheme, pasquill_taylor_scheme
+    from _dispersion import stabilty_class, obukhov_length
+    from _dispersion import vdi_3872_6_standard_wind
 
-from ._version import __version__
+try:
+    from ._version import __version__
+except ImportError:
+    from _version import __version__
 
 kappa = m.constants.kappa
 gn = m.constants.gn

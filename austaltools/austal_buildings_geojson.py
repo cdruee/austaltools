@@ -12,13 +12,17 @@ import re
 import shlex
 import json
 
-
 import numpy as np
 
-from ._version import __version__
+try:
+    from ._version import __version__
+except ImportError:
+    from _version import __version__
 
 logging.basicConfig()
 logger = logging.getLogger()
+
+# -------------------------------------------------------------------------
 
 def find_austxt(wdir='.'):
     xnames = [os.path.join(wdir, x) for x in ["austal.txt",
@@ -32,6 +36,7 @@ def find_austxt(wdir='.'):
     logger.debug('austal config: %s' % ausname)
     return ausname
 
+# -------------------------------------------------------------------------
 
 def get_austxt(path="austal.txt"):
     logger.info('reading: %s' % path)
@@ -67,6 +72,7 @@ def get_austxt(path="austal.txt"):
     # liste zurückgeben
     return conf
 
+# -------------------------------------------------------------------------
 
 def put_austxt(path="austal.txt", data={}):
     # get config as text
@@ -125,10 +131,12 @@ def building_new():
             'wb': 0,
             }
 
+# -------------------------------------------------------------------------
 
 def dist(p1, p2):
     return np.sqrt(np.square(p2[0] - p1[0]) + np.square(p2[1] - p1[1]))
 
+# -------------------------------------------------------------------------
 
 def main():
     # defaults
@@ -248,6 +256,7 @@ def main():
 
     put_austxt(ausfile, data=data)
 
+# -------------------------------------------------------------------------
 
 if __name__ == "__main__":
     main()

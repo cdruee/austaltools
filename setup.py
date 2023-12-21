@@ -14,6 +14,9 @@ setup(
     version=v['__version__'],
     packages=[v['__title__']],
     package_dir={v['__title__']: v['__title__']},
+    package_data={
+        "data": ["*"],
+    },
     entry_points={
         'console_scripts': [
             '%s=%s:main' % (
@@ -34,7 +37,8 @@ setup(
         'meteolib',
         'readmet',
         'matplotlib',
-        'netCDF4'
+        'netCDF4',
+        'gdal'
     ],
     description=v['__description__'],
     long_description=open('README.md').read(),

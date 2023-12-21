@@ -303,3 +303,23 @@ options:
   --debug               show informative output
   -v, --verbose         show detailed output
 ```
+
+Licenses
+========
+
+This package is licensed under the EUROPEAN UNION PUBLIC LICENCE v. 1.2.
+See `LICENSE` for the license text or navugate to https://eupl.eu/1.2/en/
+
+The topography data files in the folder data are licensed under
+various other licenses:
+
+
+| code           | license |
+|----------------|---------|
+| GLO&#8209;30   | Licence for Copernicus DEM instance COP-DEM-GLO-30-F Global 30m Full, Free & Open |
+| GTOPO30        | Creative Commons Attribution 4.0 International License. 
+| DGM25&#8209;RP | Datenlizenz Deutschland – Namensnennung – Version 2.0 |
+
+<!-- note to self: &#8209; = non-breaking hyphen -->
+
+See files containing "LICENSE" in the name for the individual licence texts.
