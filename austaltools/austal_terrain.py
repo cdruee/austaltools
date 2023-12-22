@@ -30,11 +30,6 @@ try:
 except ImportError:
     from _version import __version__, __title__
 
-try:
-    from . import data
-except ImportError:
-    import data
-
 logging.basicConfig()
 logger = logging.getLogger()
 
@@ -49,7 +44,7 @@ STORAGE_LOCATIONS = ["/opt/%s" % __title__,
 STORAGE_DIR = "terrain"
 STORAGE_PATH = None      # will be filled lazy
 DEM_FMT = "%s.lzw.tif"
-STORAGE_AUX_FILES = resources.files('austaltools.data')
+STORAGE_AUX_FILES = resources.files('data')
 
 # WGS84 - World Geodetic System 1984, https://epsg.io/4326
 LL = osr.SpatialReference()
