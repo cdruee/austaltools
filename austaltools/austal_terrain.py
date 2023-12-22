@@ -464,7 +464,7 @@ def main():
               )
     out_name = '%s.grid' % args['output']
     logger.debug("out: %s" % out_name)
-    gdal.Translate(out_name, tif_name, format='AAIGrid')
+    gdal.Translate(out_name, tif_name, noData=-9999., format='AAIGrid')
     #
     # clean up
     #
