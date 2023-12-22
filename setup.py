@@ -15,7 +15,7 @@ setup(
     packages=[v['__title__']],
     package_dir={v['__title__']: v['__title__']},
     package_data={
-        "data": ["*"],
+        "austaltools/data": ["*"],
     },
     entry_points={
         'console_scripts': [
