@@ -44,7 +44,7 @@ STORAGE_LOCATIONS = ["/opt/%s" % __title__,
 STORAGE_DIR = "terrain"
 STORAGE_PATH = None      # will be filled lazy
 DEM_FMT = "%s.lzw.tif"
-STORAGE_AUX_FILES = resources.files('data')
+STORAGE_AUX_FILES = resources.files(__title__+'.data')
 
 # WGS84 - World Geodetic System 1984, https://epsg.io/4326
 LL = osr.SpatialReference()
