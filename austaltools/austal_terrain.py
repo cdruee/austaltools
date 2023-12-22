@@ -30,6 +30,11 @@ try:
 except ImportError:
     from _version import __version__, __title__
 
+try:
+    from . import data
+except ImportError:
+    import data
+
 logging.basicConfig()
 logger = logging.getLogger()
 
@@ -262,6 +267,8 @@ def provide_terrain_data(storage_path=None, force_download=False):
             raise OSError("Could not create terrain storage dir")
         for aux_path in STORAGE_AUX_FILES.iterdir():
             aux_file = os.path.basename(aux_path)
+            if aux_file.startswith('_'):
+                continue
             logger.debug('copying auxiliary file: %s' % aux_file)
             shutil.copyfile(aux_path,
                             os.path.join(storage_path, aux_file))
