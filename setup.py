@@ -12,10 +12,12 @@ with open(v_path) as v_file:
 setup(
     name=v['__title__'],
     version=v['__version__'],
-    packages=[v['__title__']],
+    packages=[v['__title__'],
+              v['__title__']+".data"
+              ],
     package_dir={v['__title__']: v['__title__']},
     package_data={
-        "austaltools/data": ["*"],
+        v['__title__']+".data": ["*.txt"],
     },
     entry_points={
         'console_scripts': [
