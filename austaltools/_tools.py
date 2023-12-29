@@ -4,6 +4,7 @@ import re
 import shlex
 import logging
 
+import osgeo.osr as osr
 import numpy as np
 import pandas as pd
 import matplotlib.colors
@@ -11,22 +12,54 @@ import matplotlib.patches
 import matplotlib.pyplot as plt
 
 import readmet
+
+try:
+    from ._version import __version__, __title__
+except ImportError:
+    from _version import __version__, __title__
+
+
+logger = logging.getLogger(__name__)
+
 # -------------------------------------------------------------------------
 
 DEFAULT_WORKING_DIR = "."
-DEFAULT_COLORMAP = "YlOrRd"
+DEFAULT_DATA_DIRS = ["/opt/%s" % __title__,
+                     os.path.expanduser("~/.local/share/%s" % __title__),
+                     os.path.expanduser("~/.%s" % __title__),
+                     "."
+                     ]
 
-AUSTAL_POLLUTANTS_GAS = ["so2","nox","no","no2","nh3","hg0","hg","bzl","f","xx","odor",
-                         "odor_050", "odor_065", "odor_075", "odor_100", "odor_150"]
-AUSTAL_POLLUTANTS_DUST = ["pm","as","cd","hg","ni","pb","tl","ba","dx","xx",""]
-AUSTAL_POLLUTANTS_DUST_CLASSES = ["%s_%s" % (x,y)
-                                  for y in ["x","1","2","3","4"]
+# -------------------------------------------------------------------------
+
+AUSTAL_POLLUTANTS_GAS = ["so2", "nox", "no", "no2", "nh3", "hg0",
+                         "hg", "bzl", "f", "xx", "odor",
+                         "odor_050", "odor_065", "odor_075",
+                         "odor_100", "odor_150"]
+AUSTAL_POLLUTANTS_DUST = ["pm", "as", "cd", "hg", "ni", "pb", "tl",
+                          "ba", "dx", "xx", ""]
+AUSTAL_POLLUTANTS_DUST_CLASSES = ["%s_%s" % (x, y)
+                                  for y in ["x", "1", "2", "3", "4"]
                                   for x in AUSTAL_POLLUTANTS_DUST]
 Z0_CLASSES = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 1.5, 2.0]
 
 # -------------------------------------------------------------------------
 
-logger = logging.getLogger(__name__)
+# WGS84 - World Geodetic System 1984, https://epsg.io/4326
+LL = osr.SpatialReference()
+LL.ImportFromEPSG(4326)
+# DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677
+GK = osr.SpatialReference()
+GK.ImportFromEPSG(5677)
+# ETRS89 / UTM zone 32N, https://epsg.io/25832
+UT = osr.SpatialReference()
+UT.ImportFromEPSG(25832)
+
+# -------------------------------------------------------------------------
+
+DEFAULT_COLORMAP = "YlOrRd"
+
+# =========================================================================
 
 class Geometry():
     x = 0.
@@ -36,6 +69,8 @@ class Geometry():
     c = 0.
     w = 0.
 
+# -------------------------------------------------------------------------
+
     def __init__(self, x=0, y=0, a=0, b=0, c=0, w=0):
         self.x = x
         self.y = y
@@ -44,15 +79,19 @@ class Geometry():
         self.c = c
         self.w = w
 
+# =========================================================================
 
 class Building(Geometry):
     def __init__(self, *args, **kwargs):
         Geometry.__init__(self, *args, **kwargs)
 
+# -------------------------------------------------------------------------
 
 class Source(Geometry):
     def __init__(self, *args, **kwargs):
         Geometry.__init__(self, *args, **kwargs)
+
+# -------------------------------------------------------------------------
 
 def get_buildings(conf):
     pars = ["xb", "yb", "ab", "bb", "cb", "wb"]
@@ -74,6 +113,48 @@ def get_buildings(conf):
     else:
         logger.debug('no buildings in config')
     return res
+
+# -------------------------------------------------------------------------
+
+def gk2ll(rechts, hoch):
+    transform = osr.CoordinateTransformation(GK, LL)
+    return transform.TransformPoint(rechts , hoch)
+
+# -------------------------------------------------------------------------
+def ll2gk(lon, lat):
+    transform = osr.CoordinateTransformation(LL, GK)
+    return transform.TransformPoint(lon, lat)
+
+# -------------------------------------------------------------------------
+
+def ut2gk(east, north):
+    transform = osr.CoordinateTransformation(UT, GK)
+    return transform.TransformPoint(east , north)
+
+# ----------------------------------------------------
+
+def spheric_distance(lat1, lon1, lat2, lon2):
+    """
+    Calculate the great circle distance between two points
+    on the earth (specified in decimal degrees)
+    Reference:
+        https://stackoverflow.com/a/29546836/7657658
+    """
+    rlat1 = np.radians(lat1)  # deg -> rad
+    rlon1 = np.radians(lon1)  # deg -> rad
+    rlat2 = np.radians(lat2)  # deg -> rad
+    rlon2 = np.radians(lon2)  # deg -> rad
+
+    dlon = rlon2 - rlon1  # rad
+    dlat = rlat2 - rlat1  # rad
+    a = (np.sin(dlat / 2.0) ** 2 +
+         np.cos(rlat1) * np.cos(rlat2) * np.sin(dlon / 2.0) ** 2)
+    c = 2 * np.arcsin(np.sqrt(a))
+    km = 6371 * c  # km
+
+    return km
+
+# -------------------------------------------------------------------------
 
 def find_z0_class(z0):
     """

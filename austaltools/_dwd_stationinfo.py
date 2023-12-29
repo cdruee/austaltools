@@ -12,6 +12,11 @@ import argparse
 import pandas as pd
 import logging
 
+try:
+    from . import _tools
+except ImportError:
+    import _tools
+
 LOGGING_DEFAULT = logging.WARNING
 _PATH = '/localdata/druee/datensaetze/dwd_opendata/observations_germany/'
 
@@ -55,25 +60,52 @@ def dwd_metadata(station, time1, time2, param, path=_PATH):
     return value
 
 
-def dwd_stationinfo(station, path=_PATH):
-    sstr = '{:05d}'.format(station)
+def dwd_stationinfo(station, path=_PATH, pos_lat=None, pos_lon=None):
+    if station is not None:
+        sstr = '{:05d}'.format(station)
+        if pos_lat is not None and pos_lon is not None:
+            raise ValueError('lat and lon must be None ' +
+                             'unless station is None')
+    else:
+        sstr = None
     stninfo = os.path.join(path, 'TU_Stundenwerte_Beschreibung_Stationen.txt')
     logging.info("read station info from: %s" % stninfo)
-    with open(stninfo, 'r') as f:
+    min_sdist = 9999999.
+    sid = None
+    with (open(stninfo, 'r') as f):
         # skip header
         f.readline()
         f.readline()
         for line in f.readlines():
-            if line[0:5] == sstr:
-                ele = float(line[31:40])
-                lat = float(line[41:50])
-                lon = float(line[51:60])
-                nam = (line[61:102]).strip()
-                break
-        else:
-            raise ValueError('station not found: %i' % station)
+            s_id = line[0:5]
+            s_ele = float(line[31:40])
+            s_lat = float(line[41:50])
+            s_lon = float(line[51:60])
+            s_nam = (line[61:102]).strip()
+            if sstr is not None:
+                if  line[0:5] == sstr:
+                    ele = s_ele
+                    lat = s_lat
+                    lon = s_lon
+                    nam = s_nam
+                    sid = station
+                    break
+            else:
+                sdist = _tools.spheric_distance(s_lat, s_lon, pos_lat, pos_lon)
+                if sdist < min_sdist:
+                    sid = s_id
+                    ele = s_ele
+                    lat = s_lat
+                    lon = s_lon
+                    nam = s_nam
+                    min_sdist = sdist
+    if sid is None:
+        raise ValueError('station not found: %s' % station)
     logging.debug("station name: %s" % nam)
-    return (lat, lon, ele, nam)
+    if station is None:
+        return lat, lon, ele, nam, int(sid)
+    else:
+        return lat, lon, ele, nam
 
 
 def slugify(value, allow_unicode=False):
@@ -93,6 +125,48 @@ def slugify(value, allow_unicode=False):
             'ascii', 'ignore').decode('ascii')
     value = re.sub(r'[^\w\s-]', '', value.lower())
     return re.sub(r'[-\s]+', '-', value).strip('-_')
+
+# -------------------------------------------------------------------------
+
+def pressure_reduction_dwd(p,h,fastred=FALSE)
+        #
+        # DWD-Formel Druckreduktion
+        #
+        # p = ps *EXP(gn*h/(R*(t+m.Tzero+C*e+gam*h/2)))
+        #
+        # t momentane Stationstemperatur in °C
+        # e momentaner Stationsdampfdruck in hPa (evtl. zu vernachlässigen)
+        # ps momentaner Stationsluftdruck in hPa (=QFE)
+        # h Stationshöhe in Metern (oder besser geopotentiellen Metern)
+        #
+        gam = 0.0065  # K/gpm
+        C = 0.11  # K/hPa DWD-Beiwert für die Berücksichtigung der Feuchte,
+        #           etwas stationsabhängig aber irrelevant
+        h = stationinfo['ele']
+        #
+        if not fastred:
+            for i in range(0, len(dat)):
+                if (~np.isnan(dat['P'][i]) or np.isnan(dat['P0'][i])):
+                    continue
+                t = dat['TT_TU'][i]
+                e = (
+                    m.humidity.esat_w(dat['TT_TU'][i],
+                                      Kelvin=False, hPa=True) *
+                    dat['RF_TU'][i] / 100.
+                    )
+                dat.iloc[i, dat.columns.get_loc('P')] = (
+                    dat['P0'][i]/np.exp(
+                        m.constants.gn * h / (
+                            m.constants.R * (t + m.constants.Tzero +
+                                             C * e + gam*h/2)))
+                    )
+        else:
+            t = np.nanmean(dat['TT_TU'])
+            e = m.humidity.esat_w(t, Kelvin=False, hPa=True) * \
+                np.nanmean(dat['RF_TU']) / 100.
+            redfact = np.exp(m.constants.gn*h/(m.constants.R *
+                             (t+m.constants.Tzero+C*e+gam*h/2)))
+            dat['P'] = dat['P'].where(np.isnan(dat['P0']), dat['P0']/redfact)
 
 
 # ----------------------------------------------------

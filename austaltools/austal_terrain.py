@@ -11,13 +11,13 @@ import glob
 import gzip
 import os
 import shutil
+import sys
 import tarfile
 import tempfile
 from urllib.request import urlretrieve
 
 from importlib import resources
 from osgeo import gdal
-from osgeo import osr
 from osgeo_utils import gdal_merge
 
 try:
@@ -36,25 +36,11 @@ logger = logging.getLogger()
 # -------------------------------------------------------------------------
 
 KNOWN_DEMS = ["GTOPO30", "DGM25-RP", "GLO-30"]
-STORAGE_LOCATIONS = ["/opt/%s" % __title__,
-                     os.path.expanduser("~/.local/share/%s" % __title__),
-                     os.path.expanduser("~/.%s" % __title__),
-                     "."
-                     ]
+STORAGE_LOCATIONS = _tools.DEFAULT_DATA_DIRS
 STORAGE_DIR = "terrain"
 STORAGE_PATH = None      # will be filled lazy
 DEM_FMT = "%s.lzw.tif"
 STORAGE_AUX_FILES = resources.files(__title__+'.data')
-
-# WGS84 - World Geodetic System 1984, https://epsg.io/4326
-LL = osr.SpatialReference()
-LL.ImportFromEPSG(4326)
-# DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677
-GK = osr.SpatialReference()
-GK.ImportFromEPSG(5677)
-# ETRS89 / UTM zone 32N, https://epsg.io/25832
-UT = osr.SpatialReference()
-UT.ImportFromEPSG(25832)
 
 # -------------------------------------------------------------------------
 
@@ -283,23 +269,6 @@ def provide_terrain_data(storage_path=None, force_download=False):
                     logger.error("dataset %s failed to download" % dem)
     return storage_path, datasets
 
-# -------------------------------------------------------------------------
-
-def gk2ll(rechts, hoch):
-    transform = osr.CoordinateTransformation(GK, LL)
-    return transform.TransformPoint(rechts , hoch)
-
-# -------------------------------------------------------------------------
-def ll2gk(lon, lat):
-    transform = osr.CoordinateTransformation(LL, GK)
-    return transform.TransformPoint(lon, lat)
-
-# -------------------------------------------------------------------------
-
-def ut2gk(east, north):
-    transform = osr.CoordinateTransformation(UT, GK)
-    return transform.TransformPoint(east , north)
-
 
 
 # -------------------------------------------------------------------------
@@ -315,44 +284,41 @@ def cli() -> dict:
     default_extent = 6.
 
     parser = argparse.ArgumentParser(
-        description='get AUSTAL terrain data')
-    parser.add_argument(dest="center_lon", metavar="X",
-                        help="Center point eastward coordinate. "
-                        )
-    parser.add_argument(dest="center_lat", metavar="Y",
-                        help="Center point northward coordinate."
-                        )
+        description='get AUSTAL terrain data',
+        epilog='one of -L, -G, or -U and NAME' +
+               ' are required unless ' +
+               '--list-sources or --force-download is selected')
     parser.add_argument(dest="output", metavar="NAME",
-                        help="file name to store data in."
+                        help="file name to store data in.", nargs='?'
                         )
     cspars = parser.add_mutually_exclusive_group()
     cspars.add_argument('-L', '--ll',
-                        dest="coords",
-                        action='store_const',
-                        const="lonlat",
-                        default="lonlat",
-                        help='X and Y are given as Longitude and ' +
+                        metavar=("LON","LAT"),
+                        dest="ll",
+                        nargs=2,
+                        default=None,
+                        help='Center position given as Longitude and ' +
                              'Latitude, respectively. ' +
                              'This is the default.')
     cspars.add_argument('-G', '--gk',
-                        dest="coords",
-                        action='store_const',
-                        const="gk",
-                        default="lonlat",
-                        help='X and Y are given in Gauß-Krüger zone 3' +
+                        metavar=("X","Y"),
+                        dest="gk",
+                        nargs=2,
+                        default=None,
+                        help='Center position given in Gauß-Krüger zone 3' +
                              'coordinates: X = `Rechtswert`, ' +
                              'Y = `Hochwert`. ')
     cspars.add_argument('-U', '--utm',
-                        dest="coords",
-                        action='store_const',
-                        const="utm",
-                        default="lonlat",
-                        help='X and Y are given in UTM Zone 32N' +
+                        metavar=("X","Y"),
+                        dest="ut",
+                        nargs=2,
+                        default=None,
+                        help='Center position given in UTM Zone 32N' +
                              'coordinates: X = `easting`, ' +
                              'Y = `northing`.')
     parser.add_argument('-s', '--source',
                         metavar="CODE",
-                        nargs='?',
+                        nargs=1,
                         choices=KNOWN_DEMS,
                         default=default_dem,
                         help='code for the source digital elevation ' +
@@ -361,16 +327,18 @@ def cli() -> dict:
                              'Defaults to ' + default_dem)
     parser.add_argument('-e', '--extent',
                         metavar="KM",
-                        nargs='+',
+                        nargs=1,
                         default=default_extent,
                         help='extent of the extracted area in km ' +
                              '(side length of the sqare)' +
                              'Defaults to {}'.format(default_extent))
-    parser.add_argument('--list-sources',
+    sparser=parser.add_argument_group('sources',
+                                      "source handling commands")
+    sparser.add_argument('--list-sources',
                         action='store_true',
-                        help='list available terrein sources ' +
+                        help='list available terrain sources ' +
                              'and exit')
-    parser.add_argument('--force-download',
+    sparser.add_argument('--force-download',
                         action='store_true',
                         help='force dowloadinf the terrain sources ' +
                              'even if they exist.')
@@ -387,8 +355,15 @@ def cli() -> dict:
         logger.setLevel(args.verb)
     else:
         logger.setLevel(logging.WARNING)
-    logger.info(os.path.basename(__file__) + ' version: ' + __version__)
 
+    if (args.list_sources is False and args.force_download is False and
+            (args.output is None or
+             (args.ll is None and args.gk is None and args.ut is None)
+            )):
+        parser.print_help()
+        sys.exit(1)
+
+    logger.info(os.path.basename(__file__) + ' version: ' + __version__)
     logger.debug(format(args))
     return vars(args)
 
@@ -407,19 +382,17 @@ def main():
         print(" ".join(sources))
         return
 
-
-    if args["coords"] == "gk":
-        rechts, hoch = float(args['center_lon']), float(args['center_lat'])
-        lon, lat, _ = gk2ll(rechts, hoch)
-    elif args["coords"] == "utm":
-        rechts, hoch = ut2gk(
-            float(args['center_lon']), float(args['center_lat']))
-        lon, lat, _ = gk2ll(rechts, hoch)
-    elif args["coords"] == "lonlat":
-        lon, lat = float(args['center_lon']), float(args['center_lat'])
-        rechts, hoch, _ = ll2gk(lat, lon)
+    if args["gk"] is not None:
+        rechts, hoch = [float(x) for x in args['gk']]
+        lon, lat, _ = _tools.gk2ll(rechts, hoch)
+    elif args["ut"] is not None:
+        rechts, hoch, _ = _tools.ut2gk(*[float(x) for x in args['ut']])
+        lon, lat, _ = _tools.gk2ll(rechts, hoch)
+    elif args["ll"] is not None:
+        lon, lat = [float(x) for x in args['ll']]
+        rechts, hoch, _ = _tools.ll2gk(lat, lon)
     else:
-        raise ValueError("unknown coords: %s" % args['coords'])
+        rechts = hoch = lat = lon = 0
     logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
     logger.debug("lon: %s, lat: %s" % (lon, lat))
     size = args['extent'] * 1000  # km -> m
@@ -463,7 +436,7 @@ def main():
               outputBounds=bounds,
               )
     out_name = '%s.grid' % args['output']
-    logger.debug("out: %s" % out_name)
+    logger.info("writing output to: %s" % out_name)
     gdal.Translate(out_name, tif_name, noData=-9999., format='AAIGrid')
     #
     # clean up

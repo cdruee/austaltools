@@ -8,13 +8,14 @@ import logging
 
 import meteolib as m
 
+logger = logging.getLogger(__name__)
+
+# ----------------------------------------------------
+
 kappa = m.constants.kappa
 gn = m.constants.gn
 _check = m._utils._check
-
 _isscalar = pd.api.types.is_scalar
-logger = logging.getLogger(__name__)
-
 
 # =============================================================================
 

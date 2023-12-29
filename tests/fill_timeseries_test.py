@@ -1,4 +1,5 @@
 import unittest
+import os
 import subprocess
 
 
@@ -11,7 +12,7 @@ def capture(command):
     return out, err, proc.returncode
 
 
-class Test_fill_timeseries_cli(unittest.TestCase):
+class TestCommandLine(unittest.TestCase):
     def test_no_param(self):
         command = ['austal-fill-timeseries']
         out, err, exitcode = capture(command)
@@ -34,3 +35,4 @@ class Test_fill_timeseries_cli(unittest.TestCase):
         assert exitcode == 0
         # assert err == b''
         capture(['diff', '-w', 'tests/zeitreihe.dmna', 'tests/test.dmna'])
+        os.remove('tests/zeitreihe.dmna')
