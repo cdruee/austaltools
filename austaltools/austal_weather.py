@@ -7,11 +7,11 @@ Created on Fri Dec 17 13:36:08 2021
 """
 import argparse
 import datetime as dt
-from html.parser import HTMLParser
 import logging
 import os
 import re
 import shutil
+import io
 import sys
 import tempfile
 import zipfile
@@ -28,13 +28,21 @@ except ImportError:
     from _dwd_stationinfo import dwd_stationinfo, slugify
 
 try:
-    from ._dispersion import klug_manier_scheme, pasquill_taylor_scheme
-    from ._dispersion import stabilty_class, obukhov_length
-    from ._dispersion import vdi_3872_6_standard_wind
+    from ._dispersion import (klug_manier_scheme_1992,
+                              klug_manier_scheme_2017,
+                              pasquill_taylor_scheme,
+                              stabilty_class,
+                              obukhov_length,
+                              vdi_3872_6_standard_wind,
+                              )
 except ImportError:
-    from _dispersion import klug_manier_scheme, pasquill_taylor_scheme
-    from _dispersion import stabilty_class, obukhov_length
-    from _dispersion import vdi_3872_6_standard_wind
+    from _dispersion import (klug_manier_scheme_1992,
+                             klug_manier_scheme_2017,
+                             pasquill_taylor_scheme,
+                             stabilty_class,
+                             obukhov_length,
+                             vdi_3872_6_standard_wind,
+                             )
 
 try:
     from . import _tools
@@ -62,7 +70,7 @@ INTER_VARIANT = os.environ.get('INTER_VARIANT', 'barycentric')
 # possible values: empty or non-empty string:
 OUTPUT_RAW = os.environ.get('OUTPUT_RAW', '')
 # possible values: all kms kmc pts pgc empty or non-empty string:
-CLASS_SCHEME = os.environ.get('CLASS_SCHEME', 'kms')
+CLASS_SCHEME = os.environ.get('CLASS_SCHEME', 'all')
 
 # remove observations before ...
 # (to avoid problems with odd observation timing in the very manual era)
@@ -154,11 +162,21 @@ def read_era5_nc(ncfile, lat, lon):
     read ERA5 nc file and interpolate values to position (lat, lon)
         and recalculate 10 wind speed anddirection (ff/dd) using
         actual surface roughness
-        values: 'time',
-                'u10', 'v10', 'sp', 'zust', 'fsr',
-                 't2m', 'd2m', 'cbh', 'sshf', 'slhf',
-                 'lcc', 'tcc'
-        optional: 'mcc', 'tp'
+        values: 'time'
+                'u10'   m s**-1     10m_u-component_of_wind     10u
+                'v10'   m s**-1     10m_v-component_of_wind     10v
+                'sp'    Pa          surface_pressure            sp
+                'zust'  m s**-1     friction_velocity           zust
+                'fsr'   m           forecast_surface_roughness  fsr
+                't2m'   K           2m_temperature              2t
+                'd2m'   K           2m_dewpoint_temperature     2d
+                'cbh'   m           cloud_base_height           cbh
+                'sshf'  J m**-2     surface_sensible_heat_flux  sshf
+                'slhf'  J m**-2     surface_latent_heat_flux    slhf
+                'lcc'   1           low_cloud_cover             lcc
+                'tcc'   1           total_cloud_cover           tcc
+        optional:'mcc'  1           medium_cloud_cover          mcc
+                'tp'    m           total_precipitation         tp
     """
     import netCDF4
 
@@ -282,11 +300,11 @@ def read_era5_nc(ncfile, lat, lon):
     #   surface fluxes are in J/hm² down, convert to W/m² up:
     for val in ['sshf', 'slhf']:
         if val in all_variables:
-            values[val] = values[val] / (-3600.)
+            values[val] = values[val] / (-3600.)         # W/m²
     #   total precipitation is m (per hour) , convert to mm:
     for val in ['tp']:
         if val in all_variables:
-            values[val] = values[val] * 1000
+            values[val] = values[val] * 1000             # mm
     #
     #    values['ff'] = np.sqrt(values['u10']*values['u10'] +
     #                           values['v10']*values['v10'])
@@ -300,30 +318,32 @@ def read_era5_nc(ncfile, lat, lon):
     #
     #   Therefore: u10 = u*/k * ln(z/z0)
     if WIND_VARIANT == 'fixed_057':
-        z0 = 0.57
-        values['fsr'] = z0
+        z0 = 0.57                                        # m
+        values['fsr'] = z0                               # m
         values['ff'] = (values['zust'] / kappa *
-                        np.log((10. + 7. * z0) / z0))
+                        np.log((10. + 7. * z0) / z0))    # m/s
     elif WIND_VARIANT == 'fixed_010':
-        z0 = 0.10
-        values['fsr'] = z0
+        z0 = 0.10                                        # m
+        values['fsr'] = z0                               # m
         values['ff'] = (values['zust'] / kappa *
-                        np.log((10. + 7. * z0) / z0))
+                        np.log((10. + 7. * z0) / z0))    # m/s
     elif WIND_VARIANT == 'model_mean':
-        z0 = np.nanmean(values['zust'])
-        values['fsr'] = z0
+        z0 = np.nanmean(values['zust'])                  # m
+        values['fsr'] = z0                               # m
         values['ff'] = (values['zust'] / kappa *
-                        np.log((10. + 7. * z0) / z0))
+                        np.log((10. + 7. * z0) / z0))    # m/s
     elif WIND_VARIANT == 'model_uv10':
-        values['ff'] = np.sqrt(values['u10'] ** 2 + values['v10'] ** 2)
+        values['ff'] = np.sqrt(values['u10'] ** 2 +
+                               values['v10'] ** 2)       # m/s
     elif WIND_VARIANT == 'model_fsr':
         values['ff'] = (values['zust'] / kappa *
-                        np.log((10. + 7. * values['fsr']) / values['fsr']))
+                        np.log((10. + 7. * values['fsr']) /
+                               values['fsr']))           # m/s
     else:
         raise ValueError('unknown wind variant: %s' % WIND_VARIANT)
     logging.info('wind variant: %s' % WIND_VARIANT)
     values['dd'] = np.rad2deg(np.arctan2((-values['u10']),
-                                         (-values['v10'])))
+                                         (-values['v10']))) # deg
 
     return values
 
@@ -339,11 +359,20 @@ def get_ERA5_weather(lat, lon, year, storage_path='.'):
 
     logging.debug('lmcc')
     if 'mcc' in v.keys():
-        v['lmcc'] = np.maximum(v['lcc'], v['mcc'])
+        v['lmcc'] = np.maximum(v['lcc'], v['mcc'])     # 1
     else:
-        v['lmcc'] = v['lcc']
+        v['lmcc'] = v['lcc']                           # 1
 
-    res = v.filter(['time', 'ff', 'sp', 't2m','lmcc','tcc', 'sshf', 'slhf', 'fsr'])
+    res = v.filter(['time',          # UTC
+                    'ff',            # m/s
+                    'dd',            # deg
+                    'sp',            # Pa
+                    't2m',           # K
+                    'lmcc','tcc',    # 1
+                    'sshf', 'slhf',  # W/m²
+                    'fsr',           # m
+                    'tp'             # mm
+                    ])
     return res
 
 # ----------------------------------------------------
@@ -359,7 +388,7 @@ def provide_DWD_weather(station, storage_path='.'):
     #       produkt_<ID>_stunde_<from>_<to>_<station>.txt
     to_collect = [
         ['air_temperature', 'TU', 'tu'],
-        ['cloudiness', 'N', 'n'],
+        # ['cloudiness', 'N', 'n'],
         ['cloud_type', 'CS', 'cs'],
         ['extreme_wind', 'FX', 'fx'],
         ['precipitation', 'RR', 'rr'],
@@ -502,13 +531,30 @@ def meta_DWD_to_csv(metadata_files, station, path_to_files):
     # loop files
     meta = None
     for file in files:
-        logging.debug('reading metadata file: %s' % (file))
+        logging.debug('reading metadata file: %s' % file)
 
-        df = pd.read_csv(os.path.join(path_to_files, file),
+        text_cache = ""
+        re_generated = re.compile("\s*(generated|generiert).*")
+        re_blankline = re.compile("^\s*$")
+        with open(os.path.join(path_to_files, file), 'r',
+                         encoding='iso-8859-1') as f:
+            for l  in f.readlines():
+                if re.match(re_blankline,l):
+                    # stop reading at the first blank line
+                    # (that separate multiple databank output
+                    # blocks in these files)
+                    break
+                if re.match(re_generated, l):
+                    # stop reading at the "generated ..." line
+                    # (that concludes these files)
+                    break
+                text_cache += l
+
+        df = pd.read_csv(io.StringIO(text_cache),
                          sep=';', skipinitialspace=True,
                          engine='python', header=0,
-                         dtype=np.dtype(str),
-                         encoding='iso-8859-1')
+                         dtype=np.dtype(str))
+        del text_cache
         df.columns = [x.lower() for x in df.columns]
         logging.debug('... contains: ' + '|'.join(df.columns))
         #
@@ -516,24 +562,21 @@ def meta_DWD_to_csv(metadata_files, station, path_to_files):
         df = df[df['stations_id'] == str(station)]
         #
         # drop unneeded columns
-        if 'eor' in df.columns:
-            df = df.drop(['eor'], axis=1)
         if 'Geographie' in file:
             suffix = ''
-            df = df.drop(['stations_id', 'stationsname'], axis=1)
+            cols_to_drop = ['stations_id', 'stationsname', 'eor']
         elif 'Geraete' in file:
             suffix = file.split('_')[2].lower()
-            for c in df.columns:
-                if (c in ['stations_id', 'stationsname',
+            cols_to_drop = ['stations_id', 'stationsname',
                           'geo. laenge [grad]', 'geo. breite [grad]',
-                          'stationshoehe [m]'] or
-                        'unnamed' in c):
-                    df = df.drop(c, axis=1)
+                          'stationshoehe [m]', 'eor']
+            cols_to_drop += list(df.filter(regex='unnamed'))
         elif 'Stationsname' in file:
             suffix = ''
-            df = df.drop(['stations_id'], axis=1)
+            cols_to_drop = ['stations_id', 'eor']
         else:
-            suffix='unknown'
+            raise ValueError('unknown metafile %s' % file)
+        df = df.drop(cols_to_drop, axis=1, errors='ignore')
         # rename columns
         cols = []
         for c in df.columns:
@@ -542,19 +585,18 @@ def meta_DWD_to_csv(metadata_files, station, path_to_files):
             else:
                 cols.append('_'.join((suffix,c)))
         df.columns = cols
+        #
         logging.debug('merging metadata')
         if meta is None:
             meta = df
         else:
-            # remove duplicate columns
-            for c in df.columns:
-                if c in ['von_datum', 'bis_datum']:
-                    pass
-                elif c in meta.columns:
-                    df = df.drop(c, axis=1)
-            logging.debug(df.columns)
-            meta = meta.merge(df, on=['von_datum', 'bis_datum'],
-                            how='outer', suffixes=('', ' (doppel)'))
+            # no duplicate columns (https://stackoverflow.com/a/19125531)
+            cols_to_use = (list(df.columns.difference(meta.columns))
+                           + ['von_datum', 'bis_datum'])
+            meta = meta.merge(df[cols_to_use],
+                              on=['von_datum', 'bis_datum'],
+                              how='outer',
+                              suffixes=('', ' (doppel)'))
         logging.debug(meta.columns)
     #
     # convert dates
@@ -582,8 +624,47 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.'):
         provide_DWD_weather(station, storage_path)
     else:
         logger.info('data from station %05i found in storage' % station)
+    data = pd.read_csv(os.path.join(storage_path, obsfile),
+                       index_col='time', parse_dates=True,
+                       sep=',', na_values='NA')
+    meta = pd.read_csv(os.path.join(storage_path, metafile),
+                       index_col='time', parse_dates=True,
+                       sep=',', na_values='NA')
+    #
+    # select data from year
+    data = data[data.index.year == year]
+    #
+    # rename / convert units
+    data['ff'] = data['F']          # m/s
+    data['dd'] = data['D']          # deg
+    data['sp']  = data['P0']*100.   # hPa -> Pa
+    data['t2m'] = data['TT_TU']     # °C
+    data['r2m'] = data['RF_TU']/100.# % -> 1
+    data['tcc'] = data['V_N']/8.    # octa -> 1
+    data['cbh'] = data['V_S1_HHS']  # m
+    data['cty'] = ['//' if (pd.isna(x) or x == '-1') else x
+                   for x in data['V_S1_CSA']]  # SNYOP key
+    data['tp']  = data['R1']        # mm
+    #FIXME
+    # brutal hack:
+    data['fsr'] = 0.02              # m
 
+    #FIXME
+    # check units
+    data = data.filter(['time',          # UTC
+                    'ff',            # m/s
+                    'dd',            # deg
+                    'sp',            # Pa
+                    't2m',           # K
+                    'r2m',           # 1
+                    'tcc',           # 1
+                    'cbh',           # m
+                    'cty',           # code
+                    'tp',            # mm
+                    'fsr',           # m
+                    ])
 
+    return data, meta
 
 # =======================================================================
 
@@ -637,13 +718,13 @@ def cli() -> dict:
                              'coordinates: X = `easting`, ' +
                              'Y = `northing`.')
     cspars.add_argument('-D', '--dwd',
-                        metavar=["NUMBER"],
+                        metavar="NUMBER",
                         dest="dwd",
                         nargs=1,
                         help='Postion of weather station with ' +
                              'German weather service (DWD) ID `NUMBER`')
     cspars.add_argument('-W', '--wmo',
-                        metavar=["NUMBER"],
+                        metavar="NUMBER",
                         dest="wmo",
                         nargs=1,
                         help='Postion of weather station with ' +
@@ -753,81 +834,131 @@ def main():
     if source == "ERA5":
         obs = get_ERA5_weather(lat, lon, year, STORAGE_PATH)
     elif source == "DWD":
-        obs = get_DWD_weather(lat, lon, year, station, STORAGE_PATH)
+        obs, meta = get_DWD_weather(lat, lon, year, station, STORAGE_PATH)
     else:
         raise ValueError("unknown source: %s" % source)
 
     if OUTPUT_RAW != '':
         raw_name = 'extracted_{:05d}_{:04d}.csv'.format(nam, year)
-        logging.info('writing raw data to: %s' % raw_name)
+        logger.info('writing raw data to: %s' % raw_name)
         obs.to_csv(raw_name, float_format='%.2f', index=False, na_rep='-999')
 
-
+    methods_available = []
     z0 = obs['fsr'].mean()
-    logging.info("roughness length: %6f m" % z0)
+    logger.info("roughness length: %6f m" % z0)
 
-    logging.debug('v10')
+    # 10-m wind speed for the correct roughness length
+    logger.debug('v10')
     obs['v10'] = vdi_3872_6_standard_wind(obs['ff'],
                                         hap=10.0 + 7. * z0,
                                         z0p=z0)
 
-    logging.debug('kms')
-    obs['kms'] = klug_manier_scheme(obs['time'], obs['v10'], obs['tcc'],
-                                  lat, lon, ele, obs['lmcc'])
+    # air density
+    if all([x in obs.columns for x in ['sp', 't2m']]):
+        logger.debug('rho')
+        obs['rho'] = m.humidity.gas_rho(p=obs['sp'], T=obs['t2m'])
 
-    logging.debug('rho')
-    obs['rho'] = m.humidity.gas_rho(p=obs['sp'], T=obs['t2m'])
-    logging.debug('Tv')
-    obs['Tv'] = [m.humidity.Humidity(t=obs['t2m'][i],
-                                   p=obs['sp'][i],
-                                   td=obs['d2m'][i]).tvirt()
-               for i in range(obs['t2m'].size)]
-    logging.debug('Lo')
-    # calculate u* from "ff" and roughness instead of model-provided "zust"
-    obs['ust'] = obs['ff'] * kappa / (np.log((10 + 7 * obs['fsr']) / obs['fsr']))
-    obs['Lo'] = obukhov_length(ust=obs['ust'],
-                             rho=obs['rho'],
-                             Tv=obs['Tv'],
-                             H=obs['sshf'],
-                             E=obs['slhf'])
-    if OUTPUT_RAW != '':
-        obs[['time', 'v10', 'rho', 'Tv', 'Lo', 'ust']].to_csv(
-            'calculated_era5_{:05d}_{:04d}.csv'.format(station, year),
-            float_format='%.2f', index=False, na_rep='-999')
+    # virtual temperature
+    if all([x in obs.columns for x in ['sp', 't2m', 'r2m']]):
+        logger.debug('d2m')
+        obs['Tv'] = [m.humidity.Humidity(t=t, p=p, rh=rh).tvirt()
+                     for t, p, rh in
+                     zip(obs['t2m'], obs['sp'], obs['r2m'])]
+    elif all([x in obs.columns for x in ['sp', 't2m', 'd2m']]):
+        logger.debug('Tv')
+        obs['Tv'] = [m.humidity.Humidity(t, p, td).tvirt()
+                     for t, p, td in
+                     zip (obs['t2m'], obs['sp'], obs['d2m'])]
 
-    logging.debug('pts')
-    obs['pts'] = pasquill_taylor_scheme(
-        obs['time'], obs['ff'], obs['tcc'], lat, lon, obs['cbh'])
+    # Obukhov length
+    if all([x in obs.columns for x in ['ff', 'fsr', 'rho',
+                                       'Tv', 'sshf', 'slhf']]):
+        logger.debug('Lo')
+        # calculate u* from "ff" and roughness
+        # instead of model-provided "zust"
+        obs['ust'] = (
+            obs['ff'] * kappa / (np.log((10 + 7 * obs['fsr']) / obs['fsr']))
+        )
+        obs['Lo'] = obukhov_length(
+            ust=obs['ust'], rho=obs['rho'], Tv=obs['Tv'],
+            H=obs['sshf'], E=obs['slhf'])
+        if OUTPUT_RAW != '':
+            obs[['time', 'v10', 'rho', 'Tv', 'Lo', 'ust']].to_csv(
+                'calculated_L_%05i_%04i.csv' % (station, year),
+                float_format='%.2f', index=False, na_rep='-999')
 
-    logging.debug('kmc')
-    obs['kmc'] = stabilty_class(
-        'KM', obs['time'], obs['fsr'], obs['Lo'].copy())
+    #
+    # kms -----------------------------
+    if all([x in obs.columns for x in ['v10', 'tcc', 'lmcc']]):
+        logger.info('Method: kms')
+        methods_available.append('kms')
+        obs['kms'] = klug_manier_scheme_2017(
+            obs.index, obs['v10'], obs['tcc'],
+            lat, lon, ele, obs['lmcc']
+        )
+    #
+    # kmo -----------------------------
+    if all([x in obs.columns for x in ['v10', 'tcc', 'cty']]):
+        logger.info('Method: kmo')
+        methods_available.append('kmo')
+        obs['kmo'] = klug_manier_scheme_1992(
+            obs.index, obs['v10'], obs['tcc'],
+            lat, lon, cty=obs['cty'])
+    #
+    # k2o -----------------------------
+    if all([x in obs.columns for x in ['v10', 'tcc', 'cbh', 'cty']]):
+        logger.info('Method: k2o')
+        methods_available.append('k2o')
+        obs['k2o'] = klug_manier_scheme_2017(
+            obs.index, obs['v10'], obs['tcc'],
+            lat, lon, ele, cbh=obs['cbh'], cty=obs['cty'])
+    #
+    # pts -----------------------------
+    if all([x in obs.columns for x in ['ff', 'tcc', 'cbh']]):
+        logger.info('Method: pts')
+        methods_available.append('pts')
+        obs['pts'] = pasquill_taylor_scheme(
+            obs.index, obs['ff'], obs['tcc'], lat, lon, obs['cbh'])
+    #
+    # kmc -----------------------------
+    if all([x in obs.columns for x in ['fsr', 'Lo']]):
+        logger.info('Method: kmc')
+        methods_available.append('kmc')
+        obs['kmc'] = stabilty_class(
+            'KM', obs.index, obs['fsr'], obs['Lo'].copy())
+    #
+    # pgc -----------------------------
+    if all([x in obs.columns for x in ['fsr', 'Lo']]):
+        logger.info('Method: pgc')
+        methods_available.append('pgc')
+        pg = stabilty_class(
+            'PG', obs.index, obs['fsr'], obs['Lo'])
+        # convert to corresponding AK number (class F&G->1)
+        obs['pgc'] = [max((1, 7 - x)) for x in pg]
 
-    logging.debug('pgc')
-    pg = stabilty_class(
-        'PG', obs['time'], obs['fsr'], obs['Lo'])
-    # convert to corresponding AK number (class F&G->1)
-    obs['pgc'] = [max((1, 7 - x)) for x in pg]
-
-    logging.debug('w')
+    #
+    # create hour-complete data frame for output
+    logger.debug('create w')
     w = pd.DataFrame(index=pd.date_range(start=obs.index[0],
                                          end=obs.index[-1],
                                          freq='1h'))
-
-    logging.debug('v')
-    obs = obs.drop(columns='time')
+    #
+    # fill hour-complete data frame with data
+    logger.debug('fill w')
+    obs = obs.drop(columns='time', errors='ignore')
     w['time'] = w.index.to_series
     data = w.join(obs, how='left')
+
     #    print(pd.crosstab(data['kmc'],
     #                      data['pgc'],
     #                      margins = True))
     #
     #    print(skm.classification_report(data['kmc'], data['pgc']))
 
-    for x in ['kms', 'kmc', 'pts', 'pgc']:
-        if x in ['all', CLASS_SCHEME]:
-            logging.info('writing output file for: ' + x)
-            if args.prec:
+    for x in methods_available:
+        if x in CLASS_SCHEME or CLASS_SCHEME == 'all':
+            logger.info('writing output file for: ' + x)
+            if args['prec']:
                 df = pd.DataFrame({'FF': data['ff'],
                                    'DD': data['dd'],
                                    'KM': data[x],
@@ -843,7 +974,7 @@ def main():
                 ak = readmet.akterm.DataFile(data=df, z0=obs['fsr'].mean())
             outname = ('era5_{:s}_{:04d}_'.format(slugify(nam), year) +
                        x + '.akterm')
-            logging.info('writing putput file: %s' % outname)
+            logger.info('writing putput file: %s' % outname)
             ak.write(outname)
 
 
