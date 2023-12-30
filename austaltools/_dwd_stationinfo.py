@@ -128,7 +128,7 @@ def slugify(value, allow_unicode=False):
 
 # -------------------------------------------------------------------------
 
-def pressure_reduction_dwd(p,h,fastred=FALSE)
+def pressure_reduction_dwd(p,h,fastred=False):
         #
         # DWD-Formel Druckreduktion
         #
