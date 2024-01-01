@@ -659,7 +659,7 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.'):
                    for x in data['V_S1_CSA']]  # SNYOP key
     data['tp'] = data['R1']  # mm
     #
-    #
+    #FIXME
     za = _dwd_stationinfo.dwd_metadata(
         station, data.index[1], data.index[-1],
         'windgeschwindigkeit geberhoehe ueber grund [m]')
