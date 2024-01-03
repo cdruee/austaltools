@@ -6,7 +6,7 @@ pages:
   stage: build
   image: python:3.10
   environment:
-    - BUILDING_SPHINX=true
+    - BUILDING_SPHINX: true
   script:
     - pip install setuptools
     - pip install sphinx
