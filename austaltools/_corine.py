@@ -5,9 +5,10 @@ Created on Tue Jan  1 17:58:29 2024
 """
 import logging
 import json
+import os
 import urllib
 
-if not 'BUILDING_SPHINX' in globals():
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
 
 try:

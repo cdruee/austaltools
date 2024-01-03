@@ -6,7 +6,7 @@ import argparse
 import logging
 import os
 
-if not 'BUILDING_SPHINX' in globals():
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
     import readmet
 

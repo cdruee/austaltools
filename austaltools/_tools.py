@@ -4,7 +4,7 @@ import re
 import shlex
 import logging
 
-if not 'BUILDING_SPHINX' in globals():
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import osgeo.osr as osr
     import numpy as np
     import pandas as pd

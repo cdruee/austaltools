@@ -4,7 +4,7 @@ import argparse
 import os
 import logging
 
-if not 'BUILDING_SPHINX' in globals():
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import pandas as pd
     import readmet
     import yaml

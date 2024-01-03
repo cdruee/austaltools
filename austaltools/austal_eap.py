@@ -10,7 +10,7 @@ import subprocess
 import tempfile
 from time import sleep
 
-if not 'BUILDING_SPHINX' in globals():
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
     import pandas as pd
     from scipy import ndimage
