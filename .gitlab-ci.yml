@@ -5,8 +5,9 @@ stages:
 pages:
   stage: build
   image: python:3.10
+  environment:
+    - BUILDING_SPHINX=true
   script:
-    - BUILDING_SPHINX='true'
     - pip install setuptools
     - pip install sphinx
     - pip install sphinx-argparse
