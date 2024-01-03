@@ -6,7 +6,8 @@ pages:
     stage: build
     image: python:3.10
     script:
-        - pip install numpy pandas scipy
+      - apt install libgdal-dev
+      - pip install numpy pandas scipy
         - pip install matplotlib
         - pip install gdal
         - pip install meteolib
