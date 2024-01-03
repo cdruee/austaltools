@@ -45,6 +45,65 @@ def dwd_metadata(station, time1, time2, param, path=_PATH):
             break
     # reduce lines giving no new info:
     new = []
+    old = None
+    for i, v in value.iteritems():
+        if len(new) == 0:
+            new.append(True)
+            old = v
+        else:
+            if v == old:
+                new.append(False)
+            else:
+                new.append(True)
+                old = v
+    new[-1] = True
+    value = value[new]
+    return value
+
+def dwd_get_meta_value(metadata, time_begin, time_end, par_name):
+    """
+    get station metadata value for parameter `par_name` valid for
+    the time period info from `time_begin` to `time_end`
+    :param metadata: filename or pandas dataframe
+    :param time_begin: start time as string of datetime-like
+    :param time_end: end time as string of datetime-like
+    :param par_name: string containig the parameter name
+
+    :return: values for parameter `par_name`
+    :rtype: list of float
+    """
+    if isinstance(metadata, str):
+        if os.path.isfile(metadata):
+            metadata = pd.read_csv(metadata,
+                       index_col='time', parse_dates=True,
+                       sep=',', na_values='NA')
+        else:
+            raise ValueError('file not found: %s' % metadata)
+    elif isinstance(metadata, pd.DataFrame):
+        if 'time' in metadata.columns:
+            metadata.set_index('time', inplace=True)
+        if metadata.index.dtype != 'datetime64[ns]':
+            raise ValueError('metadata index must have datetime64[ns]')
+    else:
+        raise ValueError('metadata must be filename or pandas dataframe')
+    time_begin = pd.to_datetime(time_begin, utc=True)
+    time_end = pd.to_datetime(time_end, utc=True)
+    if time_end < time_begin:
+        raise ValueError('time_end must be equal to or after time_begin')
+    if par_name not in metadata.columns:
+        raise ValueError('parameter not found: %s' % par_name)
+    # get all info in time range:
+    value = pd.Series()
+    for i, v in metadata[par_name].iteritems():
+        if i < time_begin:
+            value[time_begin] = v
+        elif time_begin <= i < time_end:
+            value[i] = v
+        else:
+            value[time_end] = v
+            break
+    # remove lines giving no new info:
+    new = []
     for i, v in value.iteritems():
         if len(new) == 0:
             new.append(True)

@@ -90,12 +90,15 @@ _check = m._utils._check
 
 # ----------------------------------------------------
 
-def provide_storage(storage_path=None):
+def provide_storage(storage_path:str=None) -> str:
     """
-    find a working data storage directory
+    Finds a working data storage directory and returns its path.
+    If `storage_path` is provided, only this path is checked
+    for existance.
+
     :param storage_path: (optional) user selected path
     :return: data storage directory
-    :rtype str:
+    :rtype: str
     """
     if storage_path is not None:
         # path is prescribed
@@ -134,19 +137,42 @@ def provide_storage(storage_path=None):
     return storage_path
 
 
-def provide_dwd_station(storage_path, force=False):
+def provide_dwd_station(storage_path:str, force=False):
+    """
+    Ensure that the DWD weather station list is available
+    at `storage_path`.
+    If not, it is downloaded and stored in the `storage_path`.
+
+    :param storage_path: data storage directory
+    :param force: (optional) If True, data is downloaded even
+        if it already exists. Defaults to False.
+
+    """
     server = "https://opendata.dwd.de"
     path_aux = "climate_environment/CDC/help"
     files_aux = ["FF_Stundenwerte_Beschreibung_Stationen.txt"]
 
     for aux in files_aux:
-        if not os.path.exists(os.path.join(storage_path, aux)):
+        if (not os.path.exists(os.path.join(storage_path, aux))
+                or force is True):
             urlretrieve("/".join(server, path_aux, aux),
                         os.path.join(storage_path, aux))
 
 
 # ----------------------------------------------------
-def h_eff(has, z0s):
+def h_eff(has:float, z0s:list) -> list:
+    """
+    Calculate the effective anemometer heights of an anemometer
+    mounted at height `has` at a postion
+    with roughness length `z0s` (in m), for each of the 9
+    AUSTAL roughness-lenght classes
+    (0.01m, 0.02m, 0.05m, 0.1m, 0.2m, 0.5m, 1m, 1.5m, 2m).
+    :param has: actual aneometer height above ground in m
+    :param z0s: roughness length at the anemoeter position in m
+    :return: nine effective anemometer heights corresponding
+    to the nine roughness classes.
+    :rtype: list of float
+    """
     z0_vals = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1., 1.5, 2]
     href = 250
     d0s = m.wind.DISPLACEMENT_FACTOR * z0s
@@ -164,23 +190,32 @@ def h_eff(has, z0s):
 def read_era5_nc(ncfile, lat, lon):
     """
     read ERA5 nc file and interpolate values to position (lat, lon)
-        and recalculate 10 wind speed anddirection (ff/dd) using
-        actual surface roughness
-        values: 'time'
-                'u10'   m s**-1     10m_u-component_of_wind     10u
-                'v10'   m s**-1     10m_v-component_of_wind     10v
-                'sp'    Pa          surface_pressure            sp
-                'zust'  m s**-1     friction_velocity           zust
-                'fsr'   m           forecast_surface_roughness  fsr
-                't2m'   K           2m_temperature              2t
-                'd2m'   K           2m_dewpoint_temperature     2d
-                'cbh'   m           cloud_base_height           cbh
-                'sshf'  J m**-2     surface_sensible_heat_flux  sshf
-                'slhf'  J m**-2     surface_latent_heat_flux    slhf
-                'lcc'   1           low_cloud_cover             lcc
-                'tcc'   1           total_cloud_cover           tcc
-        optional:'mcc'  1           medium_cloud_cover          mcc
-                'tp'    m           total_precipitation         tp
+    and recalculate 10 wind speed and direction (ff/dd) using
+    actual surface roughness
+    values:
+
+    ======  ========    ==========================  ======
+     name   unit        description                 code
+    ======  ========    ==========================  ======
+    'time'
+    'u10'   m s**-1     10m_u-component_of_wind     10u
+    'v10'   m s**-1     10m_v-component_of_wind     10v
+    'sp'    Pa          surface_pressure            sp
+    'zust'  m s**-1     friction_velocity           zust
+    'fsr'   m           forecast_surface_roughness  fsr
+    't2m'   K           2m_temperature              2t
+    'd2m'   K           2m_dewpoint_temperature     2d
+    'cbh'   m           cloud_base_height           cbh
+    'sshf'  J m**-2     surface_sensible_heat_flux  sshf
+    'slhf'  J m**-2     surface_latent_heat_flux    slhf
+    'lcc'   1           low_cloud_cover             lcc
+    'tcc'   1           total_cloud_cover           tcc
+    ------  --------    --------------------------  ------
+    optional:
+    ------------------------------------------------------
+    'mcc'   1           medium_cloud_cover          mcc
+    'tp'    m           total_precipitation         tp
+    ======  ========    ==========================  ======
     """
     import netCDF4
 
@@ -226,25 +261,25 @@ def read_era5_nc(ncfile, lat, lon):
     if np.modf(idx['lon'])[0] <= 0.5:
         if np.modf(idx['lat'])[0] <= 0.5:
             # SW corner
-            pos[0] = (np.floor(idx['lon']), np.floor(idx['lat']))
-            pos[1] = (np.floor(idx['lon'] + 1), np.floor(idx['lat']))
-            pos[2] = (np.floor(idx['lon']), np.floor(idx['lat'] + 1))
+            pos[0] = (int(idx['lon']), int(idx['lat']))
+            pos[1] = (int(idx['lon'] + 1), int(idx['lat']))
+            pos[2] = (int(idx['lon']), int(idx['lat'] + 1))
         else:
             # NW corner
-            pos[0] = (np.floor(idx['lon']), np.floor(idx['lat'] + 1))
-            pos[1] = (np.floor(idx['lon'] + 1), np.floor(idx['lat'] + 1))
-            pos[2] = (np.floor(idx['lon']), np.floor(idx['lat']))
+            pos[0] = (int(idx['lon']), int(idx['lat'] + 1))
+            pos[1] = (int(idx['lon'] + 1), int(idx['lat'] + 1))
+            pos[2] = (int(idx['lon']), int(idx['lat']))
     else:
         if np.modf(idx['lat'])[0] <= 0.5:
             # SE corner
-            pos[0] = (np.floor(idx['lon'] + 1), np.floor(idx['lat']))
-            pos[1] = (np.floor(idx['lon'] + 1), np.floor(idx['lat'] + 1))
-            pos[2] = (np.floor(idx['lon']), np.floor(idx['lat']))
+            pos[0] = (int(idx['lon'] + 1), int(idx['lat']))
+            pos[1] = (int(idx['lon'] + 1), int(idx['lat'] + 1))
+            pos[2] = (int(idx['lon']), int(idx['lat']))
         else:
             # NE corner
-            pos[0] = (np.floor(idx['lon'] + 1), np.floor(idx['lat'] + 1))
-            pos[1] = (np.floor(idx['lon']), np.floor(idx['lat'] + 1))
-            pos[2] = (np.floor(idx['lon'] + 1), np.floor(idx['lat']))
+            pos[0] = (int(idx['lon'] + 1), int(idx['lat'] + 1))
+            pos[1] = (int(idx['lon']), int(idx['lat'] + 1))
+            pos[2] = (int(idx['lon'] + 1), int(idx['lat']))
 
     pi, pj = pos[0]
     logging.info(str((pi, pj, dims['lon'][pi], dims['lat'][pj])))
@@ -355,7 +390,40 @@ def read_era5_nc(ncfile, lat, lon):
 # ----------------------------------------------------
 
 
-def get_ERA5_weather(lat, lon, year, storage_path='.'):
+def get_ERA5_weather(lat, lon, year, storage_path='.') \
+        -> (pd.DataFrame, float):
+    """
+    Get weather timeseries for the provided position
+    from source ERA5 for the year provided and calulate
+    cloud cover of non-high clouds (`lmcc`) and roughness
+    length `z0` from "forecast surface roughness"
+
+    :param lat: position latitude in degrees
+    :param lon: position laongitude  in degrees
+    :param year: get data from this calendar year
+    :param storage_path: (optional) expect ERA5 data in this directory
+    :return: weather timeseries as dataframe and surface roughness in m.
+        The index of the dataframe is the measurement time as `datetime64`,
+        the columns are:
+
+        ======  ========= =============================
+        column   unit     comment
+        ======  ========= =============================
+        'time'   UTC
+        'ff'     m/s      wind speed at 10m height
+        'dd'     degrees  wind direction
+        'sp'     Pa       surface air pressure (QFE)
+        't2m'    K        air temperature at 2 m height
+        'lmcc'   1        low and medium cloud cover
+        'tcc'    1        total cloud cover
+        'sshf'   W/m²     surface sensible heat flux
+        'slhf'   W/m²     surface latent heat flux
+        'fsr'    m        forecast surface roughness
+        'tp'     mm       total precipitation per hour
+        ======  ========= =============================
+
+    :rtype: (pd.DataFrame, float)
+    """
     ncfile = os.path.join(storage_path, 'era5_ak_eu_%04i.nc' % year)
     logging.info('reading data from; %s' % ncfile)
 
@@ -369,6 +437,9 @@ def get_ERA5_weather(lat, lon, year, storage_path='.'):
     else:
         v['lmcc'] = v['lcc']  # 1
 
+    z0 = v['fsr'].mean()
+    logger.info("roughness length: %6f m" % z0)
+
     res = v.filter(['time',  # UTC
                     'ff',  # m/s
                     'dd',  # deg
@@ -379,13 +450,21 @@ def get_ERA5_weather(lat, lon, year, storage_path='.'):
                     'fsr',  # m
                     'tp'  # mm
                     ])
-    return res
+    return res, z0
 
 
 # ----------------------------------------------------
 
 
-def provide_DWD_weather(station, storage_path='.'):
+def download_DWD_weather(station, storage_path='.'):
+    """
+    Ensure that the DWD weather station data for station
+    number `station` is available at `storage_path`.
+    If not, data is downloaded and stored in the `storage_path`.
+
+    :param storage_path: data storage directory
+
+    """
     http_addr = "https://opendata.dwd.de"
     http_path = "climate_environment/CDC/observations_germany/climate/hourly"
     # for each file to collect:
@@ -476,13 +555,27 @@ def provide_DWD_weather(station, storage_path='.'):
 # -------------------------------------------------------------------------
 
 
-def data_DWD_to_csv(product_files: list, path_to_files: str):
+def data_DWD_to_csv(product_files: list, path_to_files: str) \
+        -> pd.DataFrame:
+    """
+    Build one single table of weather data from the individual
+    downloadad files
+    :param product_files: list of extracted "produkt" files
+    :param path_to_files: path where the product files are stored
+    :return: weather timeseries as dataframe. The columns are
+    named as they appear in the "produkt" files, except
+    "MESS_DATUM" and "STATIONS_ID". Instead, the index contains
+    the time of the measurement as `datetime64`.
+    :rtype: pandas.DataFrame
+
+    """
     dat = None
     for name in product_files:
         # read it into DataFrame
         logger.debug('extracting product: %s' % name)
         prodata = pd.read_csv(os.path.join(path_to_files, name),
-                              sep=';', skipinitialspace=True)
+                              sep=';', skipinitialspace=True,
+                              engine='python')
         logger.debug('columns: ' + ';'.join(prodata.columns))
         #
         # convert the time to datetime64
@@ -506,7 +599,8 @@ def data_DWD_to_csv(product_files: list, path_to_files: str):
         if dat is None:
             dat = prodata
         else:
-            dat = dat.merge(prodata, on='time', how='outer')
+            cols_to_use = (list(prodata.columns.difference(dat.columns)))
+            dat = dat.merge(prodata[cols_to_use], on='time', how='outer')
     #
     logger.debug("setting blank values to nan")
     #
@@ -535,6 +629,18 @@ def data_DWD_to_csv(product_files: list, path_to_files: str):
 
 
 def meta_DWD_to_csv(metadata_files, station, path_to_files):
+    """
+    Build one single table of the metadata provided by the individual
+    metadata files contained in the downloadad zip archives
+    :param metadata_files: list of extracted "Metadaten" files
+    :param path_to_files: path where these files are stored
+    :return: metadata table as dataframe. The columns are
+    named as they appear in the "produkt" files, except
+    "MESS_DATUM" and "STATIONS_ID". Instead, the index contains
+    the time of the measurement as `datetime64`.
+    :rtype: pandas.DataFrame
+
+    """
     #
     # deduplicate list
     files = list(set(metadata_files))
@@ -625,7 +731,41 @@ def meta_DWD_to_csv(metadata_files, station, path_to_files):
 # -------------------------------------------------------------------------
 
 
-def get_DWD_weather(lat, lon, year, station=None, storage_path='.'):
+def get_DWD_weather(lat, lon, year, station=None, storage_path='.') \
+        -> (pd.DataFrame, float):
+    """
+    Get weather timeseries for the provided position
+    from source DWD for the year provided.
+    Units are converted  and calulate
+    cloud cover of non-high clouds (`lmcc`) and roughness
+    length `z0` from "forecast surface roughness"
+
+    :param lat: position latitude in degrees
+    :param lon: position laongitude  in degrees
+    :param year: get data from this calendar year
+    :param storage_path: (optional) expect ERA5 data in this directory
+    :return: weather timeseries as dataframe and surface roughness in m.
+        The index of the dataframe is the measurement time as `datetime64`,
+        the columns are:
+
+        ======  ========= =============================
+        column   unit     comment
+        ======  ========= =============================
+        'time'   UTC
+        'ff'     m/s      wind speed at 10m height
+        'dd'     degrees  wind direction
+        'sp'     Pa       surface air pressure (QFE)
+        't2m'    K        air temperature at 2 m height
+        'r2m'    1        relative humidity at 2 m height
+        'tcc'    1        total cloud cover
+        'cbh'    m        cloud base height above ground
+        'cty'             cloud type (2-letter code)
+        'fsr'    m        forecast surface roughness
+        'tp'     mm       total precipitation per hour
+        ======  ========= =============================
+
+    :rtype: (pd.DataFrame, float)
+    """
     if station is None:
         lat, lon, ele, nam, station = _dwd_stationinfo.dwd_stationinfo(
             None, storage_path, lat, lon)
@@ -637,19 +777,23 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.'):
     if not (os.path.exists(os.path.join(storage_path, obsfile)) and
             os.path.exists(os.path.join(storage_path, metafile))):
         logger.info('data from station %05i not in storage' % station)
-        provide_DWD_weather(station, storage_path)
+        download_DWD_weather(station, storage_path)
     else:
         logger.info('data from station %05i found in storage' % station)
     data = pd.read_csv(os.path.join(storage_path, obsfile),
                        index_col='time', parse_dates=True,
-                       sep=',', na_values='NA')
+                       sep=',', na_values='NA',
+                       engine='python')
+    #
+    #  treat the data ------------------------------------------------
     #
     # select data from year
     data = data[data.index.year == year]
     #
     # rename / convert units
+    # wind direction 990 means "undetermined"/"umlaufender Wind"
+    data['dd'] = data['D'].mask(data['D'] == 990., np.nan)  # deg
     data['ff'] = data['F']  # m/s
-    data['dd'] = data['D']  # deg
     data['sp'] = data['P0'] * 100.  # hPa -> Pa
     data['t2m'] = data['TT_TU']  # °C
     data['r2m'] = data['RF_TU'] / 100.  # % -> 1
@@ -659,10 +803,13 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.'):
                    for x in data['V_S1_CSA']]  # SNYOP key
     data['tp'] = data['R1']  # mm
     #
-    #FIXME
-    za = _dwd_stationinfo.dwd_metadata(
-        station, data.index[1], data.index[-1],
-        'windgeschwindigkeit geberhoehe ueber grund [m]')
+    #  treat the metadata --------------------------------------------
+    #
+    # get wind sensor height from metadata
+    za = _dwd_stationinfo.dwd_get_meta_value(
+        os.path.join(storage_path, metafile),
+        data.index[1], data.index[-1],
+        'windgeschwindigkeit_geberhoehe ueber grund [m]')
     # if sensor height changed that year:
     if len(za) > 2:
         raise ValueError('change in anemometer setup in year: %d' % year)
@@ -676,8 +823,6 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.'):
     z0 = z0_verkaik(z_a, speed=data['F'],
                     gust=data['FX_911'], dirct=data['D'])
     logging.info("roughness length: %5f" % z0)
-    # FIXME
-    data['fsr'] = z0  # m
 
     data = data.filter(['time',  # UTC
                         'ff',  # m/s
@@ -692,17 +837,18 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.'):
                         'fsr',  # m
                         ])
 
-    return data
+    return data, z0
 
 
 # =======================================================================
 
 
-def cli() -> dict:
+def cli_parser() -> argparse.ArgumentParser:
     """
-    command line interface
+    function to parse command line arguments
 
-    :return: conf (dict)
+    :return: parser object
+    :rtype: argparse.ArgumentParser
     """
     #
     # defaults
@@ -713,7 +859,7 @@ def cli() -> dict:
     # command line args
     #
     parser = argparse.ArgumentParser(
-        description='get AUSTAL meteorlogical timeseries',
+        description='Get meteorlogical timeseries for use with AUSTAL',
         epilog='one of -L, -G, -U, -D, or -W and NAME' +
                ' are required unless ' +
                '--list-sources or --force-download is selected')
@@ -734,22 +880,23 @@ def cli() -> dict:
                         dest="gk",
                         nargs=2,
                         default=None,
-                        help='Center position given in Gauß-Krüger zone 3' +
-                             'coordinates: X = `Rechtswert`, ' +
+                        help='Center position given in Gauß-Krüger ' +
+                             'zone 3 coordinates: ' +
+                             'X = `Rechtswert`, ' +
                              'Y = `Hochwert`. ')
     cspars.add_argument('-U', '--utm',
                         metavar=("X", "Y"),
                         dest="ut",
                         nargs=2,
                         default=None,
-                        help='Center position given in UTM Zone 32N' +
-                             'coordinates: X = `easting`, ' +
+                        help='Center position given in UTM coordinates: ' +
+                             'X = `easting`, ' +
                              'Y = `northing`.')
     cspars.add_argument('-D', '--dwd',
                         metavar="NUMBER",
                         dest="dwd",
                         nargs=1,
-                        help='Postion of weather station with ' +
+                        help='Weather station position with ' +
                              'German weather service (DWD) ID `NUMBER`')
     cspars.add_argument('-W', '--wmo',
                         metavar="NUMBER",
@@ -764,8 +911,8 @@ def cli() -> dict:
                         nargs=1,
                         choices=KNOWN_SOURCES,
                         default=default_source,
-                        help='code for the source digital elevation ' +
-                             'model (DEM). Known DEMs are: ' +
+                        help='code for the weather data source. ' +
+                             'Known sources are ' +
                              ' '.join(KNOWN_SOURCES) + ' ' +
                              'Defaults to ' + default_source)
     parser.add_argument('-y', '--year', dest='year',
@@ -793,6 +940,18 @@ def cli() -> dict:
                       const=logging.DEBUG, help='show informative output')
     verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
                       const=logging.INFO, help='show detailed output')
+    return parser
+
+def cli() -> dict:
+    """
+    Command line interface.
+    Evaluates the command line arguments from cli_parser()
+    performs additional checks and sets the logging level
+
+    :return: configuration values
+    :rtype: dict
+    """
+    parser = cli_parser()
     args = parser.parse_args()
     #
     # logging level
@@ -812,7 +971,6 @@ def cli() -> dict:
         parser.print_help()
         logger.critical('-w is only valid with -D or -W')
         sys.exit(1)
-
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
     logger.debug(format(args))
     return vars(args)
@@ -861,9 +1019,9 @@ def main():
 
     source = args['source'][0]
     if source == "ERA5":
-        obs = get_ERA5_weather(lat, lon, year, STORAGE_PATH)
+        obs, z0 = get_ERA5_weather(lat, lon, year, STORAGE_PATH)
     elif source == "DWD":
-        obs, meta = get_DWD_weather(lat, lon, year, station, STORAGE_PATH)
+        obs, z0 = get_DWD_weather(lat, lon, year, station, STORAGE_PATH)
     else:
         raise ValueError("unknown source: %s" % source)
 
@@ -873,8 +1031,6 @@ def main():
         obs.to_csv(raw_name, float_format='%.2f', index=False, na_rep='-999')
 
     methods_available = []
-    z0 = obs['fsr'].mean()
-    logger.info("roughness length: %6f m" % z0)
 
     # 10-m wind speed for the correct roughness length
     logger.debug('v10')
@@ -977,6 +1133,17 @@ def main():
     obs = obs.drop(columns='time', errors='ignore')
     w['time'] = w.index.to_series
     data = w.join(obs, how='left')
+    #
+    # where wind speed is 0, wind direction must be 0, and vice versa
+    # not to self:
+    #       mask  = "replace, where cond is True"
+    #       where = "replace, where cond is False"
+    # and bring dd to range 0..360
+    data['dd'] = np.remainder(
+        data['dd'].mask(data['ff'] < 1., other=0.), 360.)
+    print(data['dd'][[x == False for x in (np.isfinite(data['dd']) & data['dd'] >= 5.)]])
+    data['ff'] = data['ff'].where(
+        np.isfinite(data['dd']) & data['dd'] > 0., other=0.)
 
     #    print(pd.crosstab(data['kmc'],
     #                      data['pgc'],
@@ -986,21 +1153,21 @@ def main():
 
     for x in methods_available:
         if x in CLASS_SCHEME or CLASS_SCHEME == 'all':
-            logger.info('writing output file for: ' + x)
+            logger.debug('generating output for: ' + x)
             if args['prec']:
                 df = pd.DataFrame({'FF': data['ff'],
                                    'DD': data['dd'],
                                    'KM': data[x],
                                    'PP': data['tp']},
                                   index=data.index)
-                ak = readmet.akterm.DataFile(data=df, z0=obs['fsr'].mean(),
+                ak = readmet.akterm.DataFile(data=df, z0=z0,
                                              prec=True)
             else:
                 df = pd.DataFrame({'FF': data['ff'],
                                    'DD': data['dd'],
                                    'KM': data[x]},
                                   index=data.index)
-                ak = readmet.akterm.DataFile(data=df, z0=obs['fsr'].mean())
+                ak = readmet.akterm.DataFile(data=df, z0=z0)
             outname = ('era5_{:s}_{:04d}_'.format(
                 _dwd_stationinfo.slugify(nam), year) +
                        x + '.akterm')
@@ -1009,6 +1176,6 @@ def main():
 
 
 # ----------------------------------------------------
-# initalize: call main routine
+# initialize: call main routine
 if __name__ == '__main__':
     main()

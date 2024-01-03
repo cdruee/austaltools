@@ -270,14 +270,11 @@ def provide_terrain_data(storage_path=None, force_download=False):
     return storage_path, datasets
 
 
-
-# -------------------------------------------------------------------------
-
-def cli() -> dict:
+def cli_parser():
     """
-    command line interface
-
-    :return: conf (dict)
+    funtion to parse command line arguments
+    :return: parser object
+    :rtype: argparse.ArgumentParser
     """
 
     default_dem = KNOWN_DEMS[1]
@@ -348,6 +345,18 @@ def cli() -> dict:
                       const=logging.DEBUG, help='show informative output')
     verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
                       const=logging.INFO, help='show detailed output')
+    return parser
+
+# -------------------------------------------------------------------------
+
+def cli() -> dict:
+    """
+    command line interface
+
+    :return: conf (dict)
+    """
+
+    parser = cli_parser()
     args = parser.parse_args()
 
     # set logging level
