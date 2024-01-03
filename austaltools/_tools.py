@@ -46,15 +46,16 @@ Z0_CLASSES = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 1.5, 2.0]
 
 # -------------------------------------------------------------------------
 
-# WGS84 - World Geodetic System 1984, https://epsg.io/4326
-LL = osr.SpatialReference()
-LL.ImportFromEPSG(4326)
-# DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677
-GK = osr.SpatialReference()
-GK.ImportFromEPSG(5677)
-# ETRS89 / UTM zone 32N, https://epsg.io/25832
-UT = osr.SpatialReference()
-UT.ImportFromEPSG(25832)
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    # WGS84 - World Geodetic System 1984, https://epsg.io/4326
+    LL = osr.SpatialReference()
+    LL.ImportFromEPSG(4326)
+    # DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677
+    GK = osr.SpatialReference()
+    GK.ImportFromEPSG(5677)
+    # ETRS89 / UTM zone 32N, https://epsg.io/25832
+    UT = osr.SpatialReference()
+    UT.ImportFromEPSG(25832)
 
 # -------------------------------------------------------------------------
 

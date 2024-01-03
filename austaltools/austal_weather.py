@@ -17,10 +17,11 @@ import tempfile
 import zipfile
 from urllib.request import urlretrieve
 
+import numpy as np
+import pandas as pd
+
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import meteolib as m
-    import numpy as np
-    import pandas as pd
     import readmet
 
 try:

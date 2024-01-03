@@ -6,6 +6,7 @@ pages:
   stage: build
   image: python:3.10
   script:
+    - pip install numpy pandas
     - pip install setuptools
     - pip install sphinx
     - pip install sphinx-argparse
