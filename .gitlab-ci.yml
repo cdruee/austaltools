@@ -6,8 +6,6 @@ pages:
   stage: build
   image: python:3.10
   script:
-    - pip install gdal-bin libgdal-dev
-    - pip install meteolib
     - pip install setuptools
     - pip install sphinx
     - pip install sphinx-argparse
