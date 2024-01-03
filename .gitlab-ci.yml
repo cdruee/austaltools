@@ -4,9 +4,9 @@ stages:
   
 pages:
     stage: build
-    image: python:3.10
+    image: ubuntu:22.04
     script:
-      - apt install libgdal-dev
+      - apt install libgdal-dev gdal-bin
       - pip install numpy pandas scipy
         - pip install matplotlib
         - pip install gdal
