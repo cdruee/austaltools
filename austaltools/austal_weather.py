@@ -85,9 +85,10 @@ METAFILE_DWD = 'metadata_%05i.csv'
 
 # ----------------------------------------------------
 
-kappa = m.constants.kappa
-gn = m.constants.gn
-_check = m._utils._check
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    kappa = m.constants.kappa
+    gn = m.constants.gn
+    _check = m._utils._check
 
 
 # ----------------------------------------------------

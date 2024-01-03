@@ -13,8 +13,9 @@ import pandas as pd
 import datetime as dt
 import logging
 
-import readmet
-import meteolib as m
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    import readmet
+    import meteolib as m
 
 try:
     from ._dwd_stationinfo import dwd_stationinfo, slugify
@@ -35,9 +36,10 @@ try:
 except ImportError:
     from _version import __version__
 
-kappa = m.constants.kappa
-gn = m.constants.gn
-_check = m._utils._check
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    kappa = m.constants.kappa
+    gn = m.constants.gn
+    _check = m._utils._check
 
 # ----------------------------------------------------
 # possible defaults: fixed_057 fixed_010 model_mean model_uv10 model_fsr
