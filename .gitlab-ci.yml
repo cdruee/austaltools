@@ -1,34 +1,31 @@
 stages:
   - build
   - release
-  
+
 pages:
-    stage: build
-    image: ubuntu:22.04
-    script:
-      - apt install libgdal-dev gdal-bin
-      - pip install numpy pandas scipy
-        - pip install matplotlib
-        - pip install gdal
-        - pip install meteolib
-        - pip install setuptools
-        - pip install sphinx
-        - pip install sphinx-argparse
-        - sphinx-build -b html docs public
-    artifacts:
-        paths:
-        - public
+  stage: build
+  image: python:3.10
+  script:
+    - pip install gdal-bin libgdal-dev
+    - pip install meteolib
+    - pip install setuptools
+    - pip install sphinx
+    - pip install sphinx-argparse
+    - sphinx-build -b html docs public
+  artifacts:
+    paths:
+      - public
 
 release-job:
-    stage: release
-    image: registry.gitlab.com/gitlab-org/release-cli:latest
-    rules:
-        # Run this job when a tag is like #.#.#
-        - if: $CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/
-    script:
-        - echo building release
-    release:
-        name: '$CI_COMMIT_TAG'
-        description: '$CI_COMMIT_DESCRIPTION'
-        tag_name: '$CI_COMMIT_TAG'
-        ref: '$CI_COMMIT_TAG'
+  stage: release
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  rules:
+    # Run this job when a tag is like #.#.#
+    - if: $CI_COMMIT_TAG =~ /^[0-9]+\.[0-9]+\.[0-9]+$/
+  script:
+    - echo building release
+  release:
+    name: '$CI_COMMIT_TAG'
+    description: '$CI_COMMIT_DESCRIPTION'
+    tag_name: '$CI_COMMIT_TAG'
+    ref: '$CI_COMMIT_TAG'

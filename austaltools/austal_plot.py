@@ -7,11 +7,9 @@ import logging
 import os
 import re
 
-import matplotlib.colors
-import matplotlib.patches
-import matplotlib.pyplot as plt
-import numpy as np
-import readmet
+if not 'BUILDING_SPHINX' in globals():
+    import numpy as np
+    import readmet
 
 logger = logging.getLogger()
 logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)

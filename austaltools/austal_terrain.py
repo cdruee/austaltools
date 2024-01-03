@@ -16,9 +16,10 @@ import tarfile
 import tempfile
 from urllib.request import urlretrieve
 
-from importlib import resources
-from osgeo import gdal
-from osgeo_utils import gdal_merge
+if not 'BUILDING_SPHINX' in globals():
+    from importlib import resources
+    from osgeo import gdal
+    from osgeo_utils import gdal_merge
 
 try:
     from . import _tools

@@ -10,17 +10,18 @@ import subprocess
 import tempfile
 from time import sleep
 
-import numpy as np
-import pandas as pd
-from scipy import ndimage
+if not 'BUILDING_SPHINX' in globals():
+    import numpy as np
+    import pandas as pd
+    from scipy import ndimage
 
-try:
-    from tqdm import tqdm
-except ImportError:
-    tqdm = None
+    try:
+        from tqdm import tqdm
+    except ImportError:
+        tqdm = None
 
-import readmet
-import meteolib
+    import readmet
+    import meteolib
 
 try:
     from . import _dispersion, _tools

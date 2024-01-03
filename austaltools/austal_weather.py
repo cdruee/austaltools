@@ -17,10 +17,11 @@ import tempfile
 import zipfile
 from urllib.request import urlretrieve
 
-import meteolib as m
-import numpy as np
-import pandas as pd
-import readmet
+if not 'BUILDING_SPHINX' in globals():
+    import meteolib as m
+    import numpy as np
+    import pandas as pd
+    import readmet
 
 try:
     from . import _dwd_stationinfo

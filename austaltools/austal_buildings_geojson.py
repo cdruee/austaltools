@@ -12,7 +12,8 @@ import re
 import shlex
 import json
 
-import numpy as np
+if not 'BUILDING_SPHINX' in globals():
+    import numpy as np
 
 try:
     from ._version import __version__

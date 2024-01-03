@@ -7,7 +7,8 @@ import logging
 import json
 import urllib
 
-import numpy as np
+if not 'BUILDING_SPHINX' in globals():
+    import numpy as np
 
 try:
     from . import _tools

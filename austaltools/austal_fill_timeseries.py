@@ -4,9 +4,10 @@ import argparse
 import os
 import logging
 
-import pandas as pd
-import readmet
-import yaml
+if not 'BUILDING_SPHINX' in globals():
+    import pandas as pd
+    import readmet
+    import yaml
 
 from ._version import __version__
 

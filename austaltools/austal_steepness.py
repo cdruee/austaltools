@@ -6,10 +6,9 @@ import argparse
 import logging
 import os
 
-import matplotlib.colors
-import matplotlib.pyplot as plt
-import numpy as np
-import readmet
+if not 'BUILDING_SPHINX' in globals():
+    import numpy as np
+    import readmet
 
 try:
     from . import _tools

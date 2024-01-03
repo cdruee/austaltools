@@ -4,14 +4,15 @@ import re
 import shlex
 import logging
 
-import osgeo.osr as osr
-import numpy as np
-import pandas as pd
-import matplotlib.colors
-import matplotlib.patches
-import matplotlib.pyplot as plt
+if not 'BUILDING_SPHINX' in globals():
+    import osgeo.osr as osr
+    import numpy as np
+    import pandas as pd
+    import matplotlib.colors
+    import matplotlib.patches
+    import matplotlib.pyplot as plt
 
-import readmet
+    import readmet
 
 try:
     from ._version import __version__, __title__

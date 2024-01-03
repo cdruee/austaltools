@@ -6,7 +6,8 @@ import pandas as pd
 import logging
 
 
-import meteolib as m
+if not 'BUILDING_SPHINX' in globals():
+    import meteolib as m
 
 logger = logging.getLogger(__name__)
 
