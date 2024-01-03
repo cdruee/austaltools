@@ -9,6 +9,7 @@ import logging
 import argparse
 import glob
 import gzip
+from importlib import resources
 import os
 import shutil
 import sys
@@ -17,7 +18,6 @@ import tempfile
 from urllib.request import urlretrieve
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    from importlib import resources
     from osgeo import gdal
     from osgeo_utils import gdal_merge
 

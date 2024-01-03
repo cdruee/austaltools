@@ -11,9 +11,6 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
     import readmet
 
-logger = logging.getLogger()
-logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
-logging.getLogger('readmet.dmna').setLevel(logging.WARNING)
 try:
     from . import _tools
 except ImportError:
@@ -23,6 +20,9 @@ try:
 except ImportError:
     from _version import __version__
 
+logger = logging.getLogger()
+logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
+logging.getLogger('readmet.dmna').setLevel(logging.WARNING)
 
 # -------------------------------------------------------------------------
 def parse_austal_outputname(filename: str):
