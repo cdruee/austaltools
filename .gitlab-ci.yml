@@ -9,8 +9,7 @@ pages:
         - pip install numpy pandas
         - pip install setuptools
         - pip install sphinx
-        - python setup.py build_sphinx
-        - mv build/sphinx/html/ public/
+        - sphinx-build -b html . public
     artifacts:
         paths:
         - public
