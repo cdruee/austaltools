@@ -8,7 +8,7 @@ pages:
     script:
         - pip install numpy pandas scipy
         - pip install matplotlib
-        - pip install gdal gdal-utils
+        - pip install gdal
         - pip install meteolib
         - pip install setuptools
         - pip install sphinx
