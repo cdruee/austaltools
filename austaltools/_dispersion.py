@@ -3,11 +3,10 @@
 import logging
 import os
 
+import numpy as np
+import pandas as pd
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    import numpy as np
-    import pandas as pd
-
     import meteolib as m
 
 logger = logging.getLogger(__name__)
