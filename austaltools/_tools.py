@@ -330,7 +330,7 @@ def common_plot(args: dict,
                 dots: dict or np.ndarray = None,
                 buildings: list = None,
                 mark: dict or pd.DataFrame = None,
-                scale: list or tuple = None) -> object:
+                scale: list or tuple = None):
     """
     :param args: dict containing the plot configuration
     :param dat: dictionary of `x`, `y`, and `z` values to plot.

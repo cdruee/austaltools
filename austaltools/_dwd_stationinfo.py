@@ -70,7 +70,7 @@ def dwd_get_meta_value(metadata, time_begin, time_end, par_name):
     :param par_name: string containig the parameter name
 
     :return: values for parameter `par_name`
-    :rtype: list of float
+    :rtype: pandas.Series
     """
     if isinstance(metadata, str):
         if os.path.isfile(metadata):

@@ -9,7 +9,10 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import readmet
     import yaml
 
-from ._version import __version__
+try:
+    from ._version import __version__
+except ImportError:
+    from _version import __version__
 
 logging.basicConfig()
 logger = logging.getLogger()

@@ -200,9 +200,16 @@ def download_dem(dem, path):
 # -------------------------------------------------------------------------
 
 
-def provide_terrain_data(storage_path=None, force_download=False):
-    extension = DEM_FMT % ""
-    datasets = []
+def provide_storage(storage_path:str=None) -> str:
+    """
+    Finds a working data storage directory and returns its path.
+    If `storage_path` is provided, only this path is checked
+    for existance.
+
+    :param storage_path: (optional) user selected path
+    :return: data storage directory
+    :rtype: str
+    """
     if storage_path is not None:
         # path is prescribed
         if not os.path.isdir(storage_path):
@@ -217,17 +224,7 @@ def provide_terrain_data(storage_path=None, force_download=False):
             if os.path.isdir(directory):
                 storage_path = directory
                 break
-    # did we find it?
-    if storage_path is not None:
-        logger.info("terrain data storage found at: %s" % storage_path)
-        # if a location is found, we are happy
-        # but does it contain any data?
-        for file in os.listdir(storage_path):
-            if file.endswith(extension):
-                datasets.append(file.replace(extension, ""))
-        if len(datasets) == 0:
-            logger.error("No terrain data found in storage")
-    if storage_path is None or force_download:
+    if storage_path is None:
         # no location was found, we must create one:
         logger.warning("no preexisting terrain data storage found")
         for location in STORAGE_LOCATIONS:
@@ -247,28 +244,55 @@ def provide_terrain_data(storage_path=None, force_download=False):
         if storage_path is None:
             # we couldn't create any location WTF
             raise OSError("Could not create terrain storage dir")
+    return storage_path
+# -------------------------------------------------------------------------
+
+
+def provide_terrain_data(storage_path:str, force=False, download=True):
+    extension = DEM_FMT % ""
+    datasets = []
+    # if a location is found, we are happy
+    # but does it contain any data?
+    for file in os.listdir(storage_path):
+        if file.endswith(extension):
+            datasets.append(file.replace(extension, ""))
+    if (len(datasets) > 0 and force is False):
+        download = False
+    if download:
         for aux_path in STORAGE_AUX_FILES.iterdir():
             aux_file = os.path.basename(aux_path)
             if aux_file.startswith('_'):
                 continue
-            logger.debug('copying auxiliary file: %s' % aux_file)
-            shutil.copyfile(aux_path,
-                            os.path.join(storage_path, aux_file))
-        logger.warning("terrain data storage created: %s" % storage_path)
+            if (not os.path.isfile(os.path.join(storage_path, aux_file)) or
+                    force):
+                logger.debug('copying auxiliary file: %s' % aux_file)
+                shutil.copyfile(aux_path,
+                                os.path.join(storage_path, aux_file))
         # now fill the storage with data
         for dem in KNOWN_DEMS:
-            if (os.path.exists(os.path.join(storage_path, DEM_FMT % dem)) and
-                    not force_download):
+            if (os.path.exists(
+                    os.path.join(storage_path, DEM_FMT % dem)) and
+                    not force):
                 logger.info("dataset found in storage: %s" % dem)
                 datasets.append(dem)
             else:
                 success = download_dem(dem, storage_path)
                 if success:
-                    logger.error("successfully downloaded dataset %s" % dem)
+                    logger.error("successful download of dataset %s" % dem)
                     datasets.append(dem)
                 else:
                     logger.error("dataset %s failed to download" % dem)
-    return storage_path, datasets
+    return datasets
+# -------------------------------------------------------------------------
+
+
+def show_notice(storage_path, source):
+    print('data copyright notice:')
+    with open(os.path.join(storage_path,
+                           "%s.NOTICE.txt" % source), "r") as f:
+        for x in f.readlines():
+            print (x)
+# -------------------------------------------------------------------------
 
 
 def cli_parser():
@@ -283,9 +307,7 @@ def cli_parser():
 
     parser = argparse.ArgumentParser(
         description='get AUSTAL terrain data',
-        epilog='one of -L, -G, or -U and NAME' +
-               ' are required unless ' +
-               '--list-sources or --force-download is selected')
+        epilog='``NAME`` is required with -L, -G, or -U.')
     parser.add_argument(dest="output", metavar="NAME",
                         help="file name to store data in.", nargs='?'
                         )
@@ -314,6 +336,18 @@ def cli_parser():
                         help='Center position given in UTM Zone 32N' +
                              'coordinates: X = `easting`, ' +
                              'Y = `northing`.')
+    cspars.add_argument('--source-action',
+                        metavar="ACTION",
+                        dest="sources",
+                        nargs=1,
+                        choices=['list', 'download', 'force'],
+                        help='Show/modify sources. ' +
+                             'Available ``ACTION`` values: \n' +
+                             '``list`` schows available sources. \n' +
+                             '``download`` starts downloading the data.\n' +
+                             '``force`` downloads data even if they are ' +
+                             'already available locally.')
+
     parser.add_argument('-s', '--source',
                         metavar="CODE",
                         nargs=1,
@@ -330,16 +364,6 @@ def cli_parser():
                         help='extent of the extracted area in km ' +
                              '(side length of the sqare)' +
                              'Defaults to {}'.format(default_extent))
-    sparser=parser.add_argument_group('sources',
-                                      "source handling commands")
-    sparser.add_argument('--list-sources',
-                        action='store_true',
-                        help='list available terrain sources ' +
-                             'and exit')
-    sparser.add_argument('--force-download',
-                        action='store_true',
-                        help='force dowloadinf the terrain sources ' +
-                             'even if they exist.')
 
     verb = parser.add_mutually_exclusive_group()
     verb.add_argument('--debug', dest='verb', action='store_const',
@@ -366,16 +390,15 @@ def cli() -> dict:
     else:
         logger.setLevel(logging.WARNING)
 
-    if (args.list_sources is False and args.force_download is False and
-            (args.output is None or
-             (args.ll is None and args.gk is None and args.ut is None)
-            )):
+    if (args.output is None and args.source_action is None):
         parser.print_help()
+        logger.critical('NAME is required with -L, -G, -U, -D or -W')
         sys.exit(1)
 
+    res = vars(args)
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
-    logger.debug(format(args))
-    return vars(args)
+    logger.debug(format(res))
+    return res
 
 
 # -------------------------------------------------------------------------
@@ -386,11 +409,8 @@ def main():
     logger.debug("args: %s" % format(args))
 
     global STORAGE_PATH
-    STORAGE_PATH, sources = provide_terrain_data(
-        force_download=args['force_download'])
-    if args["list_sources"]:
-        print(" ".join(sources))
-        return
+    STORAGE_PATH = provide_storage()
+    logger.debug("STORAGE_PATH: %s" % STORAGE_PATH)
 
     if args["gk"] is not None:
         rechts, hoch = [float(x) for x in args['gk']]
@@ -402,7 +422,23 @@ def main():
         lon, lat = [float(x) for x in args['ll']]
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
     else:
-        rechts = hoch = lat = lon = 0
+        # source actions
+        if args["source_action"] == 'list':
+            sources = provide_terrain_data(storage_path=STORAGE_PATH,
+                                           download=False)
+            for x in sources:
+                print('%-8s :' % x)
+                show_notice(STORAGE_PATH, x)
+        elif args["source_action"] == 'download':
+            provide_terrain_data(storage_path=STORAGE_PATH)
+        elif args["source_action"] == 'force':
+            provide_terrain_data(storage_path=STORAGE_PATH,
+                                           force=True)
+        else:
+            raise ValueError("Unknown source action: %s" %
+                             args["source_action"])
+        return
+
     logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
     logger.debug("lon: %s, lat: %s" % (lon, lat))
     size = args['extent'] * 1000  # km -> m
@@ -412,11 +448,7 @@ def main():
     # show notice
     #
     logger.info('reading topography data: %s' % source)
-    print('data copyright notice:')
-    with open(os.path.join(STORAGE_PATH,
-                           "%s.NOTICE.txt" % source), "r") as f:
-        for x in f.readlines():
-            print (x)
+    show_notice(storage_path=STORAGE_PATH, source=source)
     #
     # load dataset
     #

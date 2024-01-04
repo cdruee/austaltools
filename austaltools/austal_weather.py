@@ -158,12 +158,12 @@ def provide_dwd_station(storage_path:str, force=False):
     for aux in files_aux:
         if (not os.path.exists(os.path.join(storage_path, aux))
                 or force is True):
-            urlretrieve("/".join(server, path_aux, aux),
+            urlretrieve("/".join([server, path_aux, aux]),
                         os.path.join(storage_path, aux))
 
 
 # ----------------------------------------------------
-def h_eff(has:float, z0s:list) -> list:
+def h_eff(has:float, z0s:float) -> list:
     """
     Calculate the effective anemometer heights of an anemometer
     mounted at height `has` at a postion
@@ -255,7 +255,7 @@ def read_era5_nc(ncfile, lat, lon):
         # position of largest dims value smaller than tgt
         ii = np.argmax(np.where(dims[ll] <= tgt[ll], dims[ll], -999))
         # add fraction
-        if ii < len(dims[ll]):
+        if ii < len(dims[ll])-1:
             idx[ll] = ii + ((tgt[ll] - dims[ll][ii]) /
                             (dims[ll][ii + 1] - dims[ll][ii]))
 
@@ -729,8 +729,6 @@ def meta_DWD_to_csv(metadata_files, station, path_to_files):
     meta = meta.drop_duplicates()
     #
     return meta
-
-
 # -------------------------------------------------------------------------
 
 
@@ -863,10 +861,8 @@ def cli_parser() -> argparse.ArgumentParser:
     #
     parser = argparse.ArgumentParser(
         description='Get meteorlogical timeseries for use with AUSTAL',
-        epilog='one of -L, -G, -U, -D, or -W and NAME' +
-               ' are required unless ' +
-               '--list-sources or --force-download is selected')
-    parser.add_argument(dest="output", metavar="NAME",
+        epilog='-y and NAME are required with -L, -G, -U, -D, or -W.')
+    parser.add_argument(dest="output", metavar="NAME", nargs='?',
                         help="file name to store data in."
                         )
     cspars = parser.add_mutually_exclusive_group()
@@ -908,14 +904,25 @@ def cli_parser() -> argparse.ArgumentParser:
                         help='Postion of weather station with ' +
                              'World Meteorological Organization (WMO)' +
                              'station ID `NUMBER`')
+    cspars.add_argument('--source-action',
+                        metavar="ACTION",
+                        dest="sources",
+                        nargs=1,
+                        choices=['list', 'download', 'force'],
+                        help='Show/modify sources. '+
+                             'Available ``ACTION`` values: \n' +
+                             '``list`` schows available sources. \n'+
+                             '``download`` starts downloading the data.\n'+
+                             '``force`` downloads data even if they are ' +
+                             'already available locally.')
 
     parser.add_argument('-s', '--source',
                         metavar="CODE",
                         nargs=1,
                         choices=KNOWN_SOURCES,
                         default=default_source,
-                        help='code for the weather data source. ' +
-                             'Known sources are ' +
+                        help='select the source for the weather data. ' +
+                             'Known ``CODE`` values are ' +
                              ' '.join(KNOWN_SOURCES) + ' ' +
                              'Defaults to ' + default_source)
     parser.add_argument('-y', '--year', dest='year',
@@ -944,6 +951,8 @@ def cli_parser() -> argparse.ArgumentParser:
     verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
                       const=logging.INFO, help='show detailed output')
     return parser
+# -------------------------------------------------------------------------
+
 
 def cli() -> dict:
     """
@@ -974,12 +983,21 @@ def cli() -> dict:
         parser.print_help()
         logger.critical('-w is only valid with -D or -W')
         sys.exit(1)
+    if (args.year is None and args.source_action is None):
+        parser.print_help()
+        logger.critical('-y is required with -L, -G, -U, -D or -W')
+        sys.exit(1)
+    if (args.output is None and args.source_action is None):
+        parser.print_help()
+        logger.critical('NAME is required with -L, -G, -U, -D or -W')
+        sys.exit(1)
+
+    res = vars(args)
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
-    logger.debug(format(args))
-    return vars(args)
-
-
+    logger.debug(format(res))
+    return res
 # -------------------------------------------------------------------------
+
 
 def main():
     """
@@ -996,6 +1014,7 @@ def main():
     if args["dwd"] is not None:
         lat, lon, ele, nam = _dwd_stationinfo.dwd_stationinfo(
             args["dwd"], STORAGE_PATH)
+        rechts, hoch, _ = _tools.ll2gk(lat, lon)
     # elif args["wmo"] is not None:
     #     lat, lon, ele, nam = wmo_stationinfo(args["wmo"], path=path)
     elif args["gk"] is not None:
@@ -1008,9 +1027,26 @@ def main():
         lon, lat = [float(x) for x in args['ll']]
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
     else:
-        rechts = hoch = lat = lon = 0
-    if ele is None and args["ele"] is not None:
-        ele = float(args["ele"])
+        # source actions
+        if args["source_action"] == 'list':
+            for x in KNOWN_SOURCES:
+                print('%-8s :' % x)
+        elif args["source_action"] == 'download':
+            provide_dwd_station(STORAGE_PATH, force=False)
+        elif args["source_action"] == 'force':
+            provide_dwd_station(STORAGE_PATH, force=True)
+        else:
+            raise ValueError("Unknown source action: %s" %
+                             args["source_action"])
+        return
+
+    if ele is None:
+        if args["ele"] is not None:
+            ele = float(args["ele"])
+        else:
+            logger.warning('no elevation info. Assuming sea level. ' +
+                           'You should consider providing -e')
+            ele = 0.
     nam = args['output']
     logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
     logger.debug("lon: %s, lat: %s" % (lon, lat))
@@ -1020,7 +1056,7 @@ def main():
     logger.debug("year: %s" % year)
     station = args["station"]
 
-    source = args['source'][0]
+    source = args['source']
     if source == "ERA5":
         obs, z0 = get_ERA5_weather(lat, lon, year, STORAGE_PATH)
     elif source == "DWD":
