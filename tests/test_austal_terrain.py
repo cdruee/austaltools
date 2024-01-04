@@ -34,7 +34,7 @@ class TestCommandLine(unittest.TestCase):
 
     def test_ll(self):
         command = [NAME,
-                   '-L', '6.75', '49.75',
+                   '-L', '49.75', '6.75',
                    TESTFILE.replace('.grid','')]
         out, err, exitcode = capture(command)
         assert exitcode == 0
@@ -65,7 +65,7 @@ class TestCommandLine(unittest.TestCase):
 
     def test_mutex(self):
         command = [NAME,
-                   '-L', '6.75', '49.75',
+                   '-L', '49.75', '6.75',
                    '-U', '337921', '5513264',
                    TESTFILE.replace('.grid', '')]
         out, err, exitcode = capture(command)
@@ -74,7 +74,7 @@ class TestCommandLine(unittest.TestCase):
         if os.path.exists(TESTFILE): os.remove(TESTFILE)
 
     def test_list_sources(self):
-        command = [NAME, '--list-sources',]
+        command = [NAME, '--source-action','list',]
         out, err, exitcode = capture(command)
         assert exitcode == 0
         assert out.decode().strip() != ""

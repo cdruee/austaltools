@@ -860,19 +860,19 @@ def cli_parser() -> argparse.ArgumentParser:
     # command line args
     #
     parser = argparse.ArgumentParser(
-        description='Get meteorlogical timeseries for use with AUSTAL',
+        description='Get meteorological timeseries for use with AUSTAL',
         epilog='-y and NAME are required with -L, -G, -U, -D, or -W.')
     parser.add_argument(dest="output", metavar="NAME", nargs='?',
                         help="file name to store data in."
                         )
     cspars = parser.add_mutually_exclusive_group()
     cspars.add_argument('-L', '--ll',
-                        metavar=("LON", "LAT"),
+                        metavar=("LAT", "LON"),
                         dest="ll",
                         nargs=2,
                         default=None,
-                        help='Center position given as Longitude and ' +
-                             'Latitude, respectively. ' +
+                        help='Center position given as Latitude and ' +
+                             'Longitude, respectively. ' +
                              'This is the default.')
     cspars.add_argument('-G', '--gk',
                         metavar=("X", "Y"),
@@ -983,11 +983,11 @@ def cli() -> dict:
         parser.print_help()
         logger.critical('-w is only valid with -D or -W')
         sys.exit(1)
-    if (args.year is None and args.source_action is None):
+    if (args.year is None and args.sources is None):
         parser.print_help()
         logger.critical('-y is required with -L, -G, -U, -D or -W')
         sys.exit(1)
-    if (args.output is None and args.source_action is None):
+    if (args.output is None and args.sources is None):
         parser.print_help()
         logger.critical('NAME is required with -L, -G, -U, -D or -W')
         sys.exit(1)
@@ -1019,25 +1019,28 @@ def main():
     #     lat, lon, ele, nam = wmo_stationinfo(args["wmo"], path=path)
     elif args["gk"] is not None:
         rechts, hoch = [float(x) for x in args['gk']]
-        lon, lat, _ = _tools.gk2ll(rechts, hoch)
+        lat, lon, _ = _tools.gk2ll(rechts, hoch)
     elif args["ut"] is not None:
-        rechts, hoch = _tools.ut2gk(*[float(x) for x in args['ut']])
-        lon, lat, _ = _tools.gk2ll(rechts, hoch)
+        rechts, hoch, _ = _tools.ut2gk(*[float(x) for x in args['ut']])
+        lat, lon, _ = _tools.gk2ll(rechts, hoch)
     elif args["ll"] is not None:
-        lon, lat = [float(x) for x in args['ll']]
+        lat, lon = [float(x) for x in args['ll']]
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
-    else:
+    elif args["sources"] is not None:
+        source_action = list(args["sources"])[0]
         # source actions
-        if args["source_action"] == 'list':
+        if source_action == 'list':
             for x in KNOWN_SOURCES:
                 print('%-8s :' % x)
-        elif args["source_action"] == 'download':
+        elif source_action == 'download':
             provide_dwd_station(STORAGE_PATH, force=False)
-        elif args["source_action"] == 'force':
+        elif source_action == 'force':
             provide_dwd_station(STORAGE_PATH, force=True)
         else:
             raise ValueError("Unknown source action: %s" %
-                             args["source_action"])
+                             source_action)
+        return
+    else:
         return
 
     if ele is None:
@@ -1049,7 +1052,7 @@ def main():
             ele = 0.
     nam = args['output']
     logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
-    logger.debug("lon: %s, lat: %s" % (lon, lat))
+    logger.debug("lat: %s, lon: %s" % (lat, lon))
     logging.info('selected position: %.2f %.2f %.0f (%s)' %
                  (lat, lon, ele, format(nam)))
     year = int(args['year'][0])

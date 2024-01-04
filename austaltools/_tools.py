@@ -6,6 +6,7 @@ import logging
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import osgeo.osr as osr
+    import osgeo.ogr as ogr
     import numpy as np
     import pandas as pd
     import matplotlib.colors
@@ -118,29 +119,76 @@ def get_buildings(conf):
 
 # -------------------------------------------------------------------------
 
-def gk2ll(rechts, hoch):
+def gk2ll(rechts: float, hoch: float) -> (float, float, float):
+    """
+    Converts Gauss-Krüger rechts/hoch (east/north) coordinates
+    (DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677)
+    into Latitude/longitude  (WGS84, https://epsg.io/4326) position.
+    :param rechts: "Rechtswert" (eastward coordinate) in m
+    :type: float
+    :param hoch: "Hochwert" (northward coordinate) in m
+    :type: float
+    :return: latitude in degrees, longitude in degrees, altitude in meters
+    :rtype: float, float, float
+    """
     transform = osr.CoordinateTransformation(GK, LL)
     return transform.TransformPoint(rechts , hoch)
 
 # -------------------------------------------------------------------------
-def ll2gk(lon, lat):
+def ll2gk(lat:float, lon:float) -> (float, float):
+    """
+    Converts Latitude/longitude  (WGS84, https://epsg.io/4326) position
+    into Gauss-Krüger rechts/hoch (east/north) coordinates
+    (DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677).
+    :param lat: latitude in degrees
+    :type: float
+    :param lon: longitude in degrees
+    :type: float
+    :return: "Rechtswert" (eastward coordinate) in m,
+    "Hochwert" (northward coordinate) in m
+    :rtype: float, float
+    """
     transform = osr.CoordinateTransformation(LL, GK)
-    return transform.TransformPoint(lon, lat)
+    return transform.TransformPoint(lat, lon)
 
 # -------------------------------------------------------------------------
 
 def ut2gk(east, north):
+    """
+    Converts UTM east/north coordinates
+    (ETRS89 / UTM zone 32N, https://epsg.io/25832)
+    into Gauss-Krüger rechts/hoch (east/north) coordinates
+    (DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677).
+    :param east: eastward UTM coordinate in m
+    :type: float
+    :param north: northward UTM coordinate in m
+    :type: float
+    :return: "Rechtswert" (eastward coordinate) in m,
+    "Hochwert" (northward coordinate) in m,
+    Altitude in m
+    :rtype: float, float, float
+    """
     transform = osr.CoordinateTransformation(UT, GK)
     return transform.TransformPoint(east , north)
-
 # ----------------------------------------------------
+
 
 def spheric_distance(lat1, lon1, lat2, lon2):
     """
     Calculate the great circle distance between two points
-    on the earth (specified in decimal degrees)
-    Reference:
+    (specified in decimal degrees) on a spheric earth.
+     Reference:
         https://stackoverflow.com/a/29546836/7657658
+   :param lat1: Position 1 latitude in degrees
+    :type: float
+    :param lon1: Position 1 longitude in degrees
+    :type: float
+    :param lat2: Position 2 latitude in degrees
+    :type: float
+    :param lon2: Position 2 longitude in degrees
+    :type: float
+    :returns: Great circle distance in km
+    :rtype: float
     """
     rlat1 = np.radians(lat1)  # deg -> rad
     rlon1 = np.radians(lon1)  # deg -> rad
@@ -188,6 +236,13 @@ def find_austxt(wdir='.'):
 
 
 def get_austxt(path="austal.txt"):
+    """
+    Get AUSTAL configuration as dict
+    :param path: Configuration file. Defaults to
+    :type: str, optional
+    :return: configuration
+    :rtype: dict
+    """
     logger.info('reading: %s' % path)
     # return config as dict
     conf = {}
@@ -224,6 +279,25 @@ def get_austxt(path="austal.txt"):
 
 
 def put_austxt(path="austal.txt", data={}):
+    """
+    Write AUSTAL configuration file.
+
+    If the file exists, it will be rewritten.
+    Configuration values in the file are kept unless
+    data contains new values.
+
+    A Backup file is created wit a tilde appended to the filename.
+
+    :param path: File name. Defaults to
+    :type: str, optional
+    :param data: Dictionary of configuration data.
+    The keys are the AUSTAL configuration codes,
+    the values are the configuration values as strings or
+    space-separated lists
+    :return: configuration
+    :rtype: dict
+
+    """
     # get config as text
     logger.debug('reading: %s' % path)
     with open(path, 'r') as file:
@@ -274,12 +348,14 @@ def put_austxt(path="austal.txt", data={}):
 def add_arguents_common_plot(parser: argparse.ArgumentParser
                              ) -> argparse.ArgumentParser:
     """
-    add agruments to a parser that are honored by the common_plot
+    Add agruments to a parser that are honored by the common_plot
     funtion
+
     :param parser: parser to add arguments to
     :type parser: argparse.ArgumentParser
     :return: parser with added arguments
     :rtype:  argparse.ArgumentParser
+
     """
     parser.add_argument('-w', '--working-dir',
                         default=DEFAULT_WORKING_DIR,
@@ -332,6 +408,8 @@ def common_plot(args: dict,
                 mark: dict or pd.DataFrame = None,
                 scale: list or tuple = None):
     """
+    Standard plot function for the package.
+
     :param args: dict containing the plot configuration
     :param dat: dictionary of `x`, `y`, and `z` values to plot.
       'x' and 'y' must be lists of float or 1-D ndarray.

@@ -313,12 +313,12 @@ def cli_parser():
                         )
     cspars = parser.add_mutually_exclusive_group()
     cspars.add_argument('-L', '--ll',
-                        metavar=("LON","LAT"),
+                        metavar=("LAT","LON"),
                         dest="ll",
                         nargs=2,
                         default=None,
-                        help='Center position given as Longitude and ' +
-                             'Latitude, respectively. ' +
+                        help='Center position given as Latitude and ' +
+                             'Longitude, respectively. ' +
                              'This is the default.')
     cspars.add_argument('-G', '--gk',
                         metavar=("X","Y"),
@@ -390,7 +390,7 @@ def cli() -> dict:
     else:
         logger.setLevel(logging.WARNING)
 
-    if (args.output is None and args.source_action is None):
+    if (args.output is None and args.sources is None):
         parser.print_help()
         logger.critical('NAME is required with -L, -G, -U, -D or -W')
         sys.exit(1)
@@ -414,29 +414,32 @@ def main():
 
     if args["gk"] is not None:
         rechts, hoch = [float(x) for x in args['gk']]
-        lon, lat, _ = _tools.gk2ll(rechts, hoch)
+        lat, lon, _ = _tools.gk2ll(rechts, hoch)
     elif args["ut"] is not None:
         rechts, hoch, _ = _tools.ut2gk(*[float(x) for x in args['ut']])
-        lon, lat, _ = _tools.gk2ll(rechts, hoch)
+        lat, lon, _ = _tools.gk2ll(rechts, hoch)
     elif args["ll"] is not None:
-        lon, lat = [float(x) for x in args['ll']]
+        lat, lon = [float(x) for x in args['ll']]
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
-    else:
+    elif args["sources"] is not None:
+        source_action = list(args["sources"])[0]
         # source actions
-        if args["source_action"] == 'list':
+        if source_action == 'list':
             sources = provide_terrain_data(storage_path=STORAGE_PATH,
                                            download=False)
             for x in sources:
                 print('%-8s :' % x)
                 show_notice(STORAGE_PATH, x)
-        elif args["source_action"] == 'download':
+        elif source_action == 'download':
             provide_terrain_data(storage_path=STORAGE_PATH)
-        elif args["source_action"] == 'force':
+        elif source_action == 'force':
             provide_terrain_data(storage_path=STORAGE_PATH,
                                            force=True)
         else:
             raise ValueError("Unknown source action: %s" %
-                             args["source_action"])
+            source_action)
+        return
+    else:
         return
 
     logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
