@@ -295,117 +295,14 @@ def show_notice(storage_path, source):
 # -------------------------------------------------------------------------
 
 
-def cli_parser():
+def austal_terrain(args:dict):
     """
-    funtion to parse command line arguments
-    :return: parser object
-    :rtype: argparse.ArgumentParser
-    """
+    Thia is the main working function
 
-    default_dem = KNOWN_DEMS[1]
-    default_extent = 6.
-
-    parser = argparse.ArgumentParser(
-        description='get AUSTAL terrain data',
-        epilog='``NAME`` is required with -L, -G, or -U.')
-    parser.add_argument(dest="output", metavar="NAME",
-                        help="file name to store data in.", nargs='?'
-                        )
-    cspars = parser.add_mutually_exclusive_group()
-    cspars.add_argument('-L', '--ll',
-                        metavar=("LAT","LON"),
-                        dest="ll",
-                        nargs=2,
-                        default=None,
-                        help='Center position given as Latitude and ' +
-                             'Longitude, respectively. ' +
-                             'This is the default.')
-    cspars.add_argument('-G', '--gk',
-                        metavar=("X","Y"),
-                        dest="gk",
-                        nargs=2,
-                        default=None,
-                        help='Center position given in Gauß-Krüger zone 3' +
-                             'coordinates: X = `Rechtswert`, ' +
-                             'Y = `Hochwert`. ')
-    cspars.add_argument('-U', '--utm',
-                        metavar=("X","Y"),
-                        dest="ut",
-                        nargs=2,
-                        default=None,
-                        help='Center position given in UTM Zone 32N' +
-                             'coordinates: X = `easting`, ' +
-                             'Y = `northing`.')
-    cspars.add_argument('--source-action',
-                        metavar="ACTION",
-                        dest="sources",
-                        nargs=1,
-                        choices=['list', 'download', 'force'],
-                        help='Show/modify sources. ' +
-                             'Available ``ACTION`` values: \n' +
-                             '``list`` schows available sources. \n' +
-                             '``download`` starts downloading the data.\n' +
-                             '``force`` downloads data even if they are ' +
-                             'already available locally.')
-
-    parser.add_argument('-s', '--source',
-                        metavar="CODE",
-                        nargs=1,
-                        choices=KNOWN_DEMS,
-                        default=default_dem,
-                        help='code for the source digital elevation ' +
-                             'model (DEM). Known DEMs are: ' +
-                             ' ' . join(KNOWN_DEMS) + ' ' +
-                             'Defaults to ' + default_dem)
-    parser.add_argument('-e', '--extent',
-                        metavar="KM",
-                        nargs=1,
-                        default=default_extent,
-                        help='extent of the extracted area in km ' +
-                             '(side length of the sqare)' +
-                             'Defaults to {}'.format(default_extent))
-
-    verb = parser.add_mutually_exclusive_group()
-    verb.add_argument('--debug', dest='verb', action='store_const',
-                      const=logging.DEBUG, help='show informative output')
-    verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
-                      const=logging.INFO, help='show detailed output')
-    return parser
-
-# -------------------------------------------------------------------------
-
-def cli() -> dict:
-    """
-    command line interface
-
-    :return: conf (dict)
+    :param args: the command line arguments as dict
+    :type args: dict
     """
 
-    parser = cli_parser()
-    args = parser.parse_args()
-
-    # set logging level
-    if args.verb is not None:
-        logger.setLevel(args.verb)
-    else:
-        logger.setLevel(logging.WARNING)
-
-    if (args.output is None and args.sources is None):
-        parser.print_help()
-        logger.critical('NAME is required with -L, -G, -U, -D or -W')
-        sys.exit(1)
-
-    res = vars(args)
-    logger.info(os.path.basename(__file__) + ' version: ' + __version__)
-    logger.debug(format(res))
-    return res
-
-
-# -------------------------------------------------------------------------
-
-
-def main():
-    args = cli()
     logger.debug("args: %s" % format(args))
 
     global STORAGE_PATH
@@ -488,9 +385,120 @@ def main():
     #
     if logger.getEffectiveLevel() > logging.DEBUG:
         os.remove(tif_name)
+    #
+    return
+# =========================================================================
+
+
+def cli_parser():
+    """
+    funtion to parse command line arguments
+    :return: parser object
+    :rtype: argparse.ArgumentParser
+    """
+
+    default_dem = KNOWN_DEMS[1]
+    default_extent = 6.
+
+    parser = argparse.ArgumentParser(
+        description='get AUSTAL terrain data',
+        epilog='``NAME`` is required with -L, -G, or -U.')
+    parser.add_argument(dest="output", metavar="NAME",
+                        help="file name to store data in.", nargs='?'
+                        )
+    cspars = parser.add_mutually_exclusive_group()
+    cspars.add_argument('-L', '--ll',
+                        metavar=("LAT","LON"),
+                        dest="ll",
+                        nargs=2,
+                        default=None,
+                        help='Center position given as Latitude and ' +
+                             'Longitude, respectively. ' +
+                             'This is the default.')
+    cspars.add_argument('-G', '--gk',
+                        metavar=("X","Y"),
+                        dest="gk",
+                        nargs=2,
+                        default=None,
+                        help='Center position given in Gauß-Krüger zone 3' +
+                             'coordinates: X = `Rechtswert`, ' +
+                             'Y = `Hochwert`. ')
+    cspars.add_argument('-U', '--utm',
+                        metavar=("X","Y"),
+                        dest="ut",
+                        nargs=2,
+                        default=None,
+                        help='Center position given in UTM Zone 32N' +
+                             'coordinates: X = `easting`, ' +
+                             'Y = `northing`.')
+    cspars.add_argument('--source-action',
+                        metavar="ACTION",
+                        dest="sources",
+                        nargs=1,
+                        choices=['list', 'download', 'force'],
+                        help='Show/modify sources. ' +
+                             'Available ``ACTION`` values: \n' +
+                             '``list`` schows available sources. \n' +
+                             '``download`` starts downloading the data.\n' +
+                             '``force`` downloads data even if they are ' +
+                             'already available locally.')
+
+    parser.add_argument('-s', '--source',
+                        metavar="CODE",
+                        nargs=1,
+                        choices=KNOWN_DEMS,
+                        default=default_dem,
+                        help='code for the source digital elevation ' +
+                             'model (DEM). Known DEMs are: ' +
+                             ' ' . join(KNOWN_DEMS) + ' ' +
+                             'Defaults to ' + default_dem)
+    parser.add_argument('-e', '--extent',
+                        metavar="KM",
+                        nargs=1,
+                        default=default_extent,
+                        help='extent of the extracted area in km ' +
+                             '(side length of the sqare)' +
+                             'Defaults to {}'.format(default_extent))
+
+    verb = parser.add_mutually_exclusive_group()
+    verb.add_argument('--debug', dest='verb', action='store_const',
+                      const=logging.DEBUG, help='show informative output')
+    verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
+                      const=logging.INFO, help='show detailed output')
+    return parser
+# -------------------------------------------------------------------------
+
+
+def main():
+    """
+    Command line interface.
+    Evaluates the command line arguments from cli_parser()
+    performs additional checks and sets the logging level
+
+    :return: configuration values
+    :rtype: dict
+    """
+    parser = cli_parser()
+    args = vars(parser.parse_args())
+
+    # set logging level
+    if args['verb'] is not None:
+        logger.setLevel(args['verb'])
+    else:
+        logger.setLevel(logging.WARNING)
+
+    if args['output'] is None and args['sources'] is None:
+        parser.print_help()
+        logger.critical('NAME is required with -L, -G, -U, -D or -W')
+        sys.exit(1)
+
+    logger.info(os.path.basename(__file__) + ' version: ' + __version__)
+    #
+    # call the main working function
+    austal_terrain(args)
 
 
 # -------------------------------------------------------------------------
-
+# initialize: call main routine
 if __name__ == "__main__":
     main()
