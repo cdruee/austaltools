@@ -36,6 +36,6 @@ class TestCommandLine(unittest.TestCase):
                    '-c', 'tests']
         out, err, exitcode = capture(command)
         assert exitcode == 0
-        # assert err == b''
-        capture(['diff', '-w', 'tests/zeitreihe.dmna', 'tests/test.dmna'])
+        out, err, exitcode = capture(['diff', '-w', 'tests/zeitreihe.dmna', 'tests/test.dmna'])
+        assert exitcode == 0
         os.remove('tests/zeitreihe.dmna')

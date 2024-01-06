@@ -319,7 +319,7 @@ def austal_terrain(args:dict):
         lat, lon = [float(x) for x in args['ll']]
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
     elif args["sources"] is not None:
-        source_action = list(args["sources"])[0]
+        source_action = args["sources"]
         # source actions
         if source_action == 'list':
             sources = provide_terrain_data(storage_path=STORAGE_PATH,
@@ -341,7 +341,7 @@ def austal_terrain(args:dict):
 
     logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
     logger.debug("lon: %s, lat: %s" % (lon, lat))
-    size = args['extent'] * 1000  # km -> m
+    size = float(args['extent']) * 1000  # km -> m
     logger.debug("size: %s m" % size)
     source = args['source']
     #
@@ -434,7 +434,7 @@ def cli_parser():
     cspars.add_argument('--source-action',
                         metavar="ACTION",
                         dest="sources",
-                        nargs=1,
+                        nargs=None,
                         choices=['list', 'download', 'force'],
                         help='Show/modify sources. ' +
                              'Available ``ACTION`` values: \n' +
@@ -445,7 +445,7 @@ def cli_parser():
 
     parser.add_argument('-s', '--source',
                         metavar="CODE",
-                        nargs=1,
+                        nargs=None,
                         choices=KNOWN_DEMS,
                         default=default_dem,
                         help='code for the source digital elevation ' +
@@ -454,7 +454,7 @@ def cli_parser():
                              'Defaults to ' + default_dem)
     parser.add_argument('-e', '--extent',
                         metavar="KM",
-                        nargs=1,
+                        nargs=None,
                         default=default_extent,
                         help='extent of the extracted area in km ' +
                              '(side length of the sqare)' +

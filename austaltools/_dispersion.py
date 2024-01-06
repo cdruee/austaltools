@@ -151,7 +151,7 @@ class StabiltyClass():
 
     def get_bound(self, num, z0, inverted=False):
         if num not in range(self.count - 1):
-            print(self.count)
+            # print(self.count)
             raise ValueError('no boundary number #%i' % int(num))
         il = self._getval(z0, self._bounds[num])
         if inverted:

@@ -259,7 +259,7 @@ def read_era5_nc(ncfile, lat, lon):
             idx[ll] = ii + ((tgt[ll] - dims[ll][ii]) /
                             (dims[ll][ii + 1] - dims[ll][ii]))
 
-    logging.info('idx: %s' % str(idx))
+    logging.debug('idx: %s' % str(idx))
     pos = [None, None, None]
     if np.modf(idx['lon'])[0] <= 0.5:
         if np.modf(idx['lat'])[0] <= 0.5:
@@ -285,7 +285,7 @@ def read_era5_nc(ncfile, lat, lon):
             pos[2] = (int(idx['lon'] + 1), int(idx['lat']))
 
     pi, pj = pos[0]
-    logging.info(str((pi, pj, dims['lon'][pi], dims['lat'][pj])))
+    logging.debug(str((pi, pj, dims['lon'][pi], dims['lat'][pj])))
 
     if INTER_VARIANT == 'barycentric':
         # calculate barycentric weights so that
@@ -865,7 +865,7 @@ def austal_weather(args):
         lat, lon = [float(x) for x in args['ll']]
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
     elif args["sources"] is not None:
-        source_action = list(args["sources"])[0]
+        source_action = args["sources"]
         # source actions
         if source_action == 'list':
             for x in KNOWN_SOURCES:
@@ -893,7 +893,7 @@ def austal_weather(args):
     logger.debug("lat: %s, lon: %s" % (lat, lon))
     logging.info('selected position: %.2f %.2f %.0f (%s)' %
                  (lat, lon, ele, format(nam)))
-    year = int(args['year'][0])
+    year = int(args['year'])
     logger.debug("year: %s" % year)
     station = args["station"]
 
@@ -1021,9 +1021,8 @@ def austal_weather(args):
     # and bring dd to range 0..360
     data['dd'] = np.remainder(
         data['dd'].mask(data['ff'] < 1., other=0.), 360.)
-    print(data['dd'][[x == False for x in (np.isfinite(data['dd']) & data['dd'] >= 5.)]])
-    data['ff'] = data['ff'].where(
-        np.isfinite(data['dd']) & data['dd'] > 0., other=0.)
+    data['ff'] = data['ff'].mask(
+        np.isnan(data['dd']) | data['dd'] < 5., other=0.)
 
     #    print(pd.crosstab(data['kmc'],
     #                      data['pgc'],
@@ -1121,7 +1120,7 @@ def cli_parser() -> argparse.ArgumentParser:
     cspars.add_argument('--source-action',
                         metavar="ACTION",
                         dest="sources",
-                        nargs=1,
+                        nargs=None,
                         choices=['list', 'download', 'force'],
                         help='Show/modify sources. '+
                              'Available ``ACTION`` values: \n' +
@@ -1132,7 +1131,7 @@ def cli_parser() -> argparse.ArgumentParser:
 
     parser.add_argument('-s', '--source',
                         metavar="CODE",
-                        nargs=1,
+                        nargs=None,
                         choices=KNOWN_SOURCES,
                         default=default_source,
                         help='select the source for the weather data. ' +
@@ -1141,7 +1140,7 @@ def cli_parser() -> argparse.ArgumentParser:
                              'Defaults to ' + default_source)
     parser.add_argument('-y', '--year', dest='year',
                         metavar='YEAR',
-                        nargs=1,
+                        nargs=None,
                         help='year of interest [%04i]' % default_year)
 
     parser.add_argument('-e', '--elevation', dest='ele',
@@ -1206,7 +1205,6 @@ def main():
         logger.critical('NAME is required with -L, -G, -U, -D or -W')
         sys.exit(1)
 
-    res = vars(args)
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
     #
     # call the main working function

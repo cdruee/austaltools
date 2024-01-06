@@ -37,15 +37,15 @@ def cli_parser():
         description='Convenience command to produce AUSTAL input')
     parser.add_argument(dest="lat", metavar="LAT",
                         help='Center position latitude',
-                        nargs='?'
+                        nargs=None
                         )
     parser.add_argument(dest="lon", metavar="LON",
                         help='Center position longitude',
-                        nargs='?'
+                        nargs=None
                         )
     parser.add_argument(dest="output", metavar="NAME",
                         help="Stem for file names.",
-                        nargs='?'
+                        nargs=None
                         )
     verb = parser.add_mutually_exclusive_group()
     verb.add_argument('--debug', dest='verb', action='store_const',
@@ -83,19 +83,21 @@ def main():
         w_args[x] = None
     w_args['ll'] = [args['lat'], args['lon']]
     w_args['source'] = 'ERA5'
-    w_args['year'] = ['2000']
+    w_args['year'] = 2000
     w_args['prec'] = False
     w_args['station'] = None
     # call program
     austal_weather.austal_weather(w_args)
     # select one output file, simply file name, remove the rest
+    pick = 'kms'
     file_to_pick = ("%s_%s_%04i_%s.%s" %
-                    (w_args['args'].lower(), w_args['output'].lower(),
-                     int(w_args['year'][0]), 'kms', 'akterm'))
+                    (w_args['source'].lower(), w_args['output'].lower(),
+                     int(w_args['year']), pick, 'akterm'))
+    rename = '%s.akterm' % args['output']
+    logger.info('picking output file: %s -> %s' % (file_to_pick, rename))
     os.rename(file_to_pick, '%s.akterm' % args['output'])
-    for x in  glob.glob("%s_%s_%04i_*.%s" %
-                        (w_args['args'].lower(), w_args['output'].lower(),
-                         int(w_args['year'][0]), 'akterm')):
+    for x in  glob.glob(file_to_pick.replace(pick, '*')):
+        logger.info('discarding output file: %s' % x)
         os.remove(x)
     #
     # call terrain
