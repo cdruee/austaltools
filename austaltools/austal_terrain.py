@@ -36,7 +36,7 @@ logger = logging.getLogger()
 
 # -------------------------------------------------------------------------
 
-KNOWN_DEMS = ["GTOPO30", "DGM25-RP", "GLO-30"]
+KNOWN_DEMS = ["DGM25-RP", "GLO-30", "GTOPO30"]
 STORAGE_LOCATIONS = _tools.DEFAULT_DATA_DIRS
 STORAGE_DIR = "terrain"
 STORAGE_PATH = None      # will be filled lazy

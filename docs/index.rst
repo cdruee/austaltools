@@ -5,6 +5,9 @@
 Welcome to austaltools documentation!
 *************************************
 
+This documentation is currently being built up.
+Please do not expect it to be complete.
+
 =======
 General
 =======
@@ -15,6 +18,26 @@ General
 ****************************************
 Provide input for AUSTAL (or AUSTAL2000)
 ****************************************
+
+============
+austal-input
+============
+
+This is the most simple way to create input data for AUSTAL.
+For example::
+
+  austal-input 49.75 6.75 Kundelbach
+
+will produce the files ``Kundelbach.gird`` and  ``Kundelbach.akterm``.
+It calls ``austal-weather`` and ``austal-terrain`` internally,
+selcting standard options (year 2000, default sources).
+
+Its full command-line options are as the following:
+
+.. argparse::
+   :module: austaltools.austal_input
+   :func: cli_parser
+   :prog: austal-input
 
 =======
 Weather
