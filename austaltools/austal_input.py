@@ -17,10 +17,21 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     except ImportError:
         import austal_weather, austal_terrain
 
+    try:
+        from ._tools import ll2gk
+    except ImportError:
+        from _tools import ll2gk
+
+    try:
+        from . import _corine
+    except ImportError:
+        import _corine
+
 try:
     from ._version import __version__, __title__
 except ImportError:
     from _version import __version__, __title__
+
 
 logging.basicConfig()
 logger = logging.getLogger()
@@ -107,10 +118,28 @@ def main():
     for x in ['gk', 'ut', 'sources', 'ele']:
         t_args[x] = None
     t_args['ll'] = [args['lat'], args['lon']]
-    t_args['source'] = 'GTOPO30'
+    t_args['source'] = "DGM25-RP"
     t_args['extent'] = 6.
     # call program
     austal_terrain.austal_terrain(t_args)
+    # remove confusing extra files
+    for x in ['grid.aux.xml', 'prj']:
+        file_to_remove = args['output'] + '.' + x
+        if os.path.isfile(file_to_remove):
+            os.remove(file_to_remove)
+    #
+    # write coordinates to txt file
+    #
+    with open(args['output'] + '.txt', 'w') as f:
+        lat, lon = float(args['lat']), float(args['lon'])
+        f.write('%s %s : Reference Position\n' % (lat, lon))
+        x, y, _ = ll2gk(lat, lon)
+        f.write('%.0f %.0f : Gauss-Krueger Coordinates\n' % (x, y))
+        z0 = _corine.mean_roughness(x, y, 20.)
+        f.write('%.1f : z0 at position of wind measurement\n' % z0)
+
+
+
 
 # -------------------------------------------------------------------------
 # initialize: call main routine

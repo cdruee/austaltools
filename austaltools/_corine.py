@@ -38,7 +38,7 @@ REST_API_URL = ('https://image.discomap.eea.europa.eu/' +
                 'arcgis/rest/services/Corine/CLC2018_WM/MapServer/0/')
 # ----------------------------------------------------
 
-def query_corine_class(lon: float, lat: float) -> int:
+def query_corine_class(lat: float, lon: float) -> int:
     """
     query CORINE class number for single position
 
@@ -64,9 +64,13 @@ def query_corine_class(lon: float, lat: float) -> int:
     #print(res.reason)
 
     res_text = response.read().decode()
-    # print(res_text)
+    #print(res_text)
     res_data = json.loads(res_text)
-    result = res_data['features'][0]['attributes']['Code_18']
+    features = res_data['features']
+    if features is not None and len(features) > 0:
+        result = features[0]['attributes']['Code_18']
+    else:
+        result = 0
     logger.debug('... CORINE class: ' + result)
     return int(result)
 
@@ -108,7 +112,7 @@ def mean_roughness(xg: float, yg: float, h: float, fac=10.) -> float:
     z0_values = []
     for x,y in points:
         lat, lon, _ = _tools.gk2ll(x,y)
-        code = query_corine_class(lon, lat)
+        code = query_corine_class(lat, lon)
         if code in CORINE_CLASSES_ROUGHNESS_LBM_DE.keys():
             z0 = CORINE_CLASSES_ROUGHNESS_LBM_DE[code]
             z0_values.append(z0)

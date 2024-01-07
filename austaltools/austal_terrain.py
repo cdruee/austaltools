@@ -397,7 +397,7 @@ def cli_parser():
     :rtype: argparse.ArgumentParser
     """
 
-    default_dem = KNOWN_DEMS[1]
+    default_dem = KNOWN_DEMS[0]
     default_extent = 6.
 
     parser = argparse.ArgumentParser(
