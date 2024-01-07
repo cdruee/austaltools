@@ -269,9 +269,12 @@ def do_fill(action, path, cycle_file, source_id,
     zeitreihe.write(name)
 
 
-# noinspection SpellCheckingInspection
-def main():
-    # defaults
+def cli_parser():
+    """
+    funtion to parse command line arguments
+    :return: parser object
+    :rtype: argparse.ArgumentParser
+    """
     default = {'hour-begin': 8,
                'hour-end': 16,
                'cycle-file': 'cycle.yaml',
@@ -345,6 +348,12 @@ def main():
                         help='directory where "zeitreihe.dmna" is stored '
                              '[%s]' % default['path'],
                         default=default['path'])
+    return parser
+
+# noinspection SpellCheckingInspection
+def main():
+    # defaults
+    parser=cli_parser()
     args = parser.parse_args()
     #
     # logging level

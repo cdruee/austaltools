@@ -401,7 +401,8 @@ def cli_parser():
     default_extent = 6.
 
     parser = argparse.ArgumentParser(
-        description='get AUSTAL terrain data',
+        description='Extract surface topography for AUSTAL ' +
+                    'from various sources',
         epilog='``NAME`` is required with -L, -G, or -U.')
     parser.add_argument(dest="output", metavar="NAME",
                         help="file name to store data in.", nargs='?'

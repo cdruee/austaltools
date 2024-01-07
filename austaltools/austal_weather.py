@@ -1073,7 +1073,8 @@ def cli_parser() -> argparse.ArgumentParser:
     # command line args
     #
     parser = argparse.ArgumentParser(
-        description='Get meteorological timeseries for use with AUSTAL',
+        description='Extract amospheric time series for AUSTAL ' +
+                    'from various sources',
         epilog='-y and NAME are required with -L, -G, -U, -D, or -W.')
     parser.add_argument(dest="output", metavar="NAME", nargs='?',
                         help="file name to store data in."
