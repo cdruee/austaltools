@@ -27,21 +27,16 @@ logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 DEFAULT_WORKING_DIR = "."
 DEFAULT_COLORMAP = "cividis"
 
-
 # -------------------------------------------------------------------------
-def cli() -> dict:
-    """
-    command line interface
 
-    :return: conf (dict)
-    """
 
+def cli_parser():
     parser = argparse.ArgumentParser(
-        description='plot AUSTAL topography steepness')
+        description='Plot AUSTAL topography steepness')
     parser = _tools.add_arguents_common_plot(parser)
     parser.add_argument('-g', '--grid',
                         metavar='ID',
-                        nargs = '?',
+                        nargs='?',
                         default=0,
                         help='ID (number) of the grid to evaluate. '
                              'Defaults to 0')
@@ -50,25 +45,22 @@ def cli() -> dict:
                       const=logging.DEBUG, help='show informative output')
     verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
                       const=logging.INFO, help='show detailed output')
-    args = parser.parse_args()
-    #
-    # logging level
-    #
-    if args.verb is not None:
-        logger.setLevel(args.verb)
-    else:
-        logger.setLevel(logging.WARNING)
-    logger.info(os.path.basename(__file__) + ' version: ' + __version__)
-
-    logger.debug(format(args))
-    return vars(args)
-
-
+    return parser
 # -------------------------------------------------------------------------
 
 
 def main():
-    args = cli()
+    parser = cli_parser()
+    args = vars(parser.parse_args())
+    #
+    # logging level
+    #
+    if args["verb"] is not None:
+        logger.setLevel(args["verb"])
+    else:
+        logger.setLevel(logging.WARNING)
+    logger.info(os.path.basename(__file__) + ' version: ' + __version__)
+
     logger.debug("args: %s" % format(args))
 
     # try to load topography

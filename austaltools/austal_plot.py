@@ -40,6 +40,7 @@ def parse_austal_outputname(filename: str):
       - kind: type of output (load, stdev or index)
       - grid: number of grid. 0 if not given / no staggered grids.
     :rtype: dict
+
     """
     # strip path and extension
     name = os.path.splitext(os.path.basename(filename))[0]
@@ -92,11 +93,12 @@ def parse_austal_outputname(filename: str):
 
 
 # -------------------------------------------------------------------------
-def cli() -> dict:
+def cli_parser() -> argparse.ArgumentParser:
     """
     command line interface
 
-    :return: conf (dict)
+    :return: parser
+    :rtype: argparse.ArgumentParser
     """
 
     parser = argparse.ArgumentParser(
@@ -121,7 +123,15 @@ def cli() -> dict:
                       const=logging.DEBUG, help='show informative output')
     verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
                       const=logging.INFO, help='show detailed output')
-    args = parser.parse_args()
+    return parser
+
+
+# -------------------------------------------------------------------------
+
+
+def main():
+    parser = cli_parser()
+    args = vars(parser.parse_args())
 
     # set logging level
     if args.verb is not None:
@@ -130,15 +140,6 @@ def cli() -> dict:
         logger.setLevel(logging.WARNING)
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
 
-    logger.debug(format(args))
-    return vars(args)
-
-
-# -------------------------------------------------------------------------
-
-
-def main():
-    args = cli()
     logger.debug("args: %s" % format(args))
 
     # get the model configuration, if the file is present

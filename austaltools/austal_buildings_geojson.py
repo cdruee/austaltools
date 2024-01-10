@@ -34,15 +34,15 @@ def find_austxt(wdir='.'):
             break
     else:
         raise IOError('austal.txt or austal200.txt not found')
-    logger.debug('austal config: %s' % ausname)
+    logger.debug('austal argsig: %s' % ausname)
     return ausname
 
 # -------------------------------------------------------------------------
 
 def get_austxt(path="austal.txt"):
     logger.info('reading: %s' % path)
-    # return config as dict
-    conf = {}
+    # return argsig as dict
+    args = {}
     with open(path, 'r') as file:
         for line in file:
             # In jeder Zeile Kommentare entfernen
@@ -60,23 +60,23 @@ def get_austxt(path="austal.txt"):
             except ValueError:
                 values = shlex.split(val)
             # in Liste abspeichern (Zahlen als Zahlen, Strings als Strings)
-            conf[key] = values
+            args[key] = values
     # fehlende Werte mit default 0 setzen
     for x in ['xq', 'yq', 'aq', 'bq', 'cq', 'wq',
               'xb', 'yb', 'ab', 'bb', 'cb', 'wb',
               'cb']:
-        if x not in conf:
-            conf[x] = [0.]
+        if x not in args:
+            args[x] = [0.]
     # fehlende Werte mit anderen defaults setzen
-    if 'hq' not in conf:
-        conf['hq'] = [20.]
+    if 'hq' not in args:
+        args['hq'] = [20.]
     # liste zurückgeben
-    return conf
+    return args
 
 # -------------------------------------------------------------------------
 
 def put_austxt(path="austal.txt", data={}):
-    # get config as text
+    # get argsig as text
     logger.debug('reading: %s' % path)
     with open(path, 'r') as file:
         lines = file.readlines()
@@ -139,7 +139,8 @@ def dist(p1, p2):
 
 # -------------------------------------------------------------------------
 
-def main():
+
+def cli_parser():
     # defaults
     default = {'wdir': '.',
                'zvalue': 'height',
@@ -164,30 +165,38 @@ def main():
                         help='directory where "zeitreihe.dmna" is stored '
                              '[%s]' % default['wdir'],
                         default=default['wdir'])
+    return parser
+# -------------------------------------------------------------------------
 
-    args = parser.parse_args()
+
+def main():
+    """
+    Main entry point
+    """
+    parser = cli_parser()
+    args = vars(parser.parse_args())
     #
     # logging level
     #
-    if args.verb is not None:
-        logger.setLevel(args.verb)
+    if args["verb"] is not None:
+        logger.setLevel(args["verb"])
     else:
         logger.setLevel(logging.WARNING)
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
 
-    conf = vars(args)
-    zvalue = conf['zvalue']
+    
+    zvalue = args['zvalue']
 
-    ausfile = find_austxt(conf['wdir'])
+    ausfile = find_austxt(args['wdir'])
     austxt = get_austxt(ausfile)
     gx = austxt['gx'][0]  # gx = 3333401
     gy = austxt['gy'][0]  # gy = 5514280
     pg = np.array((gx, gy))
 
-    if os.path.sep in conf['file']:
-        buildings_file = conf['file']
+    if os.path.sep in args['file']:
+        buildings_file = args['file']
     else:
-        buildings_file = os.path.join(conf['wdir'], conf['file'])
+        buildings_file = os.path.join(args['wdir'], args['file'])
     logger.info('reading: %s' % buildings_file)
     with open(buildings_file) as f:
         data = json.load(f)
@@ -256,8 +265,8 @@ def main():
         data[k] = ' '.join(['{:7.1f}'.format(x[k]) for x in buildings])
 
     put_austxt(ausfile, data=data)
-
 # -------------------------------------------------------------------------
+
 
 if __name__ == "__main__":
     main()

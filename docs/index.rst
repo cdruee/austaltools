@@ -12,7 +12,8 @@ Please do not expect it to be complete.
 General
 =======
 
-This module conatins tools for use with Langrangian dispersion model AUSLTA (AUSbreitungsmodell nach TA Luft)
+This module conatins tools for use with Langrangian dispersion model
+AUSTAL (AUSbreitungsmodell nach TA Luft)
 
 Installation:
 -------------
@@ -25,10 +26,10 @@ Command-line scripts:
 
 The module contains the following scripts
 
-``austal-buildings-geojson``
+:doc:`austal-buildings-geojson`
     Read buildings from a Geojson file and put them into ``austal.txt``
 
-``austal_eap``
+:doc:`austal-eap`
     Determine EAP ("Ersatz-AnemometerPosition") accoring to VDI norm
 
 `austal-input`_
@@ -37,16 +38,16 @@ The module contains the following scripts
 :doc:`austal-fill-time-series`
     Fill source-strength columns in "zeitreihe.dmna"
 
-``austal_steepness``
+:doc:`austal-steepness`
     Determine steepness of the model area
 
-``austal-terrain``
+:doc:`austal-terrain`
     Extract surface topography for AUSTAL from various sources
 
-``austal_plot``
+:doc:`austal-plot`
     Simple baseline data plot
 
-``austal-weather``
+:doc:`austal-weather`
     Extract amospheric time series for AUSTAL from various sources
 
 Licenses
@@ -93,26 +94,6 @@ Its full command-line options are as the following:
    :module: austaltools.austal_input
    :func: cli_parser
    :prog: austal-input
-
-=======
-Weather
-=======
-
-.. argparse::
-   :module: austaltools.austal_weather
-   :func: cli_parser
-   :prog: austal-weather
-
-=======
-Terrain
-=======
-
-.. argparse::
-   :module: austaltools.austal_terrain
-   :func: cli_parser
-   :prog: austal-terrain
-
-
 
 ==============
 Developer info

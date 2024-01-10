@@ -143,6 +143,7 @@ def read_wind(file_info, path='.', grid=0):
     :param grid: index of the grid for which to read the wind data
     :return: u_grid, v_grid, axes
     :rtype: tuple of (np.ndarray, np,dnarray, dict of lists of float)
+
     """
     if grid not in file_info['grid']:
         raise ValueError('grid %i not available in data' % grid)
@@ -188,6 +189,7 @@ def read_heff(working_dir):
     where austal.txt resides
     :return: effective anemometer height
     :rtype float
+
     """
     austxt = _tools.find_austxt(working_dir)
     conf = _tools.get_austxt(austxt)
@@ -728,6 +730,7 @@ def read_ref(file, levels, dirs):
     :return: u-reference wind and v-reference wind,
     dimensions: levels, stability classes, wind directions
     :rtype numpy.ndarray, numpy.ndarray
+
     """
     logger.debug("reading wind reference file")
     ndir = len(dirs)
@@ -845,7 +848,8 @@ def print_report(args, g, gd, gf, eaps, g_upper, axes):
             print('                                          g =%9.2f' % g[i,j,lvl])
             print('...............................................................................................')
 
-def cli():
+
+def cli_parser():
     # defaults
     default = {
     }
@@ -900,24 +904,24 @@ def cli():
                       const=logging.DEBUG, help='show informative output')
     verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
                       const=logging.INFO, help='show detailed output')
-    args = parser.parse_args()
-    #
-    # logging level
-    #
-    if args.verb is not None:
-        logger.setLevel(args.verb)
-    else:
-        logger.setLevel(logging.WARNING)
-    logger.info(os.path.basename(__file__) + ' version: ' + __version__)
-
-    logger.debug(format(args))
-    return vars(args)
+    return parser
 
 
 def main():
     #
     # process user interface
-    args = cli()
+    parser = cli_parser()
+    args = vars(parser.parse_args())
+    #
+    # logging level
+    #
+    if args["verb"] is not None:
+        logger.setLevel(args["verb"])
+    else:
+        logger.setLevel(logging.WARNING)
+    logger.info(os.path.basename(__file__) + ' version: ' + __version__)
+
+    logger.debug(format(args))
     #
     #
 
