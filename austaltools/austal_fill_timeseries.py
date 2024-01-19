@@ -3,6 +3,7 @@
 import argparse
 import os
 import logging
+import sys
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import pandas as pd
@@ -13,9 +14,12 @@ try:
     from ._version import __version__
 except ImportError:
     from _version import __version__
+# ----------------------------------------------------
 
 logging.basicConfig()
 logger = logging.getLogger()
+# ----------------------------------------------------
+
 
 def parse_time_string(string):
     logger.debug('parse_time_string: %s' % string)
@@ -52,6 +56,7 @@ def parse_time_string(string):
     else:
         res = discrete
     return res
+# ----------------------------------------------------
 
 
 def parse_time_unit(string):
@@ -66,6 +71,7 @@ def parse_time_unit(string):
     else:
         raise ValueError('parse unit: unknown: %s' % string)
     return period
+# ----------------------------------------------------
 
 
 def parse_time(info, name='', multi=True):
@@ -83,6 +89,7 @@ def parse_time(info, name='', multi=True):
         else:
             count = count[0]
     return count, unit
+# ----------------------------------------------------
 
 
 def parse_cycle(c_id, c_info, time, dt):
@@ -172,6 +179,7 @@ def parse_cycle(c_id, c_info, time, dt):
             cycle[x + dx] = y
 
     return source, cycle
+# ----------------------------------------------------
 
 
 # noinspection SpellCheckingInspection
@@ -208,65 +216,7 @@ def get_cycle(file, time):
         res = res.drop(c_id, axis=1)
 
     return res
-
-
-# noinspection SpellCheckingInspection
-def do_fill(action, path, cycle_file, source_id,
-            output, hour_begin, hour_end, holiday_week, holiday_month,
-            **kwargs):
-    if path is None:
-        raise ValueError('path not given')
-    name = os.path.join(path, 'zeitreihe.dmna')
-    zeitreihe = readmet.dmna.DataFile(file=name)
-    if zeitreihe.filetype != 'timeseries':
-        raise ValueError('is not dmna timeseries format: %s' % name)
-    logger.info('working on file: %s' % name)
-    variables = zeitreihe.variables
-    sids = []
-    for x in variables:
-        if x not in ['te', 'ra', 'ua', 'lm']:
-            sids.append(x)
-    values = zeitreihe.data
-    if action == 'list':
-        logger.info('listing sources in file')
-        print('source IDs: ' + ' '.join(sids))
-        return
-    elif action in ['week-5', 'week-6']:
-        logger.info('filling work weeks for source: %s' % source_id)
-        if source_id not in sids:
-            if len(sids) == 1:
-                source_id = sids[0]
-            else:
-                raise ValueError('source ID not in file: %s' % source_id)
-        if None in [hour_begin, hour_end, output]:
-            raise ValueError('hour_begin, hour_end, or output is None')
-        if holiday_month is None:
-            holiday_month = []
-        if holiday_week is None:
-            holiday_week = []
-        time = pd.to_datetime(values['te'])
-        for i, t in enumerate(time):
-            if t.month in holiday_month:
-                continue
-            if t.week in holiday_week:
-                continue
-            if ((action == 'week-5' and 0 <= t.weekday() < 5) or
-                    (action == 'week-6' and 0 <= t.weekday() < 6)):
-                if hour_begin <= t.hour <= hour_end:
-                    values.loc[i, source_id] = float(output[0])
-    elif action in ['cycle']:
-        cyclefile = os.path.join(path, cycle_file)
-        logger.info('filling cycles from: %s' % cyclefile)
-        cycle = get_cycle(cyclefile, zeitreihe.data['te'])
-        for c in cycle.columns:
-            if c in values.columns:
-                values[c] = cycle[c].values
-            else:
-                raise ValueError('source not in zeitreihe: %s' % c)
-    else:
-        raise ValueError('unknown action: %s' % action)
-    zeitreihe.data = values
-    zeitreihe.write(name)
+# ----------------------------------------------------
 
 
 def cli_parser():
@@ -331,7 +281,7 @@ def cli_parser():
                                      for x in default['holiday-month']]) +
                            ']',
                       default=default['holiday-month'])
-    parser.add_argument('-f', '--cycle-file', nargs=1,
+    parser.add_argument('-f', '--cycle-file',
                         help='emission-cycle description file. ' +
                              'only relevant with -c. ' +
                              '[%s]' % default['cycle-file'],
@@ -342,29 +292,90 @@ def cli_parser():
                         default=None)
     parser.add_argument('-o', '--output', nargs=1,
                         help='output of the source in g/s. ' +
-                             'Only relevant with -w or -W. ',
+                             '-o is relevant with -w or -W. ',
                         default=None)
     parser.add_argument('path', metavar='PATH', nargs='?',
                         help='directory where "zeitreihe.dmna" is stored '
                              '[%s]' % default['path'],
                         default=default['path'])
     return parser
+# ----------------------------------------------------
+
 
 # noinspection SpellCheckingInspection
 def main():
     # defaults
     parser=cli_parser()
-    args = parser.parse_args()
+    args = vars(parser.parse_args())
+    logger.debug('args: %s' % args)
     #
     # logging level
     #
-    if args.verb is not None:
-        logger.setLevel(args.verb)
+    if args["verb"] is not None:
+        logger.setLevel(args["verb"])
     else:
         logger.setLevel(logging.WARNING)
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
 
-    do_fill(**vars(args))
+
+    if args["path"] is None:
+        raise ValueError('PATH not given')
+    name = os.path.join(args["path"], 'zeitreihe.dmna')
+    zeitreihe = readmet.dmna.DataFile(file=name)
+    if zeitreihe.filetype != 'timeseries':
+        raise ValueError('is not dmna timeseries format: %s' % name)
+    logger.info('working on file: %s' % name)
+    variables = zeitreihe.variables
+    sids = []
+    for x in variables:
+        if x not in ['te', 'ra', 'ua', 'lm']:
+            sids.append(x)
+    values = zeitreihe.data
+    if args["action"] == 'list':
+        logger.info('listing sources in file')
+        print('source IDs: ' + ' '.join(sids))
+        return
+    elif args["action"] in ['week-5', 'week-6']:
+        logger.info('filling work weeks for source: %s' % args["source_id"])
+        if args["output"] is None:
+            sys.tracebacklimit = 0
+            raise ValueError('-o is required with -w or -W')
+        if args["source_id"] not in sids:
+            if len(sids) == 1:
+                args["source_id"] = sids[0]
+            else:
+                sys.tracebacklimit = 0
+                raise ValueError('source ID not in file: %s' % args["source_id"])
+        if None in [args["hour_begin"], args["hour_end"], args["output"]]:
+            raise ValueError('hour_begin, hour_end, or output is None')
+        if args["holiday_month"] is None:
+            args["holiday_month"] = []
+        if args["holiday_week"] is None:
+            args["holiday_week"] = []
+        time = pd.to_datetime(values['te'])
+        for i, t in enumerate(time):
+            if t.month in args["holiday_month"]:
+                continue
+            if t.week in args["holiday_week"]:
+                continue
+            if ((args["action"] == 'week-5' and 0 <= t.weekday() < 5) or
+                    (args["action"] == 'week-6' and 0 <= t.weekday() < 6)):
+                if args["hour_begin"] <= t.hour <= args["hour_end"]:
+                    values.loc[i, args["source_id"]] = float(args["output"][0])
+    elif args["action"] in ['cycle']:
+        cyclefile = os.path.join(args["path"], args["cycle_file"])
+        logger.info('filling cycles from: %s' % cyclefile)
+        cycle = get_cycle(cyclefile, zeitreihe.data['te'])
+        for c in cycle.columns:
+            if c in values.columns:
+                values[c] = cycle[c].values
+            else:
+                raise ValueError('source not in zeitreihe: %s' % c)
+    else:
+        raise ValueError('unknown action: %s' % args["action"])
+    zeitreihe.data = values
+    zeitreihe.write(name)
+# ----------------------------------------------------
 
 
 if __name__ == "__main__":

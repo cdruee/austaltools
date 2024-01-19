@@ -22,7 +22,7 @@ https://druee.gitlab-pages.uni-trier.de/austaltools/
 ``austal-buildings-geojson``
     Read buildings from a Geojson file and put them into ``austal.txt``
 
-``austal_eap``
+``austal-eap``
     Determine EAP ("Ersatz-AnemometerPosition") accoring to VDI norm
 
 ``austal-input``
@@ -31,13 +31,13 @@ https://druee.gitlab-pages.uni-trier.de/austaltools/
 ``austal-fill-time-series``
     Fill source-strength columns in "zeitreihe.dmna"
 
-``austal_steepness``
+``austal-steepness``
     Determine steepness of the model area
 
 ``austal-terrain``
     Extract surface topography for AUSTAL from various sources
 
-``austal_plot``
+``austal-plot``
     Simple baseline data plot
 
 ``austal-weather``
