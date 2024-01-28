@@ -3,6 +3,7 @@ import os
 import re
 import shlex
 import logging
+import sys
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import osgeo.osr as osr
@@ -81,6 +82,13 @@ class Geometry():
         self.b = b
         self.c = c
         self.w = w
+        self.keys = ["x", "y", "a", "b", "c", "w"]
+    def __format__(self, spec):
+        if spec != "":
+            fmt = spec
+        else:
+            fmt = "%s: %f"
+        return " ".join([fmt % (k,getattr(self, k)) for k in self.keys])
 
 # =========================================================================
 
@@ -106,6 +114,7 @@ def get_buildings(conf):
         for par in pars:
             if par in conf:
                 if number != len(conf[par]):
+                    sys.tracebacklimit = 0
                     raise ValueError('different numbers of ' +
                                      'building-definig parameters')
                 val[par] = conf[par]
@@ -230,6 +239,7 @@ def find_austxt(wdir='.'):
             ausname = x
             break
     else:
+        sys.tracebacklimit = 0
         raise IOError('austal.txt or austal2000.txt not found')
     logger.debug('austal config: %s' % ausname)
     return ausname
@@ -256,7 +266,12 @@ def get_austxt(path="austal.txt"):
                 continue
             logger.debug('%s - %s' % (os.path.basename(path), text))
             # split line into key / value pair
-            key, val = text.split(maxsplit=1)
+            try:
+                key, val = text.split(maxsplit=1)
+            except ValueError:
+                sys.tracebacklimit = 0
+                raise ValueError('no keyword/value pair ' +
+                                 'in line "%s"' % text)
             # make numbers numeric
             try:
                 values = [float(x) for x in val.split()]
