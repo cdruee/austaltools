@@ -43,7 +43,7 @@ def building_new():
 # -------------------------------------------------------------------------
 
 
-def extract_polygons(features):
+def extract_polygons(features, origin):
     polygons = []
 
     for i, feature in enumerate(features):
@@ -74,15 +74,20 @@ def extract_polygons(features):
                          (i,geometry['type']))
             continue
         for j,coord in enumerate(coords):
-            points = [np.array(x[0:2]) for x in coord]
-            if len(points) != 5:
-                logger.error('feature #%i Polygon %i is not a quadrangle' %
-                             (i,j))
-                continue
-            if dist_points(points[0], points[4]) > 0.5:
-                logger.error('feature #%i Polygon %i is not closed' %
-                             (i,j))
-                continue
+            gk_points = [np.array(x[0:2]) for x in coord]
+            #
+            # convert coordinates to model coordinate system
+            points = [(x[0] - origin[0], x[1] - origin[1])
+                      for x in gk_points]
+
+            # if len(points) != 5:
+            #     logger.error('feature #%i Polygon %i is not a quadrangle' %
+            #                  (i,j))
+            #     continue
+            # if dist_points(points[0], points[4]) > 0.5:
+            #     logger.error('feature #%i Polygon %i is not closed' %
+            #                  (i,j))
+            #     continue
             polygons.append((i,j,points[0:4]))
 
     return polygons
@@ -377,6 +382,104 @@ def deduplicate(points, tolerance=None):
                   dist_points(p1, p2) < tolerance):
                 is_duplicate[j] = True
     return [x for i,x in enumerate(points) if not is_duplicate[i]]
+# -------------------------------------------------------------------------
+
+
+def plot_building_shapes(args, polygons, buildings, topo=None):
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import readmet
+
+
+    matplotlib.rcParams.update({'font.size': 16})
+    fig, ax = plt.subplots()
+    fig.set_size_inches(11, 8)
+
+    # ---------------------------
+    # overlay topography as isolines
+    #
+    if topo is not None:
+        logger.debug('adding topography')
+        if isinstance(topo, dict):
+            logger.debug('... from data in arguments')
+            topx = topo["x"]
+            topy = topo["y"]
+            topz = topo["z"]
+        elif isinstance(topo, str):
+            logger.debug('... from file: %s' % topo)
+            if os.path.exists(topo):
+                topo_path = topo
+            elif os.path.exists(os.path.join(args['working_dir'], topo)):
+                topo_path = os.path.join(args['working_dir'], topo)
+            else:
+                raise ValueError('topography file not found: %s' % topo)
+            logger.info('reading topography from %s' % topo_path)
+            topofile = readmet.dmna.DataFile(topo_path)
+            topz = topofile.data[""]
+            topx = topofile.axes(ax="x")
+            topy = topofile.axes(ax="y")
+        else:
+            raise ValueError('topo must be dict of filename')
+        con = plt.contour(topx, topy, topz.T, origin="lower",
+                          colors='black',
+                          linewidths=0.75
+                          )
+        ax.clabel(con, con.levels, inline=True, fontsize=10)
+
+    xrange = [np.Inf, -np.Inf]
+    yrange = [np.Inf, -np.Inf]
+    # ---------------------------
+    # show input points
+    #
+    if polygons is not None:
+        sym = "o"
+        for i, j, points in polygons:
+            for x, y in points:
+                #ax.plot(x, y, sym, markersize=10, color="blue")
+                xrange[0] = min([x,xrange[0]])
+                xrange[1] = max([x, xrange[1]])
+                yrange[0] = min([y, yrange[0]])
+                yrange[1] = max([y, yrange[1]])
+            for k,p1 in enumerate(points):
+                p2 = points[(k+1)%len(points)]
+                ax.plot([p1[0], p2[0]], [p1[1], p2[1]], ":", color="blue")
+    # ---------------------------
+    # show buildings
+    #
+    if buildings is not None:
+        for bb in buildings:
+            ax.add_patch(
+                matplotlib.patches.Rectangle(
+                    xy=(bb.x, bb.y),
+                    width=bb.a,
+                    height=bb.b,
+                    angle=bb.w,
+                    fill=False,
+                    color="black",
+                )
+            )
+            xrange[0] = min([bb.x - (bb.a + bb.b), xrange[0]])
+            xrange[1] = max([bb.x + (bb.a + bb.b), xrange[1]])
+            yrange[0] = min([bb.y - (bb.a + bb.b), yrange[0]])
+            yrange[1] = max([bb.y + (bb.a + bb.b), yrange[1]])
+
+    spread = max([xrange[1] - xrange[0], yrange[1] - yrange[0]])
+    ax.set_xlim([np.mean(xrange) - spread/2, np.mean(xrange) + spread/2])
+    ax.set_ylim([np.mean(yrange) - spread/2, np.mean(yrange) + spread/2])
+
+    if args["plot"] == "-":
+        logger.info('showing plot')
+        plt.show()
+    elif args["plot"] not in [None, ""]:
+        if os.path.sep in args["plot"]:
+            outname = args["plot"]
+        else:
+            outname = os.path.join(args["wdir"], args["plot"])
+        if not outname.endswith('.png'):
+            outname = outname + '.png'
+        logger.info('writing plot: %s' % outname)
+        plt.savefig(outname, dpi=180)
+
 
 # -------------------------------------------------------------------------
 
@@ -409,6 +512,15 @@ def cli_parser():
                              ' diagonals)' +
                              ' [%.2f]' % default['tolerance'],
                         default=default['tolerance'])
+    parser.add_argument('-p', '--plot',
+                        metavar="FILE",
+                        nargs='?',
+                        const='buildings',
+                        help='save plot to a file. If `FILE` is "-" ' +
+                             'the plot is shown on screen. If `FILE` is ' +
+                             'missing, the file name defaults to ' +
+                             '`buildings.png`'
+                        )
     height = parser.add_mutually_exclusive_group()
     height.add_argument('-z', '--zvalue',
                         help='name of property that gives building height' +
@@ -477,13 +589,9 @@ def main():
         raise ValueError('GeoJSON crs is not EPSG:31463')
 
     buildings = []
-    polygons = extract_polygons(data['features'])
-    for i,j,gk_points in polygons:
+    polygons = extract_polygons(data['features'], origin)
+    for i,j,points in polygons:
             logger.info('processing feature #%i Polygon %i:' % (i, j))
-            #
-            # convert coordinates to model coordinate system
-            points = [(x[0] - origin[0], x[1] - origin[1])
-                      for x in gk_points]
             #
             # create building object and insert data of outer rectangle
             build = find_building_around(points, rect_tolerance)
@@ -529,6 +637,8 @@ def main():
     else:
         _tools.put_austxt(ausfile, data=data)
 
+    if args["plot"]:
+        plot_building_shapes(args, polygons, buildings)
 # -------------------------------------------------------------------------
 
 

@@ -568,7 +568,7 @@ def common_plot(args: dict,
             logger.debug('... from file: %s' % topo)
             if os.path.exists(topo):
                 topo_path = topo
-            elif os.path.exist(os.path.join(args['working_dir'], topo)):
+            elif os.path.exists(os.path.join(args['working_dir'], topo)):
                 topo_path = os.path.join(args['working_dir'], topo)
             else:
                 raise ValueError('topography file not found: %s' % topo)
