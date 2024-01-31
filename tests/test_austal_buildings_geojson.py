@@ -108,7 +108,8 @@ class TestRectangleFinding(unittest.TestCase):
     def check_rotate(self, angle):
         rot_corners = rot_corn(self.org_corners, angle)
         rot_build = rot_bldg(self.org_build, angle)
-        build = prog.find_building_around(rot_corners)
+        build = prog.find_building_around(rot_corners,
+                                          prog.DEFAULT_TOLERANCE)
         print(format(self.org_corners) + '\n' +
               format(rot_corners)+ '\n' +
               format(rot_build) + '\n' +
@@ -118,7 +119,8 @@ class TestRectangleFinding(unittest.TestCase):
               )
         return prog.check_tolerances(
             prog.DEFAULT_TOLERANCE,
-            prog.find_building_around(rot_corners),
+            prog.find_building_around(rot_corners,
+                                      prog.DEFAULT_TOLERANCE),
             rot_corners)
     def test_check_rotate_0_1(self):
         self.assertTrue(self.check_rotate(0.1))
@@ -147,10 +149,14 @@ class TestBadPoints(unittest.TestCase):
     rot_corners = rot_corn(org_corners, 20)
 
     def check_num_points(self, num):
-        return prog.check_tolerances(
-            prog.DEFAULT_TOLERANCE,
-            prog.find_building_around(self.rot_corners[0:num]),
-            self.rot_corners[0:4])
+        bdg = prog.find_building_around(self.rot_corners[0:num],
+                                        prog.DEFAULT_TOLERANCE)
+        if bdg is None:
+            res = False
+        else:
+            res = prog.check_tolerances(
+            prog.DEFAULT_TOLERANCE, bdg, self.rot_corners[0:4])
+        return res
     def test_2_points(self):
         with self.assertRaises(ValueError):
             self.check_num_points(2)

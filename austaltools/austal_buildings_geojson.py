@@ -11,6 +11,8 @@ import os
 import sys
 import json
 
+from austaltools._tools import Building
+
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
 
@@ -133,8 +135,8 @@ def check_tolerances(tolerance: float, build: _tools.Building,
 # -------------------------------------------------------------------------
 
 
-def find_building_around(points: list[tuple[float, float]]) -> \
-        _tools.Building:
+def find_building_around(points: list[tuple[float, float]],
+                         tolerance: float) -> Building | None:
     """
     Find the minimal rectagle encircling the ``points``.
     Returns lower left corner as ``x`` and ``y`` coordinate,
@@ -144,9 +146,22 @@ def find_building_around(points: list[tuple[float, float]]) -> \
 
     :param points: list of the points positions
     :type points: list[tuple[float, float]]
+    :param tolerance: minimum distance between points to consider
+    them as different positions
+    :type tolerance: float
     :return: Building object defining x, y, width, depth and angle
-    :rtype: _tools.Building
+    or none if finding fails
+    :rtype: _tools.Building or None
     """
+    if len(points) > 4:
+        points = deduplicate(points, tolerance / 2.)
+    if len(points) < 2:
+        logger.error('... polygon has less than two points')
+        return None
+    elif len(points) < 4:
+        logger.warning('... polygon has less than four points')
+    elif len(points) > 4:
+        logger.warning('... polygon has more than four points')
     a, b, s, ldist, pbase = rotating_caliper(points)
     projected_points = [nearest_point_on_line(a, b, x) for x in points]
     all_pairs = [(p1, p2) for i, p1 in enumerate(projected_points)
@@ -193,6 +208,28 @@ def building_corners(build: _tools.Building) -> \
 # -------------------------------------------------------------------------
 
 
+def sort_anticlock(points: list[tuple[float,float]]) -> \
+        list[tuple[float,float]]:
+    """
+    sort points anticlockwise around the center point
+
+    :param points: point positions to sort
+    :type points:  list[tuple[float,float]]
+    :return: sorted point positions
+    :rtype: list[tuple[float,float]]
+    """
+    n = len(points)
+    center= (sum([x[0] / n for x in points]),
+             sum([x[1] / n for x in points]))
+    angles = [((np.rad2deg(np.arctan2(x[1]-center[1], x[0] - center[0]))
+                + 180) % 360.)
+              for x in points]
+    order = np.argsort(angles)
+    return [points[i] for i in order]
+
+# -------------------------------------------------------------------------
+
+
 def rotating_caliper(points: list[tuple[float, float]]) -> \
         (float, float, float, tuple[float, float]):
     """
@@ -208,6 +245,7 @@ def rotating_caliper(points: list[tuple[float, float]]) -> \
     n = len(points)
     if n <= 2:
         raise ValueError('at least two points are required')
+    points = sort_anticlock(points)
     max_dist_value = []
     max_dist_base = []
     ahs = []
@@ -329,6 +367,20 @@ def line_through(p1: tuple[float, float], p2: tuple[float, float]) -> \
 # -------------------------------------------------------------------------
 
 
+def deduplicate(points, tolerance=None):
+    is_duplicate = [False] * len(points)
+    for i,p1 in enumerate(points):
+        for j,p2 in enumerate(points[i:]):
+            if p1 == p2:
+                is_duplicate[j] = True
+            elif (tolerance is not None and
+                  dist_points(p1, p2) < tolerance):
+                is_duplicate[j] = True
+    return [x for i,x in enumerate(points) if not is_duplicate[i]]
+
+# -------------------------------------------------------------------------
+
+
 def cli_parser():
     # defaults
     default = {'wdir': '.',
@@ -427,19 +479,17 @@ def main():
     buildings = []
     polygons = extract_polygons(data['features'])
     for i,j,gk_points in polygons:
-            if len(gk_points) < 4:
-                logger.error('feature #%i Polygon %i is ' % (i,j) +
-                             'has less than four points')
-                continue
-            else:
-                logger.info('processing feature #%i Polygon %i:' % (i, j))
+            logger.info('processing feature #%i Polygon %i:' % (i, j))
             #
             # convert coordinates to model coordinate system
             points = [(x[0] - origin[0], x[1] - origin[1])
                       for x in gk_points]
             #
             # create building object and insert data of outer rectangle
-            build = find_building_around(points)
+            build = find_building_around(points, rect_tolerance)
+            # if error abort processing polygon
+            if build is None:
+                continue
             #
             # check if corner points of building object
             # match the original points inside tolerance
