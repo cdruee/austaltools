@@ -134,8 +134,8 @@ def main():
     args = vars(parser.parse_args())
 
     # set logging level
-    if args.verb is not None:
-        logger.setLevel(args.verb)
+    if args["verb"] is not None:
+        logger.setLevel(args["verb"])
     else:
         logger.setLevel(logging.WARNING)
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
