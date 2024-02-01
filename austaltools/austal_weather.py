@@ -1022,7 +1022,7 @@ def austal_weather(args):
     data['dd'] = np.remainder(
         data['dd'].mask(data['ff'] < 1., other=0.), 360.)
     data['ff'] = data['ff'].mask(
-        np.isnan(data['dd']) | data['dd'] < 5., other=0.)
+        (np.isnan(data['dd']) | data['dd'] < 1.), other=0.)
 
     #    print(pd.crosstab(data['kmc'],
     #                      data['pgc'],
