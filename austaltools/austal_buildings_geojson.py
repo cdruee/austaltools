@@ -385,7 +385,20 @@ def deduplicate(points, tolerance=None):
 # -------------------------------------------------------------------------
 
 
-def plot_building_shapes(args, polygons, buildings, topo=None):
+def plot_building_shapes(args: dict, polygons: list[tuple],
+                         buildings: list[_tools.Building],
+                         topo: str = None):
+    """
+    Plot buildings and polygon shapes from geojson file
+    :param args: command line arguments
+    :type args: dict
+    :param polygons:  list of tuple (#feature, # polygon, list of points)
+    :type polygons: list[tuple]
+    :param buildings: Building objects
+    :type buildings:  list[_tools.Building]
+    :param topo: Name of topography file (*.grid)
+    :type topo: str (optional)
+    """
     import matplotlib
     import matplotlib.pyplot as plt
     import readmet
@@ -400,26 +413,19 @@ def plot_building_shapes(args, polygons, buildings, topo=None):
     #
     if topo is not None:
         logger.debug('adding topography')
-        if isinstance(topo, dict):
-            logger.debug('... from data in arguments')
-            topx = topo["x"]
-            topy = topo["y"]
-            topz = topo["z"]
-        elif isinstance(topo, str):
-            logger.debug('... from file: %s' % topo)
-            if os.path.exists(topo):
-                topo_path = topo
-            elif os.path.exists(os.path.join(args['working_dir'], topo)):
-                topo_path = os.path.join(args['working_dir'], topo)
-            else:
-                raise ValueError('topography file not found: %s' % topo)
-            logger.info('reading topography from %s' % topo_path)
-            topofile = readmet.dmna.DataFile(topo_path)
-            topz = topofile.data[""]
-            topx = topofile.axes(ax="x")
-            topy = topofile.axes(ax="y")
+        logger.debug('... from file: %s' % topo)
+        if os.path.exists(topo):
+            topo_path = topo
+        elif os.path.exists(os.path.join(args['working_dir'], topo)):
+            topo_path = os.path.join(args['working_dir'], topo)
         else:
-            raise ValueError('topo must be dict of filename')
+            raise ValueError('topography file not found: %s' % topo)
+        logger.info('reading topography from %s' % topo_path)
+        topofile = readmet.dmna.DataFile(topo_path)
+        topz = topofile.data[""]
+        topx = topofile.axes(ax="x")
+        topy = topofile.axes(ax="y")
+
         con = plt.contour(topx, topy, topz.T, origin="lower",
                           colors='black',
                           linewidths=0.75
@@ -638,6 +644,10 @@ def main():
         _tools.put_austxt(ausfile, data=data)
 
     if args["plot"]:
+        if ('gh' in austxt):
+            topo = austxt['gh']
+        else:
+            topo = None
         plot_building_shapes(args, polygons, buildings)
 # -------------------------------------------------------------------------
 
