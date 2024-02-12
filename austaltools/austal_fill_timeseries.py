@@ -11,6 +11,11 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import yaml
 
 try:
+    from . import _tools
+except ImportError:
+    import _tools
+
+try:
     from ._version import __version__
 except ImportError:
     from _version import __version__
@@ -353,7 +358,7 @@ def main():
         if args["holiday_week"] is None:
             args["holiday_week"] = []
         time = pd.to_datetime(values['te'])
-        for i, t in enumerate(time):
+        for i, t in enumerate(_tools.progress(time, desc="work weeks")):
             if t.month in args["holiday_month"]:
                 continue
             if t.week in args["holiday_week"]:
@@ -366,7 +371,7 @@ def main():
         cyclefile = os.path.join(args["path"], args["cycle_file"])
         logger.info('filling cycles from: %s' % cyclefile)
         cycle = get_cycle(cyclefile, zeitreihe.data['te'])
-        for c in cycle.columns:
+        for c in _tools.progress(cycle.columns, desc="applying cycle"):
             if c in values.columns:
                 values[c] = cycle[c].values
             else:

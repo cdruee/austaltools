@@ -15,11 +15,6 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import pandas as pd
     from scipy import ndimage
 
-    try:
-        from tqdm import tqdm
-    except ImportError:
-        tqdm = None
-
     import readmet
     import meteolib
 
@@ -37,7 +32,6 @@ logging.basicConfig()
 logger = logging.getLogger()
 logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 logging.getLogger('readmet.dmna').setLevel(logging.ERROR)
-progress = None
 # -------------------------------------------------------------------------
 
 # VDI 3783 part 8:
@@ -52,16 +46,6 @@ MAX_HEIGHT = 100.
 # Table 7: class 3100 -> z_0 = 0.0100
 Z0_REFERENCE = 0.0100
 
-
-# -------------------------------------------------------------------------
-
-def progress(itr=[], desc="", *args, **kwargs):
-    if tqdm is not None and 10 < logger.getEffectiveLevel() <= 30:
-        return tqdm(itr, desc,
-                    bar_format="{l_bar}{bar}|{remaining}",
-                    *args, **kwargs)
-    else:
-        return itr
 
 # -------------------------------------------------------------------------
 
@@ -163,7 +147,7 @@ def read_wind(file_info, path='.', grid=0):
     u_grid = np.full((nx, ny, nz, nstab, ndir), np.nan)
     v_grid = np.full((nx, ny, nz, nstab, ndir), np.nan)
 
-    for i in progress(range(len(file_info['name'])),
+    for i in _tools.progress(range(len(file_info['name'])),
                       desc="reading wind fields"):
         igrd, wdir, stab = analyze_name(file_info['name'][i])
         if grid == igrd:
@@ -285,7 +269,7 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
     # speed is below 0,5 m · s–1. The rest of the steps
     # are performed only for the remaining grid
     # points.
-    for ibar in progress(range(nz_eval * nstab),
+    for ibar in _tools.progress(range(nz_eval * nstab),
                          desc="do quality measure "):
         iz = ibar // nstab
         istab = ibar % nstab
@@ -316,20 +300,21 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
     # calculated over all undisturbed flow sectors and
     # stability classes:
     u_ref3d = np.broadcast_to(u_ref, (nx, ny, nz, nstab, ndir))
-    v_ref3d = np.broadcast_to(u_ref, (nx, ny, nz, nstab, ndir))
+    v_ref3d = np.broadcast_to(v_ref, (nx, ny, nz, nstab, ndir))
     sumw = np.sum(np.sum(u_keep + v_keep, axis=4), axis=3)
     sumw2 = np.sum(np.sum(u_keep ** 2 + v_keep ** 2, axis=4), axis=3)
     sumwr = np.sum(np.sum(u_keep * u_ref3d + v_keep * v_ref3d, axis=4), axis=3)
-    sumr = np.sum(np.sum(u_ref + v_ref, axis=2), axis=1)
-    sumr2 = np.sum(np.sum(u_ref ** 2 + v_ref ** 2, axis=2), axis=1)
+    sumr = np.sum(np.sum(u_ref3d + v_ref3d, axis=4), axis=3)
+    sumr2 = np.sum(np.sum(u_ref3d ** 2 + v_ref3d ** 2, axis=4), axis=3)
+    korr = float( 2 * nstab * ndir)
     gd = np.full((nx, ny, nz), np.nan)
     for iz in range(nz):
         if iz <= nz_eval:
             for iy in range(ny):
                 for ix in range(nx):
-                    cov_wr = sumwr[ix, iy, iz] - sumw[ix, iy, iz] * sumr[iz]
-                    var_r = sumr2[iz] - sumr[iz] ** 2
-                    war_w = sumw2[ix, iy, iz] - sumw[ix, iy, iz] ** 2
+                    cov_wr = sumwr[ix, iy, iz] - (sumr[ix, iy, iz] * sumw[ix, iy, iz]) / korr
+                    var_r = sumr2[ix, iy, iz] - (sumr[ix, iy, iz] ** 2) / korr
+                    war_w = sumw2[ix, iy, iz] - (sumw[ix, iy, iz] ** 2) / korr
                     gd[ix, iy, iz] = (cov_wr ** 2) / (var_r * war_w)
         else:
             gd[:, :, iz] = np.nan
@@ -544,14 +529,14 @@ def run_austal(workdir, tmproot=None):
 
     dmna_expected = N_CLASS * 2
     dmna_found = 0
-    pbar = progress(total=dmna_expected)
+    pbar = _tools.progress(total=dmna_expected)
     while p.poll() is None:
         sleep(0.5)
         dmna_files = glob.glob(os.path.join(tmpdir, 'lib', 'w*.dmna'))
         nglob = len(dmna_files)
         if nglob > dmna_found:
             if hasattr(pbar, 'update'):
-                progress.update(nglob - dmna_found)
+                _tools.progress.update(nglob - dmna_found)
             dmna_found = nglob
             logging.debug('caluclated wind fields: %i of %i' %
                           (dmna_found, dmna_expected))

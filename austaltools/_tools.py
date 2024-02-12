@@ -14,6 +14,11 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import matplotlib.patches
     import matplotlib.pyplot as plt
 
+    try:
+        from tqdm import tqdm
+    except ImportError:
+        tqdm = None
+
     import readmet
 
 try:
@@ -27,11 +32,13 @@ logger = logging.getLogger(__name__)
 # -------------------------------------------------------------------------
 
 DEFAULT_WORKING_DIR = "."
+"""Default location for input and output"""
 DEFAULT_DATA_DIRS = ["/opt/%s" % __title__,
                      os.path.expanduser("~/.local/share/%s" % __title__),
                      os.path.expanduser("~/.%s" % __title__),
                      "."
                      ]
+"""Default locations where downloaded or cashed data are expected"""
 
 # -------------------------------------------------------------------------
 
@@ -39,12 +46,18 @@ AUSTAL_POLLUTANTS_GAS = ["so2", "nox", "no", "no2", "nh3", "hg0",
                          "hg", "bzl", "f", "xx", "odor",
                          "odor_050", "odor_065", "odor_075",
                          "odor_100", "odor_150"]
+"""Pollutant gases that are defined by austal"""
 AUSTAL_POLLUTANTS_DUST = ["pm", "as", "cd", "hg", "ni", "pb", "tl",
-                          "ba", "dx", "xx", ""]
+                          "ba", "dx", "xx"]
+"""Pollutant dust substances that are defined by austal"""
 AUSTAL_POLLUTANTS_DUST_CLASSES = ["%s_%s" % (x, y)
                                   for y in ["x", "1", "2", "3", "4"]
                                   for x in AUSTAL_POLLUTANTS_DUST]
+"""Pollutant dusts that are defined by austal, 
+each composed of a substance and grain-size class 1-4 or `x`"""
 Z0_CLASSES = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 1.5, 2.0]
+"""Surface roughness values corresponding to the roughness classes
+defined by austal"""
 
 # -------------------------------------------------------------------------
 
@@ -62,10 +75,17 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 # -------------------------------------------------------------------------
 
 DEFAULT_COLORMAP = "YlOrRd"
+"""Default colors used for the commpon plot type"""
 
 # =========================================================================
 
-class Geometry():
+class Geometry(object):
+    """
+    A class that defines a geometric shape of the form
+    that austal uses for sources and buildings.
+    It is a cuboid of given widht, depth, and height,
+    that may be rotated around its southwest corner.
+    """
     x = 0.
     y = 0.
     a = 0.
@@ -75,7 +95,24 @@ class Geometry():
 
 # -------------------------------------------------------------------------
 
-    def __init__(self, x=0, y=0, a=0, b=0, c=0, w=0):
+    def __init__(self, x: float = 0, y: float = 0,
+                 a: float = 0, b: float = 0, c: float = 0, w: float = 0):
+        """
+        Initilaize a Geometry
+
+        :param x: x position of the south-west corner
+        :type x: float (optional), default 0.
+        :param y: y position of the south-west corner
+        :type y: float (optional), default 0.
+        :param a: width (along x axis) of the cuboid
+        :type a: float (optional), default 0.
+        :param b: depth (along y axis) of cuboid
+        :type b: float (optional), default 0.
+        :param c: height (along z axis) of cuboid
+        :type c: float (optional), default 0.
+        :param w: rotation angle anticlockwise around the south-west corner
+        :type w: float (optional), default 0.
+        """
         self.x = x
         self.y = y
         self.a = a
@@ -83,7 +120,16 @@ class Geometry():
         self.c = c
         self.w = w
         self.keys = ["x", "y", "a", "b", "c", "w"]
-    def __format__(self, spec):
+
+
+    def __format__(self, spec: str = "") -> str:
+        """
+        return a string representing the properties of a Geometry
+        :param spec: format string (optional)
+        :type spec: str
+        :return: formatted string
+        :rtype: str
+        """
         if spec != "":
             fmt = spec
         else:
@@ -93,18 +139,33 @@ class Geometry():
 # =========================================================================
 
 class Building(Geometry):
+    """
+    A class representing the :class:`Geometry` of building
+    """
     def __init__(self, *args, **kwargs):
         Geometry.__init__(self, *args, **kwargs)
 
 # -------------------------------------------------------------------------
 
 class Source(Geometry):
+    """
+    A class representing the :class:`Geometry` of pollutant source
+    """
     def __init__(self, *args, **kwargs):
         Geometry.__init__(self, *args, **kwargs)
 
 # -------------------------------------------------------------------------
 
 def get_buildings(conf):
+    """
+    read the buildings defined in ``austal.txt`` and rerturn a list
+    of :class:`Building` objects.
+
+    :param conf: austal configuration as dict
+    :type conf: dict
+    :return: list of :ref:`Building` objects
+    :rtype: list[::class:`Building`]
+    """
     pars = ["xb", "yb", "ab", "bb", "cb", "wb"]
     res = []
     if "xb" in conf and "yb" in conf:
@@ -128,11 +189,35 @@ def get_buildings(conf):
 
 # -------------------------------------------------------------------------
 
+def progress(itr=[], desc="", *args, **kwargs):
+    """
+    A progress bar that shows if :class:`tqdm.tqdm` is available and
+    the log level is below :class:`logging.DEBUG`
+
+    :param itr: iterator
+    :type itr: list or iterable
+    :param desc: string displayed in the progress bar
+    :type desc: str (optional)
+    :param args: arguments to `tqdm.tqdm`
+    :param kwargs: keyword arguments to `tqdm.tqdm`
+    :return: decorated iterator or `itr`, depending on the conditions
+    :rtype: iterator
+    """
+    if tqdm is not None and 10 < logger.getEffectiveLevel() <= 30:
+        return tqdm(itr, desc,
+                    bar_format="{l_bar}{bar}|{remaining}",
+                    *args, **kwargs)
+    else:
+        return itr
+
+# -------------------------------------------------------------------------
+
 def gk2ll(rechts: float, hoch: float) -> (float, float, float):
     """
     Converts Gauss-Krüger rechts/hoch (east/north) coordinates
     (DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677)
     into Latitude/longitude  (WGS84, https://epsg.io/4326) position.
+
     :param rechts: "Rechtswert" (eastward coordinate) in m
     :type: float
     :param hoch: "Hochwert" (northward coordinate) in m
@@ -149,12 +234,13 @@ def ll2gk(lat:float, lon:float) -> (float, float):
     Converts Latitude/longitude  (WGS84, https://epsg.io/4326) position
     into Gauss-Krüger rechts/hoch (east/north) coordinates
     (DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677).
+
     :param lat: latitude in degrees
     :type: float
     :param lon: longitude in degrees
     :type: float
     :return: "Rechtswert" (eastward coordinate) in m,
-    "Hochwert" (northward coordinate) in m
+        "Hochwert" (northward coordinate) in m
     :rtype: float, float
     """
     transform = osr.CoordinateTransformation(LL, GK)
@@ -168,13 +254,14 @@ def ut2gk(east, north):
     (ETRS89 / UTM zone 32N, https://epsg.io/25832)
     into Gauss-Krüger rechts/hoch (east/north) coordinates
     (DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677).
+
     :param east: eastward UTM coordinate in m
     :type: float
     :param north: northward UTM coordinate in m
     :type: float
     :return: "Rechtswert" (eastward coordinate) in m,
-    "Hochwert" (northward coordinate) in m,
-    Altitude in m
+        "Hochwert" (northward coordinate) in m,
+        Altitude in m
     :rtype: float, float, float
     """
     transform = osr.CoordinateTransformation(UT, GK)
@@ -186,9 +273,10 @@ def spheric_distance(lat1, lon1, lat2, lon2):
     """
     Calculate the great circle distance between two points
     (specified in decimal degrees) on a spheric earth.
-     Reference:
-        https://stackoverflow.com/a/29546836/7657658
-   :param lat1: Position 1 latitude in degrees
+    Reference:
+    https://stackoverflow.com/a/29546836/7657658
+
+    :param lat1: Position 1 latitude in degrees
     :type: float
     :param lon1: Position 1 longitude in degrees
     :type: float
@@ -218,6 +306,7 @@ def spheric_distance(lat1, lon1, lat2, lon2):
 def find_z0_class(z0):
     """
     return index of roughness-length class that matches z0 best
+
     :param z0: actual roughness length
     :return: index of matching roughness-length class
     """
@@ -248,6 +337,7 @@ def find_austxt(wdir='.'):
 def get_austxt(path="austal.txt"):
     """
     Get AUSTAL configuration as dict
+
     :param path: Configuration file. Defaults to
     :type: str, optional
     :return: configuration
@@ -306,12 +396,11 @@ def put_austxt(path="austal.txt", data={}):
     :param path: File name. Defaults to
     :type: str, optional
     :param data: Dictionary of configuration data.
-    The keys are the AUSTAL configuration codes,
-    the values are the configuration values as strings or
-    space-separated lists
+        The keys are the AUSTAL configuration codes,
+        the values are the configuration values as strings or
+        space-separated lists
     :return: configuration
     :rtype: dict
-
     """
     # get config as text
     logger.debug('reading: %s' % path)
