@@ -62,15 +62,15 @@ logging.basicConfig()
 logger = logging.getLogger()
 
 # ----------------------------------------------------
-KNOWN_SOURCES = ["ERA5", "DWD"]
+KNOWN_SOURCES = ["ERA5", "CERRA", "DWD"]
 STORAGE_LOCATIONS = _tools.DEFAULT_DATA_DIRS
 STORAGE_DIR = "weather"
 STORAGE_PATH = None  # will be filled lazy
 
 # possible defaults: fixed_057 fixed_010 model_mean model_uv10 model_fsr
 WIND_VARIANT = os.environ.get('WIND_VARIANT', 'model_uv10')
-# possible defaults: barycentric nearest mean
-INTER_VARIANT = os.environ.get('INTER_VARIANT', 'barycentric')
+# possible defaults: weighted nearest mean
+INTER_VARIANT = os.environ.get('INTER_VARIANT', 'weighted')
 # possible values: empty or non-empty string:
 OUTPUT_RAW = os.environ.get('OUTPUT_RAW', '')
 # possible values: all kms kmc pts pgc empty or non-empty string:
@@ -93,7 +93,7 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 # ----------------------------------------------------
 
-def provide_storage(storage_path: str=None) -> str:
+def provide_storage(storage_path: str = None) -> str:
     """
     Finds a working data storage directory and returns its path.
     If `storage_path` is provided, only this path is checked
@@ -190,6 +190,58 @@ def h_eff(has: float, z0s: float) -> list:
 # ----------------------------------------------------
 
 
+def grid_surrounding_nodes(lat: float, lon: float, dims: dict) \
+        -> list[tuple[float]]:
+    dims_dim = set(len(np.shape(dims[x])) for x in ['lat', 'lon'])
+    if len(dims_dim) > 1:
+        raise ValueError('dims have different shapes')
+    if 1 in dims_dim:
+        grd_lat = np.tile(dims['lat'], (len(dims['lon']), 1)).T
+        grd_lon = np.tile(dims['lon'], (len(dims['lat']), 1))
+    elif 2 in dims_dim:
+        grd_lat = dims['lat']
+        grd_lon = dims['lon']
+    else:
+        raise ValueError('dims have unsupported shape')
+    vec_s_d = np.vectorize(_tools.spheric_distance)
+    tgt_lat = np.full(np.shape(dims['lat']), lat)
+    tgt_lon = np.full(np.shape(dims['lon']), lon)
+    distance = vec_s_d(tgt_lat, tgt_lon, grd_lat, grd_lon)
+    pos = []
+    for i in range(3):
+        id = np.min(distance)
+        ix, iy = np.unravel_index(np.argmin(distance),
+                                  np.shape(distance))
+        pos.append((ix, iy, id))
+        distance[ix, iy] = np.max(distance)
+    logger.debug('pos: %s' % pos)
+    return pos
+# ----------------------------------------------------
+
+
+def grid_calulate_weights(pos: list) -> list[float]:
+    logging.info('interpolation variant: %s' % INTER_VARIANT)
+    w = [None, None, None]
+    if INTER_VARIANT == 'weighted':
+        a = [1. / d if d > 0. else 1. for _, _, d in pos[0:3]]
+        b = np.sum(a)
+        w = [x / b for x in a]
+    elif INTER_VARIANT == 'mean':
+        w[0] = 1. / 3.
+        w[1] = 1. / 3.
+        w[2] = 1. / 3.
+    elif INTER_VARIANT == 'nearest':
+        w[0] = 1.
+        w[1] = 0.
+        w[2] = 0.
+    else:
+        raise ValueError('unknown interpolation variant: %s' %
+                         INTER_VARIANT)
+    logger.debug('w: %s' % w)
+    return w
+# ----------------------------------------------------
+
+
 def read_era5_nc(ncfile, lat, lon):
     """
     read ERA5 nc file and interpolate values to position (lat, lon)
@@ -255,7 +307,7 @@ def read_era5_nc(ncfile, lat, lon):
         # position of largest dims value smaller than tgt
         ii = np.argmax(np.where(dims[ll] <= tgt[ll], dims[ll], -999))
         # add fraction
-        if ii < len(dims[ll])-1:
+        if ii < len(dims[ll]) - 1:
             idx[ll] = ii + ((tgt[ll] - dims[ll][ii]) /
                             (dims[ll][ii + 1] - dims[ll][ii]))
 
@@ -328,7 +380,7 @@ def read_era5_nc(ncfile, lat, lon):
     values['time'] = pd.to_datetime(
         [epoch + dt.timedelta(hours=int(x)) for x in lp['time']])
     for val in all_variables:
-        logging.info('interpolating value: %s' % val)
+        logging.debug('interpolating value: %s' % val)
         v = [None, None, None]
         for i, pp in enumerate(pos):
             pi, pj = pp
@@ -391,8 +443,6 @@ def read_era5_nc(ncfile, lat, lon):
 
 
 # ----------------------------------------------------
-
-
 def get_ERA5_weather(lat, lon, year, storage_path='.') \
         -> (pd.DataFrame, float):
     """
@@ -457,8 +507,234 @@ def get_ERA5_weather(lat, lon, year, storage_path='.') \
 
 
 # ----------------------------------------------------
+def read_cerra_nc(ncfile, lat, lon):
+    """
+    read CERRA nc file and interpolate values to position (lat, lon)
+    and recalculate 10 wind speed and direction (ff/dd) using
+    actual surface roughness
+    values:
+
+    ========  =========   ==========================
+     name     unit        description
+    ========  =========   ==========================
+    'time'
+    '10wdir'  deg         10-metre wind direction true
+    '10si'    m s**-1     10-metre wind speed
+    '2r'      %           2-metre relative humidity
+    '2t'      K           2-metre temperature
+    'lcc'     %           low-level cloud cover
+    'mcc'     %           medium-level cloud cover
+    'tisemf'  N m**-2 s   time intregral of surface eastward momentum flux
+    'tisnmf'  N m**-2 s   time intregral of surface northward momentum flux
+    'slhf'    J m**-2     surface latent heat flux
+    'sp'      Pa          surface pressure
+    'sr'      m           surface roughness
+    'sshf'    J m**-2     surface sensible heat flux
+    'tcc'     %           total cloud cover
+    ------    --------    --------------------------
+    optional:
+    ------------------------------------------------
+    'tp'      kg m**-2    total_precipitation
+    ======    ========    ==========================
+    """
+    import netCDF4
+
+    _VAR_NEEDED = ['10wdir', '10si', '2r', '2t', 'lcc',
+                   'mcc', 'tisemf', 'tisnmf', 'slhf', 'sp',
+                   'sr', 'sshf', 'tcc']
+    _VAR_OPTIONAL = ['tp']
+
+    nc = netCDF4.Dataset(ncfile)
+
+    for x in _VAR_NEEDED:
+        if x not in nc.variables:
+            raise ValueError('needed variable not in input data: %s' % x)
+    all_variables = _VAR_NEEDED
+    for x in _VAR_OPTIONAL:
+        if x not in nc.variables:
+            logging.warning('optional variable not in input data: %s' % x)
+        else:
+            all_variables.append(x)
+
+    dims = {'lat': nc['lat'][:].data,
+            'lon': nc['lon'][:].data}
+
+    # make sure dims are ascending:
+    flip = {'lon': False, 'lat': False}
+
+    for ll in 'lat', 'lon':
+        if not np.all(np.diff(dims[ll]) >= 0):
+            dims[ll] = np.flip(dims[ll])
+            flip[ll] = True
+    #
+    # convert time
+    logger.info('calculating time')
+    values = pd.DataFrame()
+    time_unit_string = nc.variables['time'].units
+    time_unit, _, base_date = time_unit_string.split(maxsplit=2)
+    epoch = pd.to_datetime(base_date)
+    values['time'] = [epoch + pd.Timedelta(x, unit=time_unit)
+                      for x in nc.variables['time'][:].data]
+    #
+    # interpolate values to position
+    #
+    logger.info('calculating position')
+    positions = grid_surrounding_nodes(lat, lon, dims)
+    # extract input values at positions
+    pv = {}
+    for val in _tools.progress(all_variables, 'extract variables'):
+        pv[val] = [nc[val][:, x, y].data for x, y, _ in positions]
+    # free memory
+    nc.close()
+    # decompose wind into vector components before interpolating
+    pv['u10'] = []
+    pv['v10'] = []
+    for i, _ in _tools.progress(enumerate(positions),'decomposoing wind'):
+        u10, v10 = m.wind.dir2uv(pv['10si'][i], pv['10wdir'][i])
+        pv['u10'].append(u10)
+        pv['v10'].append(v10)
+    # calculate weights and average the values
+    weights = grid_calulate_weights(positions)
+    for val in _tools.progress(pv.keys(), 'interpolating vars'):
+        if np.ndim(pv[val]) > 1:
+            logger.debug('interpolating value: %s' % val)
+            values[val] = np.dot(weights, pv[val])
+    #
+    #  convert values
+    values.rename({
+        'sr': 'fsr',
+        '2t': 't2m',
+        '2r': 'r2m',
+    }, axis=1, inplace=True)
+    #
+    #  un-accumulate the cummulative values
+    #  model run starts at 00, 03, 06,
+    #  forcast values are accumulated, i.e.
+    #  start time +01:00 is 1-h mean
+    #  start time +02:00 is 2-h mean
+    #  start time +03:00 is 3-h mean
+    #  substract +02:00-values from +03:00 values to get 1-h mean
+    #  from +02:00 to +03:00, ...
+    hours_total = [int((x - epoch) / pd.Timedelta('1 hour'))
+                   for x in values['time']]
+    hours_lead = np.array([(x - 1) % 3 + 1 for x in hours_total])
+    for val in ['sshf', 'slhf', 'tisemf', 'tisnmf', 'tp']:
+        values[val] = values[val].mask(
+            cond=(hours_lead > 1),
+            other=values[val].diff()
+        )
+    #
+    #  2-meter relative humidity (%) to (1)
+    values['r2m'] = values['r2m'] / 100.
+    #
+    #   cloud cover values are in %, convert to fraction of 1:
+    for val in ['lcc', 'mcc', 'tcc']:
+        if val in all_variables:
+            values[val] = values[val] / 100.  # 1
+    #
+    #   surface fluxes are in J/hm² down, convert to W/m² up:
+    for val in ['sshf', 'slhf']:
+        if val in all_variables:
+            values[val] = values[val] / (-3600.)  # W/m²
+    #
+    #   total precipitation is kg = 0.999 l (per hour) , convert to mm:
+    for val in ['tp']:
+        if val in all_variables:
+            values[val] = values[val] * 0.999  # mm
+    #
+    #   friction velocity
+    for val in ['tisemf', 'tisnmf']:
+        # Momentum flux components ...  .
+        # Positive (negative) values denote stress in the eastward
+        # (westward) direction. It is an accumulated (time-integrated)
+        # parameter meaning that it is accumulated from the beginning
+        # of the forecast. The parameter is given in N m-2 s.
+        # i.e. after un-accumulating we have a hourly summation here:
+        if val in all_variables:
+            values[val] = values[val] / 3600.  # N/m² s -> N/m²
+    rho = m.thermodyn.gas_rho(p=values['sp'], T=values['t2m'],
+                              hPa=False, Kelvin=True)
+    values['zust'] = np.sqrt(
+        np.sqrt(values['tisemf'] ** 2 + values['tisnmf'] ** 2) / rho
+    )
+    values.drop(['tisemf', 'tisnmf'], axis=1)
+    #
+    # convert wind back into speed and direction
+    values['ff'], values['dd'] = m.wind.uv2dir(
+        values['u10'], values['v10'])
+    values.drop(['u10', 'v10'], axis=1)
+
+    return values
 
 
+# ----------------------------------------------------
+
+
+def get_CERRA_weather(lat, lon, year, storage_path='.') \
+        -> (pd.DataFrame, float):
+    """
+    Get weather timeseries for the provided position
+    from source CERRA for the year provided and calulate
+    cloud cover of non-high clouds (`lmcc`) and roughness
+    length `z0` from "forecast surface roughness"
+
+    :param lat: position latitude in degrees
+    :param lon: position laongitude  in degrees
+    :param year: get data from this calendar year
+    :param storage_path: (optional) expect CERRA data in this directory
+    :return: weather timeseries as dataframe and surface roughness in m.
+        The index of the dataframe is the measurement time as `datetime64`,
+        the columns are:
+
+        ======  ========= =============================
+        column   unit     comment
+        ======  ========= =============================
+        'time'   UTC
+        'ff'     m/s      wind speed at 10m height
+        'dd'     degrees  wind direction
+        'sp'     Pa       surface air pressure (QFE)
+        't2m'    K        air temperature at 2 m height
+        'lmcc'   1        low and medium cloud cover
+        'tcc'    1        total cloud cover
+        'sshf'   W/m²     surface sensible heat flux
+        'slhf'   W/m²     surface latent heat flux
+        'fsr'    m        forecast surface roughness
+        'tp'     mm       total precipitation per hour
+        ======  ========= =============================
+
+    :rtype: (pd.DataFrame, float)
+    """
+    ncfile = os.path.join(storage_path, 'cerra_ak_eu_%04i.nc' % year)
+    logging.info('reading data from; %s' % ncfile)
+
+    v = read_cerra_nc(ncfile, lat, lon)
+    v.index = v['time']
+    v.sort_index(inplace=True)
+
+    logging.debug('lmcc')
+    if 'mcc' in v.keys():
+        v['lmcc'] = np.maximum(v['lcc'], v['mcc'])  # 1
+    else:
+        v['lmcc'] = v['lcc']  # 1
+
+    z0 = v['fsr'].mean()
+    logger.info("roughness length: %6f m" % z0)
+
+    res = v.filter(['time',  # UTC
+                    'ff',  # m/s
+                    'dd',  # deg
+                    'sp',  # Pa
+                    't2m',  # K
+                    'r2m',  # 1
+                    'lmcc', 'tcc',  # 1
+                    'sshf', 'slhf',  # W/m²
+                    'fsr',  # m
+                    'tp'  # mm
+                    ])
+    return res, z0
+
+
+# ----------------------------------------------------
 def download_DWD_weather(station, storage_path='.'):
     """
     Ensure that the DWD weather station data for station
@@ -729,6 +1005,8 @@ def meta_DWD_to_csv(metadata_files, station, path_to_files):
     meta = meta.drop_duplicates()
     #
     return meta
+
+
 # -------------------------------------------------------------------------
 
 
@@ -839,6 +1117,8 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.') \
                         ])
 
     return data, z0
+
+
 # -------------------------------------------------------------------------
 
 
@@ -900,6 +1180,8 @@ def austal_weather(args):
     source = args['source']
     if source == "ERA5":
         obs, z0 = get_ERA5_weather(lat, lon, year, storage_path)
+    elif source == "CERRA":
+        obs, z0 = get_CERRA_weather(lat, lon, year, storage_path)
     elif source == "DWD":
         obs, z0 = get_DWD_weather(lat, lon, year, station, storage_path)
     else:
@@ -1047,13 +1329,16 @@ def austal_weather(args):
                                    'KM': data[x]},
                                   index=data.index)
                 ak = readmet.akterm.DataFile(data=df, z0=z0)
-            outname = ('era5_{:s}_{:04d}_'.format(
+            outname = ('{:s}_{:s}_{:04d}_'.format(
+                _dwd_stationinfo.slugify(source),
                 _dwd_stationinfo.slugify(nam), year) +
                        x + '.akterm')
-            logger.info('writing putput file: %s' % outname)
+            logger.info('writing output file: %s' % outname)
             ak.write(outname)
     #
     return
+
+
 # =========================================================================
 
 
@@ -1123,10 +1408,10 @@ def cli_parser() -> argparse.ArgumentParser:
                         dest="sources",
                         nargs=None,
                         choices=['list', 'download', 'force'],
-                        help='Show/modify sources. '+
+                        help='Show/modify sources. ' +
                              'Available ``ACTION`` values: \n' +
-                             '``list`` schows available sources. \n'+
-                             '``download`` starts downloading the data.\n'+
+                             '``list`` schows available sources. \n' +
+                             '``download`` starts downloading the data.\n' +
                              '``force`` downloads data even if they are ' +
                              'already available locally.')
 
@@ -1165,6 +1450,8 @@ def cli_parser() -> argparse.ArgumentParser:
     verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
                       const=logging.INFO, help='show detailed output')
     return parser
+
+
 # -------------------------------------------------------------------------
 
 

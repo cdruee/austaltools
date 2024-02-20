@@ -338,7 +338,7 @@ def stabilty_class(classifyer, time, z0, L):
     # 9 = missing value
     sclass = np.array([9] * len(time))
     for i, t in enumerate(time):
-        sclass[i] = scale.get_index(z0[i], L[i], inverted=False)
+        sclass[i] = scale.get_index(z0.iloc[i], L.iloc[i], inverted=False)
 
     return sclass[()]
 
@@ -586,41 +586,41 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
     kt = np.zeros(stund.shape)
     for i, _ in enumerate(time):
         # K_N for night conditions
-        if ecc[i] <= 0.75:
-            if ff[i] <= 2.:
-                kn[i] = k['I']
-            elif ff[i] <= 3:
-                kn[i] = k['II']
-            else:  # ff[i] > 3
-                kn[i] = k['III1']
+        if ecc.iloc[i] <= 0.75:
+            if ff.iloc[i] <= 2.:
+                kn.iloc[i] = k['I']
+            elif ff.iloc[i] <= 3:
+                kn.iloc[i] = k['II']
+            else:  # ff.iloc[i] > 3
+                kn.iloc[i] = k['III1']
         else:
-            if ff[i] <= 2.:
-                kn[i] = k['II']
-            else:  # ff[i] > 2)
-                kn[i] = k['III1']
+            if ff.iloc[i] <= 2.:
+                kn.iloc[i] = k['II']
+            else:  # ff.iloc[i] > 2)
+                kn.iloc[i] = k['III1']
         # K_T for day conditions
-        if ecc[i] <= 0.25:
-            if ff[i] <= 4:
-                kt[i] = k['IV']
-            else:  # ff[i] > 4:
-                kt[i] = k['III2']
-        elif ecc[i] < 0.75:
-            if ff[i] <= 3:
-                kt[i] = k['IV']
-            elif ff[i] <= 4:
-                kt[i] = k['III2']
-            else:  # ff[i] > 4
-                kt[i] = k['III1']
-        else:  # ecc[i] >= 0.75
-            if ff[i] <= 1:
-                kt[i] = k['IV']
-            elif ff[i] <= 4:
-                kt[i] = k['III2']
-            else:  # ff[i] > 4:
-                kt[i] = k['III1']
+        if ecc.iloc[i] <= 0.25:
+            if ff.iloc[i] <= 4:
+                kt.iloc[i] = k['IV']
+            else:  # ff.iloc[i] > 4:
+                kt.iloc[i] = k['III2']
+        elif ecc.iloc[i] < 0.75:
+            if ff.iloc[i] <= 3:
+                kt.iloc[i] = k['IV']
+            elif ff.iloc[i] <= 4:
+                kt.iloc[i] = k['III2']
+            else:  # ff.iloc[i] > 4
+                kt.iloc[i] = k['III1']
+        else:  # ecc.iloc[i] >= 0.75
+            if ff.iloc[i] <= 1:
+                kt.iloc[i] = k['IV']
+            elif ff.iloc[i] <= 4:
+                kt.iloc[i] = k['III2']
+            else:  # ff.iloc[i] > 4:
+                kt.iloc[i] = k['III1']
 
         logger.debug('table A.1: k_n: %4s, k_d: %4s' %
-                     (KM2002.name(kn[i]), KM2002.name(kt[i])))
+                     (KM2002.name(kn.iloc[i]), KM2002.name(kt.iloc[i])))
     #
     # **)  Für die Abgrenzung sind Sonnenaufgang und -untergang
     #      {MEZ) maßgebend. Die Ausbreitungsklasse für Nachtstunden
@@ -629,15 +629,15 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
     #
     km = np.zeros(stund.shape)
     for i, _ in enumerate(time):
-        if stund[i] <= np.ceil(s_auf[i]):
-            km[i] = kn[i]
-            logger.debug('morning        -> %4s' % (KM2002.name(km[i])))
-        elif stund[i] <= s_unter[i]:
-            km[i] = kt[i]
-            logger.debug('day            -> %4s' % (KM2002.name(km[i])))
+        if stund.iloc[i] <= np.ceil(s_auf.iloc[i]):
+            km.iloc[i] = kn.iloc[i]
+            logger.debug('morning        -> %4s' % (KM2002.name(km.iloc[i])))
+        elif stund.iloc[i] <= s_unter.iloc[i]:
+            km.iloc[i] = kt.iloc[i]
+            logger.debug('day            -> %4s' % (KM2002.name(km.iloc[i])))
         else:
-            km[i] = kn[i]
-            logger.debug('evening        -> %4s' % (KM2002.name(km[i])))
+            km.iloc[i] = kn.iloc[i]
+            logger.debug('evening        -> %4s' % (KM2002.name(km.iloc[i])))
 
     #
     # besondere Ausbreitungsverhaeltnisse
@@ -657,18 +657,18 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
         # Ausbreitungsklasse - im Fall der Klasse IV die
         # Klasse V - einzusetzen.
         #
-        if monat[i] in [6, 7, 8]:
-            if stund[i] >= 10 and stund[i] <= 16 and km[i] < k['V']:
-                if ecc[i] <= 0.75:
-                    km[i] = km[i] + 1
-                    logger.debug('rule a.1a     -> %4s' % (KM2002.name(km[i])))
-                elif ecc[i] <= 0.875 and ff[i] < 2.5:
-                    km[i] = km[i] + 1
-                    logger.debug('rule a.1b     -> %4s' % (KM2002.name(km[i])))
-            if stund[i] >= 12 and stund[i] <= 15 and km[i] < k['V']:
-                if ecc[i] <= 0.625:
-                    km[i] = km[i] + 1
-                    logger.debug('rule a.2      -> %4s' % (KM2002.name(km[i])))
+        if monat.iloc[i] in [6, 7, 8]:
+            if stund.iloc[i] >= 10 and stund.iloc[i] <= 16 and km.iloc[i] < k['V']:
+                if ecc.iloc[i] <= 0.75:
+                    km.iloc[i] = km.iloc[i] + 1
+                    logger.debug('rule a.1a     -> %4s' % (KM2002.name(km.iloc[i])))
+                elif ecc.iloc[i] <= 0.875 and ff.iloc[i] < 2.5:
+                    km.iloc[i] = km.iloc[i] + 1
+                    logger.debug('rule a.1b     -> %4s' % (KM2002.name(km.iloc[i])))
+            if stund.iloc[i] >= 12 and stund.iloc[i] <= 15 and km.iloc[i] < k['V']:
+                if ecc.iloc[i] <= 0.625:
+                    km.iloc[i] = km.iloc[i] + 1
+                    logger.debug('rule a.2      -> %4s' % (KM2002.name(km.iloc[i])))
         #
         # Teil b)
         # Für die Monate Mai und September ist für die
@@ -677,11 +677,11 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
         # Ausbreitungsklasse - im Fall der Klasse IV die
         # Klasse V - einzusetzen.
         #
-        elif monat[i] in [5, 9]:
-            if stund[i] >= 11 and stund[i] <= 15:
-                if ecc[i] <= 0.75:
-                    km[i] = km[i] + 1
-                    logger.debug('rule b        -> %4s' % (KM2002.name(km[i])))
+        elif monat.iloc[i] in [5, 9]:
+            if stund.iloc[i] >= 11 and stund.iloc[i] <= 15:
+                if ecc.iloc[i] <= 0.75:
+                    km.iloc[i] = km.iloc[i] + 1
+                    logger.debug('rule b        -> %4s' % (KM2002.name(km.iloc[i])))
         #
         # Teil c)
         # Für jede volle Stunde der Zeiträume von 1 Stunde
@@ -722,129 +722,129 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
         #
         a2_star = None
         a2_col = None
-        if kn[i] == k['I'] and kt[i] == k['IV']:
-            if stund[i] >= s_auf[i] + 1. and stund[i] < s_auf[i] + 2.:
+        if kn.iloc[i] == k['I'] and kt.iloc[i] == k['IV']:
+            if stund.iloc[i] >= s_auf.iloc[i] + 1. and stund.iloc[i] < s_auf.iloc[i] + 2.:
                 # Fussnote *)
-                if (monat[i] in [3, 4, 5, 6, 7, 8, 9, 10, 11] and ff[i] > 1.):
-                    km[i] = k['II']
+                if (monat.iloc[i] in [3, 4, 5, 6, 7, 8, 9, 10, 11] and ff.iloc[i] > 1.):
+                    km.iloc[i] = k['II']
                     a2_star = '*'
                 else:
-                    km[i] = k['I']
-            elif stund[i] >= s_auf[i] + 2. and stund[i] < s_auf[i] + 3.:
-                km[i] = k['II']
-            elif stund[i] >= s_unter[i] - 2. and stund[i] < s_unter[i] - 1.:
-                km[i] = k['II']
-            elif stund[i] >= s_unter[i] - 1. and stund[i] < s_unter[i]:
+                    km.iloc[i] = k['I']
+            elif stund.iloc[i] >= s_auf.iloc[i] + 2. and stund.iloc[i] < s_auf.iloc[i] + 3.:
+                km.iloc[i] = k['II']
+            elif stund.iloc[i] >= s_unter.iloc[i] - 2. and stund.iloc[i] < s_unter.iloc[i] - 1.:
+                km.iloc[i] = k['II']
+            elif stund.iloc[i] >= s_unter.iloc[i] - 1. and stund.iloc[i] < s_unter.iloc[i]:
                 # Fussnote **)
-                if monat[i] in [1, 2, 12] and ff[i] <= 1 and ecc[i] <= 0.75:
-                    km[i] = k['I']
+                if monat.iloc[i] in [1, 2, 12] and ff.iloc[i] <= 1 and ecc.iloc[i] <= 0.75:
+                    km.iloc[i] = k['I']
                     a2_star = '**'
                 else:
-                    km[i] = k['II']
-            elif stund[i] >= s_unter[i] and stund[i] < s_unter[i] + 1.:
+                    km.iloc[i] = k['II']
+            elif stund.iloc[i] >= s_unter.iloc[i] and stund.iloc[i] < s_unter.iloc[i] + 1.:
                 # Fussnote *)
-                if (monat[i] in [3, 4, 5, 6, 7, 8, 9, 10, 11] and ff[i] > 1):
+                if (monat.iloc[i] in [3, 4, 5, 6, 7, 8, 9, 10, 11] and ff.iloc[i] > 1):
                     a2_star = '*'
-                    km[i] = k['II']
+                    km.iloc[i] = k['II']
                 else:
-                    km[i] = k['I']
-        elif kn[i] == k['I'] and kt[i] == k['III2']:
-            if stund[i] >= s_auf[i] + 1. and stund[i] < s_auf[i] + 2.:
-                km[i] = k['II']
-            elif stund[i] >= s_auf[i] + 2. and stund[i] < s_auf[i] + 3.:
-                km[i] = k['II']
-            elif stund[i] >= s_unter[i] - 2. and stund[i] < s_unter[i] - 1.:
-                km[i] = k['III1']
-            elif stund[i] >= s_unter[i] - 1. and stund[i] < s_unter[i]:
-                km[i] = k['III1']
-            elif stund[i] >= s_unter[i] and stund[i] < s_unter[i] + 1.:
+                    km.iloc[i] = k['I']
+        elif kn.iloc[i] == k['I'] and kt.iloc[i] == k['III2']:
+            if stund.iloc[i] >= s_auf.iloc[i] + 1. and stund.iloc[i] < s_auf.iloc[i] + 2.:
+                km.iloc[i] = k['II']
+            elif stund.iloc[i] >= s_auf.iloc[i] + 2. and stund.iloc[i] < s_auf.iloc[i] + 3.:
+                km.iloc[i] = k['II']
+            elif stund.iloc[i] >= s_unter.iloc[i] - 2. and stund.iloc[i] < s_unter.iloc[i] - 1.:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_unter.iloc[i] - 1. and stund.iloc[i] < s_unter.iloc[i]:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_unter.iloc[i] and stund.iloc[i] < s_unter.iloc[i] + 1.:
                 # Fussnote *)
-                if (monat[i] in [3, 4, 5, 6, 7, 8, 9, 10, 11] and ff[i] > 1):
+                if (monat.iloc[i] in [3, 4, 5, 6, 7, 8, 9, 10, 11] and ff.iloc[i] > 1):
                     a2_star = '*'
-                    km[i] = k['II']
+                    km.iloc[i] = k['II']
                 else:
-                    km[i] = k['I']
-        elif kn[i] == k['II'] and kt[i] == k['IV']:
-            if stund[i] >= s_auf[i] + 1. and stund[i] < s_auf[i] + 2.:
-                km[i] = k['II']
-            elif stund[i] >= s_auf[i] + 2. and stund[i] < s_auf[i] + 3.:
-                km[i] = k['III1']
-            elif stund[i] >= s_unter[i] - 2. and stund[i] < s_unter[i] - 1.:
-                km[i] = k['III1']
-            elif stund[i] >= s_unter[i] - 1. and stund[i] < s_unter[i]:
-                km[i] = k['II']
-            elif stund[i] >= s_unter[i] and stund[i] < s_unter[i] + 1.:
-                km[i] = k['II']
-        elif kn[i] == k['II'] and kt[i] == k['III2']:
-            if stund[i] >= s_auf[i] + 1. and stund[i] < s_auf[i] + 2.:
-                km[i] = k['III1']
-            elif stund[i] >= s_auf[i] + 2. and stund[i] < s_auf[i] + 3.:
-                km[i] = k['III1']
-            elif stund[i] >= s_unter[i] - 2. and stund[i] < s_unter[i] - 1.:
-                km[i] = k['III1']
-            elif stund[i] >= s_unter[i] - 1. and stund[i] < s_unter[i]:
-                km[i] = k['III1']
-            elif stund[i] >= s_unter[i] and stund[i] < s_unter[i] + 1.:
-                km[i] = k['II']
-        elif kn[i] == k['III1'] and kt[i] == k['IV']:
-            if stund[i] >= s_auf[i] + 1. and stund[i] < s_auf[i] + 2.:
-                km[i] = k['III1']
-            elif stund[i] >= s_auf[i] + 2. and stund[i] < s_auf[i] + 3.:
-                km[i] = k['III2']
-            elif stund[i] >= s_unter[i] - 2. and stund[i] < s_unter[i] - 1.:
-                km[i] = k['III2']
-            elif stund[i] >= s_unter[i] - 1. and stund[i] < s_unter[i]:
-                km[i] = k['III1']
-            elif stund[i] >= s_unter[i] and stund[i] < s_unter[i] + 1.:
-                km[i] = k['III1']
-        elif kn[i] == k['III1'] and kt[i] == k['III2']:
-            if stund[i] >= s_auf[i] + 1. and stund[i] < s_auf[i] + 2.:
-                km[i] = k['III1']
-            elif stund[i] >= s_auf[i] + 2. and stund[i] < s_auf[i] + 3.:
-                km[i] = k['III1']
-            elif stund[i] >= s_unter[i] - 2. and stund[i] < s_unter[i] - 1.:
-                km[i] = k['III2']
-            elif stund[i] >= s_unter[i] - 1. and stund[i] < s_unter[i]:
-                km[i] = k['III2']
-            elif stund[i] >= s_unter[i] and stund[i] < s_unter[i] + 1.:
-                km[i] = k['III1']
-        elif kn[i] == k['III1'] and kt[i] == k['III1']:
-            if stund[i] >= s_auf[i] + 1. and stund[i] < s_auf[i] + 2.:
-                km[i] = k['III1']
-            elif stund[i] >= s_auf[i] + 2. and stund[i] < s_auf[i] + 3.:
-                km[i] = k['III1']
-            elif stund[i] >= s_unter[i] - 2. and stund[i] < s_unter[i] - 1.:
-                km[i] = k['III1']
-            elif stund[i] >= s_unter[i] - 1. and stund[i] < s_unter[i]:
-                km[i] = k['III1']
-            elif stund[i] >= s_unter[i] and stund[i] < s_unter[i] + 1.:
-                km[i] = k['III1']
+                    km.iloc[i] = k['I']
+        elif kn.iloc[i] == k['II'] and kt.iloc[i] == k['IV']:
+            if stund.iloc[i] >= s_auf.iloc[i] + 1. and stund.iloc[i] < s_auf.iloc[i] + 2.:
+                km.iloc[i] = k['II']
+            elif stund.iloc[i] >= s_auf.iloc[i] + 2. and stund.iloc[i] < s_auf.iloc[i] + 3.:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_unter.iloc[i] - 2. and stund.iloc[i] < s_unter.iloc[i] - 1.:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_unter.iloc[i] - 1. and stund.iloc[i] < s_unter.iloc[i]:
+                km.iloc[i] = k['II']
+            elif stund.iloc[i] >= s_unter.iloc[i] and stund.iloc[i] < s_unter.iloc[i] + 1.:
+                km.iloc[i] = k['II']
+        elif kn.iloc[i] == k['II'] and kt.iloc[i] == k['III2']:
+            if stund.iloc[i] >= s_auf.iloc[i] + 1. and stund.iloc[i] < s_auf.iloc[i] + 2.:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_auf.iloc[i] + 2. and stund.iloc[i] < s_auf.iloc[i] + 3.:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_unter.iloc[i] - 2. and stund.iloc[i] < s_unter.iloc[i] - 1.:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_unter.iloc[i] - 1. and stund.iloc[i] < s_unter.iloc[i]:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_unter.iloc[i] and stund.iloc[i] < s_unter.iloc[i] + 1.:
+                km.iloc[i] = k['II']
+        elif kn.iloc[i] == k['III1'] and kt.iloc[i] == k['IV']:
+            if stund.iloc[i] >= s_auf.iloc[i] + 1. and stund.iloc[i] < s_auf.iloc[i] + 2.:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_auf.iloc[i] + 2. and stund.iloc[i] < s_auf.iloc[i] + 3.:
+                km.iloc[i] = k['III2']
+            elif stund.iloc[i] >= s_unter.iloc[i] - 2. and stund.iloc[i] < s_unter.iloc[i] - 1.:
+                km.iloc[i] = k['III2']
+            elif stund.iloc[i] >= s_unter.iloc[i] - 1. and stund.iloc[i] < s_unter.iloc[i]:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_unter.iloc[i] and stund.iloc[i] < s_unter.iloc[i] + 1.:
+                km.iloc[i] = k['III1']
+        elif kn.iloc[i] == k['III1'] and kt.iloc[i] == k['III2']:
+            if stund.iloc[i] >= s_auf.iloc[i] + 1. and stund.iloc[i] < s_auf.iloc[i] + 2.:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_auf.iloc[i] + 2. and stund.iloc[i] < s_auf.iloc[i] + 3.:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_unter.iloc[i] - 2. and stund.iloc[i] < s_unter.iloc[i] - 1.:
+                km.iloc[i] = k['III2']
+            elif stund.iloc[i] >= s_unter.iloc[i] - 1. and stund.iloc[i] < s_unter.iloc[i]:
+                km.iloc[i] = k['III2']
+            elif stund.iloc[i] >= s_unter.iloc[i] and stund.iloc[i] < s_unter.iloc[i] + 1.:
+                km.iloc[i] = k['III1']
+        elif kn.iloc[i] == k['III1'] and kt.iloc[i] == k['III1']:
+            if stund.iloc[i] >= s_auf.iloc[i] + 1. and stund.iloc[i] < s_auf.iloc[i] + 2.:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_auf.iloc[i] + 2. and stund.iloc[i] < s_auf.iloc[i] + 3.:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_unter.iloc[i] - 2. and stund.iloc[i] < s_unter.iloc[i] - 1.:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_unter.iloc[i] - 1. and stund.iloc[i] < s_unter.iloc[i]:
+                km.iloc[i] = k['III1']
+            elif stund.iloc[i] >= s_unter.iloc[i] and stund.iloc[i] < s_unter.iloc[i] + 1.:
+                km.iloc[i] = k['III1']
 
-        if stund[i] >= s_auf[i] + 1. and stund[i] < s_auf[i] + 2.:
+        if stund.iloc[i] >= s_auf.iloc[i] + 1. and stund.iloc[i] < s_auf.iloc[i] + 2.:
             a2_col = 'SA+1/SA+2'
-        elif stund[i] >= s_auf[i] + 2. and stund[i] < s_auf[i] + 3.:
+        elif stund.iloc[i] >= s_auf.iloc[i] + 2. and stund.iloc[i] < s_auf.iloc[i] + 3.:
             a2_col = 'SA+2/SA+3'
-        elif stund[i] >= s_unter[i] - 2. and stund[i] < s_unter[i] - 1.:
+        elif stund.iloc[i] >= s_unter.iloc[i] - 2. and stund.iloc[i] < s_unter.iloc[i] - 1.:
             a2_col = 'SU-2/SU-1'
-        elif stund[i] >= s_unter[i] - 1. and stund[i] < s_unter[i]:
+        elif stund.iloc[i] >= s_unter.iloc[i] - 1. and stund.iloc[i] < s_unter.iloc[i]:
             a2_col = 'SU-1/SU'
-        elif stund[i] >= s_unter[i] and stund[i] < s_unter[i] + 1.:
+        elif stund.iloc[i] >= s_unter.iloc[i] and stund.iloc[i] < s_unter.iloc[i] + 1.:
             a2_col = '  SU/SU+1'
         if a2_col is not None:
             logger.debug('rule c tab A.2:')
             if a2_star is not None:
                 logger.debug('footnote (%2a) :' % a2_star)
-            logger.debug('col: %9a-> %4s' % (a2_col, KM2002.name(km[i])))
+            logger.debug('col: %9a-> %4s' % (a2_col, KM2002.name(km.iloc[i])))
         #
         # Teil d)
         #  Für die Monate Dezember, Januar und Februar
         # ist die Ausbreitungsklasse IV durch die Ausbrei-
         # tungsklasse III2 zu ersetzen.
         #
-        if monat[i] in [1, 2, 12]:
-            if km[i] == k['IV']:
-                km[i] = k['III2']
-                logger.debug('rule d        -> %4s' % (KM2002.name(km[i])))
+        if monat.iloc[i] in [1, 2, 12]:
+            if km.iloc[i] == k['IV']:
+                km.iloc[i] = k['III2']
+                logger.debug('rule d        -> %4s' % (KM2002.name(km.iloc[i])))
 
     #
     # Fälle, bei denen keine Ausbreitungsklasse bestimmt
@@ -853,16 +853,16 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
     # 3 m/s der Klasse II und von mehr als 3,5 m/s der
     # Klasse III1 zugeordnet.
     for i, _ in enumerate(time):
-        if km[i] == 0:
-            if ff[i] < 2.0:
-                km[i] = k['I']
-            elif ff[i] <= 3.5:
+        if km.iloc[i] == 0:
+            if ff.iloc[i] < 2.0:
+                km.iloc[i] = k['I']
+            elif ff.iloc[i] <= 3.5:
                 # here we include 2.0 ... 2.5 m/s as
                 # else it would remain undefinded
-                km[i] = k['II']
+                km.iloc[i] = k['II']
             else:
-                km[i] = k['III1']
-            logger.debug('savlatory rule-> %4s' % (KM2002.name(km[i])))
+                km.iloc[i] = k['III1']
+            logger.debug('savlatory rule-> %4s' % (KM2002.name(km.iloc[i])))
 
     logger.debug('return value  -> %s' % str([KM2002.name(x) for x in km]))
     if scalar:
@@ -1104,7 +1104,8 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
     ecc = tcc.mask(ci_only, [np.max((0., x - 0.375)) for x in tcc])
     for i, x in enumerate(time):
         logging.debug('tcc: %f, day: %1i, ci: %1i, ecc: %f' %
-                      (tcc[i], daytime[i], ci_only[i], ecc[i]))
+                      (tcc.iloc[i], daytime.iloc[i],
+                       ci_only[i], ecc.iloc[i]))
 
     # exit here for cloud verification (development only)
     if _cloudout:
@@ -1133,48 +1134,48 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
     kt = pd.Series(np.nan, index=stund.index)
     for i, _ in enumerate(time):
         # K_N for night conditions
-        if ecc[i] <= 0.75:
-            if ff[i] <= 2.3:
-                kn[i] = k['I']
-            elif ff[i] <= 3.3:
-                kn[i] = k['II']
+        if ecc.iloc[i] <= 0.75:
+            if ff.iloc[i] <= 2.3:
+                kn.iloc[i] = k['I']
+            elif ff.iloc[i] <= 3.3:
+                kn.iloc[i] = k['II']
             else:  # ff[i] >= 3.3
-                kn[i] = k['III1']
-        elif ecc[i] > 0.75:
-            if ff[i] <= 2.3:
-                kn[i] = k['II']
+                kn.iloc[i] = k['III1']
+        elif ecc.iloc[i] > 0.75:
+            if ff.iloc[i] <= 2.3:
+                kn.iloc[i] = k['II']
             else:  # ff[i] >= 2.4)
-                kn[i] = k['III1']
+                kn.iloc[i] = k['III1']
         else:  # ecc[i] == np.nan
-            kn[i] = np.nan
+            kn.iloc[i] = np.nan
         # K_T for day conditions
-        if ecc[i] <= 0.25:
-            if ff[i] <= 4.3:
-                kt[i] = k['IV']
+        if ecc.iloc[i] <= 0.25:
+            if ff.iloc[i] <= 4.3:
+                kt.iloc[i] = k['IV']
             else:  # ff[i] >= 4.4:
-                kt[i] = k['III2']
-        elif ecc[i] < 0.75:
-            if ff[i] <= 3.3:
-                kt[i] = k['IV']
-            elif ff[i] <= 4.3:
-                kt[i] = k['III2']
+                kt.iloc[i] = k['III2']
+        elif ecc.iloc[i] < 0.75:
+            if ff.iloc[i] <= 3.3:
+                kt.iloc[i] = k['IV']
+            elif ff.iloc[i] <= 4.3:
+                kt.iloc[i] = k['III2']
             else:  # ff[i] >= 4.4
-                kt[i] = k['III1']
-        elif ecc[i] >= 0.75:
-            if ff[i] <= 1.2:
-                kt[i] = k['IV']
-            elif ff[i] <= 4.3:
-                kt[i] = k['III2']
+                kt.iloc[i] = k['III1']
+        elif ecc.iloc[i] >= 0.75:
+            if ff.iloc[i] <= 1.2:
+                kt.iloc[i] = k['IV']
+            elif ff.iloc[i] <= 4.3:
+                kt.iloc[i] = k['III2']
             else:  # ff[i] >= 4.4:
-                kt[i] = k['III1']
+                kt.iloc[i] = k['III1']
         else:  # ecc ==np.nan
-            kt[i] = np.nan
+            kt.iloc[i] = np.nan
 
         # no values if cloud cover is missing
         # else show them
-        if not np.isnan(kt[i]) and not np.isnan(kn[i]):
+        if not np.isnan(kt.iloc[i]) and not np.isnan(kn.iloc[i]):
             logger.debug('ff: %4.1f, k_n: %4s, k_d: %4s' % (
-                ff[i], KM2002.name(kn[i]), KM2002.name(kt[i])))
+                ff.iloc[i], KM2002.name(kn.iloc[i]), KM2002.name(kt.iloc[i])))
 
     # select value depending om day/night
     km = kt.where(daytime, kn)
@@ -1201,21 +1202,21 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
         # exceeding 5/8. If the dispersion category is al-
         # ready V, this modification does not take place.
         #
-        if monat[i] in [6, 7, 8]:
-            if stund[i] >= 10 and stund[i] <= 16 and km[i] < k['V']:
-                if ecc[i] <= 0.75:
-                    km[i] = km[i] + 1
+        if monat.iloc[i] in [6, 7, 8]:
+            if stund.iloc[i] >= 10 and stund.iloc[i] <= 16 and km.iloc[i] < k['V']:
+                if ecc.iloc[i] <= 0.75:
+                    km.iloc[i] = km.iloc[i] + 1
                     logger.debug('rule a.1a     -> %4s' %
-                                 (KM2002.name(km[i])))
-                elif ecc[i] <= 0.875 and ff[i] < 2.4:
-                    km[i] = km[i] + 1
+                                 (KM2002.name(km.iloc[i])))
+                elif ecc.iloc[i] <= 0.875 and ff.iloc[i] < 2.4:
+                    km.iloc[i] = km.iloc[i] + 1
                     logger.debug('rule a.1b     -> %4s' %
-                                 (KM2002.name(km[i])))
-            if stund[i] >= 12 and stund[i] <= 15 and km[i] < k['V']:
-                if ecc[i] <= 0.625:
-                    km[i] = km[i] + 1
+                                 (KM2002.name(km.iloc[i])))
+            if stund.iloc[i] >= 12 and stund.iloc[i] <= 15 and km.iloc[i] < k['V']:
+                if ecc.iloc[i] <= 0.625:
+                    km.iloc[i] = km.iloc[i] + 1
                     logger.debug('rule a.2      -> %4s' %
-                                 (KM2002.name(km[i])))
+                                 (KM2002.name(km.iloc[i])))
         #
         # rule b)
         # For May (last climatological spring month) and
@@ -1224,12 +1225,12 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
         # the next higher dispersion category should be
         # chosen for total cloud cover not exceeding 6/8.
         #
-        elif monat[i] in [5, 9]:
-            if stund[i] >= 11 and stund[i] <= 15:
-                if ecc[i] <= 0.75:
-                    km[i] = km[i] + 1
+        elif monat.iloc[i] in [5, 9]:
+            if stund.iloc[i] >= 11 and stund.iloc[i] <= 15:
+                if ecc.iloc[i] <= 0.75:
+                    km.iloc[i] = km.iloc[i] + 1
                     logger.debug('rule b        -> %4s' %
-                                 (KM2002.name(km[i])))
+                                 (KM2002.name(km.iloc[i])))
         #
         # rule c)
         # For the period from one hour until three hours
@@ -1267,133 +1268,133 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
         #
         t3_fn = None
         t3_col = None
-        if kn[i] == k['I'] and kt[i] == k['IV']:
-            if stund[i] >= sr[i] + 1. and stund[i] < sr[i] + 2.:
+        if kn.iloc[i] == k['I'] and kt.iloc[i] == k['IV']:
+            if stund.iloc[i] >= sr.iloc[i] + 1. and stund.iloc[i] < sr.iloc[i] + 2.:
                 # footnote a)
-                if (monat[i] in [3, 4, 5, 6, 7, 8, 9, 10, 11] and
-                        ff[i] > 1.):
-                    km[i] = k['II']
+                if (monat.iloc[i] in [3, 4, 5, 6, 7, 8, 9, 10, 11] and
+                        ff.iloc[i] > 1.):
+                    km.iloc[i] = k['II']
                     t3_fn = 'a'
                 else:
-                    km[i] = k['I']
-            elif stund[i] >= sr[i] + 2. and stund[i] < sr[i] + 3.:
-                km[i] = k['II']
-            elif stund[i] >= ss[i] - 2. and stund[i] < ss[i] - 1.:
-                km[i] = k['II']
-            elif stund[i] >= ss[i] - 1. and stund[i] < ss[i]:
+                    km.iloc[i] = k['I']
+            elif stund.iloc[i] >= sr.iloc[i] + 2. and stund.iloc[i] < sr.iloc[i] + 3.:
+                km.iloc[i] = k['II']
+            elif stund.iloc[i] >= ss.iloc[i] - 2. and stund.iloc[i] < ss.iloc[i] - 1.:
+                km.iloc[i] = k['II']
+            elif stund.iloc[i] >= ss.iloc[i] - 1. and stund.iloc[i] < ss.iloc[i]:
                 # footnote b)
-                if (monat[i] in [1, 2, 12] and ff[i] <= 1 and
-                        ecc[i] <= 0.75):
-                    km[i] = k['I']
+                if (monat.iloc[i] in [1, 2, 12] and ff.iloc[i] <= 1 and
+                        ecc.iloc[i] <= 0.75):
+                    km.iloc[i] = k['I']
                     t3_fn = 'b'
                 else:
-                    km[i] = k['II']
-            elif stund[i] >= ss[i] and stund[i] < ss[i] + 1.:
+                    km.iloc[i] = k['II']
+            elif stund.iloc[i] >= ss.iloc[i] and stund.iloc[i] < ss.iloc[i] + 1.:
                 # footnote a)
-                if (monat[i] in [3, 4, 5, 6, 7, 8, 9, 10, 11] and
-                        ff[i] > 1):
+                if (monat.iloc[i] in [3, 4, 5, 6, 7, 8, 9, 10, 11] and
+                        ff.iloc[i] > 1):
                     t3_fn = 'a'
-                    km[i] = k['II']
+                    km.iloc[i] = k['II']
                 else:
-                    km[i] = k['I']
-        elif kn[i] == k['I'] and kt[i] == k['III2']:
-            if sr[i] + 1. <= stund[i] < sr[i] + 2.:
-                km[i] = k['II']
-            elif sr[i] + 2. <= stund[i] < sr[i] + 3.:
-                km[i] = k['II']
-            elif ss[i] - 2. <= stund[i] < ss[i] - 1.:
-                km[i] = k['III1']
-            elif ss[i] - 1. <= stund[i] < ss[i]:
-                km[i] = k['III1']
-            elif ss[i] <= stund[i] < ss[i] + 1.:
+                    km.iloc[i] = k['I']
+        elif kn.iloc[i] == k['I'] and kt.iloc[i] == k['III2']:
+            if sr.iloc[i] + 1. <= stund.iloc[i] < sr.iloc[i] + 2.:
+                km.iloc[i] = k['II']
+            elif sr.iloc[i] + 2. <= stund.iloc[i] < sr.iloc[i] + 3.:
+                km.iloc[i] = k['II']
+            elif ss.iloc[i] - 2. <= stund.iloc[i] < ss.iloc[i] - 1.:
+                km.iloc[i] = k['III1']
+            elif ss.iloc[i] - 1. <= stund.iloc[i] < ss.iloc[i]:
+                km.iloc[i] = k['III1']
+            elif ss.iloc[i] <= stund.iloc[i] < ss.iloc[i] + 1.:
                 # Fussnote *)
-                if (monat[i] in [3, 4, 5, 6, 7, 8, 9, 10, 11] and
-                        ff[i] > 1):
+                if (monat.iloc[i] in [3, 4, 5, 6, 7, 8, 9, 10, 11] and
+                        ff.iloc[i] > 1):
                     t3_fn = 'a'
-                    km[i] = k['II']
+                    km.iloc[i] = k['II']
                 else:
-                    km[i] = k['I']
-        elif kn[i] == k['II'] and kt[i] == k['IV']:
-            if sr[i] + 1. <= stund[i] < sr[i] + 2.:
-                km[i] = k['II']
-            elif sr[i] + 2. <= stund[i] < sr[i] + 3.:
-                km[i] = k['III1']
-            elif ss[i] - 2. <= stund[i] < ss[i] - 1.:
-                km[i] = k['III1']
-            elif ss[i] - 1. <= stund[i] < ss[i]:
-                km[i] = k['II']
-            elif ss[i] <= stund[i] < ss[i] + 1.:
-                km[i] = k['II']
-        elif kn[i] == k['II'] and kt[i] == k['III2']:
-            if sr[i] + 1. <= stund[i] < sr[i] + 2.:
-                km[i] = k['III1']
-            elif sr[i] + 2. <= stund[i] < sr[i] + 3.:
-                km[i] = k['III1']
-            elif ss[i] - 2. <= stund[i] < ss[i] - 1.:
-                km[i] = k['III1']
-            elif ss[i] - 1. <= stund[i] < ss[i]:
-                km[i] = k['III1']
-            elif ss[i] <= stund[i] < ss[i] + 1.:
-                km[i] = k['II']
-        elif kn[i] == k['III1'] and kt[i] == k['IV']:
-            if sr[i] + 1. <= stund[i] < sr[i] + 2.:
-                km[i] = k['III1']
-            elif sr[i] + 2. <= stund[i] < sr[i] + 3.:
-                km[i] = k['III2']
-            elif ss[i] - 2. <= stund[i] < ss[i] - 1.:
-                km[i] = k['III2']
-            elif ss[i] - 1. <= stund[i] < ss[i]:
-                km[i] = k['III1']
-            elif ss[i] <= stund[i] < ss[i] + 1.:
-                km[i] = k['III1']
-        elif kn[i] == k['III1'] and kt[i] == k['III2']:
-            if sr[i] + 1. <= stund[i] < sr[i] + 2.:
-                km[i] = k['III1']
-            elif sr[i] + 2. <= stund[i] < sr[i] + 3.:
-                km[i] = k['III1']
-            elif ss[i] - 2. <= stund[i] < ss[i] - 1.:
-                km[i] = k['III2']
-            elif ss[i] - 1. <= stund[i] < ss[i]:
-                km[i] = k['III2']
-            elif ss[i] <= stund[i] < ss[i] + 1.:
-                km[i] = k['III1']
-        elif kn[i] == k['III1'] and kt[i] == k['III1']:
-            if sr[i] + 1. <= stund[i] < sr[i] + 2.:
-                km[i] = k['III1']
-            elif sr[i] + 2. <= stund[i] < sr[i] + 3.:
-                km[i] = k['III1']
-            elif ss[i] - 2. <= stund[i] < ss[i] - 1.:
-                km[i] = k['III1']
-            elif ss[i] - 1. <= stund[i] < ss[i]:
-                km[i] = k['III1']
-            elif ss[i] <= stund[i] < ss[i] + 1.:
-                km[i] = k['III1']
+                    km.iloc[i] = k['I']
+        elif kn.iloc[i] == k['II'] and kt.iloc[i] == k['IV']:
+            if sr.iloc[i] + 1. <= stund.iloc[i] < sr.iloc[i] + 2.:
+                km.iloc[i] = k['II']
+            elif sr.iloc[i] + 2. <= stund.iloc[i] < sr.iloc[i] + 3.:
+                km.iloc[i] = k['III1']
+            elif ss.iloc[i] - 2. <= stund.iloc[i] < ss.iloc[i] - 1.:
+                km.iloc[i] = k['III1']
+            elif ss.iloc[i] - 1. <= stund.iloc[i] < ss.iloc[i]:
+                km.iloc[i] = k['II']
+            elif ss.iloc[i] <= stund.iloc[i] < ss.iloc[i] + 1.:
+                km.iloc[i] = k['II']
+        elif kn.iloc[i] == k['II'] and kt.iloc[i] == k['III2']:
+            if sr.iloc[i] + 1. <= stund.iloc[i] < sr.iloc[i] + 2.:
+                km.iloc[i] = k['III1']
+            elif sr.iloc[i] + 2. <= stund.iloc[i] < sr.iloc[i] + 3.:
+                km.iloc[i] = k['III1']
+            elif ss.iloc[i] - 2. <= stund.iloc[i] < ss.iloc[i] - 1.:
+                km.iloc[i] = k['III1']
+            elif ss.iloc[i] - 1. <= stund.iloc[i] < ss.iloc[i]:
+                km.iloc[i] = k['III1']
+            elif ss.iloc[i] <= stund.iloc[i] < ss.iloc[i] + 1.:
+                km.iloc[i] = k['II']
+        elif kn.iloc[i] == k['III1'] and kt.iloc[i] == k['IV']:
+            if sr.iloc[i] + 1. <= stund.iloc[i] < sr.iloc[i] + 2.:
+                km.iloc[i] = k['III1']
+            elif sr.iloc[i] + 2. <= stund.iloc[i] < sr.iloc[i] + 3.:
+                km.iloc[i] = k['III2']
+            elif ss.iloc[i] - 2. <= stund.iloc[i] < ss.iloc[i] - 1.:
+                km.iloc[i] = k['III2']
+            elif ss.iloc[i] - 1. <= stund.iloc[i] < ss.iloc[i]:
+                km.iloc[i] = k['III1']
+            elif ss.iloc[i] <= stund.iloc[i] < ss.iloc[i] + 1.:
+                km.iloc[i] = k['III1']
+        elif kn.iloc[i] == k['III1'] and kt.iloc[i] == k['III2']:
+            if sr.iloc[i] + 1. <= stund.iloc[i] < sr.iloc[i] + 2.:
+                km.iloc[i] = k['III1']
+            elif sr.iloc[i] + 2. <= stund.iloc[i] < sr.iloc[i] + 3.:
+                km.iloc[i] = k['III1']
+            elif ss.iloc[i] - 2. <= stund.iloc[i] < ss.iloc[i] - 1.:
+                km.iloc[i] = k['III2']
+            elif ss.iloc[i] - 1. <= stund.iloc[i] < ss.iloc[i]:
+                km.iloc[i] = k['III2']
+            elif ss.iloc[i] <= stund.iloc[i] < ss.iloc[i] + 1.:
+                km.iloc[i] = k['III1']
+        elif kn.iloc[i] == k['III1'] and kt.iloc[i] == k['III1']:
+            if sr.iloc[i] + 1. <= stund.iloc[i] < sr.iloc[i] + 2.:
+                km.iloc[i] = k['III1']
+            elif sr.iloc[i] + 2. <= stund.iloc[i] < sr.iloc[i] + 3.:
+                km.iloc[i] = k['III1']
+            elif ss.iloc[i] - 2. <= stund.iloc[i] < ss.iloc[i] - 1.:
+                km.iloc[i] = k['III1']
+            elif ss.iloc[i] - 1. <= stund.iloc[i] < ss.iloc[i]:
+                km.iloc[i] = k['III1']
+            elif ss.iloc[i] <= stund.iloc[i] < ss.iloc[i] + 1.:
+                km.iloc[i] = k['III1']
 
-        if sr[i] + 1. <= stund[i] < sr[i] + 2.:
+        if sr.iloc[i] + 1. <= stund.iloc[i] < sr.iloc[i] + 2.:
             t3_col = 'SA+1/SA+2'
-        elif sr[i] + 2. <= stund[i] < sr[i] + 3.:
+        elif sr.iloc[i] + 2. <= stund.iloc[i] < sr.iloc[i] + 3.:
             t3_col = 'SA+2/SA+3'
-        elif ss[i] - 2. <= stund[i] < ss[i] - 1.:
+        elif ss.iloc[i] - 2. <= stund.iloc[i] < ss.iloc[i] - 1.:
             t3_col = 'SU-2/SU-1'
-        elif ss[i] - 1. <= stund[i] < ss[i]:
+        elif ss.iloc[i] - 1. <= stund.iloc[i] < ss.iloc[i]:
             t3_col = 'SU-1/SU'
-        elif ss[i] <= stund[i] < ss[i] + 1.:
+        elif ss.iloc[i] <= stund.iloc[i] < ss.iloc[i] + 1.:
             t3_col = '  SU/SU+1'
         if t3_col is not None:
             logger.debug('rule c tab 3:')
             if t3_fn is not None:
                 logger.debug('footnote (%2a) :' % t3_fn)
-            logger.debug('col: %9a-> %4s' % (t3_col, KM2002.name(km[i])))
+            logger.debug('col: %9a-> %4s' % (t3_col, KM2002.name(km.iloc[i])))
         #
         # part d)
         # For December, January and February (climato-
         # logical winter months), dispersion category IV
         # should be replaced by III/2.
         #
-        if monat[i] in [1, 2, 12]:
-            if km[i] == k['IV']:
-                km[i] = k['III2']
-                logger.debug('rule d        -> %4s' % (KM2002.name(km[i])))
+        if monat.iloc[i] in [1, 2, 12]:
+            if km.iloc[i] == k['IV']:
+                km.iloc[i] = k['III2']
+                logger.debug('rule d        -> %4s' % (KM2002.name(km.iloc[i])))
 
     # Missing total cloud cover
     #
@@ -1414,40 +1415,40 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
     # | >= 3.3          |  III1 |  III1 |  III1 | III1  |
     #
     for i, t in enumerate(time):
-        if pd.isna(km[i]):
-            logger.debug('missing tcc %s, ff: %4.1f' % (t, ff[i]))
-            if not daytime[i] or stund[i] <= sr[i] + 1.:
+        if pd.isna(km.iloc[i]):
+            logger.debug('missing tcc %s, ff: %4.1f' % (t, ff.iloc[i]))
+            if not daytime.iloc[i] or stund.iloc[i] <= sr.iloc[i] + 1.:
                 logger.debug('  -> Table 4 col 1')
-                if ff[i] <= 2.3:
-                    km[i] = k['I']
-                elif ff[i] <= 3.3:
-                    km[i] = k['II']
-                else:  # km[i] >= 3.3
-                    km[i] = k['III1']
-            elif sr[i] + 1. < stund[i] <= sr[i] + 3.:
+                if ff.iloc[i] <= 2.3:
+                    km.iloc[i] = k['I']
+                elif ff.iloc[i] <= 3.3:
+                    km.iloc[i] = k['II']
+                else:  # km.iloc[i] >= 3.3
+                    km.iloc[i] = k['III1']
+            elif sr.iloc[i] + 1. < stund.iloc[i] <= sr.iloc[i] + 3.:
                 logger.debug('  -> Table 4 col 2')
-                if ff[i] <= 2.3:
-                    km[i] = k['II']
-                elif ff[i] <= 3.3:
-                    km[i] = k['III1']
-                else:  # km[i] >= 3.3
-                    km[i] = k['III1']
-            elif ss[i] - 2. < stund[i] <= ss[i]:
+                if ff.iloc[i] <= 2.3:
+                    km.iloc[i] = k['II']
+                elif ff.iloc[i] <= 3.3:
+                    km.iloc[i] = k['III1']
+                else:  # km.iloc[i] >= 3.3
+                    km.iloc[i] = k['III1']
+            elif ss.iloc[i] - 2. < stund.iloc[i] <= ss.iloc[i]:
                 logger.debug('  -> Table 4 col 4')
-                if ff[i] <= 2.3:
-                    km[i] = k['III1']
-                elif ff[i] <= 3.3:
-                    km[i] = k['III1']
-                else:  # km[i] >= 3.3
-                    km[i] = k['III1']
+                if ff.iloc[i] <= 2.3:
+                    km.iloc[i] = k['III1']
+                elif ff.iloc[i] <= 3.3:
+                    km.iloc[i] = k['III1']
+                else:  # km.iloc[i] >= 3.3
+                    km.iloc[i] = k['III1']
             else:  # daytime and >3 after sr and >2 before ss
                 logger.debug('  -> Table 4 col 3')
-                if ff[i] <= 2.3:
-                    km[i] = k['III2']
-                elif ff[i] <= 3.3:
-                    km[i] = k['III2']
-                else:  # km[i] >= 3.3
-                    km[i] = k['III1']
+                if ff.iloc[i] <= 2.3:
+                    km.iloc[i] = k['III2']
+                elif ff.iloc[i] <= 3.3:
+                    km.iloc[i] = k['III2']
+                else:  # km.iloc[i] >= 3.3
+                    km.iloc[i] = k['III1']
 
     logger.debug('return value  -> %s' % str([KM2002.name(x) for x in km]))
     if scalar:
@@ -1485,22 +1486,22 @@ def pasquill_taylor_scheme(time, ff, tcc, lat, lon, ceil):
     pt = pd.Series(np.nan, index=range(len(time)))
     for i in range(len(time)):
         logger.debug('surise,sunset,elevation : (%f, %f) %f)' %
-                     (s_rise[i], s_set[i], s_ele[i]))
+                     (s_rise.iloc[i], s_set.iloc[i], s_ele.iloc[i]))
         rad_index = -999
         insolation_class = -999
         #
         # 1. If the total cloud1 cover is 10/10 and the ceiling is
         #   less than 7000 feet, use net radiation index equal to 0
         #   (whether day or night).
-        if tcc[i] > 0.9 and ceil[i] <= (7000 * 0.3048):
+        if tcc.iloc[i] > 0.9 and ceil.iloc[i] <= (7000 * 0.3048):
             rad_index = 0
 
         # 2. For nighttime:
         #   (from one hour before sunset to one hour after sunrise):
         #  (a) If total cloud cover < 4/10, use net radiation index -2.
         #  (b) If total cloud cover > 4/10, use net radiation index -1.
-        elif s_ele[i] < 0.:
-            if tcc[i] <= 0.4:
+        elif s_ele.iloc[i] < 0.:
+            if tcc.iloc[i] <= 0.4:
                 rad_index = -2
             else:
                 rad_index = -1
@@ -1509,29 +1510,29 @@ def pasquill_taylor_scheme(time, ff, tcc, lat, lon, ceil):
         else:
             # (a) Determine the insolation class number as a function of
             #   solar altitude from Table 6-5.
-            insolation_class = taylor_insolation_class(s_ele[i])
+            insolation_class = taylor_insolation_class(s_ele.iloc[i])
 
             # (b) If total cloud cover <5/10, use the net radiation index
             #   in Table 6-4 corresponding to the isolation class number.
-            if tcc[i] < 0.5:
+            if tcc.iloc[i] < 0.5:
                 rad_index = insolation_class
 
             # (c) If cloud cover >5/10, modify the insolation class number
             #   using the following six steps.
             else:
                 # (1) Ceiling <7000 ft, subtract 2.
-                if ceil[i] <= (7000 * 0.3048):
+                if ceil.iloc[i] <= (7000 * 0.3048):
                     mod_ins_class = insolation_class - 2
 
                 # (2) Ceiling >7000 ft but <16000 ft, subtract 1.
-                elif (7000 * 0.3048) < ceil[i] < (16000 * 0.3048):
+                elif (7000 * 0.3048) < ceil.iloc[i] < (16000 * 0.3048):
                     mod_ins_class = insolation_class - 1
 
                 # (3) total cloud cover equal 10/10, subtract 1.
                 #    (This will only apply to ceilings >7000 ft
                 #     since cases with 10/10 coverage below 7000 ft
                 #     are considered in item 1 above.)
-                elif tcc[i] > 0.9:
+                elif tcc.iloc[i] > 0.9:
                     mod_ins_class = insolation_class - 1
 
                 # (4) If insolation class number has not been modified by
@@ -1550,14 +1551,14 @@ def pasquill_taylor_scheme(time, ff, tcc, lat, lon, ceil):
                 rad_index = mod_ins_class
 
         logger.debug('tcc, insolation_class, rad_index: %f, %i, %i' % (
-            tcc[i], insolation_class, rad_index))
+            tcc.iloc[i], insolation_class, rad_index))
         # use index in Table 6-4
-        pt[i] = turners_key(ff[i], rad_index)
+        pt.iloc[i] = turners_key(ff.iloc[i], rad_index)
 
         # For EPA regulatory modeling applications, stability categories
         # 6 and 7 (F and G) are combined and considered category 6.
-        if pt[i] > 6:
-            pt[i] = 6
+        if pt.iloc[i] > 6:
+            pt.iloc[i] = 6
 
     pt = 7 - pt  # turn class values around to match K/M
     if scalar:
@@ -1609,7 +1610,7 @@ def turners_key(ff, NRI):
     ri = [4, 3, 2, 1, 0, -1, -2]
     for i, ri in enumerate(ri):
         if NRI == ri:
-            key = vals[i]
+            key = vals.iloc[i]
             break
     else:
         raise ValueError('illegal NRI value: %i' % NRI)
