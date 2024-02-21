@@ -7,6 +7,7 @@ Created on Fri Dec 17 13:36:08 2021
 """
 import argparse
 import datetime as dt
+import itertools
 import logging
 import os
 import re
@@ -185,20 +186,72 @@ def h_eff(has: float, z0s: float) -> list:
         d0 = m.wind.DISPLACEMENT_FACTOR * z0
         ha.append(d0 + z0 * ((href - d0) / z0) ** ps)
     return ha
+# ----------------------------------------------------
 
 
+def area_of_triangle(abc: list[tuple[float, float]]) -> float:
+    """
+    calculate area of the triangle spanned by the corners `abc`
+    :param abc: corner positions of the triangle
+    :type abc: list[tuple[float, float]]
+    :return: area of the triangle. Positive if triangle node
+        numbering is counter-clockwise, negative if clockwise
+    :rtype: float
+    """
+    a, b, c = abc
+    area = 0.5 *(-b[1]*c[0] + a[1]*(-b[0] + c[0]) +
+                 a[0]*(b[1] - c[1]) + b[0]*c[1])
+    return area
+# ----------------------------------------------------
+
+
+def point_in_triangle(p: tuple[float, float],
+                          abc: list[tuple[float, float]]) -> bool:
+
+    """
+    check if point `p` is inside the triangle spanned by the corners `abc`
+
+    :param p: position of point `p`
+    :type p:  tuple[float, float]
+    :param abc: corner positions of the triangle
+    :type abc: list[tuple[float, float]]
+    :return: returns True if point is inside triangle, returns False
+        otherwise OR when the triangle is trivial (has zero area)
+    :rtype: bool
+    """
+    # inspired by https://stackoverflow.com/a/2049593
+
+    area = area_of_triangle(abc)
+    if area == 0:
+        return False
+    a, b, c = abc
+    s = (a[1]*c[0] - a[0]*c[1] + (c[1] - a[1])*p[0] + (a[0] - c[0])*p[1]) \
+        / (2 * area)
+    t = (a[0]*b[1] - a[1]*b[0] + (a[1] - b[1])*p[0] + (b[0] - a[0])*p[1]) \
+        / (2 * area)
+    res = s > 0. and t > 0. and 1 - s - t > 0.
+    return res
 # ----------------------------------------------------
 
 
 def grid_surrounding_nodes(lat: float, lon: float, dims: dict) \
         -> list[tuple[float]]:
+    """
+    get the three nodes from dims that surround position lat / lon
+    :param lat: point position latitude
+    :type lat: float
+    :param lon: point position longitude
+    :type lon: float
+    :param dims: 2-D array of lat and lon grid positions
+    :type dims: dict[np.array]
+    :return: Three corner positions and the distance to each of them
+        as tuple (grid-index x, grid-index y, distance)
+    :rtype: list[tuple[float, float, float]]
+    """
     dims_dim = set(len(np.shape(dims[x])) for x in ['lat', 'lon'])
     if len(dims_dim) > 1:
         raise ValueError('dims have different shapes')
-    if 1 in dims_dim:
-        grd_lat = np.tile(dims['lat'], (len(dims['lon']), 1)).T
-        grd_lon = np.tile(dims['lon'], (len(dims['lat']), 1))
-    elif 2 in dims_dim:
+    if 2 in dims_dim:
         grd_lat = dims['lat']
         grd_lon = dims['lon']
     else:
@@ -207,15 +260,42 @@ def grid_surrounding_nodes(lat: float, lon: float, dims: dict) \
     tgt_lat = np.full(np.shape(dims['lat']), lat)
     tgt_lon = np.full(np.shape(dims['lon']), lon)
     distance = vec_s_d(tgt_lat, tgt_lon, grd_lat, grd_lon)
-    pos = []
-    for i in range(3):
-        id = np.min(distance)
-        ix, iy = np.unravel_index(np.argmin(distance),
-                                  np.shape(distance))
-        pos.append((ix, iy, id))
-        distance[ix, iy] = np.max(distance)
-    logger.debug('pos: %s' % pos)
-    return pos
+    # https://stackoverflow.com/a/30577520
+    sort_index = list(map(tuple,
+                          np.dstack(np.unravel_index(
+                              np.argsort(distance.ravel()),
+                              distance.shape)).reshape(-1,2)
+                          ))
+    sorted_grd = [(i, j, distance[i,j]) for i, j in sort_index]
+
+    min_dist_sum = np.inf
+    min_triangle = None
+    # get all possible triangles out of the nearest 3, 4, 5, ... points
+    for n in range(3, len(sorted_grd)):
+        logger.debug('iterating points: %s' % n)
+        triangles = list(itertools.combinations(sorted_grd[0:n], 3))
+        # calculate sum of corner distances for triangles
+        # that include the target position
+        dist_sums = []
+        for t in triangles:
+            corners = [(grd_lon[i, j], grd_lat[i, j]) for i, j, _ in t]
+            if point_in_triangle((lon, lat), corners):
+                ds = np.sum([d**2 for _, _, d in t])
+            else:
+                ds = np.inf
+            dist_sums.append(ds)
+        # stop searching if this value of n brings no better triangles
+        if not any([x < min_dist_sum for x in dist_sums]) and \
+                min_triangle is not None:
+            break
+        # get the triangle that has the lowest sum of corner distances
+        for i, t in enumerate(triangles):
+            if dist_sums[i] < min_dist_sum:
+                min_dist_sum = dist_sums[i]
+                min_triangle = t
+        logger.debug('min_triangle: %s %s' % (str(min_triangle),str(min_dist_sum)))
+
+    return min_triangle
 # ----------------------------------------------------
 
 
@@ -279,117 +359,54 @@ def read_era5_nc(ncfile, lat, lon):
                    'lcc', 'tcc']
     _VAR_OPTIONAL = ['mcc', 'tp']
 
-    lp = netCDF4.Dataset(ncfile)
+    nc = netCDF4.Dataset(ncfile)
 
     for x in _VAR_NEEDED:
-        if x not in lp.variables:
+        if x not in nc.variables:
             raise ValueError('needed variable not in input data: %s' % x)
     all_variables = _VAR_NEEDED
     for x in _VAR_OPTIONAL:
-        if x not in lp.variables:
+        if x not in nc.variables:
             logging.warning('optional variable not in input data: %s' % x)
         else:
             all_variables.append(x)
-
-    dims = {'lat': lp['latitude'][:].data,
-            'lon': lp['longitude'][:].data}
-
-    # make sure dims are ascending:
-    flip = {'lon': False, 'lat': False}
-    for ll in 'lat', 'lon':
-        if not np.all(np.diff(dims[ll]) >= 0):
-            dims[ll] = np.flip(dims[ll])
-            flip[ll] = True
-
-    idx = {'lat': -1, 'lon': -1}
-    tgt = {'lat': lat, 'lon': lon}
-    for ll in ['lat', 'lon']:
-        # position of largest dims value smaller than tgt
-        ii = np.argmax(np.where(dims[ll] <= tgt[ll], dims[ll], -999))
-        # add fraction
-        if ii < len(dims[ll]) - 1:
-            idx[ll] = ii + ((tgt[ll] - dims[ll][ii]) /
-                            (dims[ll][ii + 1] - dims[ll][ii]))
-
-    logging.debug('idx: %s' % str(idx))
-    pos = [None, None, None]
-    if np.modf(idx['lon'])[0] <= 0.5:
-        if np.modf(idx['lat'])[0] <= 0.5:
-            # SW corner
-            pos[0] = (int(idx['lon']), int(idx['lat']))
-            pos[1] = (int(idx['lon'] + 1), int(idx['lat']))
-            pos[2] = (int(idx['lon']), int(idx['lat'] + 1))
-        else:
-            # NW corner
-            pos[0] = (int(idx['lon']), int(idx['lat'] + 1))
-            pos[1] = (int(idx['lon'] + 1), int(idx['lat'] + 1))
-            pos[2] = (int(idx['lon']), int(idx['lat']))
-    else:
-        if np.modf(idx['lat'])[0] <= 0.5:
-            # SE corner
-            pos[0] = (int(idx['lon'] + 1), int(idx['lat']))
-            pos[1] = (int(idx['lon'] + 1), int(idx['lat'] + 1))
-            pos[2] = (int(idx['lon']), int(idx['lat']))
-        else:
-            # NE corner
-            pos[0] = (int(idx['lon'] + 1), int(idx['lat'] + 1))
-            pos[1] = (int(idx['lon']), int(idx['lat'] + 1))
-            pos[2] = (int(idx['lon'] + 1), int(idx['lat']))
-
-    pi, pj = pos[0]
-    logging.debug(str((pi, pj, dims['lon'][pi], dims['lat'][pj])))
-
-    if INTER_VARIANT == 'barycentric':
-        # calculate barycentric weights so that
-        # val(x,y) = w1*val(x1,y1) + w2*val(x2,y2) + w3*val(x3,y3)
-        # https://en.wikipedia.org/wiki/Barycentric_coordinate_system
-        #
-        x = []
-        y = []
-        for pp in pos:
-            pi, pj = pp
-            x.append(dims['lon'][pi])
-            y.append(dims['lat'][pj])
-        w0 = (((y[1] - y[2]) * (lon - x[2]) +
-               (x[2] - x[1]) * (lat - y[2])) /
-              ((y[1] - y[2]) * (x[0] - x[2]) +
-               (x[2] - x[1]) * (y[0] - y[2])))
-        w1 = (((y[2] - y[0]) * (lon - x[2]) +
-               (x[0] - x[2]) * (lat - y[2])) /
-              ((y[1] - y[2]) * (x[0] - x[2]) +
-               (x[2] - x[1]) * (y[0] - y[2])))
-        w2 = 1 - (w0 + w1)
-    elif INTER_VARIANT == 'mean':
-        w0 = 1. / 3.
-        w1 = 1. / 3.
-        w2 = 1. / 3.
-    elif INTER_VARIANT == 'nearest':
-        w0 = 1.
-        w1 = 0.
-        w2 = 0.
-        logging.debug("extracting position %.4f / %.4f " %
-                      (dims['lon'][pos[0][0]], dims['lat'][pos[0][1]]))
-    else:
-        raise ValueError('unknown interpolation variant: %s' %
-                         INTER_VARIANT)
-    logging.info('interpolation variant: %s' % INTER_VARIANT)
-    logging.debug('weights: %6.2f %6.2f %6.2f' % (w0, w1, w2))
-
+    #
+    # make lat lon 2-D fields
+    nx = len(nc['longitude'])
+    ny = len(nc['latitude'])
+    dims = {'lat': np.full((nx, ny), np.nan),
+            'lon': np.full((nx, ny), np.nan)}
+    for x in range(nx):
+        for y in range(ny):
+            dims['lon'][x, y] = nc['longitude'][x].data
+            dims['lat'][x, y] = nc['latitude'][y].data
+    #
+    # convert time
+    logger.info('calculating time')
     values = pd.DataFrame()
     epoch = dt.datetime(1900, 1, 1, 0, 0, tzinfo=dt.timezone.utc)
     values['time'] = pd.to_datetime(
-        [epoch + dt.timedelta(hours=int(x)) for x in lp['time']])
-    for val in all_variables:
-        logging.debug('interpolating value: %s' % val)
-        v = [None, None, None]
-        for i, pp in enumerate(pos):
-            pi, pj = pp
-            if flip['lon']:
-                pi = len(dims['lon']) - 1 - pi
-            if flip['lat']:
-                pj = len(dims['lat']) - 1 - pj
-            v[i] = pd.Series(lp[val][:, pj, pi].data)
-        values[val] = w0 * v[0] + w1 * v[1] + w2 * v[2]
+        [epoch + dt.timedelta(hours=int(x)) for x in nc['time']])
+    #
+    # interpolate values to position
+    #
+    logger.info('calculating position')
+    positions = grid_surrounding_nodes(lat, lon, dims)
+    # extract input values at positions
+    pv = {}
+    for val in _tools.progress(all_variables, 'extract variables'):
+        pv[val] = [nc[val][:, x, y].data for x, y, _ in positions]
+    # free memory
+    nc.close()
+
+    # calculate weights and average the values
+    weights = grid_calulate_weights(positions)
+    for val in _tools.progress(pv.keys(), 'interpolating vars'):
+        if np.ndim(pv[val]) > 1:
+            logger.debug('interpolating value: %s' % val)
+            values[val] = np.dot(weights, pv[val])
+    #
+    #  convert values
     #
     #   surface fluxes are in J/hm² down, convert to W/m² up:
     for val in ['sshf', 'slhf']:
@@ -399,6 +416,11 @@ def read_era5_nc(ncfile, lat, lon):
     for val in ['tp']:
         if val in all_variables:
             values[val] = values[val] * 1000  # mm
+    #   remove negative cbh values:
+    for val in ['cbh']:
+        if val in all_variables:
+            # Replace values where the condition is True.
+            values[val] = values[val].mask(values[val] < 0, np.nan)
     #
     #    values['ff'] = np.sqrt(values['u10']*values['u10'] +
     #                           values['v10']*values['v10'])
@@ -497,9 +519,10 @@ def get_ERA5_weather(lat, lon, year, storage_path='.') \
                     'ff',  # m/s
                     'dd',  # deg
                     'sp',  # Pa
-                    't2m',  # K
+                    't2m', 'd2m',  # K
                     'lmcc', 'tcc',  # 1
                     'sshf', 'slhf',  # W/m²
+                    'cbh',  # m
                     'fsr',  # m
                     'tp'  # mm
                     ])
@@ -558,14 +581,6 @@ def read_cerra_nc(ncfile, lat, lon):
 
     dims = {'lat': nc['lat'][:].data,
             'lon': nc['lon'][:].data}
-
-    # make sure dims are ascending:
-    flip = {'lon': False, 'lat': False}
-
-    for ll in 'lat', 'lon':
-        if not np.all(np.diff(dims[ll]) >= 0):
-            dims[ll] = np.flip(dims[ll])
-            flip[ll] = True
     #
     # convert time
     logger.info('calculating time')
@@ -664,6 +679,15 @@ def read_cerra_nc(ncfile, lat, lon):
         values['u10'], values['v10'])
     values.drop(['u10', 'v10'], axis=1)
 
+    if values['time'][0] > epoch:
+        first_hours = pd.date_range(start=epoch, end=values['time'][0],
+                                    freq='1h', inclusive="left")
+        first_rows = []
+        for x in first_hours:
+            first_rows.append({c: np.nan if c != 'time' else x
+                               for c in values.columns})
+        values = pd.concat([pd.DataFrame(first_rows), values],
+                           ignore_index=True)
     return values
 
 

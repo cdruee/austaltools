@@ -19,9 +19,11 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     _check = m._utils._check
     _isscalar = pd.api.types.is_scalar
 
+
 # =============================================================================
 
-class StabiltyClass():
+
+class StabiltyClass:
     _bounds = None
     _centers = None
     _index = None
@@ -88,7 +90,7 @@ class StabiltyClass():
         if names is not None:
             if not type(names) in [list, tuple]:
                 raise ValueError('names must be list or tuple')
-            if any([type(x) != str for x in names]):
+            if any([not isinstance(x, str) for x in names]):
                 raise ValueError('names must be strings')
             if len(names) != self.count:
                 raise ValueError('number of names must equal ' +
@@ -319,7 +321,7 @@ def stabilty_class(classifyer, time, z0, L):
     else:
         time = pd.DatetimeIndex(time)
     if _isscalar(z0):
-        z0 = pd.Series(z0, index=time.index)
+        z0 = pd.Series(z0, index=time)
     else:
         z0 = pd.Series(z0)
     L = pd.Series(L)
@@ -576,8 +578,8 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
     # *) Bei den Fällen mit einer Gesamtbedeckung, die ausschließ-
     # lich aus hohen Wolken (Cirren) besteht, ist von einer um 3/8
     # erniedrigten Gesamtbedeckung auszugehen.
-    ecc = [np.max((0., x - 0.375)) if y in ['CI', 'CC', 'CS']
-           else x for x, y in zip(tcc, cty)]
+    ecc = pd.Series([np.max((0., x - 0.375)) if y in ['CI', 'CC', 'CS']
+                     else x for x, y in zip(tcc, cty)])
     for x, y, z in zip(tcc, cty, ecc):
         logger.debug('tcc: %4f, cty: %2s, ecc: %4f' % (x, y, z))
     # K_N for night conditions
@@ -1610,7 +1612,7 @@ def turners_key(ff, NRI):
     ri = [4, 3, 2, 1, 0, -1, -2]
     for i, ri in enumerate(ri):
         if NRI == ri:
-            key = vals.iloc[i]
+            key = vals[i]
             break
     else:
         raise ValueError('illegal NRI value: %i' % NRI)
@@ -1668,11 +1670,11 @@ def obukhov_length(ust, rho, Tv, H, E, Kelvin=None):
 def h_eff(has, z0s):
     z0_vals = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1., 1.5, 2]
     href = 250
-    d0s = m.wind.displacement_factor * z0s
+    d0s = m.wind.DISPLACEMENT_FACTOR * z0s
     ps = np.log((has - d0s) / z0s) / np.log((href - d0s) / z0s)
     ha = []
     for z0 in z0_vals:
-        d0 = m.wind.displacement_factor * z0
+        d0 = m.wind.DISPLACEMENT_FACTOR * z0
         ha.append(d0 + z0 * ((href - d0) / z0) ** ps)
     return ha
 
