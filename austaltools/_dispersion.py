@@ -485,7 +485,7 @@ def vdi_3872_6_sun_rise_set(time, lat, lon):
     if np.min(lon) < -9.5 or np.max(lon) > 32.:
         raise ValueError('VDI 3782 Part 6, Annex A defined for CET, only')
     # get day of year in CET
-    j = pd.to_datetime(cet).dayofyear  # days
+    j = pd.Series(pd.to_datetime(cet).dayofyear, index=dt)  # days
     # latitude in radians
     phi_rad = np.deg2rad(lat)  # rad
     # equation (A3)
@@ -508,7 +508,8 @@ def vdi_3872_6_sun_rise_set(time, lat, lon):
     s_dn = 12. + omega_0 + Z_v - Z
 
     # convert CET to tz given
-    tzoff = (pd.Series([x.tzinfo.utcoffset(x).seconds / 3600. for x in dt]) -
+    tzoff = (pd.Series([x.tzinfo.utcoffset(x).seconds / 3600. for x in dt],
+                       index=dt) -
              pd.Timestamp.now(tz='CET').utcoffset().seconds / 3600.)
     s_up = s_up + tzoff
     s_dn = s_dn + tzoff
@@ -616,17 +617,20 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
     else:
         scalar = False
         time = pd.DatetimeIndex(time)
-    ff = pd.Series(ff)
-    tcc = pd.Series(tcc)
+    if not isinstance(ff, pd.Series):
+        ff = pd.Series(ff, index=time)
+    if not isinstance(tcc, pd.Series):
+        tcc = pd.Series(tcc, index=time)
     if not (np.shape(time) == np.shape(ff) == np.shape(tcc)):
         raise ValueError('shapes of time, ff, tcc are not equal')
     if not ((_isscalar(lat) and _isscalar(lon)) or
             (np.shape(time) == np.shape(lat) == np.shape(lon))):
         raise ValueError('lat, lon must be scalars or same shape as time')
     if cty is None:
-        cty = np.array(['CU'] * len(time))
+        cty = pd.Series('CU', index=time)
     else:
-        cty = pd.Series(cty)
+        if not isinstance(cty, pd.Series):
+            cty = pd.Series(cty, index=time)
     if not (np.shape(time) == np.shape(cty)):
         raise ValueError('shapes of time and cty are not equal')
     # valid valid for Germmany:
@@ -638,9 +642,9 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
 
     logger.debug('klug_manier_scheme_1992 ---> %19s ...' % (time[0]))
     # Einlesen
-    monat = pd.Series([x.month for x in time])
+    monat = pd.Series([x.month for x in time], index=time)
     stund = pd.Series([(float(x.hour) + float(x.minute) / 60.)
-                       for x in time])
+                       for x in time], index=time)
 
     # auf/unter UTC
     s_auf, _, s_unter = m.radiation.fast_rise_transit_set(time, lat, lon)
@@ -671,13 +675,13 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
     # lich aus hohen Wolken (Cirren) besteht, ist von einer um 3/8
     # erniedrigten Gesamtbedeckung auszugehen.
     ecc = pd.Series([np.max((0., x - 0.375)) if y in ['CI', 'CC', 'CS']
-                     else x for x, y in zip(tcc, cty)])
+                     else x for x, y in zip(tcc, cty)], index=time)
     for x, y, z in zip(tcc, cty, ecc):
         logger.debug('tcc: %4f, cty: %2s, ecc: %4f' % (x, y, z))
     # K_N for night conditions
-    kn = pd.Series(np.nan, index=stund.index)
+    kn = pd.Series(np.nan, index=time)
     # K_T for day conditions
-    kt = pd.Series(np.nan, index=stund.index)
+    kt = pd.Series(np.nan, index=time)
     for i, _ in enumerate(time):
         # K_N for night conditions
         if ecc.iloc[i] <= 0.75:
@@ -721,7 +725,7 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
     #      wird noch für die auf den Sonnenaufgang folgende volle Stunde
     #      eingesetzt.
     #
-    km = pd.Series(np.nan, index=stund.index)
+    km = pd.Series(np.nan, index=time)
     for i, _ in enumerate(time):
         if stund.iloc[i] <= np.ceil(s_auf.iloc[i]):
             km.iloc[i] = kn.iloc[i]
@@ -1048,8 +1052,10 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
     else:
         scalar = False
         time = pd.DatetimeIndex(time)
-    ff = pd.Series(ff)
-    tcc = pd.Series(tcc)
+    if not isinstance(ff, pd.Series):
+        ff = pd.Series(ff, index=time)
+    if not isinstance(tcc, pd.Series):
+        tcc = pd.Series(tcc, index=time)
     # set negative values (invalid) to nan
     tcc = tcc.mask(tcc < 0, np.nan)
     if not (np.shape(time) == np.shape(ff) == np.shape(tcc)):
@@ -1061,14 +1067,16 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
         raise ValueError('lat, lon, and ele must be ' +
                          'scalars or same shape as time')
     if cbh is not None:
-        cbh = pd.Series(cbh)
+        if not isinstance(cbh, pd.Series):
+            cbh = pd.Series(cbh, index = time)
         if not (np.shape(time) == np.shape(cbh)):
             raise ValueError('shapes of time and cbh are not equal')
     if cty is not None:
-        cty = pd.Series(cty)
+        if not isinstance(cty, pd.Series):
+            cty = pd.Series(cty, index=time)
         if not (np.shape(time) == np.shape(cty)):
             raise ValueError('shapes of time and cty are not equal')
-    # valid valid for Germmany:
+    # valid valid for Germany:
     if ((np.min(lon) < -9.5) or
             (np.min(lat) < 35.) or
             (np.max(lon) > 32.) or
@@ -1079,9 +1087,9 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
     logger.debug('klug_manier_scheme_2017 ---> %19s ...' % (time[0]))
 
     # Einlesen
-    monat = pd.Series([x.month for x in time])
+    monat = pd.Series([x.month for x in time], index=time)
     stund = pd.Series([(float(x.hour) + float(x.minute) / 60.)
-                       for x in time])
+                       for x in time], index=time)
 
     # Sunrise and sunset times are to be quoted in the
     # relevant zonetime. For Germany, CET should be
@@ -1223,9 +1231,9 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
     # >= 4.4         |III1 |III1 |III2 |III1 |III1 |
     #
     # K_N for night conditions
-    kn = pd.Series(np.nan, index=stund.index)
+    kn = pd.Series(np.nan, index=time)
     # K_T for day conditions
-    kt = pd.Series(np.nan, index=stund.index)
+    kt = pd.Series(np.nan, index=time)
     for i, _ in enumerate(time):
         # K_N for night conditions
         if ecc.iloc[i] <= 0.75:
