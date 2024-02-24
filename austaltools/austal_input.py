@@ -58,6 +58,9 @@ def cli_parser():
                         help="Stem for file names.",
                         nargs=None
                         )
+    parser.add_argument("--version",
+                        version="%(prog)s " + str(__version__),
+                        action="version")
     verb = parser.add_mutually_exclusive_group()
     verb.add_argument('--debug', dest='verb', action='store_const',
                       const=logging.DEBUG, help='show informative output')

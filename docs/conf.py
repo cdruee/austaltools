@@ -33,7 +33,7 @@ from austaltools._version import \
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = ['sphinx.ext.autodoc',
-              'sphinx.ext.imgmath',
+              'sphinx.ext.mathjax',
               'sphinxarg.ext',
              ]
 

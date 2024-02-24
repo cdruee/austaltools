@@ -680,8 +680,13 @@ def read_cerra_nc(ncfile, lat, lon):
     values.drop(['u10', 'v10'], axis=1)
 
     if values['time'][0] > epoch:
-        first_hours = pd.date_range(start=epoch, end=values['time'][0],
-                                    freq='1h', inclusive="left")
+        first_hours = pd.date_range(start=epoch,
+                                    end=(values['time'][0] -
+                                         pd.Timedelta(1,"m")),
+                                    freq='1h')
+        #   right end -1 min to exclude the full-hour value
+        #   this could be done by `inclusive="left"`
+        #   but only for pandas 1.4.0 and later
         first_rows = []
         for x in first_hours:
             first_rows.append({c: np.nan if c != 'time' else x
@@ -756,9 +761,9 @@ def get_CERRA_weather(lat, lon, year, storage_path='.') \
                     'tp'  # mm
                     ])
     return res, z0
-
-
 # ----------------------------------------------------
+
+
 def download_DWD_weather(station, storage_path='.'):
     """
     Ensure that the DWD weather station data for station
@@ -809,12 +814,14 @@ def download_DWD_weather(station, storage_path='.'):
         with open(list_file, 'r') as list_handle:
             html = list_handle.read()
             http_links = re.findall(r'href="(.*?)"', html)
+        pattern = 'stundenwerte_%s_%05i_[0-9_]*_hist.zip' % (zid, station)
+        logger.debug("looking for file: %s" % pattern)
         for link in http_links:
-            pattern = 'stundenwerte_%s_%05i_[0-9_]*_hist.zip' % (zid, station)
             if re.match(pattern, link):
                 break
         else:
-            raise ValueError("Could not find matching archive file")
+            raise ValueError("Could not find matching archive file: " +
+                             pattern)
         #
         # construct url of the archive we want and get zip file
         zip_link = "/".join([http_addr, http_path, dnam, 'historical', link])
@@ -1046,6 +1053,7 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.') \
     :param lat: position latitude in degrees
     :param lon: position laongitude  in degrees
     :param year: get data from this calendar year
+    :param station: number of the station you are looking for
     :param storage_path: (optional) expect ERA5 data in this directory
     :return: weather timeseries as dataframe and surface roughness in m.
         The index of the dataframe is the measurement time as `datetime64`,
@@ -1080,13 +1088,21 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.') \
     if not (os.path.exists(os.path.join(storage_path, obsfile)) and
             os.path.exists(os.path.join(storage_path, metafile))):
         logger.info('data from station %05i not in storage' % station)
-        download_DWD_weather(station, storage_path)
+        try:
+            download_DWD_weather(station, storage_path)
+        except Exception as e:
+            sys.tracebacklimit=0
+            raise LookupError('downloading data from ' +
+                          'station %05i ' % station +
+                          'failed'
+                          )
     else:
         logger.info('data from station %05i found in storage' % station)
     data = pd.read_csv(os.path.join(storage_path, obsfile),
                        index_col='time', parse_dates=True,
                        sep=',', na_values='NA',
                        engine='python')
+    logger.debug('done reading')
     #
     #  treat the data ------------------------------------------------
     #
@@ -1154,8 +1170,9 @@ def austal_weather(args):
 
     ele = None
     if args["dwd"] is not None:
+        station = int(pd.to_numeric(args["dwd"]))
         lat, lon, ele, nam = _dwd_stationinfo.dwd_stationinfo(
-            args["dwd"], storage_path)
+            station, storage_path)
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
     # elif args["wmo"] is not None:
     #     lat, lon, ele, nam = wmo_stationinfo(args["wmo"], path=path)
@@ -1199,7 +1216,6 @@ def austal_weather(args):
                  (lat, lon, ele, format(nam)))
     year = int(args['year'])
     logger.debug("year: %s" % year)
-    station = args["station"]
 
     source = args['source']
     if source == "ERA5":
@@ -1417,13 +1433,11 @@ def cli_parser() -> argparse.ArgumentParser:
     cspars.add_argument('-D', '--dwd',
                         metavar="NUMBER",
                         dest="dwd",
-                        nargs=1,
                         help='Weather station position with ' +
                              'German weather service (DWD) ID `NUMBER`')
     cspars.add_argument('-W', '--wmo',
                         metavar="NUMBER",
                         dest="wmo",
-                        nargs=1,
                         help='Postion of weather station with ' +
                              'World Meteorological Organization (WMO)' +
                              'station ID `NUMBER`')
@@ -1458,16 +1472,19 @@ def cli_parser() -> argparse.ArgumentParser:
                         help='surface elevation. ' +
                              'only allowed with -L, -G, -U.')
 
-    parser.add_argument('-w', '--station', dest='station',
-                        metavar='ID',
-                        default=None,
-                        help='weather station ID. ' +
-                             'only allowed with -D, -W.')
+    # parser.add_argument('-w', '--station', dest='station',
+    #                     metavar='ID',
+    #                     default=None,
+    #                     help='weather station ID. ' +
+    #                          'only allowed with -D, -W.')
 
     parser.add_argument('-p', '--precip', dest='prec',
                         action='store_true',
                         help='add precipitation columns to output file')
 
+    parser.add_argument("--version",
+                        version="%(prog)s " + str(__version__),
+                        action="version")
     verb = parser.add_mutually_exclusive_group()
     verb.add_argument('--debug', dest='verb', action='store_const',
                       const=logging.DEBUG, help='show informative output')
@@ -1503,11 +1520,11 @@ def main():
         parser.print_help()
         logger.critical('-D and -W are mutually exclusive with -e')
         sys.exit(1)
-    if ((args['dwd'] is None and args['wmo'] is None)
-            and args['station'] is not None):
-        parser.print_help()
-        logger.critical('-w is only valid with -D or -W')
-        sys.exit(1)
+    # if ((args['dwd'] is None and args['wmo'] is None)
+    #         and args['station'] is not None):
+    #     parser.print_help()
+    #     logger.critical('-w is only valid with -D or -W')
+    #     sys.exit(1)
     if args['year'] is None and args['sources'] is None:
         parser.print_help()
         logger.critical('-y is required with -L, -G, -U, -D or -W')

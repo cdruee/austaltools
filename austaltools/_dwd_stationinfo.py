@@ -5,17 +5,21 @@ Created on Thu Feb  3 19:20:42 2022
 
 @author: clemens
 """
-import os
-import unicodedata
-import re
 import argparse
-import pandas as pd
 import logging
+import os
+import re
+import unicodedata
+
+import pandas as pd
 
 try:
     from . import _tools
 except ImportError:
     import _tools
+
+logging.basicConfig()
+logger = logging.getLogger()
 
 LOGGING_DEFAULT = logging.WARNING
 _PATH = '/localdata/druee/datensaetze/dwd_opendata/observations_germany/'
@@ -28,14 +32,14 @@ def dwd_metadata(station, time1, time2, param, path=_PATH):
         raise ValueError('time2 mut be equal or after time1')
     sstr = '{:05d}'.format(station)
     stninfo = os.path.join(path, 'metadata_' + sstr + '.csv')
-    logging.info("read station info from: %s" % stninfo)
+    logger.info("read station info from: %s" % stninfo)
     md = pd.read_csv(stninfo, header=0)
     md.index = pd.to_datetime(md['time'])
     if param not in md.columns:
         raise ValueError('parameter not found: %s' % param)
     # get all info in time range:
     value = pd.Series()
-    for i, v in md[param].iteritems():
+    for i, v in md[param].items():
         if i < time1:
             value[time1] = v
         elif time1 <= i < time2:
@@ -46,7 +50,7 @@ def dwd_metadata(station, time1, time2, param, path=_PATH):
     # reduce lines giving no new info:
     new = []
     old = None
-    for i, v in value.iteritems():
+    for i, v in value.items():
         if len(new) == 0:
             new.append(True)
             old = v
@@ -72,6 +76,7 @@ def dwd_get_meta_value(metadata, time_begin, time_end, par_name):
     :return: values for parameter `par_name`
     :rtype: pandas.Series
     """
+    logger.debug("getting station metadata: %s" % par_name)
     if isinstance(metadata, str):
         if os.path.isfile(metadata):
             metadata = pd.read_csv(metadata,
@@ -94,7 +99,7 @@ def dwd_get_meta_value(metadata, time_begin, time_end, par_name):
         raise ValueError('parameter not found: %s' % par_name)
     # get all info in time range:
     value = pd.Series()
-    for i, v in metadata[par_name].iteritems():
+    for i, v in metadata[par_name].items():
         if i < time_begin:
             value[time_begin] = v
         elif time_begin <= i < time_end:
@@ -104,7 +109,7 @@ def dwd_get_meta_value(metadata, time_begin, time_end, par_name):
             break
     # remove lines giving no new info:
     new = []
-    for i, v in value.iteritems():
+    for i, v in value.items():
         if len(new) == 0:
             new.append(True)
             old = v
@@ -128,7 +133,7 @@ def dwd_stationinfo(station, path=_PATH, pos_lat=None, pos_lon=None):
     else:
         sstr = None
     stninfo = os.path.join(path, 'TU_Stundenwerte_Beschreibung_Stationen.txt')
-    logging.info("read station info from: %s" % stninfo)
+    logger.debug("read station info from: %s" % stninfo)
     min_sdist = 9999999.
     sid = None
     with (open(stninfo, 'r') as f):
@@ -160,7 +165,7 @@ def dwd_stationinfo(station, path=_PATH, pos_lat=None, pos_lon=None):
                     min_sdist = sdist
     if sid is None:
         raise ValueError('station not found: %s' % station)
-    logging.debug("station name: %s" % nam)
+    logger.debug("station name: %s" % nam)
     if station is None:
         return lat, lon, ele, nam, int(sid)
     else:
@@ -251,9 +256,9 @@ if __name__ == '__main__':
     # logging level
     #
     if args.verb is not None:
-        logging.root.setLevel(args.verb)
+        logger.root.setLevel(args.verb)
     else:
-        logging.root.setLevel(LOGGING_DEFAULT)
+        logger.root.setLevel(LOGGING_DEFAULT)
     if args.station is not None:
         station = int(args.station)
     if args.path is not None:

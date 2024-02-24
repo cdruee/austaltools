@@ -24,6 +24,35 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 
 class StabiltyClass:
+    """
+    Class that holds information about a list of stabilty classes.
+
+    :param bounds: for each stability class, a 2-element list or tuple
+        must be given. The first list must contain the z0 vlaues for
+        the roughness lenght classes in ascending order, the second
+        list must be of the same length and contain the boundary
+        values of the Obukhov lenght separating the 1st and 2nd class,
+        the 2nd and the 3rd, ... .
+        Mutually exclusive with `centers`.
+    :type bounds: list[tuple[list]]
+    :param centers: for each stability class, a 2-element list or tuple
+        must be given. The first list must contain the z0 vlaues for
+        the roughness lenght classes in ascending order, the second
+        list must be of the same length and contain the center
+        values of the Obukhov lenght for 1st, 2nd, 3rd, ... class
+        Mutually exclusive with `bounds`.
+    :type centers: list[tuple[list]]
+    :param inverted: False if the bounds or center values should
+        be taken as they are. True if values shoud be inverted
+        i.e. :math:`1/x`. Defaults to False.
+    :type inverted: bool
+    :param reverse_index: False if the numric class index is acsending.
+        True if it is decending. Defaults to False.
+    :type reverse_index:
+    :param names: Names of the stability classes. Must be same lenght
+        as `centers` or one more element as `bounds`
+    :type names: list[str]
+    """
     _bounds = None
     _centers = None
     _index = None
@@ -152,6 +181,20 @@ class StabiltyClass:
             self._bounds.append([bz0, bil])
 
     def get_bound(self, num, z0, inverted=False):
+        """
+        get the upper boundary value of Obukhov lentgh :math:`L` for the
+        class with index `num` for roughness length `z0`.
+        :param num: numeric class index
+        :type num: int
+        :param z0: roughness length in m
+        :type z0: float
+        :param inverted: True if :math:`1/L` should be returned instead
+            of :math:`L`
+        :type inverted: bool (optional)
+        :return: Obukhov length :math:`L` in m
+        :rtype: float
+        """
+
         if num not in range(self.count - 1):
             # print(self.count)
             raise ValueError('no boundary number #%i' % int(num))
@@ -162,6 +205,19 @@ class StabiltyClass:
             return 1 / il
 
     def get_center(self, num, z0, inverted=False):
+        """
+        get the center value of Obukhov lentgh :math:`L` for the
+        class with index `num` for roughness length `z0`.
+        :param num: numeric class index
+        :type num: int
+        :param z0: roughness length in m
+        :type z0: float
+        :param inverted: True if :math:`1/L` should be returned instead
+            of :math:`L`
+        :type inverted:  bool (optional)
+        :return: Obukhov length :math:`L` in m
+        :rtype: float
+        """
         if num not in range(self.count):
             raise ValueError('no class number #%i' % int(num))
         il = self._getval(z0, self._centers[num])
@@ -170,11 +226,23 @@ class StabiltyClass:
         else:
             return 1 / il
 
-    def get_index(self, z0, index, inverted=False):
+    def get_index(self, z0, lob, inverted=False):
+        """
+        get the numeric class index for roughness length `z0` and
+        Obukhov lentgh :math:`L`.
+        :param z0: roughness length in m
+        :type z0: float
+        :param lob: Obukhov lentgh
+        :param inverted: True if `lob` is :math:`1/L` instead
+            of :math:`L`
+        :type inverted:  bool (optional)
+        :return: Numeric class index
+        :rtype: int
+        """
         if inverted:
-            il = index
+            il = lob
         else:
-            il = 1. / index
+            il = 1. / lob
         bs = [self.get_bound(i, z0, inverted=True)
               for i in range(self.count - 1)]
         for i, x in enumerate(bs):
@@ -189,14 +257,43 @@ class StabiltyClass:
             return cl + 1
 
     def get_name(self, z0, index, inverted=False):
+        """
+        get the class name for roughness length `z0` and
+        Obukhov lentgh :math:`L`.
+
+        :param z0: roughness length in m
+        :type z0: float
+        :param lob: Obukhov lentgh
+        :param inverted: True if `lob` is :math:`1/L` instead
+            of :math:`L`
+        :type inverted:  bool (optional)
+        :return: class name
+        :rtype: str
+        """
         return self.names[self.get_index(z0, index, inverted) - 1]
 
     def name(self, num):
+        """
+        get the class name for numeric class index
+
+        :param num: numeric class index
+        :type z0: int
+        :return: class name
+        :rtype: str
+        """
         if not num - 1 in range(self.count):
             raise ValueError('no class number #%i' % int(num))
         return self.names[int(num) - 1]
 
     def index(self, name):
+        """
+        get the numeric class index for class name
+
+        :param name: class name
+        :type name: str
+        :return: numeric class index
+        :rtype: int
+        """
         if name not in self.names:
             raise ValueError('no class name "%s"' % name)
         return self.names.index(name) + 1
@@ -222,14 +319,11 @@ KM2021 = StabiltyClass(centers=[
     reverse_index=True,
     names=['I', 'II', 'III1', 'III2', 'IV', 'V'])
 """
-Klug/Manier stabilty classes. Class center values taken from TA Luft 2021.
+Klug/Manier stabilty classes. Class center values taken from 
+TA Luft 2021 [TAL2021]_.
 
-Full Title: *Neufassung der Ersten Allgemeinen Verwaltungsvorschrift*
-*zum Bundes-Immissionsschutzgesetz*
-(Technische Anleitung zur Reinhaltung der Luft – TA Luft).
-issued 18. August 2021,
 
-Tabelle 17: Klassierung der Obukhov­Länge L in m
+Tabelle 17: Klassierung der Obukhov-Länge L in m
 """
 # ----------------------------------------------------
 #
@@ -251,12 +345,8 @@ KM2002 = StabiltyClass(centers=[
     reverse_index=True,
     names=['I', 'II', 'III1', 'III2', 'IV', 'V'])
 """
-Klug/Manier stabilty classes. Class center values taken from TA Luft 2002.
-
-Full name: *Erste Allgemeine Verwaltungsvorschrift zum*
-*Bundes–Immissionsschutzgesetz*
-(Technische Anleitung zur Reinhaltung der Luft – TA Luft)
-issued 24 Juli 2002
+Klug/Manier stabilty classes. Class center values taken from TA Luft 2002
+[TAL2002]_.
 
 Tabelle 17: Bestimmung der Monin–Obukhov–Länge L_M
 """
@@ -306,7 +396,7 @@ PG1972 = StabiltyClass(bounds=[
     names=['A', 'B', 'C', 'D', 'E', 'F', 'G'])
 """
 Pasquill-Gifford stability classes.
-Class Boundaries scraped from Golder (1972) Fig 5
+Class Boundaries scraped from [GOL1972]_ Fig 5
 
 According to EPA (link?) class G is neglected for regulatory modeling
 """
@@ -352,10 +442,11 @@ def vdi_3872_6_sun_rise_set(time, lat, lon):
     Sunrise and sunset calculation
     according to VDI 3782 Part 6, Annex A
 
-    Based on equation (B10) for the solar elevation angle :math: `{\gamma}`
+    Based on equation (B10) for the solar elevation angle :math:`{\gamma}`
     quoted in VDI 3789:
-    ..math:
-        \sin\gamma = \sin\phi + \cos\phi \cos\delta \cos\omega_0
+
+    :math:`\sin\gamma = \sin\phi + \cos\phi \cos\delta \cos\omega_0`
+
     :param time: (required, time-like)
         An arbitrary time during the day of year for which
         surise and sunset shout be calculated.
@@ -430,7 +521,7 @@ def vdi_3872_6_sun_rise_set(time, lat, lon):
 # ----------------------------------------------------
 
 def vdi_3872_6_standard_wind(va, hap, z0p):
-    """
+    r"""
     Returns the Calculation value of wind speed
     according to VDI 3782 Part 6, Annex A
 
@@ -438,19 +529,19 @@ def vdi_3872_6_standard_wind(va, hap, z0p):
     that are taken at the standard measurement
     height of 10 m above ground (VDI 3786 Part 2;
     VDI 3783 Part 8; [5; 6]) in combination with a
-    roughness length of :math: `z0 = 0.1 ` m.
-    If the wind speed :math: `v_a` is available for other than
+    roughness length of :math:`z0 = 0.1` m.
+    If the wind speed :math:`v_a` is available for other than
     the standard conditions, a conversion needs to be
     carried out from the conditions (measurement height
-    :math: `h_a'`, roughness lenght :math: `z_0'` at the measurement
+    :math:`h_a'`, roughness lenght :math:`z_0'` at the measurement
     site to the standard conditions.
 
     :param va: (required,float or array-like)
-        measured wind speed (:math: `v_a`) in m/s.
+        measured wind speed (:math:`v_a`) in m/s.
     :param hap: (required,float) height of the wind measurement
-        above ground (:math: `h_a`) in m.
+        above ground (:math:`h_a`) in m.
     :param z0p: (required,float) roughness lenght at the
-        measurement site (:math: `z_0`) in m.
+        measurement site (:math:`z_0`) in m.
     """
     va = np.array(va)
     # hr = 100 m
@@ -479,18 +570,18 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
     Calulate stability class after Klug/Manier
     accroding to according to VDI 3782 Part 1 (issued 1992)
 
-    +----------+-----------------+-------+
-    | Category |Atmospheric      | Index |
-    |          |stability        |       |
-    +----------+-----------------+-------+
-    | I        |very stable      |  1    |
-    | II       |stable           |  2    |
-    | III/1    |neutral/stable   |  3    |
-    | III/2    |neutral/unstable |  4    |
-    | IV       |unstable         |  5    |
-    | V        |very unstable    |  6    |
-    +----------+-----------------+-------+
 
+     ========== ================= =======
+      Category  Atmospheric        Index
+                stability
+     ========== ================= =======
+      I         very stable         1
+      II        stable              2
+      III/1     neutral/stable      3
+      III/2     neutral/unstable    4
+      IV        unstable            5
+      V         very unstable       6
+     ========== ================= =======
 
     :param time: (required, time-like)
         An arbitrary time during the day of year for which
@@ -547,8 +638,9 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
 
     logger.debug('klug_manier_scheme_1992 ---> %19s ...' % (time[0]))
     # Einlesen
-    monat = np.array([x.month for x in time])
-    stund = np.array([(float(x.hour) + float(x.minute) / 60.) for x in time])
+    monat = pd.Series([x.month for x in time])
+    stund = pd.Series([(float(x.hour) + float(x.minute) / 60.)
+                       for x in time])
 
     # auf/unter UTC
     s_auf, _, s_unter = m.radiation.fast_rise_transit_set(time, lat, lon)
@@ -583,9 +675,9 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
     for x, y, z in zip(tcc, cty, ecc):
         logger.debug('tcc: %4f, cty: %2s, ecc: %4f' % (x, y, z))
     # K_N for night conditions
-    kn = np.zeros(stund.shape)
+    kn = pd.Series(np.nan, index=stund.index)
     # K_T for day conditions
-    kt = np.zeros(stund.shape)
+    kt = pd.Series(np.nan, index=stund.index)
     for i, _ in enumerate(time):
         # K_N for night conditions
         if ecc.iloc[i] <= 0.75:
@@ -629,7 +721,7 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
     #      wird noch für die auf den Sonnenaufgang folgende volle Stunde
     #      eingesetzt.
     #
-    km = np.zeros(stund.shape)
+    km = pd.Series(np.nan, index=stund.index)
     for i, _ in enumerate(time):
         if stund.iloc[i] <= np.ceil(s_auf.iloc[i]):
             km.iloc[i] = kn.iloc[i]
@@ -879,35 +971,34 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
                             _cloudout=False):
     """
     Calulate stability class after Klug/Manier
-    accroding to according to VDI 3782 Part 6 (issued Apr 2017)
+    according to according to VDI 3782 Part 6 (issued Apr 2017)
 
-
-    +----------+-----------------+-------+
-    | Category |Atmospheric      | Index |
-    |          |stability        |       |
-    +----------+-----------------+-------+
-    | I        |very stable      |  1    |
-    | II       |stable           |  2    |
-    | III/1    |neutral/stable   |  3    |
-    | III/2    |neutral/unstable |  4    |
-    | IV       |unstable         |  5    |
-    | V        |very unstable    |  6    |
-    +----------+-----------------+-------+
+     ========== ================= =======
+      Category  Atmospheric        Index
+                stability
+     ========== ================= =======
+      I         very stable         1
+      II        stable              2
+      III/1     neutral/stable      3
+      III/2     neutral/unstable    4
+      IV        unstable            5
+      V         very unstable       6
+     ========== ================= =======
 
     The norm states:
 
-    > Strictly speaking, the above correction conditions apply
-    > only to locations in Central Europe with a pronounced season-
-    > al climate and sunrise and sunset times definable over the
-    > whole year, which in particular during the winter months
-    > always exhibit a time difference exceeding six hours. These
-    > conditions are met in Germany. For other countries, CET
-    > should be replaced where relevant by the corresponding zone-
-    > time. In climatic zones with diurnal climate or other calendar
-    > classifications of astronomical seasons, the correction condi-
-    > tions are not directly applicable in the above form. Adaptation
-    > of subsections a to d for other global climatic zones does not
-    > form a part of this standard.
+      Strictly speaking, the above correction conditions apply
+      only to locations in Central Europe with a pronounced season-
+      al climate and sunrise and sunset times definable over the
+      whole year, which in particular during the winter months
+      always exhibit a time difference exceeding six hours. These
+      conditions are met in Germany. For other countries, CET
+      should be replaced where relevant by the corresponding zone-
+      time. In climatic zones with diurnal climate or other calendar
+      classifications of astronomical seasons, the correction condi-
+      tions are not directly applicable in the above form. Adaptation
+      of subsections a to d for other global climatic zones does not
+      form a part of this standard.
 
     :param time: (required, time-like)
         An arbitrary time during the day of year for which
@@ -918,18 +1009,19 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
         If timezone is supplied, time is converted to CET.
     :param ff: (required, float)
         wind speed in 10m height. VDI 3782 Part 6 states:
-        > The standard conditions for
-        > the wind speed (υa) are the standard measurement
-        > height of 10 m above ground (VDI 3786 Part 2;
-        > VDI 3783 Part 8) in combination with a
-        > roughness length of z0 = 0,1 m. Other measurement
-        > heights are suitable if they equal at least twelve
-        > times the roughness length and are at least 4 m
-        > above ground level. If the wind speed is available
-        > for other than the above standard conditions,
-        > i.e. for another suitable measurement height
-        > or a different roughness length,
-        > a conversion needs to be carried out.
+
+          The standard conditions for
+          the wind speed (υa) are the standard measurement
+          height of 10 m above ground (VDI 3786 Part 2;
+          VDI 3783 Part 8) in combination with a
+          roughness length of z0 = 0,1 m. Other measurement
+          heights are suitable if they equal at least twelve
+          times the roughness length and are at least 4 m
+          above ground level. If the wind speed is available
+          for other than the above standard conditions,
+          i.e. for another suitable measurement height
+          or a different roughness length,
+          a conversion needs to be carried out.
     :param tcc: (required, float)
         total cloud cover as fraction of 1
         (equals value in octa divided by 8).
@@ -1463,6 +1555,10 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
 # ----------------------------------------------------
 
 def klug_manier_scheme(*args, **kwargs):
+    """
+    shorthand for the currently valid version of the
+    Klug/Manier scheme :meth:`austaltools._dispersion.klug_manier_scheme_2017`
+    """
     return klug_manier_scheme_2017(*args, **kwargs)
 
 
@@ -1570,7 +1666,19 @@ def pasquill_taylor_scheme(time, ff, tcc, lat, lon, ceil):
     return pt
 
 
-def turners_key(ff, NRI):
+def turners_key(ff: float, NRI:int) -> int:
+    """
+    Returns the P-G stability class matching a
+    wind speed class and net radiation index
+    [EPA2000]_
+
+    :param ff: wind speed in m/s
+    :type ff: float
+    :param NRI: net radiation index
+    :type NRI: int
+    :return: P-G stability class as number (1=A, 2=B,...)
+    :rtype: int
+    """
     ff = _check('ff', ff, 'float', ge=0.)
     NRI = _check('NRI', NRI, 'int', ge=-2, le=4)
     #                 Table 6-4
