@@ -67,6 +67,7 @@ The file has the following structure (the indentations and hyphens are important
           time: 36
           unit: hour
           value: 1.1
+      unit: g/h
 
 
 - Each cycle in the file has a name, here ``meinname``.
@@ -80,7 +81,7 @@ The file has the following structure (the indentations and hyphens are important
     - Optionally you can add an ``offset``, which is also defined by ``time`` and ``unit``.
       is defined. This makes specifications of the form ``every odd month in the 2nd and 4th week`` possible,
       as in the example above, are possible.
-  - The emission can be specified as ``list`` or ``sequence``.
+  - The emission can be specified as either ``list`` or ``sequence``.
     - A ``list`` is a list of hourly values of the source strength.
       - provide values as list of the form::
 
@@ -97,6 +98,13 @@ The file has the following structure (the indentations and hyphens are important
       and the source strength (the time unit ``month`` is not possible here).
       For ``const`` the value is valid for the whole time, for ``ramp`` the source strength changes linearly over the
       time linearly from the previous value (start = 0) to the specified value.
+    - ``unit`` can be given optionally, if the unit of the values given
+      in the list or sequence is not `g/s` (the generic unit used by austal).
+      ``unit`` may be given as a string in the form '`mass`/`time`', where
+      `mass` can be one of `t`, `kg`, `g`, `mg`, `ug`, or `µg` and
+      `time` can be one of `total` (the whole simulation time),
+      `d` (day), `m` or `min` (minute), or `s` or `sec` (second).
+      Example `kg/d` for kilograms per day.
   - With ``#`` you can comment out lines in the file.
 
 How to apply

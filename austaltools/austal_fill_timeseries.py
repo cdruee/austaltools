@@ -171,6 +171,51 @@ def parse_cycle(c_id, c_info, time, dt):
         sequence = pd.Series(sequ_value, index=sequ_time)
     logger.debug(format(sequence))
 
+    if "unit" in c_info.keys():
+        unit_info = c_info["unit"]
+        if "/" in unit_info:
+            # split unit into mass and time interval
+            try:
+                unit_w, unit_t = unit_info.split("/")
+            except ValueError:
+                sys.tracebacklimit = 0
+                raise ValueError('invalid unit info: %s' % unit_info)
+            # parse mass
+            if unit_w == "t":
+                factor_w = 1.E+6
+            elif unit_w == "kg":
+                factor_w = 1.E+3
+            elif unit_w == "g":
+                factor_w = 1.
+            elif unit_w == "mg":
+                factor_w = 1.E-3
+            elif unit_w in ["ug", "µg"]:
+                factor_w = 1.E-6
+            else:
+                sys.tracebacklimit = 0
+                raise ValueError('invalid weight unit: %s' % unit_w)
+            # parse time interval
+            if unit_t == "total":
+                factor_t = 1./float(len(time)*3600)
+            elif unit_t == "d":
+                factor_t = 1./(24.*3600.)
+            elif unit_t == "h":
+                factor_t = 1./3600.
+            elif unit_t == ["m", "min"]:
+                factor_t = 1./60.
+            elif unit_t in ["s", "sec"]:
+                factor_t = 1.
+            else:
+                sys.tracebacklimit = 0
+                raise ValueError('invalid time unit: %s' % unit_t)
+        factor = factor_w * factor_t
+    else:
+        unit_info = "g/s"
+        factor = 1.
+    logger.info(f'cycle {c_id} given in {unit_info}, ' +
+                f'applying conversion factor: {factor}')
+
+
     if any([x < sequence.index[-1] for x in start.diff()[1:]]):
         logger.warning('sequence longer than start interval: %s' % c_id)
     if (start.values[-1] + sequence.index[-1]) > time.values[-1]:
@@ -178,10 +223,11 @@ def parse_cycle(c_id, c_info, time, dt):
 
     # generate cycle:
     # copy sequence to each start time
+    # covert units in the process
     cycle = pd.Series(0, index=time, name=c_id, dtype=float)
     for x in start:
         for dx, y in sequence.items():
-            cycle[x + dx] = y
+            cycle[x + dx] = y * factor
 
     return source, cycle
 # ----------------------------------------------------
