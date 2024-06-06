@@ -115,7 +115,7 @@ def wind_files(path):
     return {'name': f_name, 'stab': f_stab, "wdir": f_wdir, 'grid': f_grid}
 
 
-def read_wind(file_info, path='.', grid=0):
+def read_wind(file_info: dict, path: str = '.', grid: int = 0):
     """
     read wind library files
 
@@ -124,22 +124,33 @@ def read_wind(file_info, path='.', grid=0):
     :type file_info: dict
     :param path: Wind library files are expected
     to be in this path
+    :type path: str
     :param grid: index of the grid for which to read the wind data
+    :type grid: int
     :return: u_grid, v_grid, axes
     :rtype: tuple of (np.ndarray, np,dnarray, dict of lists of float)
 
     """
+    if not isinstance(grid, int):
+        raise ValueError('grid number is not numeric')
     if grid not in file_info['grid']:
         raise ValueError('grid %i not available in data' % grid)
     else:
         logger.info('reading grid: %i' % grid)
-    ndir = len(set(file_info["wdir"]))
-    dirs = sorted(list(set(file_info["wdir"])))
-    nstab = len(set(file_info['stab']))
-    stabs = sorted(list(set(file_info['stab'])))
+    # extract info for the wanted grid:
+    grid_info = {}
+    for k,v in file_info.items():
+        grid_info[k] = [
+            x for i,x in enumerate(file_info[k])
+            if file_info['grid'][i] == grid
+        ]
+    ndir = len(set(grid_info["wdir"]))
+    dirs = sorted(list(set(grid_info["wdir"])))
+    nstab = len(set(grid_info['stab']))
+    stabs = sorted(list(set(grid_info['stab'])))
 
     axes = readmet.dmna.DataFile(
-        os.path.join(path, file_info['name'][0])).axes()
+        os.path.join(path, grid_info['name'][0])).axes()
     nx = len(axes['x'])
     ny = len(axes['y'])
     nz = len(axes['z'])
@@ -147,11 +158,11 @@ def read_wind(file_info, path='.', grid=0):
     u_grid = np.full((nx, ny, nz, nstab, ndir), np.nan)
     v_grid = np.full((nx, ny, nz, nstab, ndir), np.nan)
 
-    for i in _tools.progress(range(len(file_info['name'])),
+    for i in _tools.progress(range(len(grid_info['name'])),
                       desc="reading wind fields"):
-        igrd, wdir, stab = analyze_name(file_info['name'][i])
+        igrd, wdir, stab = analyze_name(grid_info['name'][i])
         if grid == igrd:
-            filename = os.path.join(path, file_info['name'][i])
+            filename = os.path.join(path, grid_info['name'][i])
             logger.debug('loading file: %s' % filename)
             dmna = readmet.dmna.DataFile(filename)
             istab = stabs.index(stab)
@@ -919,18 +930,19 @@ def main():
     working_dir = args["working_dir"]
     lib_dir = wind_library(working_dir)
     file_info = wind_files(lib_dir)
-    dirs = [float(x) * 10. for x in sorted(list(set(file_info["wdir"])))]
+    directions = [float(x) * 10.
+                  for x in sorted(list(set(file_info["wdir"])))]
     u_grid, v_grid, axes = read_wind(file_info, path=lib_dir,
-                                     grid=args['grid'])
+                                     grid=int(args['grid']))
     #
     # get the reference profile
     #
     if args['reference'] == 'simple':
-        u_ref, v_ref = calc_ref(axes['z'], dirs)
+        u_ref, v_ref = calc_ref(axes['z'], directions)
     elif args['reference'] == 'file':
-        u_ref, v_ref = read_ref('/local/data/druee/software/austaltools/TAL-Anemo/Ref1d.dat', axes['z'], dirs)
+        u_ref, v_ref = read_ref('/local/data/druee/software/austaltools/TAL-Anemo/Ref1d.dat', axes['z'], directions)
     elif args['reference'] == 'austal':
-        u_ref, v_ref = austal_ref(working_dir, axes['z'], dirs, tmproot=working_dir)
+        u_ref, v_ref = austal_ref(working_dir, axes['z'], directions, tmproot=working_dir)
     else:
         raise ValueError('unknown kind of reference: %s' % args['reference'])
     #
