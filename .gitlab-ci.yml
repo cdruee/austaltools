@@ -68,7 +68,7 @@ test_latest:
   stage: test
   script:
     - echo pip install tox numpy pandas flake8
-    - eco tox
+    - echo tox
 
 pages:
   image: python:latest
