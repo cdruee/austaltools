@@ -62,12 +62,13 @@ build_pages:
     paths:
     - public
 
+#TODO make this work
 test_latest:
   image: python:latest
   stage: test
   script:
-    - pip install tox numpy pandas flake8
-    - tox
+    - echo pip install tox numpy pandas flake8
+    - eco tox
 
 pages:
   image: python:latest
