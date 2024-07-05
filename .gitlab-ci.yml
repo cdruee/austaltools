@@ -116,9 +116,12 @@ release:
 deploy_deb:
   image: ubuntu:latest
   stage: deploy
-  dependencies:
-    - build_sdist
-    - build_bdist_deb
+  needs:
+    - job: build_sdist
+      artifacts: true
+    - job: build_bdist_deb
+      artifacts: true
+    - job: test_latest
   before_script:
     - 'command -v ssh-agent >/dev/null || ( apt-get update -y && apt-get install openssh-client -y )'
     - mkdir -p ~/.ssh
