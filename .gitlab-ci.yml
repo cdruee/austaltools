@@ -118,7 +118,7 @@ deploy_deb:
   stage: deploy
   dependencies:
     - build_sdist
-    - package_deb
+    - build_bdist_deb
   before_script:
     - 'command -v ssh-agent >/dev/null || ( apt-get update -y && apt-get install openssh-client -y )'
     - mkdir -p ~/.ssh
