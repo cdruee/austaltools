@@ -145,25 +145,25 @@ def read_nc(ncfile, lat, lon):
     if np.modf(idx['lon'])[0] <= 0.5:
         if np.modf(idx['lat'])[0] <= 0.5:
             # SW corner
-            pos[0] = (np.int(idx['lon']), np.int(idx['lat']))
-            pos[1] = (np.int(idx['lon'] + 1), np.int(idx['lat']))
-            pos[2] = (np.int(idx['lon']), np.int(idx['lat'] + 1))
+            pos[0] = (int(idx['lon']), int(idx['lat']))
+            pos[1] = (int(idx['lon'] + 1), int(idx['lat']))
+            pos[2] = (int(idx['lon']), int(idx['lat'] + 1))
         else:
             # NW corner
-            pos[0] = (np.int(idx['lon']), np.int(idx['lat'] + 1))
-            pos[1] = (np.int(idx['lon'] + 1), np.int(idx['lat'] + 1))
-            pos[2] = (np.int(idx['lon']), np.int(idx['lat']))
+            pos[0] = (int(idx['lon']), int(idx['lat'] + 1))
+            pos[1] = (int(idx['lon'] + 1), int(idx['lat'] + 1))
+            pos[2] = (int(idx['lon']), int(idx['lat']))
     else:
         if np.modf(idx['lat'])[0] <= 0.5:
             # SE corner
-            pos[0] = (np.int(idx['lon'] + 1), np.int(idx['lat']))
-            pos[1] = (np.int(idx['lon'] + 1), np.int(idx['lat'] + 1))
-            pos[2] = (np.int(idx['lon']), np.int(idx['lat']))
+            pos[0] = (int(idx['lon'] + 1), int(idx['lat']))
+            pos[1] = (int(idx['lon'] + 1), int(idx['lat'] + 1))
+            pos[2] = (int(idx['lon']), int(idx['lat']))
         else:
             # NE corner
-            pos[0] = (np.int(idx['lon'] + 1), np.int(idx['lat'] + 1))
-            pos[1] = (np.int(idx['lon']), np.int(idx['lat'] + 1))
-            pos[2] = (np.int(idx['lon'] + 1), np.int(idx['lat']))
+            pos[0] = (int(idx['lon'] + 1), int(idx['lat'] + 1))
+            pos[1] = (int(idx['lon']), int(idx['lat'] + 1))
+            pos[2] = (int(idx['lon'] + 1), int(idx['lat']))
 
     pi, pj = pos[0]
     logging.info(str((pi, pj, dims['lon'][pi], dims['lat'][pj])))
@@ -408,9 +408,9 @@ def main():
     logging.debug('rho')
     v['rho'] = m.humidity.gas_rho(p=v['sp'], T=v['t2m'])
     logging.debug('Tv')
-    v['Tv'] = [m.humidity.Humidity(t=v['t2m'][i],
-                                   p=v['sp'][i],
-                                   td=v['d2m'][i]).tvirt()
+    v['Tv'] = [m.humidity.Humidity(t=v['t2m'].iloc[i],
+                                   p=v['sp'].iloc[i],
+                                   td=v['d2m'].iloc[i]).tvirt()
                for i in range(v['t2m'].size)]
     logging.debug('Lo')
     # calculate u* from "ff" and roughness instead of model-provided "zust"

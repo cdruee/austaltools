@@ -10,9 +10,22 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import osgeo.ogr as ogr
     import numpy as np
     import pandas as pd
-    import matplotlib.colors
-    import matplotlib.patches
-    import matplotlib.pyplot as plt
+    try:
+        import matplotlib
+        have_matplotlib = False
+        if os.name == 'posix' and "DISPLAY" not in os.environ:
+            matplotlib.use('Agg')
+            have_display = False
+        else:
+            have_display = True
+        import matplotlib.colors
+        import matplotlib.patches
+        import matplotlib.pyplot as plt
+    except ImportError:
+        have_matplotlib = False
+        have_display = False
+        matplotlib = None
+        plt = None
 
     try:
         from tqdm import tqdm
@@ -546,6 +559,11 @@ def common_plot(args: dict,
     :type mark: dict or pandas.Dataframe
 
     """
+    if not have_matplotlib:
+        raise EnvironmentError('matplotlib not available, cannot plot')
+    if args["plot"] == "__show__" and not have_display:
+        raise EnvironmentError('no display, cannot show plot')
+
     matplotlib.rcParams.update({'font.size': 16})
     fig, ax = plt.subplots()
     fig.set_size_inches(11, 8)

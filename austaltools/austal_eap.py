@@ -1008,6 +1008,8 @@ def main():
         else:
             logger.debug('select to write plot to custom filename')
         _tools.common_plot(args, dat=dat_dict, mark=pos_dict, scale=scale)
+    else:
+        logger.info('nothing selected, skipping plot')
 
 
 

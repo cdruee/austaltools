@@ -1288,7 +1288,7 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
     for i, _ in enumerate(time):
 
         # no corrections if cloud cover is missing
-        if np.isnan(kt[i]) or np.isnan(kn[i]):
+        if np.isnan(kt.iloc[i]) or np.isnan(kn.iloc[i]):
             continue
         #
         # rule a)
