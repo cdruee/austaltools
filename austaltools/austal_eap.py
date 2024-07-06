@@ -1004,9 +1004,9 @@ def main():
             logger.debug('select to show plot')
         elif args['plot'] == '__default__':
             args['plot'] = "eap_quality_measure"
-            logger.debug('select to write plort to default filename')
+            logger.debug('select to write plot to default filename')
         else:
-            logger.debug('select to write plort to custom filename')
+            logger.debug('select to write plot to custom filename')
         _tools.common_plot(args, dat=dat_dict, mark=pos_dict, scale=scale)
 
 

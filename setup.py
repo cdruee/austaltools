@@ -38,7 +38,6 @@ setup(
         'netCDF4',
         'numpy',
         'gdal',
-        'gdal-utils',
         'pandas',
         'pyyaml',
         'readmet',
