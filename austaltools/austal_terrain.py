@@ -5,16 +5,19 @@ Created on Sun Mar 20 09:57:48 2022
 
 @author: clemens
 """
-import logging
 import argparse
+import csv
 import glob
 import gzip
-from importlib import resources
+import io
+import logging
 import os
 import shutil
 import sys
 import tarfile
 import tempfile
+import zipfile
+from importlib import resources
 from urllib.request import urlretrieve
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
@@ -36,7 +39,7 @@ logger = logging.getLogger()
 
 # -------------------------------------------------------------------------
 
-KNOWN_DEMS = ["DGM25-RP", "GLO-30", "GTOPO30"]
+KNOWN_DEMS = ["DGM25-RP", "DGM25-NW", "GLO-30", "GTOPO30"]
 STORAGE_LOCATIONS = _tools.DEFAULT_DATA_DIRS
 STORAGE_DIR = "terrain"
 STORAGE_PATH = None      # will be filled lazy
@@ -173,6 +176,62 @@ def download_DGM25_RP(path):
 
 # -------------------------------------------------------------------------
 
+def download_DGM25_NW(path):
+    """
+
+    :param path:
+    :type path:
+    :return:
+    :rtype:
+    """
+    out_res = 25 # m in EPSG:5677 aka Gauss-Krueger band 3
+    base_url = ("https://www.opengeodata.nrw.de/" +
+                "produkte/geobasis/hm/dgm1_tiff/dgm1_tiff/")
+    meta_file = "dgm1_meta.zip"
+    url = f"{base_url}/{meta_file}"
+    logger.debug("downloading metadata: %s" % path)
+    zip_file, _ = urlretrieve(url, os.path.basename(url))
+    input_files = []
+    with zipfile.ZipFile(zip_file, 'r') as zf:
+        with io.TextIOWrapper(zf.open('dgm1_tiff.csv')) as csvfile:
+            for row in csv.reader(csvfile, delimiter=';',
+                                  quoting=csv.QUOTE_NONE):
+                if "ETRS89_UTM32" in row:
+                    input_files.append(row[0])
+    tile_files = []
+    for tf1 in _tools.progress(input_files):
+        url = f"{base_url}/{tf1}"
+        logger.debug(f"downloading ... {url}")
+        zip_file, _ = urlretrieve(url, tf1)
+        tf25 = tf1.replace("dgm1","dgm25") + ".tif"
+        logger.debug(f"converting tile ... {tf1} -> {tf25}")
+        try:
+            gdal.Warp(destNameOrDestDS=tf25,
+                      xRes=out_res,
+                      yRes=out_res,
+                      dstSRS="EPSG:5677",
+                      srcDSOrSrcDSTab=tf1,
+                      srcSRS="EPSG:25832",
+                      format="GTiff")
+            tile_files.append(tf25)
+        except Exception as e:
+            logger.error(str(e))
+        os.remove(tf1)
+    # merge the GeoTiff Files from all tiles into one file
+    target = os.path.join(path,DEM_FMT % "DGM25-NW")
+    if os.path.exists(target):
+        logger.info("removing old source file")
+        os.remove(target)
+    logger.debug("merging tiles ...")
+    gdal_merge.main(["", "-co", "compress=lzw",
+                     "-o", target,
+                     ] + tile_files)
+    logger.debug("... done")
+
+    return
+
+# -------------------------------------------------------------------------
+
 def download_dem(dem, path):
     logger.info("downloading terrain source %s" % dem)
     success = True
@@ -186,6 +245,8 @@ def download_dem(dem, path):
                 download_GLO_30(path)
             elif dem == "DGM25-RP":
                 download_DGM25_RP(path)
+            elif dem == "DGM25-NW":
+                download_DGM25_NW(path)
             else:
                 logger.error("unknown dataset to download %s" % dem)
                 success = False
@@ -248,7 +309,8 @@ def provide_storage(storage_path:str=None) -> str:
 # -------------------------------------------------------------------------
 
 
-def provide_terrain_data(storage_path:str, force=False, download=True):
+def provide_terrain_data(storage_path:str, source=None, 
+                         force=False, download=True):
     extension = DEM_FMT % ""
     datasets = []
     # if a location is found, we are happy
@@ -256,8 +318,6 @@ def provide_terrain_data(storage_path:str, force=False, download=True):
     for file in os.listdir(storage_path):
         if file.endswith(extension):
             datasets.append(file.replace(extension, ""))
-    if (len(datasets) > 0 and force is False):
-        download = False
     if download:
         for aux_path in STORAGE_AUX_FILES.iterdir():
             aux_file = os.path.basename(aux_path)
@@ -276,12 +336,14 @@ def provide_terrain_data(storage_path:str, force=False, download=True):
                 logger.info("dataset found in storage: %s" % dem)
                 datasets.append(dem)
             else:
-                success = download_dem(dem, storage_path)
-                if success:
-                    logger.error("successful download of dataset %s" % dem)
-                    datasets.append(dem)
-                else:
-                    logger.error("dataset %s failed to download" % dem)
+                logger.debug(f"{dem} -- {source}")
+                if dem == source:
+                    success = download_dem(dem, storage_path)
+                    if success:
+                        logger.error("successful download of dataset %s" % dem)
+                        datasets.append(dem)
+                    else:
+                        logger.error("dataset %s failed to download" % dem)
     return datasets
 # -------------------------------------------------------------------------
 
@@ -299,7 +361,7 @@ def austal_terrain(args:dict):
     """
     Thia is the main working function
 
-    :param args: the command line arguments as dict
+    :param args: the command line arguments as dictionary
     :type args: dict
     """
 
@@ -318,20 +380,22 @@ def austal_terrain(args:dict):
     elif args["ll"] is not None:
         lat, lon = [float(x) for x in args['ll']]
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
-    elif args["sources"] is not None:
-        source_action = args["sources"]
+    elif args["source_action"] is not None:
+        source_action = args["source_action"]
         # source actions
         if source_action == 'list':
-            sources = provide_terrain_data(storage_path=STORAGE_PATH,
+            source_action = provide_terrain_data(storage_path=STORAGE_PATH,
                                            download=False)
-            for x in sources:
+            for x in source_action:
                 print('%-8s :' % x)
                 show_notice(STORAGE_PATH, x)
         elif source_action == 'download':
-            provide_terrain_data(storage_path=STORAGE_PATH)
+            provide_terrain_data(storage_path=STORAGE_PATH,
+                                 source=args["source"])
         elif source_action == 'force':
             provide_terrain_data(storage_path=STORAGE_PATH,
-                                           force=True)
+                                 source=args["source"],
+                                 force=True)
         else:
             raise ValueError("Unknown source action: %s" %
             source_action)
@@ -434,7 +498,7 @@ def cli_parser():
                              'Y = `northing`.')
     cspars.add_argument('--source-action',
                         metavar="ACTION",
-                        dest="sources",
+                        dest="source_action",
                         nargs=None,
                         choices=['list', 'download', 'force'],
                         help='Show/modify sources. ' +
@@ -491,7 +555,7 @@ def main():
     else:
         logger.setLevel(logging.WARNING)
 
-    if args['output'] is None and args['sources'] is None:
+    if args['output'] is None and args['source_action'] is None:
         parser.print_help()
         logger.critical('NAME is required with -L, -G, -U, -D or -W')
         sys.exit(1)
