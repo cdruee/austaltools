@@ -54,6 +54,7 @@ build_pages:
   image: python:latest
   stage: build
   script:
+    - BUILDING_SPHINX="true"
     - pip install sphinx sphinx-argparse
     - pip install numpy pandas
     - sphinx-build -b html docs build/sphinx/html
