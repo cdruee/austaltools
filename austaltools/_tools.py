@@ -5,7 +5,8 @@ import shlex
 import logging
 import sys
 
-print(os.environ.get('BUILDING_SPHINX'))
+for key, value in os.environ.items():
+    print('{}: {}'.format(key, value))
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import osgeo.osr as osr
     import osgeo.ogr as ogr
