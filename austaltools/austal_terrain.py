@@ -177,13 +177,7 @@ def download_DGM25_RP(path):
 # -------------------------------------------------------------------------
 
 def download_DGM25_NW(path):
-    """
 
-    :param path:
-    :type path:
-    :return:
-    :rtype:
-    """
     out_res = 25 # m in EPSG:5677 aka Gauss-Krueger band 3
     base_url = ("https://www.opengeodata.nrw.de/" +
                 "produkte/geobasis/hm/dgm1_tiff/dgm1_tiff/")

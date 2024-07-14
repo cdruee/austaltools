@@ -56,7 +56,7 @@ Licenses
 This package is licensed under the EUROPEAN UNION PUBLIC LICENCE v. 1.2.
 See `LICENSE` for the license text or navugate to https://eupl.eu/1.2/en/
 
-The topography data files in the folder `data` are licensed under
+The topography data that can be downloaded are licensed under
 various other licenses:
 
 +----------+-----------------------------------------------------------------------------------+
@@ -67,6 +67,8 @@ various other licenses:
 | GTOPO30  | Creative Commons Attribution 4.0 International License.                           |
 +----------+-----------------------------------------------------------------------------------+
 | DGM25-RP | Datenlizenz Deutschland – Namensnennung – Version 2.0                             |
++----------+-----------------------------------------------------------------------------------+
+| DGM25-NW | Datenlizenz Deutschland – Zero – Version 2.0                                      |
 +----------+-----------------------------------------------------------------------------------+
 
 See files containing `LICENSE.*` for the individual licence texts.
