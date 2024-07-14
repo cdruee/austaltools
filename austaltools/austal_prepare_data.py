@@ -12,6 +12,7 @@ import gzip
 import io
 import logging
 import os
+import pip
 import shutil
 import sys
 import tarfile
@@ -23,6 +24,18 @@ from urllib.request import urlretrieve
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from osgeo import gdal
     from osgeo_utils import gdal_merge
+
+try:
+    import cdsapi
+except ImportError:
+    pip.main(['install', 'cdsapi'])
+    import cdsapi
+
+try:
+    import cdo
+except ImportError:
+    pip.main(['install', 'cdo'])
+    import cdo
 
 try:
     from . import _tools
@@ -558,6 +571,206 @@ def main():
     #
     # call the main working function
     austal_terrain(args)
+
+
+
+
+
+
+#!/usr/bin/env python3
+import cdsapi
+import os
+from cdo import *
+from glob import glob
+from multiprocessing import Pool
+
+
+def filename(y,lt=None):
+    name = 'cerra_ak_eu_%04i' % y
+    if lt is not None:
+        name += '_%01i'%lt
+    return name
+
+
+# -------------------------------------------------------------------------
+# ERA5
+
+
+#!/usr/bin/env python3
+import cdsapi
+import os
+from multiprocessing import Pool
+
+
+
+def era5_getyear(y):
+  year = '{:04d}'.format(y)
+  ncname = 'era5_ak_eu_'+year+'.nc'
+  c = cdsapi.Client()
+  if not os.path.exists(ncname):
+    c.retrieve(
+      'reanalysis-era5-single-levels',
+      {
+        'product_type': 'reanalysis',
+        'variable': [
+            '10m_u_component_of_wind', '10m_v_component_of_wind', '2m_dewpoint_temperature',
+            '2m_temperature', 'forecast_surface_roughness', 'friction_velocity',
+            'surface_latent_heat_flux', 'surface_pressure', 'surface_sensible_heat_flux',
+            'low_cloud_cover', 'total_cloud_cover',
+            'cloud_base_height','total_precipitation',
+        ],
+        'year': year,
+        'month': [
+            '01', '02', '03',
+            '04', '05', '06',
+            '07', '08', '09',
+            '10', '11', '12',
+        ],
+        'day': [
+            '01', '02', '03',
+            '04', '05', '06',
+            '07', '08', '09',
+            '10', '11', '12',
+            '13', '14', '15',
+            '16', '17', '18',
+            '19', '20', '21',
+            '22', '23', '24',
+            '25', '26', '27',
+            '28', '29', '30',
+            '31',
+        ],
+        'time': [
+            '00:00', '01:00', '02:00',
+            '03:00', '04:00', '05:00',
+            '06:00', '07:00', '08:00',
+            '09:00', '10:00', '11:00',
+            '12:00', '13:00', '14:00',
+            '15:00', '16:00', '17:00',
+            '18:00', '19:00', '20:00',
+            '21:00', '22:00', '23:00',
+        ],
+        'area': [
+            71, -12, 33,
+            36,
+        ],
+        'format': 'netcdf',
+      },
+      ncname)
+
+if __name__ == '__main__':
+  with Pool(10) as pool:
+    p = pool.map(getyear, range(1980,1991))
+#    p = pool.map(getyear, range(1990,2001))
+#    p = pool.map(getyear, range(2001,2011))
+#    p = pool.map(getyear, range(2011,2021))
+
+# -------------------------------------------------------------------------
+# CERRA
+
+def cerra_getyear(opts):
+  y, lt = opts
+  gribname = filename(y, lt) + '.grib'
+  c = cdsapi.Client()
+  if not os.path.exists(gribname):
+      print("cds getting: " + gribname)
+      opts = (
+        'reanalysis-cerra-single-levels',
+        {
+            'data_type': 'reanalysis',
+            'product_type': 'forecast',
+            'variable': [
+                '10m_wind_direction', '10m_wind_speed', '2m_relative_humidity',
+                '2m_temperature', 'low_cloud_cover', 'medium_cloud_cover',
+                'momentum_flux_at_the_surface_u_component',
+                'momentum_flux_at_the_surface_v_component', 'surface_latent_heat_flux',
+                'surface_pressure', 'surface_roughness', 'surface_sensible_heat_flux',
+                'total_cloud_cover', 'total_precipitation',
+            ],
+            'level_type': 'surface_or_atmosphere',
+            'year': '%04i' % y,
+            'month': [
+                '01', '02', '03',
+                '04', '05', '06',
+                '07', '08', '09',
+                '10', '11', '12',
+            ],
+            'day': [
+                '01', '02', '03',
+                '04', '05', '06',
+                '07', '08', '09',
+                '10', '11', '12',
+                '13', '14', '15',
+                '16', '17', '18',
+                '19', '20', '21',
+                '22', '23', '24',
+                '25', '26', '27',
+                '28', '29', '30',
+                '31',
+            ],
+            'time': [
+                '00:00', '03:00', '06:00',
+                '09:00', '12:00', '15:00',
+                '18:00', '21:00',
+            ],
+            'leadtime_hour': '%i' % lt,
+            'format': 'grib',
+        },
+        gribname
+      )
+      c.retrieve(*opts)
+      ncname = filename(y,lt) + '.nc'
+      print("cdo processing: " + ncname)
+      cdo.selindexbox('489,649,479,659', options='-f nc',
+                      input=gribname, output=ncname)
+      #os.remove(gribname)
+
+
+def cerra_create(years):
+    tempPath = './tmp/'
+    cdo = Cdo(tempdir=tempPath)
+    print("python-cdo version: %s" % cdo.__version__())
+    print("cdo        version: %s" % cdo.version())
+    cdo.debug = True
+    cdo.cleanTempDir()
+
+    # get sets of bunches to retrieve
+    combi = []
+    for y in range(2000,2001):
+        print("year: %s" % y)
+        for lt in range(1,4):
+            combi.append((y,lt))
+
+    # get data and extract region
+    with Pool(10) as pool:
+        p = pool.map(cerra_getyear, combi)
+
+    # combine forecasts
+    for yr in set([x for x,_ in combi]):
+        lts = set([y for x,y in combi if x == yr])
+        infiles = [filename(yr, lt) + '.nc' for lt in lts]
+        cdo.mergetime(
+            input=" ".join([
+                cdo.setgridtype('curvilinear', input=x)
+                for x in infiles
+            ]),
+            output=filename(yr, None) + '.nc',
+            options='-f nc4 -z zip_6 --reduce_dim'
+        )
+#        for x in infiles:
+#            os.remove(x)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # -------------------------------------------------------------------------

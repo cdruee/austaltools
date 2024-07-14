@@ -2,7 +2,6 @@
 """
 create basic plot for austal result files
 """
-import argparse
 import logging
 import os
 import re
@@ -21,10 +20,13 @@ except ImportError:
     from _version import __version__
 
 logger = logging.getLogger()
-logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
-logging.getLogger('readmet.dmna').setLevel(logging.WARNING)
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    logging.getLogger('readmet.dmna').setLevel(logging.WARNING)
+
 
 # -------------------------------------------------------------------------
+
+
 def parse_austal_outputname(filename: str):
     """
     analyze name of austal output file
@@ -93,56 +95,15 @@ def parse_austal_outputname(filename: str):
 
 
 # -------------------------------------------------------------------------
-def cli_parser() -> argparse.ArgumentParser:
+
+
+def main(args):
     """
-    command line interface
+    This is the main working function
 
-    :return: parser
-    :rtype: argparse.ArgumentParser
+    :param args: the command line arguments as dictionary
+    :type args: dict
     """
-
-    parser = argparse.ArgumentParser(
-        description='create AUSTAL windlibrary using METRAS')
-    parser = _tools.add_arguents_common_plot(parser)
-    parser.add_argument(dest="file", metavar="DATA",
-                        help="data file to plot."
-                        )
-    parser.add_argument('-s', '--stdvs',
-                        metavar="STDVs",
-                        nargs='?',
-                        default=0.,
-                        const=1.,
-                        help='hash areas where the data are not ' +
-                             'significant. Sigingicant is defined as ' +
-                             'larder than `STDVs` times the standard ' +
-                             'deviation caculated by austal. ' +
-                             'If missing, `STDVs` defaults to 1.0.')
-
-    parser.add_argument("--version",
-                        version="%(prog)s " + str(__version__),
-                        action="version")
-    verb = parser.add_mutually_exclusive_group()
-    verb.add_argument('--debug', dest='verb', action='store_const',
-                      const=logging.DEBUG, help='show informative output')
-    verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
-                      const=logging.INFO, help='show detailed output')
-    return parser
-
-
-# -------------------------------------------------------------------------
-
-
-def main():
-    parser = cli_parser()
-    args = vars(parser.parse_args())
-
-    # set logging level
-    if args["verb"] is not None:
-        logger.setLevel(args["verb"])
-    else:
-        logger.setLevel(logging.WARNING)
-    logger.info(os.path.basename(__file__) + ' version: ' + __version__)
-
     logger.debug("args: %s" % format(args))
 
     # get the model configuration, if the file is present
@@ -154,7 +115,6 @@ def main():
         conf = None
     logger.debug("conf: %s" % format(conf))
 
-
     infile = args['file']
     # make sure infile has an extension
     if not infile.endswith('.dmna'):
@@ -163,11 +123,10 @@ def main():
     info = parse_austal_outputname(infile)
     logger.debug("info: %s" % format(info))
 
-    if args['buildings']:
-        buildings = None
-        if conf:
-            buildings = _tools.get_buildings(conf)
-            logging.info('buildings in config: %d' % len(buildings))
+    buildings = None
+    if args['buildings'] and conf:
+        buildings = _tools.get_buildings(conf)
+        logging.info('buildings in config: %d' % len(buildings))
 
     # warn, if not a file containing "additional load"
     if info["kind"] != "load":
@@ -180,12 +139,6 @@ def main():
     dat = datafile.data[datafile.variables[0]]
     datx = datafile.axes(ax="x")
     daty = datafile.axes(ax="y")
-    try:
-        dd = float(datafile.header['delta'][0])
-    except ValueError:
-        dd = datx[1] - datx[0]
-        logger.warning('grid spacing "delta" not in data file, ' +
-                       'guessing: %fm ' % dd)
 
     if len(dat.shape) == 3:
         datz = dat[:, :, 0]
@@ -208,11 +161,10 @@ def main():
             std = std[:, :, 0]
         if datz.shape != std.shape:
             raise ValueError('stdv shape does not match data shape')
-        std[std==0] = 1.E-19
+        std[std == 0] = 1.E-19
         dots = datz / (stdvs * std)
     else:
         dots = None
-
 
     # try to load topography
     topo_path = os.path.join(args['working_dir'],
@@ -230,7 +182,7 @@ def main():
     elif args['plot'] == '__default__':
         args['plot'] = os.path.splitext(os.path.basename(infile_path))[0]
 
-    scale = 10 ** (np.ceil(np.log10(np.percentile(datz, 97.5))) )
+    scale = 10 ** (np.ceil(np.log10(np.percentile(datz, 97.5))))
     # for all-zero fields or bad data, make a dummy scale
     if scale <= 0.:
         scale = 1.
@@ -243,7 +195,3 @@ def main():
                        dots=dots, buildings=buildings, scale=levels)
 
 # ------------------------------------------------------------------------
-
-
-if __name__ == "__main__":
-    main()

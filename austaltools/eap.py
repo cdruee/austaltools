@@ -1,6 +1,5 @@
 #!/bin/env python3
 
-import argparse
 import glob
 import logging
 import os
@@ -19,19 +18,19 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import meteolib
 
 try:
-    from . import _dispersion, _tools
-except ImportError:
-    import _dispersion, _tools
-
-try:
+    from . import _tools
     from ._version import __version__
+    from . import _dispersion
 except ImportError:
+    import _tools
     from _version import __version__
+    import _dispersion
 
 logging.basicConfig()
 logger = logging.getLogger()
-logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
-logging.getLogger('readmet.dmna').setLevel(logging.ERROR)
+
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    logging.getLogger('readmet.dmna').setLevel(logging.ERROR)
 # -------------------------------------------------------------------------
 
 # VDI 3783 part 8:
@@ -90,6 +89,9 @@ def analyze_name(name):
     return grid, wdir, ak
 
 
+# ----------------------------------------------------
+
+
 def wind_files(path):
     """
     find wind library files
@@ -98,7 +100,7 @@ def wind_files(path):
     :return: dict of lists containing names, stability classes,
     general wind directions, and grid indexes of all files.
     """
-    wn = re.compile("w[0-9asnwe]{7}\.dmna")
+    wn = re.compile(r"w[0-9asnwe]{7}\.dmna")
     f_name = [x for x in os.listdir(path) if wn.match(x)]
     logger.debug('filenames: %s' % str(f_name))
     f_grid = []
@@ -113,6 +115,9 @@ def wind_files(path):
     logger.debug('wind directions: %s' % str(f_wdir))
     logger.debug('grid indexes: %s' % str(f_grid))
     return {'name': f_name, 'stab': f_stab, "wdir": f_wdir, 'grid': f_grid}
+
+
+# ----------------------------------------------------
 
 
 def read_wind(file_info: dict, path: str = '.', grid: int = 0):
@@ -139,9 +144,9 @@ def read_wind(file_info: dict, path: str = '.', grid: int = 0):
         logger.info('reading grid: %i' % grid)
     # extract info for the wanted grid:
     grid_info = {}
-    for k,v in file_info.items():
+    for k, v in file_info.items():
         grid_info[k] = [
-            x for i,x in enumerate(file_info[k])
+            x for i, x in enumerate(file_info[k])
             if file_info['grid'][i] == grid
         ]
     ndir = len(set(grid_info["wdir"]))
@@ -159,7 +164,7 @@ def read_wind(file_info: dict, path: str = '.', grid: int = 0):
     v_grid = np.full((nx, ny, nz, nstab, ndir), np.nan)
 
     for i in _tools.progress(range(len(grid_info['name'])),
-                      desc="reading wind fields"):
+                             desc="reading wind fields"):
         igrd, wdir, stab = analyze_name(grid_info['name'][i])
         if grid == igrd:
             filename = os.path.join(path, grid_info['name'][i])
@@ -172,6 +177,10 @@ def read_wind(file_info: dict, path: str = '.', grid: int = 0):
     axes['dir'] = [x * 10. for x in dirs]
     axes['ak'] = stabs
     return u_grid, v_grid, axes
+
+
+# ----------------------------------------------------
+
 
 def read_heff(working_dir):
     """
@@ -202,6 +211,9 @@ def read_heff(working_dir):
     return heff
 
 
+# ----------------------------------------------------
+
+
 def same_sense_rotation(val, ref):
     """
     return true if directions (in degrees) in
@@ -227,6 +239,9 @@ def same_sense_rotation(val, ref):
     else:
         res = False
     return res
+
+
+# ----------------------------------------------------
 
 
 def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
@@ -281,7 +296,7 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
     # are performed only for the remaining grid
     # points.
     for ibar in _tools.progress(range(nz_eval * nstab),
-                         desc="do quality measure "):
+                                desc="do quality measure "):
         iz = ibar // nstab
         istab = ibar % nstab
         if iz <= nz_eval:
@@ -317,7 +332,7 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
     sumwr = np.sum(np.sum(u_keep * u_ref3d + v_keep * v_ref3d, axis=4), axis=3)
     sumr = np.sum(np.sum(u_ref3d + v_ref3d, axis=4), axis=3)
     sumr2 = np.sum(np.sum(u_ref3d ** 2 + v_ref3d ** 2, axis=4), axis=3)
-    korr = float( 2 * nstab * ndir)
+    korr = float(2 * nstab * ndir)
     gd = np.full((nx, ny, nz), np.nan)
     for iz in range(nz):
         if iz <= nz_eval:
@@ -344,6 +359,10 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
 
     return g, gd, gf
 
+
+# ----------------------------------------------------
+
+
 def find_eap(g_lower):
     # 5) Within each individual contiguous region with
     # the wind direction rotating in the same sense,
@@ -369,18 +388,21 @@ def find_eap(g_lower):
         g_notnan = g_lower
         g_notnan[np.isnan(g_notnan)] = 0
         # ! label is 1-based but index in g_upper_max is 0-based -> add 1
-        eap = [ ndimage.maximum_position(g_notnan,
-                                         label,
-                                         x + 1)
-                for x in g_upper_descending_indexes]
+        eap = [ndimage.maximum_position(g_notnan,
+                                        label,
+                                        x + 1)
+               for x in g_upper_descending_indexes]
     else:
         eap = []
         g_upper = []
 
     return eap, g_upper
 
+
+# ----------------------------------------------------
+
 def calc_all_eap(g, mx_lvl=None):
-    g_upper_levels =[]
+    g_upper_levels = []
     eap_levels = []
     for lvl in range(np.shape(g)[2]):
         if mx_lvl is None or lvl <= mx_lvl:
@@ -393,7 +415,9 @@ def calc_all_eap(g, mx_lvl=None):
     return eap_levels, g_upper_levels
 
 
-def interpolate_wind(u_in:list, v_in:list, z_in:list, levels:list):
+# ----------------------------------------------------
+
+def interpolate_wind(u_in: list, v_in: list, z_in: list, levels: list):
     if not (len(u_in) == len(v_in) == len(z_in)):
         raise ValueError('u, v,, and z must have the same length')
     u_out = []
@@ -421,8 +445,8 @@ def interpolate_wind(u_in:list, v_in:list, z_in:list, levels:list):
             u2, d1 = meteolib.wind.uv2dir(u_in[i2], v_in[i2])
             ww = meteolib.wind.LogWind(u=u1, z=z1, u2=u2, z2=z2)
             ff = ww.u(lev)
-            um = np.interp([lev], [z1, z2], [u_in[i1],u_in[i2]])
-            vm = np.interp([lev], [z1, z2], [v_in[i1],v_in[i2]])
+            um = np.interp([lev], [z1, z2], [u_in[i1], u_in[i2]])
+            vm = np.interp([lev], [z1, z2], [v_in[i1], v_in[i2]])
             _, dd = meteolib.wind.uv2dir(um, vm)
             u, v = meteolib.wind.dir2uv(ff, dd)
         else:
@@ -431,6 +455,10 @@ def interpolate_wind(u_in:list, v_in:list, z_in:list, levels:list):
         u_out.append(u)
         v_out.append(v)
     return u_out, v_out
+
+
+# ----------------------------------------------------
+
 
 class GridASCII(object):
     file = None
@@ -446,9 +474,9 @@ class GridASCII(object):
         self.file = file
         self.data = np.loadtxt(file, skiprows=6)
         with open(file, "r") as f:
-            for l in f:
-                k, v = re.split("\s+", l.strip(), 1)
-                if re.match('[0-9-.E]+', k):
+            for ln in f:
+                k, v = re.split(r"\s+", ln.strip(), 1)
+                if re.match(r'[0-9-.E]+', k):
                     # if fist field is a number the header is over
                     break
                 elif k in self._keys:
@@ -464,6 +492,9 @@ class GridASCII(object):
 
         np.savetxt(file, self.data, header=ascii_header,
                    comments='', fmt="%4.0f", delimiter="")
+
+
+# ----------------------------------------------------
 
 
 def run_austal(workdir, tmproot=None):
@@ -483,7 +514,7 @@ def run_austal(workdir, tmproot=None):
         with open(austal_mod, 'w') as w:
             for line in a:
                 try:
-                    k, v = re.split("\s+", line.strip(), 1)
+                    k, v = re.split(r"\s+", line.strip(), 1)
                 except ValueError:
                     k = line.strip()
                     v = ''
@@ -508,7 +539,7 @@ def run_austal(workdir, tmproot=None):
                 hq 10
                 
                 qs -4
-                """.splitlines():
+            """.splitlines():
                 w.write("{}\n".format(line.strip()))
     #
     # make flat topography at same mean elevation
@@ -547,7 +578,7 @@ def run_austal(workdir, tmproot=None):
         nglob = len(dmna_files)
         if nglob > dmna_found:
             if hasattr(pbar, 'update'):
-                _tools.progress.update(nglob - dmna_found)
+                pbar.update(nglob - dmna_found)
             dmna_found = nglob
             logging.debug('caluclated wind fields: %i of %i' %
                           (dmna_found, dmna_expected))
@@ -557,7 +588,7 @@ def run_austal(workdir, tmproot=None):
         austal_ok = True
     else:
         for line in p.stdout.readlines():
-            if "Windfeldbibliothek wurde erstellt" in line:
+            if "Windfeldbibliothek wurde erstellt" in line.decode():
                 austal_ok = True
                 break
         else:
@@ -574,13 +605,15 @@ def run_austal(workdir, tmproot=None):
     return u_tmp, v_tmp, ax_tmp
 
 
+# ----------------------------------------------------
+
+
 def austal_ref(workdir, levels, dirs, tmproot=None):
     logger.debug("calculating refernce wind fields")
     u_tmp, v_tmp, ax_tmp = run_austal(workdir, tmproot)
     z_tmp = ax_tmp['z']
     d_tmp = ax_tmp['dir']
     s_tmp = ax_tmp['ak']
-
 
     logger.debug("extracting wind reference profile")
     # get index of position closest to the origin
@@ -590,7 +623,6 @@ def austal_ref(workdir, levels, dirs, tmproot=None):
     write_ref("Ref1d.dat", z_tmp, d_tmp, u_tmp[ix, iy, :, :, :],
               v_tmp[ix, iy, :, :, :], (z_tmp, s_tmp, d_tmp))
 
-
     # shape of reference wind profiles: (nz, nstab, ndir)
     u_ref = np.full((len(levels), N_CLASS, len(dirs)), np.nan)
     v_ref = np.full((len(levels), N_CLASS, len(dirs)), np.nan)
@@ -599,17 +631,17 @@ def austal_ref(workdir, levels, dirs, tmproot=None):
         for ido, do in enumerate(dirs):
             # find profile with same stability class and nearest direction
             diff_min = 360.
-            rf = rd = pd.Series(dtype=float)
+            ui = vi = None
             for idi, di in enumerate(d_tmp):
-               for isi,_ in enumerate(s_tmp):
+                for isi, _ in enumerate(s_tmp):
                     # difference in -180 ... 180
                     diff_dir = (((do - di) + 180.) % 360.) - 180.
                     if isi == iso and abs(diff_dir) < abs(diff_min):
-                      # this is the selected reference profile:
+                        # this is the selected reference profile:
                         ui = u_tmp[ix, iy, :, isi, idi]
                         vi = v_tmp[ix, iy, :, isi, idi] + diff_dir
                         diff_min = diff_dir
-            if diff_min == 360.:
+            if diff_min == 360. or ui is None or vi is None:
                 raise ValueError('no reference profile for ' +
                                  'stability class: %s' %
                                  _dispersion.KM2021.name(iso + 1))
@@ -618,6 +650,8 @@ def austal_ref(workdir, levels, dirs, tmproot=None):
 
     return u_ref, v_ref
 
+
+# ----------------------------------------------------
 
 
 def calc_ref(levels, dirs):
@@ -673,7 +707,7 @@ def calc_ref(levels, dirs):
     l_ob = [_dispersion.KM2021.get_center(x, z0=z0)
             for x in range(N_CLASS)]
     # turning angle at inversion height after Van Ulden & Holtslag 1985)
-    D_h = [
+    d_h = [
         35,
         35,
         15,
@@ -697,7 +731,7 @@ def calc_ref(levels, dirs):
                                         z=h_ref,
                                         zoL=h_ref / l_ob[istab])
         for idir, wdir in enumerate(dirs):
-            D_20 = D_h[istab] * 1.58*(1.-np.exp(-1.0*20./val_z_i[istab]))
+            D_20 = d_h[istab] * 1.58 * (1. - np.exp(-1.0 * 20. / val_z_i[istab]))
             for iz, z in enumerate(levels):
                 if z < (ww.z0 + ww.d):
                     ff = 0
@@ -705,14 +739,17 @@ def calc_ref(levels, dirs):
                     ff = ww.u(h_ref)
                 else:
                     ff = ww.u(z)
-                D_z = D_h[istab] * 1.58*(1.-np.exp(-1.0*z/val_z_i[istab]))
-                dd = wdir - D_20 + D_z
+                d_z = d_h[istab] * 1.58 * (1. - np.exp(-1.0 * z / val_z_i[istab]))
+                dd = wdir - D_20 + d_z
                 logger.debug(str([istab, idir, z, ff, dd]))
                 (u_ref[iz, istab, idir],
                  v_ref[iz, istab, idir]) = meteolib.wind.dir2uv(ff, dd)
     write_ref("Ref1d.dat", levels, dirs, u_ref, v_ref,
               (levels, [x for x in range(N_CLASS)], dirs))
     return u_ref, v_ref
+
+
+# ----------------------------------------------------
 
 
 def read_ref(file, levels, dirs):
@@ -733,7 +770,7 @@ def read_ref(file, levels, dirs):
     nlev = len(levels)
 
     # isd have the form wS0DD
-    x = pd.read_table(file, skiprows=1, nrows=0, sep='\s+',
+    x = pd.read_table(file, skiprows=1, nrows=0, sep=r'\s+',
                       skipinitialspace=True,
                       quotechar="'", engine="python")
     ref_id = [x.replace('\'', '') for x in list(x.columns)]
@@ -742,7 +779,7 @@ def read_ref(file, levels, dirs):
     ref_dir = [float(x[3:5]) * 10 for x in ref_id]
 
     df = pd.read_table(file, skiprows=2, header=None, index_col=0,
-                       sep='\s+',
+                       sep=r'\s+',
                        engine="python")
     ref_ff = df[[2 * x + 1 for x in range(len(ref_id))]]
     ref_ff.columns = ref_id
@@ -780,6 +817,9 @@ def read_ref(file, levels, dirs):
     return u_ref, v_ref
 
 
+# ----------------------------------------------------
+
+
 def write_ref(file, out_levels, out_dirs, u_ref, v_ref, axes_ref):
     logger.debug("writing wind reference file")
     levels, stabs, dirs = axes_ref
@@ -788,7 +828,7 @@ def write_ref(file, out_levels, out_dirs, u_ref, v_ref, axes_ref):
 
     with open(file, "w") as fid:
         fid.write("%-8i' Anzahl Profilpunkte\n" % nlev)
-        for ilev in range(-1,nlev):
+        for ilev in range(-1, nlev):
             if ilev < 0:
                 line = "        "
             else:
@@ -799,7 +839,7 @@ def write_ref(file, out_levels, out_dirs, u_ref, v_ref, axes_ref):
                         continue
                     if ilev < 0:
                         line += "'w%1i0%2.0f'        " % (istab + 1,
-                                                          dirs[idir]/10)
+                                                          dirs[idir] / 10)
                     else:
                         ff, dd = meteolib.wind.uv2dir(
                             u_ref[ilev, istab, idir],
@@ -808,6 +848,10 @@ def write_ref(file, out_levels, out_dirs, u_ref, v_ref, axes_ref):
             if levels[ilev] not in out_levels:
                 continue
             fid.write(line + "\n")
+
+
+# ----------------------------------------------------
+
 
 def print_report(args, g, gd, gf, eaps, g_upper, axes):
     print('Bibliotheksverzeichnis ist %s' % args['working_dir'])
@@ -821,11 +865,14 @@ def print_report(args, g, gd, gf, eaps, g_upper, axes):
     print('Auswertegebiet Gitter  1  West - Ost : %9.0f bis %9.0f' % (min(axes['x']), max(axes['x'])))
     print('                          Sued - Nord: %9.0f bis %9.0f' % (min(axes['y']), max(axes['y'])))
     print()
-    print('===============================================================================================================')
-    print('==================    Objektiv bestimmte Ersatz-Anemometerorte im Gitter 1 je Modellebene:    =================')
-    print('===============================================================================================================')
+    print(
+        '===============================================================================================================')
+    print(
+        '==================    Objektiv bestimmte Ersatz-Anemometerorte im Gitter 1 je Modellebene:    =================')
+    print(
+        '===============================================================================================================')
     print()
-    for lvl,height in enumerate(axes['z']):
+    for lvl, height in enumerate(axes['z']):
         if len(eaps[lvl]) > 0:
             i, j = eaps[lvl][0]
             print()
@@ -839,91 +886,23 @@ def print_report(args, g, gd, gf, eaps, g_upper, axes):
             print('                                    j-Index =%9i' % (j + 1))
             print('                                      x (m) =%9.0f' % axes['x'][i])
             print('                                      y (m) =%9.0f' % axes['y'][j])
-            print('                                         gd =%9.2f' % gd[i,j,lvl])
-            print('                                         gf =%9.2f' % gf[i,j,lvl])
-            print('                                          g =%9.2f' % g[i,j,lvl])
+            print('                                         gd =%9.2f' % gd[i, j, lvl])
+            print('                                         gf =%9.2f' % gf[i, j, lvl])
+            print('                                          g =%9.2f' % g[i, j, lvl])
             print('...............................................................................................')
 
 
-def cli_parser():
-    # defaults
-    default = {
-    }
-    parser = argparse.ArgumentParser(
-        description='find substitute anemometer position ' +
-                    'according to VDI 3783 Part 16 ' +
-                    'from a wind library generated by austal')
-    parser = _tools.add_arguents_common_plot(parser)
-    parser.add_argument('-g', '--grid',
-                        metavar='ID',
-                        nargs='?',
-                        default=0,
-                        help='ID (number) of the grid to evaluate. '
-                             'Defaults to 0')
-    parser.add_argument('-z', '--height',
-                        metavar='METERS',
-                        nargs='?',
-                        default=None,
-                        help='effective anemometer height, i.e. height ' +
-                             'to evaluate EAP at in m. '
-                             'Defaults to 10.0')
-    parser.add_argument('-r', '--reference',
-                        default='simple',
-                        choices=['simple', 'file', 'austal'],
-                        help='choose kind of reference profile. ' +
-                             '`simple` produces a log wind profile, ' +
-                             '`file` reads reference profile from file. ' +
-                             'Defaults to `simple`')
-    parser.add_argument('-q', '--report',
-                        action='store_true',
-                        help='show detailed results')
-    parser.add_argument('--edge-nodes',
-                        default=N_EGDE_NODES,
-                        nargs='?',
-                        help='number of edge nodes along each side, ' +
-                             'where data are exluded. ' +
-                             'Defaults to %i' % N_EGDE_NODES)
-    parser.add_argument('--max-height',
-                        default=MAX_HEIGHT,
-                        nargs='?',
-                        help='maximum height to evaluate EAP. ' +
-                             'Defaults to %f' % MAX_HEIGHT)
-    parser.add_argument('--min-ff',
-                        default=MIN_FF,
-                        nargs='?',
-                        help='minimum wind speed below which data are '
-                             'exluded. ' +
-                             'Defaults to %f' % MIN_FF)
-
-    parser.add_argument("--version",
-                        version="%(prog)s " + str(__version__),
-                        action="version")
-    verb = parser.add_mutually_exclusive_group()
-    verb.add_argument('--debug', dest='verb', action='store_const',
-                      const=logging.DEBUG, help='show informative output')
-    verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
-                      const=logging.INFO, help='show detailed output')
-    return parser
+# ----------------------------------------------------
 
 
-def main():
-    #
-    # process user interface
-    parser = cli_parser()
-    args = vars(parser.parse_args())
-    #
-    # logging level
-    #
-    if args["verb"] is not None:
-        logger.setLevel(args["verb"])
-    else:
-        logger.setLevel(logging.WARNING)
-    logger.info(os.path.basename(__file__) + ' version: ' + __version__)
+def main(args):
+    """
+    This is the main working function
 
+    :param args: the command line arguments as dictionary
+    :type args: dict
+    """
     logger.debug(format(args))
-    #
-    #
-
     #
     # read the wind library data
     #
@@ -956,7 +935,7 @@ def main():
                                      nedge=args['edge_nodes'],
                                      minff=args['min_ff'],
                                      maxlev=mx_lvl)
-    eaps, g_upper = calc_all_eap(g,mx_lvl)
+    eaps, g_upper = calc_all_eap(g, mx_lvl)
 
     #
     # select level closest to height
@@ -1011,7 +990,4 @@ def main():
     else:
         logger.info('nothing selected, skipping plot')
 
-
-
-if __name__ == "__main__":
-    main()
+# ----------------------------------------------------

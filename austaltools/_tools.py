@@ -7,12 +7,12 @@ import sys
 
 if os.getenv('BUILDING_SPHINX', 'false') == 'false':
     import osgeo.osr as osr
-    import osgeo.ogr as ogr
     import numpy as np
     import pandas as pd
+
     try:
         import matplotlib
-        have_matplotlib = False
+        have_matplotlib = True
         if os.name == 'posix' and "DISPLAY" not in os.environ:
             matplotlib.use('Agg')
             have_display = False
@@ -39,8 +39,9 @@ try:
 except ImportError:
     from _version import __version__, __title__
 
-
 logger = logging.getLogger(__name__)
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 
 # -------------------------------------------------------------------------
 
@@ -90,6 +91,7 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 DEFAULT_COLORMAP = "YlOrRd"
 """Default colors used for the commpon plot type"""
 
+
 # =========================================================================
 
 class Geometry(object):
@@ -106,7 +108,7 @@ class Geometry(object):
     c = 0.
     w = 0.
 
-# -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
 
     def __init__(self, x: float = 0, y: float = 0,
                  a: float = 0, b: float = 0, c: float = 0, w: float = 0):
@@ -117,11 +119,11 @@ class Geometry(object):
         :type x: float (optional), default 0.
         :param y: y position of the south-west corner
         :type y: float (optional), default 0.
-        :param a: width (along x axis) of the cuboid
+        :param a: width (along x-axis) of the cuboid
         :type a: float (optional), default 0.
-        :param b: depth (along y axis) of cuboid
+        :param b: depth (along y-axis) of cuboid
         :type b: float (optional), default 0.
-        :param c: height (along z axis) of cuboid
+        :param c: height (along z-axis) of cuboid
         :type c: float (optional), default 0.
         :param w: rotation angle anticlockwise around the south-west corner
         :type w: float (optional), default 0.
@@ -133,7 +135,6 @@ class Geometry(object):
         self.c = c
         self.w = w
         self.keys = ["x", "y", "a", "b", "c", "w"]
-
 
     def __format__(self, spec: str = "") -> str:
         """
@@ -147,7 +148,8 @@ class Geometry(object):
             fmt = spec
         else:
             fmt = "%s: %f"
-        return " ".join([fmt % (k,getattr(self, k)) for k in self.keys])
+        return " ".join([fmt % (k, getattr(self, k)) for k in self.keys])
+
 
 # =========================================================================
 
@@ -155,8 +157,10 @@ class Building(Geometry):
     """
     A class representing the :class:`Geometry` of building
     """
+
     def __init__(self, *args, **kwargs):
         Geometry.__init__(self, *args, **kwargs)
+
 
 # -------------------------------------------------------------------------
 
@@ -164,8 +168,10 @@ class Source(Geometry):
     """
     A class representing the :class:`Geometry` of pollutant source
     """
+
     def __init__(self, *args, **kwargs):
         Geometry.__init__(self, *args, **kwargs)
+
 
 # -------------------------------------------------------------------------
 
@@ -183,8 +189,7 @@ def get_buildings(conf):
     res = []
     if "xb" in conf and "yb" in conf:
         number = len(conf["xb"])
-        lb = {}
-        val={}
+        val = {}
         for par in pars:
             if par in conf:
                 if number != len(conf[par]):
@@ -193,16 +198,18 @@ def get_buildings(conf):
                                      'building-definig parameters')
                 val[par] = conf[par]
             else:
-                val = [0] * len(conf())
+                val = [0] * len(conf.keys())
         for i in range(number):
             res.append(Building(*[val[p][i] for p in pars]))
     else:
         logger.debug('no buildings in config')
     return res
 
+
 # -------------------------------------------------------------------------
 
-def progress(itr=[], desc="", *args, **kwargs):
+
+def progress(itr=None, desc="", *args, **kwargs):
     """
     A progress bar that shows if :class:`tqdm.tqdm` is available and
     the log level is below :class:`logging.DEBUG`
@@ -216,12 +223,15 @@ def progress(itr=[], desc="", *args, **kwargs):
     :return: decorated iterator or `itr`, depending on the conditions
     :rtype: iterator
     """
+    if itr is None:
+        itr = []
     if tqdm is not None and 10 < logger.getEffectiveLevel() <= 30:
         return tqdm(itr, desc,
                     bar_format="{l_bar}{bar}|{remaining}",
                     *args, **kwargs)
     else:
         return itr
+
 
 # -------------------------------------------------------------------------
 
@@ -239,10 +249,11 @@ def gk2ll(rechts: float, hoch: float) -> (float, float, float):
     :rtype: float, float, float
     """
     transform = osr.CoordinateTransformation(GK, LL)
-    return transform.TransformPoint(rechts , hoch)
+    return transform.TransformPoint(rechts, hoch)
+
 
 # -------------------------------------------------------------------------
-def ll2gk(lat:float, lon:float) -> (float, float):
+def ll2gk(lat: float, lon: float) -> (float, float):
     """
     Converts Latitude/longitude  (WGS84, https://epsg.io/4326) position
     into Gauss-Krüger rechts/hoch (east/north) coordinates
@@ -258,6 +269,7 @@ def ll2gk(lat:float, lon:float) -> (float, float):
     """
     transform = osr.CoordinateTransformation(LL, GK)
     return transform.TransformPoint(lat, lon)
+
 
 # -------------------------------------------------------------------------
 
@@ -278,7 +290,9 @@ def ut2gk(east, north):
     :rtype: float, float, float
     """
     transform = osr.CoordinateTransformation(UT, GK)
-    return transform.TransformPoint(east , north)
+    return transform.TransformPoint(east, north)
+
+
 # ----------------------------------------------------
 
 
@@ -314,6 +328,7 @@ def spheric_distance(lat1, lon1, lat2, lon2):
 
     return km
 
+
 # -------------------------------------------------------------------------
 
 def find_z0_class(z0):
@@ -330,6 +345,7 @@ def find_z0_class(z0):
         lclasses = np.log(Z0_CLASSES)
         i = np.argmin(np.abs(lclasses - lz0))
     return i
+
 
 def find_austxt(wdir='.'):
     if wdir == '':
@@ -362,7 +378,7 @@ def get_austxt(path="austal.txt"):
     with open(path, 'r') as file:
         for line in file:
             # remove comments in each line
-            text = re.sub("^[ ]*-.*", "", line)
+            text = re.sub("^ *-.*", "", line)
             text = re.sub("'.*", "", text).strip()
             # if empty line remains: skip
             if text == "":
@@ -384,8 +400,8 @@ def get_austxt(path="austal.txt"):
             conf[key] = values
     # fill missing values with default 0
     for x in ['xq', 'yq', 'aq', 'bq', 'cq', 'wq',
-#              'xb', 'yb', 'ab', 'bb', 'cb', 'wb',
-#              'cb'
+              #              'xb', 'yb', 'ab', 'bb', 'cb', 'wb',
+              #              'cb'
               ]:
         if x not in conf:
             conf[x] = [0.]
@@ -396,7 +412,7 @@ def get_austxt(path="austal.txt"):
     return conf
 
 
-def put_austxt(path="austal.txt", data={}):
+def put_austxt(path="austal.txt", data=None):
     """
     Write AUSTAL configuration file.
 
@@ -416,12 +432,14 @@ def put_austxt(path="austal.txt", data={}):
     :rtype: dict
     """
     # get config as text
+    if data is None:
+        data = {}
     logger.debug('reading: %s' % path)
     with open(path, 'r') as file:
         lines = file.readlines()
     # backup
-    logger.debug('writing backup: %s' % path+'~')
-    with open(path+'~', 'w') as file:
+    logger.debug('writing backup: %s' % path + '~')
+    with open(path + '~', 'w') as file:
         for line in lines:
             file.write(line)
     # rewrite old file
@@ -431,7 +449,7 @@ def put_austxt(path="austal.txt", data={}):
         for line in lines:
             keep = True
             # In jeder Zeile Kommentare entfernen
-            stripped = re.sub("^[ ]*-.*", "", line)
+            stripped = re.sub("^ *-.*", "", line)
             stripped = re.sub("'.*", "", stripped).strip()
             # wenn Zeile Daten enthält
             if stripped != "":
@@ -474,12 +492,6 @@ def add_arguents_common_plot(parser: argparse.ArgumentParser
     :rtype:  argparse.ArgumentParser
 
     """
-    parser.add_argument('-w', '--working-dir',
-                        default=DEFAULT_WORKING_DIR,
-                        help="working directory. " +
-                             'In this directory the file `austal.txt` ' +
-                             'is expected. Defaults to "%s"' %
-                             DEFAULT_WORKING_DIR)
     parser.add_argument('-b', '--no-buildings',
                         dest='buildings',
                         action='store_false',
@@ -515,6 +527,7 @@ def add_arguents_common_plot(parser: argparse.ArgumentParser
                         default=False,
                         help='force overwriting plotfile if it exists.')
     return parser
+
 
 def common_plot(args: dict,
                 dat: dict,
@@ -588,7 +601,7 @@ def common_plot(args: dict,
     if scale is None:
         dmin = np.nanmin(datz)
         dmax = np.nanmax(datz)
-    elif isinstance(scale,float):
+    elif isinstance(scale, float):
         dmin = 0.
         dmax = scale
     elif len(scale) == 2:
@@ -597,7 +610,7 @@ def common_plot(args: dict,
         levels = np.array(scale)
     if levels is None:
         data_range = dmax - dmin
-        order = 10**np.floor(np.log10(data_range))
+        order = 10 ** np.floor(np.log10(data_range))
         dmin = np.floor(dmin / order) * order
         dmax = np.ceil(dmax / order) * order
         logger.debug('data_range: %f' % data_range)
@@ -639,7 +652,7 @@ def common_plot(args: dict,
             dotx = dots['x']
             doty = dots['y']
             dotz = dots['z']
-        elif isinstance(dots,np.ndarray):
+        elif isinstance(dots, np.ndarray):
             dotz = dots
             if np.shape(dotz) != np.shape(datz):
                 raise ValueError('dots shape does not equal dat shape')
@@ -713,7 +726,7 @@ def common_plot(args: dict,
     #
     if mark is not None:
         pf = pd.DataFrame(mark)
-        for i,p in pf.iterrows():
+        for i, p in pf.iterrows():
             x = p['x']
             y = p['y']
             if 'sym' in p:

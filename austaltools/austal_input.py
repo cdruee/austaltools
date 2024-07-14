@@ -13,9 +13,9 @@ import sys
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     try:
-        from . import austal_weather, austal_terrain
+        from . import input_weather, input_terrain
     except ImportError:
-        import austal_weather, austal_terrain
+        import input_weather, input_terrain
 
     try:
         from ._tools import ll2gk

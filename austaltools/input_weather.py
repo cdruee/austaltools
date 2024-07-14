@@ -1382,138 +1382,18 @@ def austal_weather(args):
 # =========================================================================
 
 
-def cli_parser() -> argparse.ArgumentParser:
-    """
-    function to parse command line arguments
-
-    :return: parser object
-    :rtype: argparse.ArgumentParser
-    """
-    #
-    # defaults
-    #
-    default_source = KNOWN_SOURCES[0]
-    default_year = 2020
-    #
-    # command line args
-    #
-    parser = argparse.ArgumentParser(
-        description='Extract amospheric time series for AUSTAL ' +
-                    'from various sources',
-        epilog='-y and NAME are required with -L, -G, -U, -D, or -W.')
-    parser.add_argument(dest="output", metavar="NAME", nargs='?',
-                        help="file name to store data in."
-                        )
-    cspars = parser.add_mutually_exclusive_group()
-    cspars.add_argument('-L', '--ll',
-                        metavar=("LAT", "LON"),
-                        dest="ll",
-                        nargs=2,
-                        default=None,
-                        help='Center position given as Latitude and ' +
-                             'Longitude, respectively. ' +
-                             'This is the default.')
-    cspars.add_argument('-G', '--gk',
-                        metavar=("X", "Y"),
-                        dest="gk",
-                        nargs=2,
-                        default=None,
-                        help='Center position given in Gauß-Krüger ' +
-                             'zone 3 coordinates: ' +
-                             'X = `Rechtswert`, ' +
-                             'Y = `Hochwert`. ')
-    cspars.add_argument('-U', '--utm',
-                        metavar=("X", "Y"),
-                        dest="ut",
-                        nargs=2,
-                        default=None,
-                        help='Center position given in UTM coordinates: ' +
-                             'X = `easting`, ' +
-                             'Y = `northing`.')
-    cspars.add_argument('-D', '--dwd',
-                        metavar="NUMBER",
-                        dest="dwd",
-                        help='Weather station position with ' +
-                             'German weather service (DWD) ID `NUMBER`')
-    cspars.add_argument('-W', '--wmo',
-                        metavar="NUMBER",
-                        dest="wmo",
-                        help='Postion of weather station with ' +
-                             'World Meteorological Organization (WMO)' +
-                             'station ID `NUMBER`')
-    cspars.add_argument('--source-action',
-                        metavar="ACTION",
-                        dest="sources",
-                        nargs=None,
-                        choices=['list', 'download', 'force'],
-                        help='Show/modify sources. ' +
-                             'Available ``ACTION`` values: \n' +
-                             '``list`` schows available sources. \n' +
-                             '``download`` starts downloading the data.\n' +
-                             '``force`` downloads data even if they are ' +
-                             'already available locally.')
-
-    parser.add_argument('-s', '--source',
-                        metavar="CODE",
-                        nargs=None,
-                        choices=KNOWN_SOURCES,
-                        default=default_source,
-                        help='select the source for the weather data. ' +
-                             'Known ``CODE`` values are ' +
-                             ' '.join(KNOWN_SOURCES) + ' ' +
-                             'Defaults to ' + default_source)
-    parser.add_argument('-y', '--year', dest='year',
-                        metavar='YEAR',
-                        nargs=None,
-                        help='year of interest [%04i]' % default_year)
-
-    parser.add_argument('-e', '--elevation', dest='ele',
-                        metavar='METERS',
-                        help='surface elevation. ' +
-                             'only allowed with -L, -G, -U.')
-
-    # parser.add_argument('-w', '--station', dest='station',
-    #                     metavar='ID',
-    #                     default=None,
-    #                     help='weather station ID. ' +
-    #                          'only allowed with -D, -W.')
-
-    parser.add_argument('-p', '--precip', dest='prec',
-                        action='store_true',
-                        help='add precipitation columns to output file')
-
-    parser.add_argument("--version",
-                        version="%(prog)s " + str(__version__),
-                        action="version")
-    verb = parser.add_mutually_exclusive_group()
-    verb.add_argument('--debug', dest='verb', action='store_const',
-                      const=logging.DEBUG, help='show informative output')
-    verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
-                      const=logging.INFO, help='show detailed output')
-    return parser
 
 
 # -------------------------------------------------------------------------
 
 
-def main():
+def main(args):
     """
-    Command line interface.
-    Evaluates the command line arguments from cli_parser()
-    performs additional checks and sets the logging level
+    This is the main routine
 
     :return: configuration values
     :rtype: dict
     """
-    parser = cli_parser()
-    args = vars(parser.parse_args())
-    #
-    # logging level
-    #
-    if args['verb'] is not None:
-        logging.root.setLevel(args['verb'])
-    else:
-        logging.root.setLevel(logging.WARNING)
 
     if ((args['dwd'] is not None or args['wmo'] is not None)
             and args['ele'] is not None):
@@ -1539,8 +1419,3 @@ def main():
     # call the main working function
     austal_weather(args)
 
-
-# ----------------------------------------------------
-# initialize: call main routine
-if __name__ == '__main__':
-    main()

@@ -1,6 +1,5 @@
 #!/bin/env python3
 
-import argparse
 import os
 import logging
 import sys
@@ -12,13 +11,11 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 try:
     from . import _tools
-except ImportError:
-    import _tools
-
-try:
     from ._version import __version__
 except ImportError:
+    import _tools
     from _version import __version__
+
 # ----------------------------------------------------
 
 logging.basicConfig()
@@ -123,6 +120,7 @@ def parse_cycle(c_id, c_info, time, dt):
     start = pd.Series([x + y for x in a_time for y in o_time])
     logger.debug('start: ' + format(start))
 
+    sequence = None
     if "sequence" not in c_info.keys() and "list" not in c_info.keys():
         raise ValueError('cycle has no sequence info: %s' % c_id)
     if "sequence" in c_info.keys() and "list" in c_info.keys():
@@ -172,6 +170,7 @@ def parse_cycle(c_id, c_info, time, dt):
     logger.debug(format(sequence))
 
     if "unit" in c_info.keys():
+        factor_w = factor_t = None
         unit_info = c_info["unit"]
         if "/" in unit_info:
             # split unit into mass and time interval
@@ -214,7 +213,6 @@ def parse_cycle(c_id, c_info, time, dt):
         factor = 1.
     logger.info(f'cycle {c_id} given in {unit_info}, ' +
                 f'applying conversion factor: {factor}')
-
 
     if any([x < sequence.index[-1] for x in start.diff()[1:]]):
         logger.warning('sequence longer than start interval: %s' % c_id)
@@ -267,113 +265,15 @@ def get_cycle(file, time):
         res = res.drop(c_id, axis=1)
 
     return res
-# ----------------------------------------------------
 
-
-def cli_parser():
-    """
-    funtion to parse command line arguments
-    :return: parser object
-    :rtype: argparse.ArgumentParser
-    """
-    default = {'hour-begin': 8,
-               'hour-end': 16,
-               'cycle-file': 'cycle.yaml',
-               'holiday-week': [25, 26, 27, 28, 29, 30, 52],
-               'holiday-month': [7],
-               'path': '.'
-               }
-    parser = argparse.ArgumentParser(description='fill source-strength ' +
-                                                 'columns in "zeitreihe.dmna"')
-    parser.add_argument("--version",
-                        version="%(prog)s " + str(__version__),
-                        action="version")
-    verb = parser.add_mutually_exclusive_group()
-    verb.add_argument('--debug', dest='verb', action='store_const',
-                      const=logging.DEBUG, help='show informative output')
-    verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
-                      const=logging.INFO, help='show detailed output')
-    sched = parser.add_mutually_exclusive_group(required=True)
-    sched.add_argument('-l', '--list',
-                       action='store_const', dest='action', const='list',
-                       help='list source column IDs in file' +
-                            'and exit without modifying "zeitreihe.dmna".' +
-                            '[default]')
-    sched.add_argument('-c', '--cycle',
-                       action='store_const', dest='action', const='cycle',
-                       help='use production cycle from file')
-    sched.add_argument('-w', '--week-5',
-                       action='store_const', dest='action', const='week-5',
-                       help='source active Mon-Fri')
-    sched.add_argument('-W', '--week-6',
-                       action='store_const', dest='action', const='week-6',
-                       help='source active Mon-Sat')
-    parser.add_argument('-b', '--hour-begin', metavar='HOUR',
-                        nargs=1,
-                        help='daily work begin time in hours 0-23. ' +
-                             'Only relevant with -w or -W. ' +
-                             '[%02i]' % default['hour-begin'],
-                        default=default['hour-begin'])
-    parser.add_argument('-e', '--hour-end', metavar='HOUR',
-                        nargs=1,
-                        help='daily work end time in hours, ' +
-                             '0-23. Only relevant with -w or -W .' +
-                             '[%02i]' % default['hour-end'],
-                        default=default['hour-end'])
-    hold = parser.add_mutually_exclusive_group()
-    hold.add_argument('-u', '--holiday-week', nargs="+",
-                      help='work-free weeks 1-52 as space-delimited list. ' +
-                           'Only relevant with -w or -W. [' +
-                           ' '.join(['%d' % x
-                                     for x in default['holiday-week']]) +
-                           ']',
-                      default=default['holiday-week'])
-    hold.add_argument('-U', '--holiday-month', nargs="+",
-                      help='work-free months 1-12 as space-delimited list. ' +
-                           'Only relevant with -w or -W. ' +
-                           ' '.join(['%d' % x
-                                     for x in default['holiday-month']]) +
-                           ']',
-                      default=default['holiday-month'])
-    parser.add_argument('-f', '--cycle-file',
-                        help='emission-cycle description file. ' +
-                             'only relevant with -c. ' +
-                             '[%s]' % default['cycle-file'],
-                        default=default['cycle-file'])
-    parser.add_argument('-s', '--source-id', nargs=1,
-                        help='source ID. Required if more than one source. ' +
-                             'list IDs in file with -l.',
-                        default=None)
-    parser.add_argument('-o', '--output', nargs=1,
-                        help='output of the source in g/s. ' +
-                             '-o is relevant with -w or -W. ',
-                        default=None)
-    parser.add_argument('path', metavar='PATH', nargs='?',
-                        help='directory where "zeitreihe.dmna" is stored '
-                             '[%s]' % default['path'],
-                        default=default['path'])
-    return parser
 # ----------------------------------------------------
 
 
 # noinspection SpellCheckingInspection
-def main():
-    # defaults
-    parser=cli_parser()
-    args = vars(parser.parse_args())
+def main(args):
+    #
     logger.debug('args: %s' % args)
     #
-    # logging level
-    #
-    if args["verb"] is not None:
-        logger.setLevel(args["verb"])
-    else:
-        logger.setLevel(logging.WARNING)
-    logger.info(os.path.basename(__file__) + ' version: ' + __version__)
-
-
-    if args["path"] is None:
-        raise ValueError('PATH not given')
     name = os.path.join(args["path"], 'zeitreihe.dmna')
     zeitreihe = readmet.dmna.DataFile(file=name)
     if zeitreihe.filetype != 'timeseries':
@@ -429,8 +329,3 @@ def main():
         raise ValueError('unknown action: %s' % args["action"])
     zeitreihe.data = values
     zeitreihe.write(name)
-# ----------------------------------------------------
-
-
-if __name__ == "__main__":
-    main()

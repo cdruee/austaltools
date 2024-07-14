@@ -21,11 +21,7 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            '%s=%s:main' % (
-                os.path.splitext(os.path.basename(x))[0].replace('_', '-'),
-                v['__title__'].replace('-', '_') + '.' +
-                os.path.splitext(os.path.basename(x))[0])
-            for x in glob.iglob(v['__title__'] + '/[a-zA-Z]*py')
+            'austaltools=command_line:main',
         ],
     },
     author=v['__author__'],
@@ -41,6 +37,7 @@ setup(
         'pandas',
         'pyyaml',
         'readmet',
+        'scipy'
     ],
     description=v['__description__'],
     long_description=open('README.md').read(),

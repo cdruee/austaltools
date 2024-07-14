@@ -7,10 +7,10 @@ from . import _corine
 from . import _dwd_stationinfo
 
 from . import austal_buildings_geojson
-from . import austal_eap
-from . import austal_fill_timeseries
+from . import eap
+from . import fill_timeseries
 from . import austal_input
-from . import austal_plot
-from . import austal_steepness
-from . import austal_terrain
-from . import austal_weather
+from . import plot
+from . import steepness
+from . import input_terrain
+from . import input_weather
