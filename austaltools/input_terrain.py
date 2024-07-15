@@ -84,9 +84,9 @@ def main(args: dict):
     else:
         return
 
-    if args["source"] in AVAILABLE_SOURCES.keys:
+    if args["source"] in AVAILABLE_DEMS.keys:
         source = args["source"]
-        storage_path = AVAILABLE_SOURCES[source]
+        storage_path = AVAILABLE_DEMS[source]
     else:
         raise ValueError("Source must be one of the available sources")
 
@@ -143,4 +143,4 @@ def main(args: dict):
 # =========================================================================
 # init at import:
 
-AVAILABLE_SOURCES = find_terrain_data()
+AVAILABLE_DEMS = find_terrain_data()

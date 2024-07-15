@@ -215,7 +215,7 @@ def cli_parser():
 
     # ----------------------------------------------------
 
-    default_dem = input_terrain.KNOWN_DEMS[0]
+    default_dem = input_terrain.AVAILABLE_DEMS[0]
     default_extent = 6.
 
     pars_ter = subparsers.add_parser(
@@ -254,12 +254,12 @@ def cli_parser():
     pars_ter.add_argument('-s', '--source',
                           metavar="CODE",
                           nargs=None,
-                          choices=input_terrain.KNOWN_DEMS,
+                          choices=input_terrain.AVAILABLE_DEMS,
                           default=default_dem,
                           help='code for the source digital elevation ' +
                                'model (DEM). Known DEMs are: ' +
-                               ' '.join(input_terrain.KNOWN_DEMS) + ' ' +
-                               'Defaults to ' + default_dem)
+                               ' '.join(input_terrain.AVAILABLE_DEMS) +
+                               ' Defaults to ' + default_dem)
     pars_ter.add_argument('-e', '--extent',
                           metavar="KM",
                           nargs=None,
@@ -357,7 +357,8 @@ def cli_parser():
 
     # ----------------------------------------------------
 
-    parser.add_argument('working_dir',
+    parser.add_argument('-w','--working-dir',
+                        dest='working_dir',
                         metavar='PATH',
                         help='woking directory '
                              '[%s]' % default['working_dir'],
