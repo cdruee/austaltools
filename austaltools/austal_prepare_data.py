@@ -14,7 +14,6 @@ import logging
 import os
 import pip
 import shutil
-import sys
 import tarfile
 import tempfile
 import zipfile
@@ -24,6 +23,8 @@ from urllib.request import urlretrieve
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from osgeo import gdal
     from osgeo_utils import gdal_merge
+    from multiprocessing import Pool
+    import cdo
 
 try:
     import cdsapi
@@ -53,18 +54,67 @@ logger = logging.getLogger()
 # -------------------------------------------------------------------------
 
 KNOWN_DEMS = ["DGM25-RP", "DGM25-NW", "GLO-30", "GTOPO30"]
-STORAGE_LOCATIONS = _tools.DEFAULT_DATA_DIRS
-STORAGE_DIR = "terrain"
-STORAGE_PATH = None      # will be filled lazy
+KNOWN_WEATHER = ["CERRA5", "ERA5", "DWD"]
+STORAGE_TERRAIN = "terrain"
+STORAGE_WAETHER = "weather"
 DEM_FMT = "%s.lzw.tif"
-STORAGE_AUX_FILES = resources.files(__title__+'.data')
+STORAGE_AUX_FILES = resources.files(__title__ + '.data')
+
+# -------------------------------------------------------------------------
+
+
+def locations_available(candidates):
+    return [x for x in candidates if os.path.isdir(x)]
+
+def locations_writable(candidates):
+    return [x for x in candidates if os.access(x, os.W_OK)]
+
+def location_has_storage(location, storage):
+    path = os.path.join(location, storage)
+    return os.path.exists(path)
+
+def find_storage_path(locs: str = None, stor: str = None) -> str:
+    """
+    Finds a viable data storage directory and returns its path.
+    If `storage_path` is provided, only this path is checked
+    for existance.
+
+    :param storage_path: (optional) user selected path
+    :return: data storage directory
+    :rtype: str
+    """
+    if stor is None:
+        raise ValueError('stor must be provided')
+    if locs is None:
+        locs = _tools.DEFAULT_DATA_DIRS
+    loc_exist = locations_available(locs)
+    if len(loc_exist) == 0:
+        return None
+    loc_write = locations_writable(loc_exist)
+    if len(loc_write) == 0:
+        return None
+    for loc in loc_write:
+        if location_has_storage(loc, stor):
+            location = loc
+            break
+    else:
+        for loc in loc_write:
+            try:
+                os.makedirs(os.path.join(loc, stor))
+            except IOError:
+                continue
+            if os.path.isdir(os.path.join(loc, stor)):
+                location = loc
+                break
+        else:
+            raise Exception('Could not create data storage directory')
+    return os.path.join(location, stor)
 
 # -------------------------------------------------------------------------
 
 def download_GTOPO30(path):
-
     support = ("https://data.rda.ucar.edu/ds758.0/support/"
-                       + "GTOPO30support.tar.gz")
+               + "GTOPO30support.tar.gz")
     download = ("https://data.rda.ucar.edu/ds758.0/elevtiles/" +
                 "%s.DEM.gz")
     tiles = ["W020N90"]
@@ -77,14 +127,14 @@ def download_GTOPO30(path):
     # get the single archive that holds the supportive
     # files for all tiles
     logger.debug("downloading ... %s" % support)
-    support_file , _ = urlretrieve(
+    support_file, _ = urlretrieve(
         support, os.path.basename(support))
     with tarfile.open(support_file) as support_tar:
         # no get every tile we want
         for tile in tiles:
             # extract the matching supportive files
             to_extract = [x.name for x in support_tar.getmembers()
-                         if tile in x.name]
+                          if tile in x.name]
             support_tar.extractall(members=to_extract)
             # now download the actual data file for the tile
             download_url = download % tile
@@ -96,15 +146,15 @@ def download_GTOPO30(path):
             tile_dem = tile_file.replace(".gz", "")
             tile_tif = tile_dem.replace(".DEM", ".tif")
             logger.debug("... decompressing %s" % tile_dem)
-            with gzip.open(tile_file,'rb') as tf:
+            with gzip.open(tile_file, 'rb') as tf:
                 with open(tile_dem, 'wb') as td:
-                    shutil.copyfileobj(tf, td, length=16*1024)
+                    shutil.copyfileobj(tf, td, length=16 * 1024)
             logger.debug("... converting to %s" % tile_tif)
             gdal.Warp(destNameOrDestDS=tile_tif,
                       srcDSOrSrcDSTab=tile_dem,
                       format="GTiff")
     # merge the GeoTiff Files from all tiles into one file
-    target = os.path.join(path,DEM_FMT % "GTOPO30")
+    target = os.path.join(path, DEM_FMT % "GTOPO30")
     if os.path.exists(target):
         logger.info("removing old source file")
         os.remove(target)
@@ -116,24 +166,24 @@ def download_GTOPO30(path):
 
     return
 
+
 # -------------------------------------------------------------------------
 
 def download_GLO_30(path):
-
     download_dir = ("https://prism-dem-open.copernicus.eu/" +
                     "pd-desk-open-access/prismDownload/" +
                     "COP-DEM_GLO-30-DGED__2022_1/")
     file_fmt = "Copernicus_DSM_10_N%02i_00_E%03i_00.tar"
 
-    for lat in range(47,54):
-        for lon in range(5,16):
-            url = download_dir + file_fmt % (lat,lon)
+    for lat in range(47, 54):
+        for lon in range(5, 16):
+            url = download_dir + file_fmt % (lat, lon)
             logger.debug("downloading ... %s" % url)
             tar_file, _ = urlretrieve(url, os.path.basename(url))
             name_root = tar_file.replace(".tar", "")
             with tarfile.open(tar_file) as tf:
                 to_extract = [x for x in tf.getmembers()
-                              if name_root+"/DEM/" in x.name]
+                              if name_root + "/DEM/" in x.name]
                 for x in to_extract:
                     # remove path from name of tar member to extract
                     x.name = os.path.basename(x.name)
@@ -141,23 +191,23 @@ def download_GLO_30(path):
                     # now extract tar member to current dir
                     tf.extract(x, '.')
     # merge the GeoTiff Files from all tiles into one file
-    target = os.path.join(path,DEM_FMT % "GLO-30")
+    target = os.path.join(path, DEM_FMT % "GLO-30")
     if os.path.exists(target):
         logger.info("removing old source file")
         os.remove(target)
     logger.debug("merging tiles ...")
     gdal_merge.main(["", "-co", "compress=lzw",
                      "-o", target,
-                     "-ot","Int16"] +
-                     glob.glob("Copernicus_*.tif"))
+                     "-ot", "Int16"] +
+                    glob.glob("Copernicus_*.tif"))
     logger.debug("... done")
 
     return
 
+
 # -------------------------------------------------------------------------
 
 def download_DGM25_RP(path):
-
     url = "https://vermkv.service24.rlp.de/opendat/dgm25/dgm25.zip"
     logger.debug("downloading ... %s" % url)
     zip_file, _ = urlretrieve(url, os.path.basename(url))
@@ -165,17 +215,17 @@ def download_DGM25_RP(path):
     shutil.unpack_archive(zip_file)
     for tile_xyz in glob.glob("*.xyz"):
         logger.debug("converting tile ... %s" % tile_xyz)
-        tile_tif = tile_xyz.replace(".xyz",".tif")
+        tile_tif = tile_xyz.replace(".xyz", ".tif")
         try:
             gdal.Warp(destNameOrDestDS=tile_tif,
-                  dstSRS="EPSG:5677",
-                  srcDSOrSrcDSTab=tile_xyz,
-                  srcSRS="EPSG:25832",
-                  format="GTiff")
+                      dstSRS="EPSG:5677",
+                      srcDSOrSrcDSTab=tile_xyz,
+                      srcSRS="EPSG:25832",
+                      format="GTiff")
         except Exception as e:
             logger.error(str(e))
     # merge the GeoTiff Files from all tiles into one file
-    target = os.path.join(path,DEM_FMT % "DGM25-RP")
+    target = os.path.join(path, DEM_FMT % "DGM25-RP")
     if os.path.exists(target):
         logger.info("removing old source file")
         os.remove(target)
@@ -187,11 +237,11 @@ def download_DGM25_RP(path):
 
     return
 
+
 # -------------------------------------------------------------------------
 
 def download_DGM25_NW(path):
-
-    out_res = 25 # m in EPSG:5677 aka Gauss-Krueger band 3
+    out_res = 25  # m in EPSG:5677 aka Gauss-Krueger band 3
     base_url = ("https://www.opengeodata.nrw.de/" +
                 "produkte/geobasis/hm/dgm1_tiff/dgm1_tiff/")
     meta_file = "dgm1_meta.zip"
@@ -210,7 +260,7 @@ def download_DGM25_NW(path):
         url = f"{base_url}/{tf1}"
         logger.debug(f"downloading ... {url}")
         zip_file, _ = urlretrieve(url, tf1)
-        tf25 = tf1.replace("dgm1","dgm25") + ".tif"
+        tf25 = tf1.replace("dgm1", "dgm25") + ".tif"
         logger.debug(f"converting tile ... {tf1} -> {tf25}")
         try:
             gdal.Warp(destNameOrDestDS=tf25,
@@ -225,7 +275,7 @@ def download_DGM25_NW(path):
             logger.error(str(e))
         os.remove(tf1)
     # merge the GeoTiff Files from all tiles into one file
-    target = os.path.join(path,DEM_FMT % "DGM25-NW")
+    target = os.path.join(path, DEM_FMT % "DGM25-NW")
     if os.path.exists(target):
         logger.info("removing old source file")
         os.remove(target)
@@ -237,9 +287,12 @@ def download_DGM25_NW(path):
 
     return
 
+
 # -------------------------------------------------------------------------
 
-def download_dem(dem, path):
+def download_dem(dem: str, path:str=None):
+    if path is None:
+        path = find_storage_path(path, STORAGE_TERRAIN)
     logger.info("downloading terrain source %s" % dem)
     success = True
     pwd = os.getcwd()
@@ -268,55 +321,7 @@ def download_dem(dem, path):
 # -------------------------------------------------------------------------
 
 
-def provide_storage(storage_path:str=None) -> str:
-    """
-    Finds a working data storage directory and returns its path.
-    If `storage_path` is provided, only this path is checked
-    for existance.
-
-    :param storage_path: (optional) user selected path
-    :return: data storage directory
-    :rtype: str
-    """
-    if storage_path is not None:
-        # path is prescribed
-        if not os.path.isdir(storage_path):
-            raise ValueError("terrain storage not found at: %s" %
-                             storage_path)
-    else:
-        # path is not prescribed: search
-        for location in reversed(STORAGE_LOCATIONS):
-            # start from current dir, user dirs to system dirs
-            # so user can override system installation
-            directory = os.path.join(location, STORAGE_DIR)
-            if os.path.isdir(directory):
-                storage_path = directory
-                break
-    if storage_path is None:
-        # no location was found, we must create one:
-        logger.warning("no preexisting terrain data storage found")
-        for location in STORAGE_LOCATIONS:
-            directory = os.path.join(location, STORAGE_DIR)
-            if os.access(directory, os.W_OK):
-                # exists and is writable, keep
-                storage_path = directory
-                break
-            try:
-                # does not exist: try to make it
-                os.makedirs(directory)
-                # if we are here, we succeeded making directory, keep
-                storage_path = directory
-                break
-            except OSError:
-                pass
-        if storage_path is None:
-            # we couldn't create any location WTF
-            raise OSError("Could not create terrain storage dir")
-    return storage_path
-# -------------------------------------------------------------------------
-
-
-def provide_terrain_data(storage_path:str, source=None, 
+def provide_terrain_data(storage_path: str, source=None,
                          force=False, download=True):
     extension = DEM_FMT % ""
     datasets = []
@@ -327,13 +332,13 @@ def provide_terrain_data(storage_path:str, source=None,
             datasets.append(file.replace(extension, ""))
     if download:
         for aux_path in STORAGE_AUX_FILES.iterdir():
-            aux_file = os.path.basename(aux_path)
+            aux_file = os.path.basename(str(aux_path))
             if aux_file.startswith('_'):
                 continue
             if (not os.path.isfile(os.path.join(storage_path, aux_file)) or
                     force):
                 logger.debug('copying auxiliary file: %s' % aux_file)
-                shutil.copyfile(aux_path,
+                shutil.copyfile(str(aux_path),
                                 os.path.join(storage_path, aux_file))
         # now fill the storage with data
         for dem in KNOWN_DEMS:
@@ -352,6 +357,8 @@ def provide_terrain_data(storage_path:str, source=None,
                     else:
                         logger.error("dataset %s failed to download" % dem)
     return datasets
+
+
 # -------------------------------------------------------------------------
 
 
@@ -360,11 +367,13 @@ def show_notice(storage_path, source):
     with open(os.path.join(storage_path,
                            "%s.NOTICE.txt" % source), "r") as f:
         for x in f.readlines():
-            print (x)
+            print(x)
+
+
 # -------------------------------------------------------------------------
 
 
-def austal_terrain(args:dict):
+def austal_terrain(args: dict):
     """
     Thia is the main working function
 
@@ -392,7 +401,7 @@ def austal_terrain(args:dict):
         # source actions
         if source_action == 'list':
             source_action = provide_terrain_data(storage_path=STORAGE_PATH,
-                                           download=False)
+                                                 download=False)
             for x in source_action:
                 print('%-8s :' % x)
                 show_notice(STORAGE_PATH, x)
@@ -405,7 +414,7 @@ def austal_terrain(args:dict):
                                  force=True)
         else:
             raise ValueError("Unknown source action: %s" %
-            source_action)
+                             source_action)
         return
     else:
         return
@@ -423,7 +432,7 @@ def austal_terrain(args:dict):
     #
     # load dataset
     #
-    file_name = os.path.join(STORAGE_PATH,DEM_FMT % source)
+    file_name = os.path.join(STORAGE_PATH, DEM_FMT % source)
     logger.debug("file_name: %s" % file_name)
     dataset = gdal.Open(file_name)
 
@@ -436,10 +445,10 @@ def austal_terrain(args:dict):
     # GT(5) n-s pixel resolution / pixel height (negative value for a north-up image).
     logger.debug("gt: %s" % format(gt))
 
-    bounds = (rechts - size/2., # minX
-              hoch - size/2.,   # minY
-              rechts + size/2., # maxX,
-              hoch + size/2.,   # maxY
+    bounds = (rechts - size / 2.,  # minX
+              hoch - size / 2.,  # minY
+              rechts + size / 2.,  # maxX,
+              hoch + size / 2.,  # maxY
               )
     logger.debug("bounds: %s" % format(bounds))
     tif_name = tempfile.mkstemp(suffix=".tif")[1]
@@ -458,6 +467,185 @@ def austal_terrain(args:dict):
         os.remove(tif_name)
     #
     return
+
+
+# -------------------------------------------------------------------------
+
+
+def filename(y, lt=None):
+    name = 'cerra_ak_eu_%04i' % y
+    if lt is not None:
+        name += '_%01i' % lt
+    return name
+
+
+# -------------------------------------------------------------------------
+# ERA5
+
+
+#!/usr/bin/env python3
+import cdsapi
+import os
+from multiprocessing import Pool
+
+
+def era5_getyear(y):
+    year = '{:04d}'.format(y)
+    ncname = 'era5_ak_eu_' + year + '.nc'
+    c = cdsapi.Client()
+    if not os.path.exists(ncname):
+        c.retrieve(
+            'reanalysis-era5-single-levels',
+            {
+                'product_type': 'reanalysis',
+                'variable': [
+                    '10m_u_component_of_wind', '10m_v_component_of_wind', '2m_dewpoint_temperature',
+                    '2m_temperature', 'forecast_surface_roughness', 'friction_velocity',
+                    'surface_latent_heat_flux', 'surface_pressure', 'surface_sensible_heat_flux',
+                    'low_cloud_cover', 'total_cloud_cover',
+                    'cloud_base_height', 'total_precipitation',
+                ],
+                'year': year,
+                'month': [
+                    '01', '02', '03',
+                    '04', '05', '06',
+                    '07', '08', '09',
+                    '10', '11', '12',
+                ],
+                'day': [
+                    '01', '02', '03',
+                    '04', '05', '06',
+                    '07', '08', '09',
+                    '10', '11', '12',
+                    '13', '14', '15',
+                    '16', '17', '18',
+                    '19', '20', '21',
+                    '22', '23', '24',
+                    '25', '26', '27',
+                    '28', '29', '30',
+                    '31',
+                ],
+                'time': [
+                    '00:00', '01:00', '02:00',
+                    '03:00', '04:00', '05:00',
+                    '06:00', '07:00', '08:00',
+                    '09:00', '10:00', '11:00',
+                    '12:00', '13:00', '14:00',
+                    '15:00', '16:00', '17:00',
+                    '18:00', '19:00', '20:00',
+                    '21:00', '22:00', '23:00',
+                ],
+                'area': [
+                    71, -12, 33,
+                    36,
+                ],
+                'format': 'netcdf',
+            },
+            ncname)
+
+
+# if __name__ == '__main__':
+#   with Pool(10) as pool:
+#     p = pool.map(era5_getyear, range(1980,2021))
+
+# -------------------------------------------------------------------------
+# CERRA
+
+def cerra_getyear(opts):
+    y, lt = opts
+    gribname = filename(y, lt) + '.grib'
+    c = cdsapi.Client()
+    if not os.path.exists(gribname):
+        print("cds getting: " + gribname)
+        opts = (
+            'reanalysis-cerra-single-levels',
+            {
+                'data_type': 'reanalysis',
+                'product_type': 'forecast',
+                'variable': [
+                    '10m_wind_direction', '10m_wind_speed', '2m_relative_humidity',
+                    '2m_temperature', 'low_cloud_cover', 'medium_cloud_cover',
+                    'momentum_flux_at_the_surface_u_component',
+                    'momentum_flux_at_the_surface_v_component', 'surface_latent_heat_flux',
+                    'surface_pressure', 'surface_roughness', 'surface_sensible_heat_flux',
+                    'total_cloud_cover', 'total_precipitation',
+                ],
+                'level_type': 'surface_or_atmosphere',
+                'year': '%04i' % y,
+                'month': [
+                    '01', '02', '03',
+                    '04', '05', '06',
+                    '07', '08', '09',
+                    '10', '11', '12',
+                ],
+                'day': [
+                    '01', '02', '03',
+                    '04', '05', '06',
+                    '07', '08', '09',
+                    '10', '11', '12',
+                    '13', '14', '15',
+                    '16', '17', '18',
+                    '19', '20', '21',
+                    '22', '23', '24',
+                    '25', '26', '27',
+                    '28', '29', '30',
+                    '31',
+                ],
+                'time': [
+                    '00:00', '03:00', '06:00',
+                    '09:00', '12:00', '15:00',
+                    '18:00', '21:00',
+                ],
+                'leadtime_hour': '%i' % lt,
+                'format': 'grib',
+            },
+            gribname
+        )
+        c.retrieve(*opts)
+        ncname = filename(y, lt) + '.nc'
+        print("cdo processing: " + ncname)
+        cdo.selindexbox('489,649,479,659', options='-f nc',
+                        input=gribname, output=ncname)
+        #os.remove(gribname)
+
+
+def cerra_create(years):
+    tempPath = './tmp/'
+    data = cdo.Cdo(tempdir=tempPath)
+    print("python-cdo version: %s" % data.__version__())
+    print("cdo        version: %s" % data.version())
+    data.debug = True
+    data.cleanTempDir()
+
+    # get sets of bunches to retrieve
+    combi = []
+    for y in range(2000, 2001):
+        print("year: %s" % y)
+
+        for lt in range(1, 4):
+            combi.append((y, lt))
+
+    # get data and extract region
+    with Pool(10) as pool:
+        p = pool.map(cerra_getyear, combi)
+
+    # combine forecasts
+    for yr in set([x for x, _ in combi]):
+        lts = set([y for x, y in combi if x == yr])
+        infiles = [filename(yr, lt) + '.nc' for lt in lts]
+        data.mergetime(
+            input=" ".join([
+                data.setgridtype('curvilinear', input=x)
+                for x in infiles
+            ]),
+            output=filename(yr, None) + '.nc',
+            options='-f nc4 -z zip_6 --reduce_dim'
+        )
+
+
+#        for x in infiles:
+#            os.remove(x)
+
 # =========================================================================
 
 
@@ -472,75 +660,73 @@ def cli_parser():
     default_extent = 6.
 
     parser = argparse.ArgumentParser(
-        description='Extract surface topography for AUSTAL ' +
-                    'from various sources',
-        epilog='``NAME`` is required with -L, -G, or -U.')
-    parser.add_argument(dest="output", metavar="NAME",
-                        help="file name to store data in.", nargs='?'
-                        )
-    cspars = parser.add_mutually_exclusive_group()
-    cspars.add_argument('-L', '--ll',
-                        metavar=("LAT","LON"),
-                        dest="ll",
-                        nargs=2,
-                        default=None,
-                        help='Center position given as Latitude and ' +
-                             'Longitude, respectively. ' +
-                             'This is the default.')
-    cspars.add_argument('-G', '--gk',
-                        metavar=("X","Y"),
-                        dest="gk",
-                        nargs=2,
-                        default=None,
-                        help='Center position given in Gauß-Krüger zone 3' +
-                             'coordinates: X = `Rechtswert`, ' +
-                             'Y = `Hochwert`. ')
-    cspars.add_argument('-U', '--utm',
-                        metavar=("X","Y"),
-                        dest="ut",
-                        nargs=2,
-                        default=None,
-                        help='Center position given in UTM Zone 32N' +
-                             'coordinates: X = `easting`, ' +
-                             'Y = `northing`.')
-    cspars.add_argument('--source-action',
-                        metavar="ACTION",
-                        dest="source_action",
-                        nargs=None,
-                        choices=['list', 'download', 'force'],
-                        help='Show/modify sources. ' +
-                             'Available ``ACTION`` values: \n' +
-                             '``list`` schows available sources. \n' +
-                             '``download`` starts downloading the data.\n' +
-                             '``force`` downloads data even if they are ' +
-                             'already available locally.')
-
-    parser.add_argument('-s', '--source',
-                        metavar="CODE",
-                        nargs=None,
-                        choices=KNOWN_DEMS,
-                        default=default_dem,
-                        help='code for the source digital elevation ' +
-                             'model (DEM). Known DEMs are: ' +
-                             ' ' . join(KNOWN_DEMS) + ' ' +
-                             'Defaults to ' + default_dem)
-    parser.add_argument('-e', '--extent',
-                        metavar="KM",
-                        nargs=None,
-                        default=default_extent,
-                        help='extent of the extracted area in km ' +
-                             '(side length of the sqare)' +
-                             'Defaults to {}'.format(default_extent))
-
-    parser.add_argument("--version",
-                        version="%(prog)s " + str(__version__),
-                        action="version")
+        description='Prepare modify datasets used by austaltools',
+    )
     verb = parser.add_mutually_exclusive_group()
     verb.add_argument('--debug', dest='verb', action='store_const',
                       const=logging.DEBUG, help='show informative output')
     verb.add_argument('-v', '--verbose', dest='verb', action='store_const',
                       const=logging.INFO, help='show detailed output')
+    parser.add_argument("--version",
+                        version="%(prog)s " + str(__version__),
+                        action="version")
+    subparsers = parser.add_subparsers(dest='action',
+                                       metavar='COMMAND',
+                                       required=True
+                                       )
+    sub_list = subparsers.add_parser('list')
+    sub_only_grp = sub_list.add_mutually_exclusive_group()
+    sub_only_grp.add_argument('-w', '--weather',
+                              dest='only',
+                              action='store_const',
+                              const='weather',
+                              default='all')
+    sub_only_grp.add_argument('-t', '--terrain',
+                              dest='only',
+                              action='store_const',
+                              const='terrain',
+                              default='all')
+    sub_only_grp.add_argument('--all',
+                              dest='only',
+                              action='store_const',
+                              const='all',
+                              default='all')
+    sub_state_grp = sub_list.add_mutually_exclusive_group()
+    sub_state_grp.add_argument('-k', '--known',
+                               dest='state',
+                               action='store_const',
+                               const='known',
+                               default='available')
+    sub_state_grp.add_argument('--available',
+                               dest='state',
+                               action='store_const',
+                               const='available',
+                               default='available')
+    sub_list.add_argument('-l', '--long',
+                          action="store_true",
+                          help='show verbose list instead of just codes')
+
+    sub_down = subparsers.add_parser('download')
+    sub_down.add_argument('-s', '--source',
+                          metavar="CODE",
+                          nargs=None,
+                          choices=KNOWN_DEMS + KNOWN_WEATHER,
+                          default=default_dem,
+                          help='code for the source digital elevation ' +
+                               'model (DEM). Known DEMs are: ' +
+                               ' '.join(KNOWN_DEMS) + ' ' +
+                               'Defaults to ' + default_dem)
+
+    parser.add_argument("--storage",
+                        metavar='PATH',
+                        default=None,
+                        help='custom location for data storage'
+                        )
+
+
     return parser
+
+
 # -------------------------------------------------------------------------
 
 
@@ -562,215 +748,26 @@ def main():
     else:
         logger.setLevel(logging.WARNING)
 
-    if args['output'] is None and args['source_action'] is None:
-        parser.print_help()
-        logger.critical('NAME is required with -L, -G, -U, -D or -W')
-        sys.exit(1)
+    # if args['output'] is None and args['source_action'] is None:
+    #     parser.print_help()
+    #     logger.critical('NAME is required with -L, -G, -U, -D or -W')
+    #     sys.exit(1)
 
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
-    #
-    # call the main working function
-    austal_terrain(args)
 
+    logger.debug(args)
 
-
-
-
-
-#!/usr/bin/env python3
-import cdsapi
-import os
-from cdo import *
-from glob import glob
-from multiprocessing import Pool
-
-
-def filename(y,lt=None):
-    name = 'cerra_ak_eu_%04i' % y
-    if lt is not None:
-        name += '_%01i'%lt
-    return name
-
-
-# -------------------------------------------------------------------------
-# ERA5
-
-
-#!/usr/bin/env python3
-import cdsapi
-import os
-from multiprocessing import Pool
-
-
-
-def era5_getyear(y):
-  year = '{:04d}'.format(y)
-  ncname = 'era5_ak_eu_'+year+'.nc'
-  c = cdsapi.Client()
-  if not os.path.exists(ncname):
-    c.retrieve(
-      'reanalysis-era5-single-levels',
-      {
-        'product_type': 'reanalysis',
-        'variable': [
-            '10m_u_component_of_wind', '10m_v_component_of_wind', '2m_dewpoint_temperature',
-            '2m_temperature', 'forecast_surface_roughness', 'friction_velocity',
-            'surface_latent_heat_flux', 'surface_pressure', 'surface_sensible_heat_flux',
-            'low_cloud_cover', 'total_cloud_cover',
-            'cloud_base_height','total_precipitation',
-        ],
-        'year': year,
-        'month': [
-            '01', '02', '03',
-            '04', '05', '06',
-            '07', '08', '09',
-            '10', '11', '12',
-        ],
-        'day': [
-            '01', '02', '03',
-            '04', '05', '06',
-            '07', '08', '09',
-            '10', '11', '12',
-            '13', '14', '15',
-            '16', '17', '18',
-            '19', '20', '21',
-            '22', '23', '24',
-            '25', '26', '27',
-            '28', '29', '30',
-            '31',
-        ],
-        'time': [
-            '00:00', '01:00', '02:00',
-            '03:00', '04:00', '05:00',
-            '06:00', '07:00', '08:00',
-            '09:00', '10:00', '11:00',
-            '12:00', '13:00', '14:00',
-            '15:00', '16:00', '17:00',
-            '18:00', '19:00', '20:00',
-            '21:00', '22:00', '23:00',
-        ],
-        'area': [
-            71, -12, 33,
-            36,
-        ],
-        'format': 'netcdf',
-      },
-      ncname)
-
-if __name__ == '__main__':
-  with Pool(10) as pool:
-    p = pool.map(getyear, range(1980,1991))
-#    p = pool.map(getyear, range(1990,2001))
-#    p = pool.map(getyear, range(2001,2011))
-#    p = pool.map(getyear, range(2011,2021))
-
-# -------------------------------------------------------------------------
-# CERRA
-
-def cerra_getyear(opts):
-  y, lt = opts
-  gribname = filename(y, lt) + '.grib'
-  c = cdsapi.Client()
-  if not os.path.exists(gribname):
-      print("cds getting: " + gribname)
-      opts = (
-        'reanalysis-cerra-single-levels',
-        {
-            'data_type': 'reanalysis',
-            'product_type': 'forecast',
-            'variable': [
-                '10m_wind_direction', '10m_wind_speed', '2m_relative_humidity',
-                '2m_temperature', 'low_cloud_cover', 'medium_cloud_cover',
-                'momentum_flux_at_the_surface_u_component',
-                'momentum_flux_at_the_surface_v_component', 'surface_latent_heat_flux',
-                'surface_pressure', 'surface_roughness', 'surface_sensible_heat_flux',
-                'total_cloud_cover', 'total_precipitation',
-            ],
-            'level_type': 'surface_or_atmosphere',
-            'year': '%04i' % y,
-            'month': [
-                '01', '02', '03',
-                '04', '05', '06',
-                '07', '08', '09',
-                '10', '11', '12',
-            ],
-            'day': [
-                '01', '02', '03',
-                '04', '05', '06',
-                '07', '08', '09',
-                '10', '11', '12',
-                '13', '14', '15',
-                '16', '17', '18',
-                '19', '20', '21',
-                '22', '23', '24',
-                '25', '26', '27',
-                '28', '29', '30',
-                '31',
-            ],
-            'time': [
-                '00:00', '03:00', '06:00',
-                '09:00', '12:00', '15:00',
-                '18:00', '21:00',
-            ],
-            'leadtime_hour': '%i' % lt,
-            'format': 'grib',
-        },
-        gribname
-      )
-      c.retrieve(*opts)
-      ncname = filename(y,lt) + '.nc'
-      print("cdo processing: " + ncname)
-      cdo.selindexbox('489,649,479,659', options='-f nc',
-                      input=gribname, output=ncname)
-      #os.remove(gribname)
-
-
-def cerra_create(years):
-    tempPath = './tmp/'
-    cdo = Cdo(tempdir=tempPath)
-    print("python-cdo version: %s" % cdo.__version__())
-    print("cdo        version: %s" % cdo.version())
-    cdo.debug = True
-    cdo.cleanTempDir()
-
-    # get sets of bunches to retrieve
-    combi = []
-    for y in range(2000,2001):
-        print("year: %s" % y)
-        for lt in range(1,4):
-            combi.append((y,lt))
-
-    # get data and extract region
-    with Pool(10) as pool:
-        p = pool.map(cerra_getyear, combi)
-
-    # combine forecasts
-    for yr in set([x for x,_ in combi]):
-        lts = set([y for x,y in combi if x == yr])
-        infiles = [filename(yr, lt) + '.nc' for lt in lts]
-        cdo.mergetime(
-            input=" ".join([
-                cdo.setgridtype('curvilinear', input=x)
-                for x in infiles
-            ]),
-            output=filename(yr, None) + '.nc',
-            options='-f nc4 -z zip_6 --reduce_dim'
-        )
-#        for x in infiles:
-#            os.remove(x)
-
-
-
-
-
-
-
-
-
-
-
-
-
+    if args['action'] == 'download':
+        if args['source'] in KNOWN_DEMS:
+            download_dem(args['source'], args['storage'])
+        elif args['source'] in KNOWN_WEATHER:
+            pass
+        else:
+            raise ValueError("Source not recognized: %s "
+                             % args['source'])
+    else:
+        raise ValueError("Action not recognized: %s "
+                         % args['source'])
 
 
 # -------------------------------------------------------------------------
