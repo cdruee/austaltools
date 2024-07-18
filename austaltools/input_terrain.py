@@ -39,7 +39,7 @@ def find_terrain_data():
     datasets = {}
     # if a location is found, we are happy
     # but does it contain any data?
-    for dd in _tools.DEFAULT_DATA_DIRS:
+    for dd in _tools.STORAGE_LOCATIONS:
         path = os.path.join(dd, STORAGE_DIR)
         if os.path.isdir(path):
             for dem in KNOWN_DEMS:

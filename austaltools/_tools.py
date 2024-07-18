@@ -47,12 +47,19 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 DEFAULT_WORKING_DIR = "."
 """Default location for input and output"""
-DEFAULT_DATA_DIRS = ["/opt/%s" % __title__,
+STORAGE_LOCATIONS = ["/opt/%s" % __title__,
                      os.path.expanduser("~/.local/share/%s" % __title__),
                      os.path.expanduser("~/.%s" % __title__),
-                     "."
+                         "."
                      ]
 """Default locations where downloaded or cashed data are expected"""
+STORAGE_TERRAIN = "terrain"
+"""storage directory that holds terrain data inside the storage locations"""
+STORAGE_WAETHER = "weather"
+"""storage directory that holds weather data inside the storage locations"""
+STORAGES = [STORAGE_TERRAIN, STORAGE_WAETHER]
+"""storage directories that hold data inside the storage locations"""
+
 
 # -------------------------------------------------------------------------
 

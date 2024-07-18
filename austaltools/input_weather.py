@@ -64,7 +64,7 @@ logger = logging.getLogger()
 
 # ----------------------------------------------------
 KNOWN_SOURCES = ["ERA5", "CERRA", "DWD"]
-STORAGE_LOCATIONS = _tools.DEFAULT_DATA_DIRS
+STORAGE_LOCATIONS = _tools.STORAGE_LOCATIONS
 STORAGE_DIR = "weather"
 STORAGE_PATH = None  # will be filled lazy
 
