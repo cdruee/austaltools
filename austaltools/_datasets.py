@@ -11,17 +11,19 @@ import glob
 import gzip
 import io
 import logging
-import sys
 import os
-
-import pip
+import re
 import shutil
+import sys
 import tarfile
 import tempfile
 import zipfile
-from urllib.request import urlretrieve, urlopen
-from urllib.error import HTTPError
 from importlib import resources
+from urllib.error import HTTPError
+from urllib.request import urlretrieve, urlopen
+from xml.etree import ElementTree
+
+import pip
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from osgeo import gdal
@@ -69,9 +71,37 @@ DATASET_DEFINITIONS = [
         "doi": "10.5281/zenodo.12740424"
     },
     {
+        "name": "DGM10-RP",
+        "storage": "terrain",
+        "assemble": "assemble_DGMxx",
+        "arguments": {
+            'resolution': 10,
+            'host': 'https://geobasis-rlp.de',
+            'path': '/data/dgm1/current',
+            'filelist': '/meta4/dgm1_tif_07.meta4',
+            'xmlpath': '/file/url',
+            'CRS': 'EPSG:25832'
+        },
+    },
+    {
         "name": "DGM25-NW",
         "storage": "terrain",
         "assemble": "assemble_DGM25_NW"
+    },
+    {
+        "name": "DGM10-NW",
+        "storage": "terrain",
+        "assemble": "assemble_DGMxx",
+        "arguments": {
+            'resolution': 10,
+            'host': 'https://www.opengeodata.nrw.de',
+            'path': 'produkte/geobasis/hm/dgm1_tiff/dgm1_tiff',
+            'filelist': 'index.xml',
+            'xmlpath': '/datasets/dataset[0]/file',
+            'xmlattribute': 'name',
+            'datapath': '',
+            'CRS': 'EPSG:25832'
+        },
     },
     {
         "name": "GLO-30",
@@ -99,6 +129,7 @@ KNOWN_DEMS = [x['name'] for x in DATASET_DEFINITIONS
 KNOWN_WEATHER = [x['name'] for x in DATASET_DEFINITIONS
                  if x['storage'] == _tools.STORAGE_WAETHER]
 
+
 # =========================================================================
 
 
@@ -110,49 +141,51 @@ class DataSet:
     file_license = None
     file_notice = None
     file_data = None
-    doi = None
+    uri = None
     years = []
+    arguments = None
+
     # ----------------------------------------------------
 
     def assemble(self):
         """Placeholder for download function"""
         pass
+
     # ----------------------------------------------------
 
-    def download(self, where=None, url=None):
+    def download(self, path=None, uri=None):
         """Download assembled dataset from reopository"""
-        if where is None:
-            where = self.path
+        if path is None:
+            path = self.path
         else:
-            self.path = where
-        if url is None:
-            if self.doi is None:
-                raise ValueError("No DOI and download URL provided")
+            self.path = path
+        if uri is None:
+            if self.uri is not None:
+                uri = self.uri
             else:
-                doi_url = f"https://doi.org/{self.doi}"
-                logger.debug(f"resolving {doi_url}")
-                for i in range(MAX_RETRY):
-                    try:
-                        resolver = urlopen(doi_url)
-                        redirect = resolver.url
-                        resolver.close()
-                        break
-                    except HTTPError:
-                        continue
-                else:
-                    raise Exception("Could not resolve DOI")
-                if "zenodo" in redirect:
-                    url = f"{redirect}/files/{self.file_data}?download=1"
-                else:
-                    raise ValueError(f"Dont know how to hande redirect " +
-                                     "URL: {URL}")
-        urlretrieve(url, os.path.join(where, self.file_data))
-        for aux_path in DIST_AUX_FILES.iterdir():
-            aux_file = os.path.basename(str(aux_path))
-            if aux_file in [self.file_license, self.file_notice]:
-                logger.debug('copying auxiliary file: %s' % aux_file)
-                shutil.copyfile(str(aux_path),
-                                os.path.join(where, aux_file))
+                raise ValueError("No uri defined or provided")
+        if uri.startswith('doi'):
+            doi = re.sub('^doi[:/]*', '', uri)
+            doi_url = f"https://doi.org/{doi}"
+            logger.debug(f"resolving {doi_url}")
+            for i in range(MAX_RETRY):
+                try:
+                    resolver = urlopen(doi_url)
+                    redirect = resolver.url
+                    resolver.close()
+                    break
+                except HTTPError:
+                    continue
+            else:
+                raise Exception("Could not resolve DOI")
+            if "zenodo" in redirect:
+                url = f"{redirect}/files/{self.file_data}?download=1"
+            else:
+                raise ValueError(f"Dont know how to hande redirect " +
+                                 "URL: {URL}")
+        elif uri.startswith('http'):
+            url = uri
+        urlretrieve(url, os.path.join(path, self.file_data))
 
     # ----------------------------------------------------
 
@@ -174,28 +207,51 @@ class DataSet:
             if self.storage == 'terrain':
                 self.file_data = DEM_FMT % self.name
             elif self.storage == 'weather':
-                self.file_data = WEA_FMT % (self.name,0)
+                self.file_data = WEA_FMT % (self.name, 0)
+
+
 # =========================================================================
 
 
 def locations_available(locs):
     return [x for x in locs if os.path.isdir(x)]
+
+
 # -------------------------------------------------------------------------
 
 
 def locations_writable(locs):
     return [x for x in locs if os.access(x, os.W_OK)]
+
+
 # -------------------------------------------------------------------------
 
 
 def location_has_storage(location, storage):
-    path = os.path.join(location, storage)
-    return os.path.exists(path)
+    return os.path.exists(os.path.join(location, storage))
 
 
 # -------------------------------------------------------------------------
 
-def scan_datasets(locs=None):
+
+def dataset_get(name):
+    for x in DATASETS:
+        if x.name == name:
+            return x
+    else:
+        raise ValueError(f"Dataset {name} not found")
+
+
+# -------------------------------------------------------------------------
+
+
+def dataset_available(name):
+    return dataset_get(name).available
+
+
+# -------------------------------------------------------------------------
+
+def dataset_scan(locs=None):
     if locs is None:
         locs = _tools.STORAGE_LOCATIONS
     loc_avail = locations_available(locs)
@@ -211,6 +267,8 @@ def scan_datasets(locs=None):
                 if os.path.exists(datafile):
                     ds.available = True
                     ds.path = path
+
+
 # -------------------------------------------------------------------------
 
 
@@ -220,10 +278,11 @@ def find_writeable_storage(locs: str = None, stor: str = None) -> str or None:
     If `storage_path` is provided, only this path is checked
     for existance.
 
-    :param locs:
-    :type locs:
-    :param str: (optional) user selected path
-    :return: data storage directory
+    :param locs: Candidate locations
+    :type locs: str
+    :param stor: Storage directory expected at location
+    :type stor: str
+    :return: path to a writable data storage directory
     :rtype: str
     """
     if stor is None:
@@ -252,10 +311,13 @@ def find_writeable_storage(locs: str = None, stor: str = None) -> str or None:
         else:
             raise Exception('Could not create data storage directory')
     return os.path.join(location, stor)
+
+
 # -------------------------------------------------------------------------
 
 
-def assebmle_GTOPO30(path):
+def assebmle_GTOPO30(path: str, name = "GTOPO30",
+                     replace=False, args: dict ={}):
     support = ("https://data.rda.ucar.edu/ds758.0/support/"
                + "GTOPO30support.tar.gz")
     download = ("https://data.rda.ucar.edu/ds758.0/elevtiles/" +
@@ -269,6 +331,11 @@ def assebmle_GTOPO30(path):
     # "E120S60 ".split()
     # get the single archive that holds the supportive
     # files for all tiles
+    target = os.path.join(path, DEM_FMT % "GTOPO30")
+    logger.debug(f'data file path: {target}')
+    if os.path.exists(target) and not replace:
+        logger.info("dataset exists ... %s" % name)
+        return False
     logger.debug("downloading ... %s" % support)
     support_file, _ = urlretrieve(
         support, os.path.basename(support))
@@ -297,7 +364,6 @@ def assebmle_GTOPO30(path):
                       srcDSOrSrcDSTab=tile_dem,
                       format="GTiff")
     # merge the GeoTiff Files from all tiles into one file
-    target = os.path.join(path, DEM_FMT % "GTOPO30")
     if os.path.exists(target):
         logger.info("removing old source file")
         os.remove(target)
@@ -308,11 +374,12 @@ def assebmle_GTOPO30(path):
     logger.debug("... done")
 
     return
+
+
 # -------------------------------------------------------------------------
 
 
-def assemble_GLO_30(path, replace=False):
-    name = "GLO_30"
+def assemble_GLO_30(path, name = "GLO_30", replace=False, args: dict ={}):
     target = os.path.join(path, DEM_FMT % name)
     logger.debug(f'data file path: {target}')
     if os.path.exists(target) and not replace:
@@ -352,11 +419,124 @@ def assemble_GLO_30(path, replace=False):
     logger.debug("... done")
 
     return
+
+
+# -------------------------------------------------------------------------
+
+def xmlpath(xml, path):
+    res = []
+    levels = path.split('/')
+    if levels[0] == '':
+        levels.pop(0)
+    tree = ElementTree.fromstring(xml)
+    root = tree.getroot()
+    m = re.search('{.*}', root.tag)
+    if m:
+        ns = '%s' % m.group(0)
+    else:
+        ns = ''
+    nodes = [root]
+    spec = num = attr = sel = None
+    for level in levels:
+        if "[" in level:
+            name = re.sub('\[.*]', '', level)
+            spec = re.sub('.*\[(.*)].*', r'\1', level)
+            try:
+                num = int(spec)
+            except ValueError:
+                if '=' in spec:
+                    attr, sel = [x.strip() for x in spec.split('=')]
+        else:
+            name = level
+        tag = ''.join((ns, name))
+        print(name, spec, num, attr, sel)
+        next = []
+        for node in nodes:
+            # iterate over children
+            for i, ele in enumerate(node):
+                if not ele.tag == tag:
+                    continue
+                if num is None and attr is None:
+                    next.append(ele)
+                elif num is not None and num == i:
+                    next.append(ele)
+                elif (attr is not None and
+                      (attr in ele.attrib and re.match(attr, ele.attrib))):
+                    next.append(ele)
+            nodes = next
+        res = [x.text for x in nodes]
+    return res
+
+
+def assemble_DGMxx(path: str, name: str, replace : bool,
+                   provider: dict):
+    if 'resoltion' in provider:
+        out_res = provider['resolution']
+    else:
+        out_res = 25
+    target = os.path.join(path, DEM_FMT % name)
+    logger.debug(f'data file path: {target}')
+    if os.path.exists(target) and not replace:
+        logger.info("skipping because dataset exists: %s" % name)
+        return False
+
+    base_url = '/'.join((provider['host'], provider['path']))
+    filelist = provider['filelist']
+    url = '/'.join((base_url, filelist))
+    # switch formats:
+    if filelist.endswith(('.xml', 'meta4')):
+        # xml
+        logger.debug("downloading xml metadata: %s" % path)
+        xml_file, _ = urlretrieve(url, os.path.basename(filelist))
+        with open(xml_file, 'r') as xf:
+            input_files = xmlpath(xml=xf.read(), path=path)
+    else:
+        raise NotImplementedError(f'cannot handle meta format: {filelist}')
+
+    tile_files = []
+    for tf1 in _tools.progress(input_files):
+        if re.match('^http[s]*://', tf1):
+            url = tf1
+        else:
+            url = f"{base_url}/{tf1}"
+        logger.debug(f"downloading ... {url}")
+        for i in range(MAX_RETRY):
+            try:
+                zip_file, _ = urlretrieve(url, tf1)
+                break
+            except Exception as e:
+                pass
+        else:
+            raise Exception("failed to download tile files")
+        tf25 = os.path.splitext()[0] + ".reduced.tif"
+        logger.debug(f"converting tile ... {tf1} -> {tf25}")
+        try:
+            gdal.Warp(destNameOrDestDS=tf25,
+                      xRes=out_res,
+                      yRes=out_res,
+                      dstSRS="EPSG:5677",
+                      srcDSOrSrcDSTab=tf1,
+                      format="GTiff")
+            tile_files.append(tf25)
+        except Exception as e:
+            logger.error(str(e))
+        os.remove(tf1)
+    # merge the GeoTiff Files from all tiles into one file
+    if os.path.exists(target):
+        logger.info("removing old source file")
+        os.remove(target)
+    logger.debug("merging tiles ...")
+    gdal_merge.main(["", "-co", "compress=lzw",
+                     "-o", target,
+                     ] + tile_files)
+    logger.debug("... done")
+    return True
+
+
 # -------------------------------------------------------------------------
 
 
-def assemble_DGM25_RP(path, replace=False):
-    name = "DGM25-RP"
+def assemble_DGM25_RP(path, name = "DGM25-RP", replace=False):
     target = os.path.join(path, DEM_FMT % name)
     logger.debug(f'data file path: {target}')
     if os.path.exists(target) and not replace:
@@ -393,138 +573,34 @@ def assemble_DGM25_RP(path, replace=False):
 # -------------------------------------------------------------------------
 
 
-def assemble_DGMxx_NW(path, replace=False, out_res=None):
-    if out_res is None:
-        out_res = 25  # m in EPSG:5677 aka Gauss-Krueger band 3
-    name = "DGM%d_NW" % out_res
-    target = os.path.join(path, DEM_FMT % name)
-    logger.debug(f'data file path: {target}')
-    if os.path.exists(target) and not replace:
-        logger.info("skipping because dataset exists: %s" % name)
-        return False
-
-    base_url = ("https://www.opengeodata.nrw.de/" +
-                "produkte/geobasis/hm/dgm1_tiff/dgm1_tiff/")
-    meta_file = "dgm1_meta.zip"
-    url = f"{base_url}/{meta_file}"
-    logger.debug("downloading metadata: %s" % path)
-    zip_file, _ = urlretrieve(url, os.path.basename(url))
-    input_files = []
-    with zipfile.ZipFile(zip_file, 'r') as zf:
-        with io.TextIOWrapper(zf.open('dgm1_tiff.csv')) as csvfile:
-            for row in csv.reader(csvfile, delimiter=';',
-                                  quoting=csv.QUOTE_NONE):
-                if "ETRS89_UTM32" in row:
-                    input_files.append(row[0])
-    tile_files = []
-    for tf1 in _tools.progress(input_files):
-        url = f"{base_url}/{tf1}"
-        logger.debug(f"downloading ... {url}")
-        for i in range(MAX_RETRY):
-            try:
-                zip_file, _ = urlretrieve(url, tf1)
-                break
-            except Exception as e:
-                pass
-        else:
-            raise Exception("failed to download tile files")
-        tf25 = tf1.replace("dgm1", "dgm25") + ".tif"
-        logger.debug(f"converting tile ... {tf1} -> {tf25}")
-        try:
-            gdal.Warp(destNameOrDestDS=tf25,
-                      xRes=out_res,
-                      yRes=out_res,
-                      dstSRS="EPSG:5677",
-                      srcDSOrSrcDSTab=tf1,
-                      srcSRS="EPSG:25832",
-                      format="GTiff")
-            tile_files.append(tf25)
-        except Exception as e:
-            logger.error(str(e))
-        os.remove(tf1)
-    # merge the GeoTiff Files from all tiles into one file
-    if os.path.exists(target):
-        logger.info("removing old source file")
-        os.remove(target)
-    logger.debug("merging tiles ...")
-    gdal_merge.main(["", "-co", "compress=lzw",
-                     "-o", target,
-                     ] + tile_files)
-    logger.debug("... done")
-    return True
-# -------------------------------------------------------------------------
-
-
-def assemble_DGM25_NW(path, replace=False):
-    return assemble_DGMxx_NW(path, replace, out_res=25)
-# -------------------------------------------------------------------------
-
-
-def download_dem(dem: str, path: str = None):
+def provide_dem(source: str, path: str = None,
+                force: bool = False, method: str = 'download'):
     if path is None:
         path = find_writeable_storage(path, _tools.STORAGE_TERRAIN)
-    logger.info("downloading terrain source %s" % dem)
-    success = True
-    pwd = os.getcwd()
-    with tempfile.TemporaryDirectory() as temp_dir:
-        os.chdir(temp_dir)
-        try:
-            if dem == "GTOPO30":
-                pass  #download_GTOPO30(path)
-            elif dem == "GLO-30":
-                pass  #download_GLO_30(path)
-            elif dem == "DGM25-RP":
-                pass  #download_DGM25_RP(path)
-            elif dem == "DGM25-NW":
-                pass  #download_DGM25_NW(path)
-            else:
-                logger.error("unknown dataset to download %s" % dem)
-                success = False
-        except Exception as e:
-            logger.error(str(e))
-            success = False
-    # return before clean up
-    os.chdir(pwd)
-    return success
-# -------------------------------------------------------------------------
+    dataset = dataset_get(source)
+    logger.info("downloading terrain source %s" % source)
+    if method == 'download':
+        if dataset.uri is None:
+            raise Exception("Dataset has no download uri, assemble it.")
+        dataset.download(path)
+    elif method == 'assemble':
+        # change to temp directory
+        pwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            os.chdir(temp_dir)
+            dataset.assemble(path, source, force, dataset.arguments)
+            # return before clean up
+            os.chdir(pwd)
+    else:
+        raise ValueError("method must be either 'download' or 'assemble'")
 
-
-def provide_terrain_data(storage_path: str, source=None,
-                         force=False, download=True):
-    extension = DEM_FMT % ""
-    datasets = []
-    # if a location is found, we are happy
-    # but does it contain any data?
-    for file in os.listdir(storage_path):
-        if file.endswith(extension):
-            datasets.append(file.replace(extension, ""))
-    if download:
-        for aux_path in DIST_AUX_FILES.iterdir():
-            aux_file = os.path.basename(str(aux_path))
-            if aux_file.startswith('_'):
-                continue
-            if (not os.path.isfile(os.path.join(storage_path, aux_file)) or
-                    force):
-                logger.debug('copying auxiliary file: %s' % aux_file)
-                shutil.copyfile(str(aux_path),
-                                os.path.join(storage_path, aux_file))
-        # now fill the storage with data
-        for dem in KNOWN_DEMS:
-            if (os.path.exists(
-                    os.path.join(storage_path, DEM_FMT % dem)) and
-                    not force):
-                logger.info("dataset found in storage: %s" % dem)
-                datasets.append(dem)
-            else:
-                logger.debug(f"{dem} -- {source}")
-                if dem == source:
-                    success = download_dem(dem, storage_path)
-                    if success:
-                        logger.error("successful download of dataset %s" % dem)
-                        datasets.append(dem)
-                    else:
-                        logger.error("dataset %s failed to download" % dem)
-    return datasets
+    for aux_path in DIST_AUX_FILES.iterdir():
+        aux_file = os.path.basename(str(aux_path))
+        if aux_file in [dataset.file_license, dataset.file_notice]:
+            logger.debug('copying auxiliary file: %s' % aux_file)
+            shutil.copyfile(str(aux_path),
+                            os.path.join(path, aux_file))
+    return
 # -------------------------------------------------------------------------
 
 
@@ -534,6 +610,8 @@ def show_notice(storage_path, source):
                            "%s.NOTICE.txt" % source), "r") as f:
         for x in f.readlines():
             print(x)
+
+
 # -------------------------------------------------------------------------
 # -------------------------------------------------------------------------
 
@@ -592,10 +670,12 @@ def era5_getyear(opts):
             'format': 'netcdf',
         },
         target)
+
+
 # -------------------------------------------------------------------------
 
 
-def assemble_ERA5(path, years):
+def assemble_ERA5(path: str, years: list):
     # create option tuples
     combi = []
     for y in years:
@@ -604,7 +684,9 @@ def assemble_ERA5(path, years):
         combi.append((y, path))
     # get data in parallel directly to storage
     with Pool(10) as pool:
-        p = pool.map(era5_getyear, combi)
+        pool.map(era5_getyear, combi)
+
+
 # -------------------------------------------------------------------------
 
 
@@ -613,6 +695,8 @@ def cerraname(y, lt=None):
     if lt is not None:
         name += '_%01i' % lt
     return name
+
+
 # -------------------------------------------------------------------------
 
 
@@ -672,10 +756,12 @@ def cerra_getyear(opts):
         cdo.selindexbox('489,649,479,659', options='-f nc',
                         input=gribname, output=ncname)
         os.remove(gribname)
+
+
 # -------------------------------------------------------------------------
 
 
-def assemble_CERRA(path, years):
+def assemble_CERRA(path: str, years: list):
     tempPath = './tmp/'
     data = cdo.Cdo(tempdir=tempPath)
     print("python-cdo version: %s" % data.__version__())
@@ -710,10 +796,13 @@ def assemble_CERRA(path, years):
         )
         for x in infiles:
             os.remove(x)
+
+
 # -------------------------------------------------------------------------
 
 
-def download_weather(source: str, path: str = None, years: list = None):
+def provide_weather(source: str, path: str = None, years: list = None,
+                    method: str = 'download'):
     if path is None:
         path = find_writeable_storage(path, _tools.STORAGE_TERRAIN)
     logger.info("downloading weather source %s" % source)
@@ -735,16 +824,22 @@ def download_weather(source: str, path: str = None, years: list = None):
     # return before clean up
     os.chdir(pwd)
     return success
+
+
 # -------------------------------------------------------------------------
 
 
 # initialize
 DATASETS = [DataSet(**x) for x in DATASET_DEFINITIONS]
-scan_datasets()
-
-
+dataset_scan()
 
 # RP: https://geobasis-rlp.de/data/dgm1/current/meta4/dgm1_tif_07.meta4
+
+# for x in root.findall('./metalink:file',{"metalink":"urn:ietf:params:xml:ns:metalink"}):
+#     if x.attrib['name'].endswith('tif'):
+#         u = x.find('./metalink:url',{"metalink":"urn:ietf:params:xml:ns:metalink"})
+#         print(u.text)
+
 
 # BW: https://opengeodata.lgl-bw.de/data/dgm/dgm1_32_501_5380_2_bw.zip
 #  re: 387-609/2  ho:5264-5514/2

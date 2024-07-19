@@ -124,14 +124,19 @@ def cli_parser():
                                'Defaults to ' + default_dem)
     sub_down.add_argument('-y', '--years',
                           metavar="YEAR",
-                          nargs=2,
-                          choices=DS.KNOWN_DEMS + DS.KNOWN_WEATHER,
-                          help='years for which to download weather data' +
-                               '. Data will be downloaded from first to ' +
-                               'second year given, including both. ' +
-                               'To download a singe year, give the year ' +
-                               'twice. No default, required with ' +
+                          help='Year for which to download weather data.' +
+                               ' A range of years may be given as ' +
+                               '<start year>-<end year>. ' +
+                               'No default, required with ' +
                                'weather datasets.')
+    sub_down.add_argument('-p', '--path',
+                          metavar="PATH",
+                          default=None,
+                          help='download files to PATH instead of one ' +
+                               'of the default locations. Note: ' +
+                               'data downloaded to a custom PATH are ' +
+                               'not considered by austaltools by default.')
+
     sub_down.add_argument('-f', '--force',
                           action='store_true',
                           help='overwrite dataset if it exists.'
@@ -139,6 +144,46 @@ def cli_parser():
                                'installation, it might be downloaded ' +
                                'to the user directory (again), where ' +
                                'it takes higher preference.')
+
+    sub_assm = subparsers.add_parser('assemble',
+                                     help='assemble dataset from original ' +
+                                     'data source. \n' +
+                                     'WARNING: This may take a ' +
+                                     'LONG time and may require excessive ' +
+                                     'memory and disk space!'
+                                     )
+    sub_assm.add_argument('-s', '--source',
+                          metavar="CODE",
+                          nargs=None,
+                          choices=DS.KNOWN_DEMS + DS.KNOWN_WEATHER,
+                          default=default_dem,
+                          help='code for the source digital elevation ' +
+                               'model (DEM). Known DEMs are: ' +
+                               ' '.join(DS.KNOWN_DEMS) + ' ' +
+                               'Defaults to ' + default_dem)
+    sub_assm.add_argument('-y', '--years',
+                          metavar="YEAR",
+                          help='Year for which to generate weather data.' +
+                               ' A range of years may be given as ' +
+                               '<start year>-<end year>. ' +
+                               'No default, required with ' +
+                               'weather datasets.')
+    sub_assm.add_argument('-p', '--path',
+                          metavar="PATH",
+                          default=None,
+                          help='create files in PATH instead of one ' +
+                               'of the default locations. Note: ' +
+                               'data downloaded to a custom PATH are ' +
+                               'not considered by austaltools by default.')
+
+    sub_assm.add_argument('-f', '--force',
+                          action='store_true',
+                          help='overwrite dataset if it exists.'
+                               'If dataset exists in a system-wide ' +
+                               'installation, it might be downloaded ' +
+                               'to the user directory (again), where ' +
+                               'it takes higher preference.')
+
 
     parser.add_argument('--storage',
                         metavar='PATH',
@@ -177,23 +222,40 @@ def main():
     if args['action'] == 'list':
         list_datasets(args['only'], args['state'], args['long'])
 
-    elif args['action'] == 'download':
+    elif args['action'] in ['download', 'assemble']:
         if args['source'] in DS.KNOWN_DEMS:
-            if DS.DATASETS[args['source']].available and not args['force']:
+            if DS.dataset_available(args['source']) and not args['force']:
                 sys.tracebacklimit = 0
                 raise ValueError(f"dataset exists: {args['source']} ")
-            DS.download_dem(args['source'])
+            DS.provide_dem(args['source'],
+                                    path=args['path'],
+                                    force=args['force'],
+                                    method=args['action'])
         elif args['source'] in DS.KNOWN_WEATHER:
             if 'years' not in args:
                 sys.tracebacklimit = 0
                 raise ValueError('-y required with dataset: %s '
                                  % args['source'])
-            if DS.DATASETS[args['source']].available and not args['force']:
+            else:
+                try:
+                    year_list = [int(args['years'])]
+                except ValueError:
+                    if '-' in args['years']:
+                        y1, y2 = args['years'].split('-')
+                        year_list = list(range(int(y1), int(y2) + 1))
+                    else:
+                        raise ValueError("cannot argument to -y: %s" %
+                                         args["years"])
+                logger.debug('years parsed into int: %s',
+                             year_list)
+            if DS.dataset_available(args['source']) and not args['force']:
                 sys.tracebacklimit = 0
                 raise ValueError(f"dataset exists: {args['source']} ")
-            year_list = [x for x in range(args['years'][0],
-                                          args['years'][1] + 1)]
-            DS.download_weather(args['source'], year_list)
+            DS.provide_weather(args['source'],
+                               path=args['path'],
+                               years=year_list,
+                               method=args['action'],
+                               )
         else:
             raise ValueError("Source not recognized: %s "
                              % args['source'])

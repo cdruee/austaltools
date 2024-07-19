@@ -1054,7 +1054,7 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.') \
     :param lon: position laongitude  in degrees
     :param year: get data from this calendar year
     :param station: number of the station you are looking for
-    :param storage_path: (optional) expect ERA5 data in this directory
+    :param storage_path: (optional) expect DWD data in this directory
     :return: weather timeseries as dataframe and surface roughness in m.
         The index of the dataframe is the measurement time as `datetime64`,
         the columns are:
