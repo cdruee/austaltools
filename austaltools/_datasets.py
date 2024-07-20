@@ -9,7 +9,6 @@ import csv
 import datetime as dt
 import glob
 import gzip
-import io
 import logging
 import os
 import re
@@ -19,10 +18,9 @@ import tarfile
 import tempfile
 import zipfile
 from importlib import resources
-from urllib.error import HTTPError
-from urllib.request import urlretrieve, urlopen
 from xml.etree import ElementTree
 
+import requests
 import pip
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
@@ -76,17 +74,13 @@ DATASET_DEFINITIONS = [
         "assemble": "assemble_DGMxx",
         "arguments": {
             'resolution': 10,
+            'check_cert': False,
             'host': 'https://geobasis-rlp.de',
             'path': '/data/dgm1/current',
             'filelist': '/meta4/dgm1_tif_07.meta4',
-            'xmlpath': '/file/url',
+            'xmlpath': '/file[name=.tif$]/url',
             'CRS': 'EPSG:25832'
         },
-    },
-    {
-        "name": "DGM25-NW",
-        "storage": "terrain",
-        "assemble": "assemble_DGM25_NW"
     },
     {
         "name": "DGM10-NW",
@@ -170,11 +164,11 @@ class DataSet:
             logger.debug(f"resolving {doi_url}")
             for i in range(MAX_RETRY):
                 try:
-                    resolver = urlopen(doi_url)
+                    resolver = requests.head(doi_url)
                     redirect = resolver.url
                     resolver.close()
                     break
-                except HTTPError:
+                except requests.HTTPError:
                     continue
             else:
                 raise Exception("Could not resolve DOI")
@@ -185,7 +179,8 @@ class DataSet:
                                  "URL: {URL}")
         elif uri.startswith('http'):
             url = uri
-        urlretrieve(url, os.path.join(path, self.file_data))
+        with open(os.path.join(path, self.file_data), 'wb') as f:
+            f.write(requests.get(url, allow_redirects=True).content)
 
     # ----------------------------------------------------
 
@@ -428,8 +423,7 @@ def xmlpath(xml, path):
     levels = path.split('/')
     if levels[0] == '':
         levels.pop(0)
-    tree = ElementTree.fromstring(xml)
-    root = tree.getroot()
+    root = ElementTree.fromstring(xml)
     m = re.search('{.*}', root.tag)
     if m:
         ns = '%s' % m.group(0)
@@ -448,6 +442,7 @@ def xmlpath(xml, path):
                     attr, sel = [x.strip() for x in spec.split('=')]
         else:
             name = level
+            spec = attr = sel = None
         tag = ''.join((ns, name))
         print(name, spec, num, attr, sel)
         next = []
@@ -461,16 +456,17 @@ def xmlpath(xml, path):
                 elif num is not None and num == i:
                     next.append(ele)
                 elif (attr is not None and
-                      (attr in ele.attrib and re.match(attr, ele.attrib))):
+                      attr in ele.attrib and
+                      bool(re.search(sel, ele.attrib[attr]))):
                     next.append(ele)
-            nodes = next
-        res = [x.text for x in nodes]
+        nodes = next
+    res = [x.text for x in nodes]
     return res
 
 
 def assemble_DGMxx(path: str, name: str, replace : bool,
                    provider: dict):
-    if 'resoltion' in provider:
+    if 'resolution' in provider:
         out_res = provider['resolution']
     else:
         out_res = 25
@@ -481,34 +477,39 @@ def assemble_DGMxx(path: str, name: str, replace : bool,
         return False
 
     base_url = '/'.join((provider['host'], provider['path']))
+    if 'check_cert' in provider:
+        verify = provider['check_cert']
     filelist = provider['filelist']
     url = '/'.join((base_url, filelist))
     # switch formats:
     if filelist.endswith(('.xml', 'meta4')):
         # xml
-        logger.debug("downloading xml metadata: %s" % path)
-        xml_file, _ = urlretrieve(url, os.path.basename(filelist))
-        with open(xml_file, 'r') as xf:
-            input_files = xmlpath(xml=xf.read(), path=path)
+        logger.debug("downloading xml metadata: %s" % url)
+        rsp = requests.get(url, allow_redirects=True, verify=verify)
+        input_files = xmlpath(xml=rsp.content.decode(),
+                              path=provider['xmlpath'])
     else:
         raise NotImplementedError(f'cannot handle meta format: {filelist}')
 
     tile_files = []
-    for tf1 in _tools.progress(input_files):
-        if re.match('^http[s]*://', tf1):
-            url = tf1
+    for inp in _tools.progress(input_files):
+        if re.match('^http[s]*://', inp):
+            url = inp
+            tf1 = os.path.basename(inp)
         else:
-            url = f"{base_url}/{tf1}"
+            url = f"{base_url}/{inp}"
+            tf1 = inp
         logger.debug(f"downloading ... {url}")
         for i in range(MAX_RETRY):
-            try:
-                zip_file, _ = urlretrieve(url, tf1)
-                break
-            except Exception as e:
-                pass
+            #try:
+            with open(tf1, 'wb') as f:
+                f.write(requests.get(url,verify=verify).content)
+            break
+            #except Exception as e:
+            #    pass
         else:
             raise Exception("failed to download tile files")
-        tf25 = os.path.splitext()[0] + ".reduced.tif"
+        tf25 = os.path.splitext(tf1)[0] + ".reduced.tif"
         logger.debug(f"converting tile ... {tf1} -> {tf25}")
         try:
             gdal.Warp(destNameOrDestDS=tf25,
@@ -588,6 +589,7 @@ def provide_dem(source: str, path: str = None,
         pwd = os.getcwd()
         with tempfile.TemporaryDirectory() as temp_dir:
             os.chdir(temp_dir)
+            logger.debug('calling %s' % str(dataset.assemble))
             dataset.assemble(path, source, force, dataset.arguments)
             # return before clean up
             os.chdir(pwd)
