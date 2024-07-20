@@ -91,7 +91,7 @@ DATASET_DEFINITIONS = [
             'host': 'https://www.opengeodata.nrw.de',
             'path': 'produkte/geobasis/hm/dgm1_tiff/dgm1_tiff',
             'filelist': 'index.xml',
-            'xmlpath': '/datasets/dataset[0]/file',
+            'xmlpath': '/datasets/dataset[0]/files/file::name',
             'xmlattribute': 'name',
             'datapath': '',
             'CRS': 'EPSG:25832'
@@ -420,7 +420,12 @@ def assemble_GLO_30(path, name = "GLO_30", replace=False, args: dict ={}):
 
 def xmlpath(xml, path):
     res = []
-    levels = path.split('/')
+    if '::' in path:
+        getpath, getatt = path.split("::")
+    else:
+        getpath = path
+        getatt = None
+    levels = getpath.split('/')
     if levels[0] == '':
         levels.pop(0)
     root = ElementTree.fromstring(xml)
@@ -430,37 +435,44 @@ def xmlpath(xml, path):
     else:
         ns = ''
     nodes = [root]
-    spec = num = attr = sel = None
+    spec = attr = sel = None
     for level in levels:
         if "[" in level:
             name = re.sub('\[.*]', '', level)
             spec = re.sub('.*\[(.*)].*', r'\1', level)
             try:
-                num = int(spec)
+                sel = int(spec)
+                attr = None
             except ValueError:
                 if '=' in spec:
                     attr, sel = [x.strip() for x in spec.split('=')]
+                else:
+                    attr = spec
+                    sel = None
         else:
             name = level
             spec = attr = sel = None
         tag = ''.join((ns, name))
-        print(name, spec, num, attr, sel)
+        print(name, spec, attr, sel)
         next = []
         for node in nodes:
             # iterate over children
             for i, ele in enumerate(node):
                 if not ele.tag == tag:
                     continue
-                if num is None and attr is None:
+                if sel is None and attr is None:
                     next.append(ele)
-                elif num is not None and num == i:
+                elif sel == i:
                     next.append(ele)
                 elif (attr is not None and
                       attr in ele.attrib and
                       bool(re.search(sel, ele.attrib[attr]))):
                     next.append(ele)
         nodes = next
-    res = [x.text for x in nodes]
+    if getatt is None:
+        res = [x.text for x in nodes]
+    else:
+        res = [x.get(getatt, default='') for x in nodes]
     return res
 
 
@@ -479,6 +491,8 @@ def assemble_DGMxx(path: str, name: str, replace : bool,
     base_url = '/'.join((provider['host'], provider['path']))
     if 'check_cert' in provider:
         verify = provider['check_cert']
+    else:
+        verify = True
     filelist = provider['filelist']
     url = '/'.join((base_url, filelist))
     # switch formats:
