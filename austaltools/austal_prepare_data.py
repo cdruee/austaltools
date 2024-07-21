@@ -190,6 +190,11 @@ def cli_parser():
                         default=None,
                         help='custom location for data storage'
                         )
+    parser.add_argument('--temp',
+                        metavar='PATH',
+                        default=None,
+                        help='custom location for temp files [/tmp]'
+                        )
 
     return parser
 
@@ -218,6 +223,9 @@ def main():
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
 
     logger.debug(args)
+
+    if args['temp'] is not None:
+        DS.TEMP = args['temp']
 
     if args['action'] == 'list':
         list_datasets(args['only'], args['state'], args['long'])

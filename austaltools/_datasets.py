@@ -62,6 +62,7 @@ logger = logging.getLogger()
 DEM_FMT = '%s.lzw.tif'
 WEA_FMT = '%s_ak_eu_%04i.nc'
 DIST_AUX_FILES = resources.files(__title__ + '.data')
+TEMP = None
 MAX_RETRY = 3
 
 DATASET_DEFINITIONS = {
@@ -744,7 +745,7 @@ def provide_dem(source: str, path: str = None,
     elif method == 'assemble':
         # change to temp directory
         pwd = os.getcwd()
-        with tempfile.TemporaryDirectory() as temp_dir:
+        with tempfile.TemporaryDirectory(dir = TEMP) as temp_dir:
             os.chdir(temp_dir)
             logger.debug('calling %s' % str(dataset.assemble))
             dataset.assemble(path, source, force, dataset.arguments)
