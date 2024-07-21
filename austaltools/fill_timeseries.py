@@ -22,45 +22,6 @@ logging.basicConfig()
 logger = logging.getLogger()
 # ----------------------------------------------------
 
-
-def parse_time_string(string):
-    logger.debug('parse_time_string: %s' % string)
-    for x in string:
-        if x not in ['-', ',', '/'] and not x.isdigit():
-            raise ValueError('parse time: illegal character in string: %s' % x)
-    if '/' in string and ',' in string:
-        raise ValueError('parse time: list and step are mutually exclusive')
-    if '-' in string and ',' in string:
-        raise ValueError('parse time: list and range are mutually exclusive')
-    if '/' in string:
-        rang, step = string.split('/', 1)
-        step = int(step)
-    else:
-        rang = string
-        step = 1
-    if '-' in rang:
-        start_stop = [int(x) for x in rang.split('-', 1)]
-        discrete = None
-    elif ',' in rang:
-        start_stop = None
-        discrete = [int(x) for x in rang.split(',')]
-        if not sorted(discrete) == discrete:
-            raise ValueError('parse time: discrete list is not sorted')
-    else:
-        start_stop = None
-        discrete = [int(rang)]
-    if start_stop:
-        res = []
-        x = start_stop[0]
-        while x <= start_stop[1]:
-            res.append(x)
-            x = x + step
-    else:
-        res = discrete
-    return res
-# ----------------------------------------------------
-
-
 def parse_time_unit(string):
     if string.lower() in ['month', 'months']:
         period = 'months'
@@ -79,7 +40,7 @@ def parse_time_unit(string):
 def parse_time(info, name='', multi=True):
     if "time" not in info.keys():
         raise ValueError('no time info: %s' % name)
-    count = parse_time_string(format(info['time']))
+    count = _tools.parse_time_string(format(info['time']))
     logger.debug('count: ' + format(count))
     if "unit" not in info.keys():
         raise ValueError('no unit info: %s' % name)

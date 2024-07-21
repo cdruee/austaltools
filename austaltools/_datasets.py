@@ -9,6 +9,8 @@ import csv
 import datetime as dt
 import glob
 import gzip
+import inspect
+import itertools
 import logging
 import os
 import re
@@ -18,8 +20,11 @@ import tarfile
 import tempfile
 import zipfile
 from importlib import resources
+from pathlib import PurePath
 from xml.etree import ElementTree
 
+import numpy as np
+import pandas as pd
 import requests
 import pip
 
@@ -94,6 +99,23 @@ DATASET_DEFINITIONS = [
             'xmlpath': '/datasets/dataset[0]/files/file::name',
             'xmlattribute': 'name',
             'datapath': '',
+            'CRS': 'EPSG:25832'
+        },
+    },
+    {
+        "name": "DGM10-BW",
+        "storage": "terrain",
+        "assemble": "assemble_DGMxx",
+        "arguments": {
+            'resolution': 10,
+            'host': 'https://opengeodata.lgl-bw.de',
+            #  re: 387-609/2  ho:5264-5514/2
+            'path': 'data/dgm',
+            'filelist': 'generate',
+            'format': 'dgm1_32_%i_%i_2_bw.zip',
+            'values': ['387-609/2', '5264-5514/2'],
+            'missing': 'ignore',
+            'unpack': 'zip://*/*.xyz',
             'CRS': 'EPSG:25832'
         },
     },
@@ -502,6 +524,10 @@ def assemble_DGMxx(path: str, name: str, replace : bool,
         rsp = requests.get(url, allow_redirects=True, verify=verify)
         input_files = xmlpath(xml=rsp.content.decode(),
                               path=provider['xmlpath'])
+    elif filelist == 'generate':
+        exp_val = [_tools.parse_time_string(x) for x in provider['values']]
+        combval = itertools.product(*exp_val)
+        input_files = [provider['format'] % x for x in combval]
     else:
         raise NotImplementedError(f'cannot handle meta format: {filelist}')
 
@@ -509,33 +535,91 @@ def assemble_DGMxx(path: str, name: str, replace : bool,
     for inp in _tools.progress(input_files):
         if re.match('^http[s]*://', inp):
             url = inp
-            tf1 = os.path.basename(inp)
+            dl_file = os.path.basename(inp)
         else:
             url = f"{base_url}/{inp}"
-            tf1 = inp
+            dl_file = inp
         logger.debug(f"downloading ... {url}")
+        failure_ok = False
         for i in range(MAX_RETRY):
-            #try:
-            with open(tf1, 'wb') as f:
-                f.write(requests.get(url,verify=verify).content)
-            break
-            #except Exception as e:
-            #    pass
+            req = requests.get(url, verify=verify)
+            if req.status_code == requests.codes.ok:
+                with open(dl_file, 'wb') as f:
+                    f.write(req.content)
+                break
+            elif (req.status_code == 404 and
+                  'missing' in provider and
+                  provider['missing'] in ['ok', 'ignore']):
+                failure_ok = True
+                # break retry loop
+                break
         else:
             raise Exception("failed to download tile files")
-        tf25 = os.path.splitext(tf1)[0] + ".reduced.tif"
-        logger.debug(f"converting tile ... {tf1} -> {tf25}")
-        try:
-            gdal.Warp(destNameOrDestDS=tf25,
-                      xRes=out_res,
-                      yRes=out_res,
-                      dstSRS="EPSG:5677",
-                      srcDSOrSrcDSTab=tf1,
-                      format="GTiff")
-            tile_files.append(tf25)
-        except Exception as e:
-            logger.error(str(e))
-        os.remove(tf1)
+        if failure_ok:
+            # skip rest of inp loop
+            continue
+
+        if ('unpack' not in provider or
+                provider['unpack'] in ['', 'tif', 'false']) and \
+                dl_file.endswith('tif'):
+            inputfiles = [dl_file]
+        elif ('unpack' in provider and
+                provider['unpack'].startswith(('zip','unzip'))):
+            zip = zipfile.ZipFile(dl_file, 'r')
+            pattern = re.sub('^(un|)zip[:/]*', '', provider['unpack'])
+            unpack = [x for x in zip.namelist()
+                      if PurePath(x).match(pattern)]
+            inputfiles = []
+            for un in unpack:
+                with zip.open(un) as fz:
+                    with open(os.path.basename(un), 'wb') as fu:
+                        fu.write(fz.read())
+                inputfiles.append(os.path.basename(un))
+        else:
+            raise Exception("dont know how to handle download file")
+
+        if 'CRS' in provider:
+            srcsrs = provider['CRS']
+        else:
+            srcsrs = None
+        for inputfile in inputfiles:
+            if inputfile.endswith('tif'):
+                tf1 = inputfile
+            elif inputfile.endswith('xyz'):
+                tf1 = re.sub('\.xyz$', '.tif', inputfile)
+                logger.debug(f"converting tile ... {inputfile} -> {tf1}")
+                xyz2csv(inputfile,'dgm.csv')
+                # os.rename(inputfile, 'dgm.csv')
+                # with open('dgm.vrt', 'w') as f:
+                #     f.write(inspect.cleandoc('''
+                #     <OGRVRTDataSource>
+                #         <OGRVRTLayer name="dgm">
+                #             <SrcDataSource>dgm.csv</SrcDataSource>
+                #         <GeometryType>wkbPoint</GeometryType>
+                #         <GeometryField encoding="PointFromColumns" x="field_1" y="Northing" z="Elevation"/>
+                #         </OGRVRTLayer>
+                #     </OGRVRTDataSource>
+                #     '''))
+                gdal.Translate(destName=tf1,
+                               srcDS='dgm.csv',
+                               outputSRS=srcsrs,
+                               noData=-9999,
+                               )
+            else:
+                raise Exception(f'cannot handle {inputfile}')
+            tfxx = os.path.splitext(tf1)[0] + ".reduced.tif"
+            logger.debug(f"resampling tile ... {tf1} -> {tfxx}")
+            try:
+                gdal.Warp(destNameOrDestDS=tfxx,
+                          xRes=out_res,
+                          yRes=out_res,
+                          dstSRS="EPSG:5677",
+                          srcDSOrSrcDSTab=tf1,
+                          format="GTiff")
+                tile_files.append(tfxx)
+            except Exception as e:
+                logger.error(str(e))
+            os.remove(tf1)
     # merge the GeoTiff Files from all tiles into one file
     if os.path.exists(target):
         logger.info("removing old source file")
@@ -546,6 +630,27 @@ def assemble_DGMxx(path: str, name: str, replace : bool,
                      ] + tile_files)
     logger.debug("... done")
     return True
+
+def xyz2csv(inputfile, output):
+    df = pd.read_csv(inputfile,
+                     sep='\s+', header=None, names=['x', 'y', 'z'])
+    # get full grid axes
+    x_res = np.mean(np.diff(sorted(set(df['x']))))
+    x_vals = set(np.arange(df['x'].min(), df['x'].max() + x_res, x_res))
+    y_res = np.mean(np.diff(sorted(set(df['y']))))
+    y_vals = set(np.arange(df['y'].min(), df['y'].max() + y_res, y_res))
+
+    # create full dataframe
+    ff = pd.DataFrame.from_records(itertools.product(x_vals, y_vals),
+                                   columns=['x','y'])
+    of = pd.merge(ff,df,how='left', left_on=['x','y'], right_on=['x','y'])
+    del(ff)
+    of = of.replace(np.nan, -9999.)
+
+    # sort it so gdal doesnt complain
+    of = of.sort_values(['y', 'x'])
+
+    of.to_csv(output, index=False, header=False)
 
 
 # -------------------------------------------------------------------------

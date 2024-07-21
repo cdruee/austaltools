@@ -179,8 +179,46 @@ class Source(Geometry):
     def __init__(self, *args, **kwargs):
         Geometry.__init__(self, *args, **kwargs)
 
-
 # -------------------------------------------------------------------------
+
+
+def parse_time_string(string):
+    logger.debug('parse_time_string: %s' % string)
+    for x in string:
+        if x not in ['-', ',', '/'] and not x.isdigit():
+            raise ValueError('parse time: illegal character in string: %s' % x)
+    if '/' in string and ',' in string:
+        raise ValueError('parse time: list and step are mutually exclusive')
+    if '-' in string and ',' in string:
+        raise ValueError('parse time: list and range are mutually exclusive')
+    if '/' in string:
+        rang, step = string.split('/', 1)
+        step = int(step)
+    else:
+        rang = string
+        step = 1
+    if '-' in rang:
+        start_stop = [int(x) for x in rang.split('-', 1)]
+        discrete = None
+    elif ',' in rang:
+        start_stop = None
+        discrete = [int(x) for x in rang.split(',')]
+        if not sorted(discrete) == discrete:
+            raise ValueError('parse time: discrete list is not sorted')
+    else:
+        start_stop = None
+        discrete = [int(rang)]
+    if start_stop:
+        res = []
+        x = start_stop[0]
+        while x <= start_stop[1]:
+            res.append(x)
+            x = x + step
+    else:
+        res = discrete
+    return res
+# -------------------------------------------------------------------------
+
 
 def get_buildings(conf):
     """
@@ -215,7 +253,6 @@ def get_buildings(conf):
 
 # -------------------------------------------------------------------------
 
-
 def progress(itr=None, desc="", *args, **kwargs):
     """
     A progress bar that shows if :class:`tqdm.tqdm` is available and
@@ -240,8 +277,6 @@ def progress(itr=None, desc="", *args, **kwargs):
         return itr
 
 
-# -------------------------------------------------------------------------
-
 def gk2ll(rechts: float, hoch: float) -> (float, float, float):
     """
     Converts Gauss-Krüger rechts/hoch (east/north) coordinates
@@ -257,9 +292,11 @@ def gk2ll(rechts: float, hoch: float) -> (float, float, float):
     """
     transform = osr.CoordinateTransformation(GK, LL)
     return transform.TransformPoint(rechts, hoch)
+# -------------------------------------------------------------------------
 
 
 # -------------------------------------------------------------------------
+
 def ll2gk(lat: float, lon: float) -> (float, float):
     """
     Converts Latitude/longitude  (WGS84, https://epsg.io/4326) position
@@ -278,7 +315,8 @@ def ll2gk(lat: float, lon: float) -> (float, float):
     return transform.TransformPoint(lat, lon)
 
 
-# -------------------------------------------------------------------------
+# ----------------------------------------------------
+
 
 def ut2gk(east, north):
     """
@@ -300,8 +338,7 @@ def ut2gk(east, north):
     return transform.TransformPoint(east, north)
 
 
-# ----------------------------------------------------
-
+# -------------------------------------------------------------------------
 
 def spheric_distance(lat1, lon1, lat2, lon2):
     """
@@ -335,8 +372,6 @@ def spheric_distance(lat1, lon1, lat2, lon2):
 
     return km
 
-
-# -------------------------------------------------------------------------
 
 def find_z0_class(z0):
     """
