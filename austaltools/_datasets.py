@@ -5,11 +5,9 @@ Created on Sun Mar 20 09:57:48 2022
 
 @author: clemens
 """
-import csv
 import datetime as dt
 import glob
 import gzip
-import inspect
 import itertools
 import logging
 import os
@@ -61,23 +59,26 @@ logger = logging.getLogger()
 
 # -------------------------------------------------------------------------
 
-DEM_FMT = "%s.lzw.tif"
-WEA_FMT = "%s_ak_eu_%04i.nc"
+DEM_FMT = '%s.lzw.tif'
+WEA_FMT = '%s_ak_eu_%04i.nc'
 DIST_AUX_FILES = resources.files(__title__ + '.data')
 MAX_RETRY = 3
 
-DATASET_DEFINITIONS = [
-    {
-        "name": "DGM25-RP",
-        "storage": "terrain",
-        "assemble": "assemble_DGM25_RP",
-        "doi": "10.5281/zenodo.12740424"
+DATASET_DEFINITIONS = {
+    'DGM25-RP': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGM25_RP',
+        'doi': '10.5281/zenodo.12740424',
+        'license': 'spdx:DL-DE-BY-2.0',
+        'notice': 'Generated from DGM1 data ' +
+                  '"© GeoBasis-DE / LVermGeoRP 2024, ' +
+                  ' www.lvermgeo.rlp.de", ' +
+                  'licensed under DL-DE-BY-2.0',
     },
-    {
-        "name": "DGM10-RP",
-        "storage": "terrain",
-        "assemble": "assemble_DGMxx",
-        "arguments": {
+    'DGM10-RP': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
             'resolution': 10,
             'check_cert': False,
             'host': 'https://geobasis-rlp.de',
@@ -86,12 +87,16 @@ DATASET_DEFINITIONS = [
             'xmlpath': '/file[name=.tif$]/url',
             'CRS': 'EPSG:25832'
         },
+        'license': 'spdx:DL-DE-BY-2.0',
+        'notice': 'Generated from DGM1 data ' +
+                  '"© GeoBasis-DE / LVermGeoRP 2024, ' +
+                  ' www.lvermgeo.rlp.de", ' +
+                  'licensed under DL-DE-BY-2.0',
     },
-    {
-        "name": "DGM10-NW",
-        "storage": "terrain",
-        "assemble": "assemble_DGMxx",
-        "arguments": {
+    'DGM10-NW': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
             'resolution': 10,
             'host': 'https://www.opengeodata.nrw.de',
             'path': 'produkte/geobasis/hm/dgm1_tiff/dgm1_tiff',
@@ -101,12 +106,13 @@ DATASET_DEFINITIONS = [
             'datapath': '',
             'CRS': 'EPSG:25832'
         },
+        'license': 'spdx:DL-DE-ZERO-2.0',
+        'notice': None
     },
-    {
-        "name": "DGM10-BW",
-        "storage": "terrain",
-        "assemble": "assemble_DGMxx",
-        "arguments": {
+    'DGM10-BW': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
             'resolution': 10,
             'host': 'https://opengeodata.lgl-bw.de',
             #  re: 387-609/2  ho:5264-5514/2
@@ -118,32 +124,59 @@ DATASET_DEFINITIONS = [
             'unpack': 'zip://*/*.xyz',
             'CRS': 'EPSG:25832'
         },
+        'license': 'spdx:DL-DE-BY-2.0',
+        'notice': 'Generated from DGM1 data '
+                  'by "Landesamt für Geoinformation und Landentwicklung '
+                  'Baden-Württemberg (LGL), www.lgl-bw.de", '
+                  'licensed under DL-DE-BY-2.0',
     },
-    {
-        "name": "GLO-30",
-        "storage": "terrain",
-        "assemble": "assemble_GLO_30"
+    'DGM10-BY': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
+            'resolution': 10,
+            'check_cert': False,
+            'host': 'https://geodaten.bayern.de',
+            'path': '/odd/a/dgm/dgm1',
+            'filelist': '/meta/metalink/09.meta4',
+            'xmlpath': '/file[name=.tif$]/url[0]',
+            'CRS': 'EPSG:25832'
+        },
+        'license': 'spdx:CC-BY-4.0',
+        'notice': 'Generated from DGM1 data '
+                  'by "Bayerische Vermessungsverwaltung – '
+                  'www.geodaten.bayern.de", '
+                  'licensed under CC-BY-4.0',
     },
-    {
-        "name": "GTOPO30",
-        "storage": "terrain",
-        "assemble": "assebmle_GTOPO30"
+    'GLO-30': {
+        'storage': 'terrain',
+        'assemble': 'assemble_GLO_30',
+        'license': 'file:',
+        'notice': '(C) DLR e.V. 2010-2014 and © Airbus Defence and Space '
+                  'GmbH 2014-2018 provided under COPERNICUS by the '
+                  'European Union and ESA; all rights reserved.\n'
+                  'EU users who use the Copernicus DEM in their research '
+                  'are requested to use the following DOI when citing '
+                  'the data source in their publications: '
+                  'https://doi.org/10.5270/ESA-c5d3d65',
     },
-    {
-        "name": "ERA5",
-        "storage": "weather",
-        "assemble": "assemble_ERA5"
+    'GTOPO30': {
+        'storage': 'terrain',
+        'assemble': 'assebmle_GTOPO30'
     },
-    {
-        "name": "CERRA",
-        "storage": "weather",
-        "assemble": "assemble_CERRA"
+    'ERA5': {
+        'storage': 'weather',
+        'assemble': 'assemble_ERA5'
     },
-]
-KNOWN_DEMS = [x['name'] for x in DATASET_DEFINITIONS
-              if x['storage'] == _tools.STORAGE_TERRAIN]
-KNOWN_WEATHER = [x['name'] for x in DATASET_DEFINITIONS
-                 if x['storage'] == _tools.STORAGE_WAETHER]
+    'CERRA': {
+        'storage': 'weather',
+        'assemble': 'assemble_CERRA'
+    },
+}
+KNOWN_DEMS = [k for k, v in DATASET_DEFINITIONS.items()
+              if v['storage'] == _tools.STORAGE_TERRAIN]
+KNOWN_WEATHER = [k for k, v in DATASET_DEFINITIONS.items()
+                 if v['storage'] == _tools.STORAGE_WAETHER]
 
 
 # =========================================================================
@@ -201,6 +234,8 @@ class DataSet:
                                  "URL: {URL}")
         elif uri.startswith('http'):
             url = uri
+        else:
+            raise ValueError(f'cannot handle URI: {uri}')
         with open(os.path.join(path, self.file_data), 'wb') as f:
             f.write(requests.get(url, allow_redirects=True).content)
 
@@ -333,12 +368,25 @@ def find_writeable_storage(locs: str = None, stor: str = None) -> str or None:
 # -------------------------------------------------------------------------
 
 
-def assebmle_GTOPO30(path: str, name = "GTOPO30",
-                     replace=False, args: dict ={}):
-    support = ("https://data.rda.ucar.edu/ds758.0/support/"
-               + "GTOPO30support.tar.gz")
-    download = ("https://data.rda.ucar.edu/ds758.0/elevtiles/" +
-                "%s.DEM.gz")
+def download(url, file):
+    req = requests.get(url, allow_redirects=True)
+    if req.status_code == 200:
+        with open(file, 'wb') as f:
+            f.write(req.content)
+    else:
+        raise Exception(f"Download failed: status code {req.status_code}")
+    return os.path.basename(file)
+
+
+# -------------------------------------------------------------------------
+
+
+def assebmle_GTOPO30(path: str, name="GTOPO30",
+                     replace=False, args: dict = {}):
+    support_url = ("https://data.rda.ucar.edu/ds758.0/support/"
+                   + "GTOPO30support.tar.gz")
+    download_fmt = ("https://data.rda.ucar.edu/ds758.0/elevtiles/" +
+                    "%s.DEM.gz")
     tiles = ["W020N90"]
     # known_tiles = \
     # "W180N90 W140N90 W100N90 W060N90 W020N90 E020N90 E060N90 E100N90"\
@@ -353,9 +401,9 @@ def assebmle_GTOPO30(path: str, name = "GTOPO30",
     if os.path.exists(target) and not replace:
         logger.info("dataset exists ... %s" % name)
         return False
-    logger.debug("downloading ... %s" % support)
-    support_file, _ = urlretrieve(
-        support, os.path.basename(support))
+    logger.debug("downloading ... %s" % support_url)
+    support_file, _ = download(
+        support_url, os.path.basename(support_url))
     with tarfile.open(support_file) as support_tar:
         # no get every tile we want
         for tile in tiles:
@@ -364,9 +412,9 @@ def assebmle_GTOPO30(path: str, name = "GTOPO30",
                           if tile in x.name]
             support_tar.extractall(members=to_extract)
             # now download the actual data file for the tile
-            download_url = download % tile
+            download_url = download_fmt % tile
             logger.debug("downloading ... %s" % download_url)
-            tile_file, _ = urlretrieve(
+            tile_file, _ = download(
                 download_url, os.path.basename(download_url))
             # expand the terrain data holding file *.DEM
             # and convert it to a GeoTiff file
@@ -396,7 +444,7 @@ def assebmle_GTOPO30(path: str, name = "GTOPO30",
 # -------------------------------------------------------------------------
 
 
-def assemble_GLO_30(path, name = "GLO_30", replace=False, args: dict ={}):
+def assemble_GLO_30(path, name="GLO_30", replace=False, args: dict = {}):
     target = os.path.join(path, DEM_FMT % name)
     logger.debug(f'data file path: {target}')
     if os.path.exists(target) and not replace:
@@ -412,7 +460,7 @@ def assemble_GLO_30(path, name = "GLO_30", replace=False, args: dict ={}):
         for lon in range(5, 16):
             url = download_dir + file_fmt % (lat, lon)
             logger.debug("downloading ... %s" % url)
-            tar_file, _ = urlretrieve(url, os.path.basename(url))
+            tar_file, _ = download(url, os.path.basename(url))
             name_root = tar_file.replace(".tar", "")
             with tarfile.open(tar_file) as tf:
                 to_extract = [x for x in tf.getmembers()
@@ -441,7 +489,6 @@ def assemble_GLO_30(path, name = "GLO_30", replace=False, args: dict ={}):
 # -------------------------------------------------------------------------
 
 def xmlpath(xml, path):
-    res = []
     if '::' in path:
         getpath, getatt = path.split("::")
     else:
@@ -457,11 +504,10 @@ def xmlpath(xml, path):
     else:
         ns = ''
     nodes = [root]
-    spec = attr = sel = None
     for level in levels:
         if "[" in level:
-            name = re.sub('\[.*]', '', level)
-            spec = re.sub('.*\[(.*)].*', r'\1', level)
+            name = re.sub(r'\[.*]', '', level)
+            spec = re.sub(r'.*\[(.*)].*', r'\1', level)
             try:
                 sel = int(spec)
                 attr = None
@@ -476,21 +522,21 @@ def xmlpath(xml, path):
             spec = attr = sel = None
         tag = ''.join((ns, name))
         print(name, spec, attr, sel)
-        next = []
+        next_nodes = []
         for node in nodes:
             # iterate over children
             for i, ele in enumerate(node):
                 if not ele.tag == tag:
                     continue
                 if sel is None and attr is None:
-                    next.append(ele)
+                    next_nodes.append(ele)
                 elif sel == i:
-                    next.append(ele)
+                    next_nodes.append(ele)
                 elif (attr is not None and
                       attr in ele.attrib and
                       bool(re.search(sel, ele.attrib[attr]))):
-                    next.append(ele)
-        nodes = next
+                    next_nodes.append(ele)
+        nodes = next_nodes
     if getatt is None:
         res = [x.text for x in nodes]
     else:
@@ -498,7 +544,7 @@ def xmlpath(xml, path):
     return res
 
 
-def assemble_DGMxx(path: str, name: str, replace : bool,
+def assemble_DGMxx(path: str, name: str, replace: bool,
                    provider: dict):
     if 'resolution' in provider:
         out_res = provider['resolution']
@@ -560,18 +606,18 @@ def assemble_DGMxx(path: str, name: str, replace : bool,
             continue
 
         if ('unpack' not in provider or
-                provider['unpack'] in ['', 'tif', 'false']) and \
+            provider['unpack'] in ['', 'tif', 'false']) and \
                 dl_file.endswith('tif'):
             inputfiles = [dl_file]
         elif ('unpack' in provider and
-                provider['unpack'].startswith(('zip','unzip'))):
-            zip = zipfile.ZipFile(dl_file, 'r')
+              provider['unpack'].startswith(('zip', 'unzip'))):
+            zf = zipfile.ZipFile(dl_file, 'r')
             pattern = re.sub('^(un|)zip[:/]*', '', provider['unpack'])
-            unpack = [x for x in zip.namelist()
+            unpack = [x for x in zf.namelist()
                       if PurePath(x).match(pattern)]
             inputfiles = []
             for un in unpack:
-                with zip.open(un) as fz:
+                with zf.open(un) as fz:
                     with open(os.path.basename(un), 'wb') as fu:
                         fu.write(fz.read())
                 inputfiles.append(os.path.basename(un))
@@ -586,20 +632,9 @@ def assemble_DGMxx(path: str, name: str, replace : bool,
             if inputfile.endswith('tif'):
                 tf1 = inputfile
             elif inputfile.endswith('xyz'):
-                tf1 = re.sub('\.xyz$', '.tif', inputfile)
+                tf1 = re.sub(r'\.xyz$', '.tif', inputfile)
                 logger.debug(f"converting tile ... {inputfile} -> {tf1}")
-                xyz2csv(inputfile,'dgm.csv')
-                # os.rename(inputfile, 'dgm.csv')
-                # with open('dgm.vrt', 'w') as f:
-                #     f.write(inspect.cleandoc('''
-                #     <OGRVRTDataSource>
-                #         <OGRVRTLayer name="dgm">
-                #             <SrcDataSource>dgm.csv</SrcDataSource>
-                #         <GeometryType>wkbPoint</GeometryType>
-                #         <GeometryField encoding="PointFromColumns" x="field_1" y="Northing" z="Elevation"/>
-                #         </OGRVRTLayer>
-                #     </OGRVRTDataSource>
-                #     '''))
+                xyz2csv(inputfile, 'dgm.csv')
                 gdal.Translate(destName=tf1,
                                srcDS='dgm.csv',
                                outputSRS=srcsrs,
@@ -631,9 +666,10 @@ def assemble_DGMxx(path: str, name: str, replace : bool,
     logger.debug("... done")
     return True
 
+
 def xyz2csv(inputfile, output):
     df = pd.read_csv(inputfile,
-                     sep='\s+', header=None, names=['x', 'y', 'z'])
+                     sep=r'\s+', header=None, names=['x', 'y', 'z'])
     # get full grid axes
     x_res = np.mean(np.diff(sorted(set(df['x']))))
     x_vals = set(np.arange(df['x'].min(), df['x'].max() + x_res, x_res))
@@ -642,9 +678,9 @@ def xyz2csv(inputfile, output):
 
     # create full dataframe
     ff = pd.DataFrame.from_records(itertools.product(x_vals, y_vals),
-                                   columns=['x','y'])
-    of = pd.merge(ff,df,how='left', left_on=['x','y'], right_on=['x','y'])
-    del(ff)
+                                   columns=['x', 'y'])
+    of = pd.merge(ff, df, how='left', left_on=['x', 'y'], right_on=['x', 'y'])
+    del ff
     of = of.replace(np.nan, -9999.)
 
     # sort it so gdal doesnt complain
@@ -656,7 +692,7 @@ def xyz2csv(inputfile, output):
 # -------------------------------------------------------------------------
 
 
-def assemble_DGM25_RP(path, name = "DGM25-RP", replace=False):
+def assemble_DGM25_RP(path, name="DGM25-RP", replace=False):
     target = os.path.join(path, DEM_FMT % name)
     logger.debug(f'data file path: {target}')
     if os.path.exists(target) and not replace:
@@ -665,7 +701,7 @@ def assemble_DGM25_RP(path, name = "DGM25-RP", replace=False):
 
     url = "https://vermkv.service24.rlp.de/opendat/dgm25/dgm25.zip"
     logger.debug("downloading ... %s" % url)
-    zip_file, _ = urlretrieve(url, os.path.basename(url))
+    zip_file, _ = download(url, os.path.basename(url))
     logger.debug("extracting ... %s" % zip_file)
     shutil.unpack_archive(zip_file)
     for tile_xyz in glob.glob("*.xyz"):
@@ -690,6 +726,8 @@ def assemble_DGM25_RP(path, name = "DGM25-RP", replace=False):
     logger.debug("... done")
 
     return True
+
+
 # -------------------------------------------------------------------------
 
 
@@ -715,13 +753,29 @@ def provide_dem(source: str, path: str = None,
     else:
         raise ValueError("method must be either 'download' or 'assemble'")
 
-    for aux_path in DIST_AUX_FILES.iterdir():
-        aux_file = os.path.basename(str(aux_path))
-        if aux_file in [dataset.file_license, dataset.file_notice]:
-            logger.debug('copying auxiliary file: %s' % aux_file)
-            shutil.copyfile(str(aux_path),
-                            os.path.join(path, aux_file))
+    # auxiliary files:
+    if 'licence' in DATASET_DEFINITIONS[source]:
+        lic_file = os.path.join(path, dataset.file_license)
+        lic_src, lic_id = DATASET_DEFINITIONS[source]['licence'].split(':')
+        if lic_src == 'spdx':
+            lic_url = ("https://spdx.org/licenses/%s.json" %
+                       DATASET_DEFINITIONS[source]['licence'])
+            lic_json = requests.get(lic_url).json()
+            with open(lic_file, 'wb') as f:
+                f.write(lic_json['licenseText'])
+        elif lic_src == 'file':
+            if lic_id in [None, '']:
+                lic_aux = os.path.join(str(DIST_AUX_FILES), lic_file)
+            else:
+                lic_aux = os.path.join(str(DIST_AUX_FILES), lic_id)
+            shutil.copy(lic_aux, lic_file)
+    if 'notice' in DATASET_DEFINITIONS[source]:
+        not_file = os.path.join(path, dataset.file_license)
+        with open(not_file, 'w') as f:
+            f.write(DATASET_DEFINITIONS[source]['notice'])
     return
+
+
 # -------------------------------------------------------------------------
 
 
@@ -883,8 +937,8 @@ def cerra_getyear(opts):
 
 
 def assemble_CERRA(path: str, years: list):
-    tempPath = './tmp/'
-    data = cdo.Cdo(tempdir=tempPath)
+    temp_path = './tmp/'
+    data = cdo.Cdo(tempdir=temp_path)
     print("python-cdo version: %s" % data.__version__())
     print("cdo        version: %s" % data.version())
     data.debug = True
@@ -951,18 +1005,5 @@ def provide_weather(source: str, path: str = None, years: list = None,
 
 
 # initialize
-DATASETS = [DataSet(**x) for x in DATASET_DEFINITIONS]
+DATASETS = [DataSet(name=k, **v) for k, v in DATASET_DEFINITIONS.items()]
 dataset_scan()
-
-# RP: https://geobasis-rlp.de/data/dgm1/current/meta4/dgm1_tif_07.meta4
-
-# for x in root.findall('./metalink:file',{"metalink":"urn:ietf:params:xml:ns:metalink"}):
-#     if x.attrib['name'].endswith('tif'):
-#         u = x.find('./metalink:url',{"metalink":"urn:ietf:params:xml:ns:metalink"})
-#         print(u.text)
-
-
-# BW: https://opengeodata.lgl-bw.de/data/dgm/dgm1_32_501_5380_2_bw.zip
-#  re: 387-609/2  ho:5264-5514/2
-
-# NS: https://ni-lgln-opengeodata.hub.arcgis.com/apps/lgln-opengeodata::digitales-gel%C3%A4ndemodell-dgm1/about
