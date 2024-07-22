@@ -64,7 +64,6 @@ WEA_FMT = '%s_ak_eu_%04i.nc'
 DIST_AUX_FILES = resources.files(__title__ + '.data')
 TEMP = None
 MAX_RETRY = 3
-
 DATASET_DEFINITIONS = {
     'DGM25-RP': {
         'storage': 'terrain',
@@ -75,40 +74,6 @@ DATASET_DEFINITIONS = {
                   '"© GeoBasis-DE / LVermGeoRP 2024, ' +
                   ' www.lvermgeo.rlp.de", ' +
                   'licensed under DL-DE-BY-2.0',
-    },
-    'DGM10-RP': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'check_cert': False,
-            'host': 'https://geobasis-rlp.de',
-            'path': '/data/dgm1/current',
-            'filelist': '/meta4/dgm1_tif_07.meta4',
-            'xmlpath': '/file[name=.tif$]/url',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:DL-DE-BY-2.0',
-        'notice': 'Generated from DGM1 data ' +
-                  '"© GeoBasis-DE / LVermGeoRP 2024, ' +
-                  ' www.lvermgeo.rlp.de", ' +
-                  'licensed under DL-DE-BY-2.0',
-    },
-    'DGM10-NW': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'https://www.opengeodata.nrw.de',
-            'path': 'produkte/geobasis/hm/dgm1_tiff/dgm1_tiff',
-            'filelist': 'index.xml',
-            'xmlpath': '/datasets/dataset[0]/files/file::name',
-            'xmlattribute': 'name',
-            'datapath': '',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:DL-DE-ZERO-2.0',
-        'notice': None
     },
     'DGM10-BW': {
         'storage': 'terrain',
@@ -149,6 +114,59 @@ DATASET_DEFINITIONS = {
                   'www.geodaten.bayern.de", '
                   'licensed under CC-BY-4.0',
     },
+    'DGM10-NI': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
+            'resolution': 10,
+            'host': 'https://arcgis-geojson.s3.eu-de.'
+                    'cloud-object-storage.appdomain.cloud',
+            'path': 'dgm1',
+            'filelist': 'lgln-opengeodata-dgm1.geojson',
+            'jsonpath': '/features/*/properties/dgm1',
+            'datapath': '',
+            'CRS': 'EPSG:25832'
+        },
+        'license': 'spdx:CC-BY-4.0',
+        'notice': 'Generated from DGM1 data '
+                  'by "Landesbetrieb Landesvermessung und '
+                  'Geobasisinformation Niedersachsen - LGLN" (2024), '
+                  'licensed under CC-BY-4.0'
+    },
+    'DGM10-NW': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
+            'resolution': 10,
+            'host': 'https://www.opengeodata.nrw.de',
+            'path': 'produkte/geobasis/hm/dgm1_tiff/dgm1_tiff',
+            'filelist': 'index.xml',
+            'xmlpath': '/datasets/dataset[0]/files/file::name',
+            'xmlattribute': 'name',
+            'datapath': '',
+            'CRS': 'EPSG:25832'
+        },
+        'license': 'spdx:DL-DE-ZERO-2.0',
+        'notice': None
+    },
+    'DGM10-RP': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
+            'resolution': 10,
+            'check_cert': False,
+            'host': 'https://geobasis-rlp.de',
+            'path': '/data/dgm1/current',
+            'filelist': '/meta4/dgm1_tif_07.meta4',
+            'xmlpath': '/file[name=.tif$]/url',
+            'CRS': 'EPSG:25832'
+        },
+        'license': 'spdx:DL-DE-BY-2.0',
+        'notice': 'Generated from DGM1 data ' +
+                  '"© GeoBasis-DE / LVermGeoRP 2024, ' +
+                  ' www.lvermgeo.rlp.de", ' +
+                  'licensed under DL-DE-BY-2.0',
+    },
     'GLO-30': {
         'storage': 'terrain',
         'assemble': 'assemble_GLO_30',
@@ -174,6 +192,7 @@ DATASET_DEFINITIONS = {
         'assemble': 'assemble_CERRA'
     },
 }
+
 KNOWN_DEMS = [k for k, v in DATASET_DEFINITIONS.items()
               if v['storage'] == _tools.STORAGE_TERRAIN]
 KNOWN_WEATHER = [k for k, v in DATASET_DEFINITIONS.items()
@@ -545,6 +564,10 @@ def xmlpath(xml, path):
     return res
 
 
+def jsonpath(json, path):
+    return None
+
+
 def assemble_DGMxx(path: str, name: str, replace: bool,
                    provider: dict):
     if 'resolution' in provider:
@@ -571,6 +594,13 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         rsp = requests.get(url, allow_redirects=True, verify=verify)
         input_files = xmlpath(xml=rsp.content.decode(),
                               path=provider['xmlpath'])
+    elif filelist.endswith(('.json', 'geojson')):
+        # xml
+        logger.debug("downloading json metadata: %s" % url)
+        rsp = requests.get(url, allow_redirects=True,
+                           verify=verify)
+        input_files = jsonpath(json=rsp.json(),
+                               path=provider['jsonpath'])
     elif filelist == 'generate':
         exp_val = [_tools.parse_time_string(x) for x in provider['values']]
         combval = itertools.product(*exp_val)
@@ -641,6 +671,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
                                outputSRS=srcsrs,
                                noData=-9999,
                                )
+                os.remove(inputfile)
             else:
                 raise Exception(f'cannot handle {inputfile}')
             tfxx = os.path.splitext(tf1)[0] + ".reduced.tif"
@@ -656,6 +687,8 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
             except Exception as e:
                 logger.error(str(e))
             os.remove(tf1)
+        if os.path.exists(dl_file):
+            os.remove(dl_file)
     # merge the GeoTiff Files from all tiles into one file
     if os.path.exists(target):
         logger.info("removing old source file")
@@ -745,7 +778,7 @@ def provide_dem(source: str, path: str = None,
     elif method == 'assemble':
         # change to temp directory
         pwd = os.getcwd()
-        with tempfile.TemporaryDirectory(dir = TEMP) as temp_dir:
+        with tempfile.TemporaryDirectory(dir=TEMP) as temp_dir:
             os.chdir(temp_dir)
             logger.debug('calling %s' % str(dataset.assemble))
             dataset.assemble(path, source, force, dataset.arguments)
