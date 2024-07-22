@@ -10,6 +10,7 @@ import glob
 import gzip
 import itertools
 import logging
+import multiprocessing
 import os
 import re
 import shutil
@@ -562,18 +563,110 @@ def xmlpath(xml, path):
     else:
         res = [x.get(getatt, default='') for x in nodes]
     return res
+# -------------------------------------------------------------------------
 
 
 def jsonpath(json, path):
     return None
+# -------------------------------------------------------------------------
 
 
-def assemble_DGMxx(path: str, name: str, replace: bool,
-                   provider: dict):
+def process_input_file(args):
+    inp, base_url, verify, provider = args
+    tile_files = []
+    if re.match('^http[s]*://', inp):
+        url = inp
+        dl_file = os.path.basename(inp)
+    else:
+        url = f"{base_url}/{inp}"
+        dl_file = inp
+    logger.debug(f"downloading ... {url}")
+    failure_ok = False
+    for i in range(MAX_RETRY):
+        req = requests.get(url, verify=verify)
+        if req.status_code == requests.codes.ok:
+            with open(dl_file, 'wb') as f:
+                f.write(req.content)
+            break
+        elif (req.status_code == 404 and
+              'missing' in provider and
+              provider['missing'] in ['ok', 'ignore']):
+            failure_ok = True
+            # break retry loop
+            break
+    else:
+        raise Exception("failed to download tile files")
+    if failure_ok:
+        # skip rest of inp loop
+        return tile_files
+
+    if ('unpack' not in provider or
+        provider['unpack'] in ['', 'tif', 'false']) and \
+            dl_file.endswith('tif'):
+        inputfiles = [dl_file]
+    elif ('unpack' in provider and
+          provider['unpack'].startswith(('zip', 'unzip'))):
+        zf = zipfile.ZipFile(dl_file, 'r')
+        pattern = re.sub('^(un|)zip[:/]*', '', provider['unpack'])
+        unpack = [x for x in zf.namelist()
+                  if PurePath(x).match(pattern)]
+        inputfiles = []
+        for un in unpack:
+            with zf.open(un) as fz:
+                with open(os.path.basename(un), 'wb') as fu:
+                    fu.write(fz.read())
+            inputfiles.append(os.path.basename(un))
+    else:
+        raise Exception("dont know how to handle download file")
+
     if 'resolution' in provider:
         out_res = provider['resolution']
     else:
         out_res = 25
+    if 'CRS' in provider:
+        srcsrs = provider['CRS']
+    else:
+        srcsrs = None
+    for inputfile in inputfiles:
+        if inputfile.endswith('tif'):
+            tf1 = inputfile
+        elif inputfile.endswith('xyz'):
+            tf1 = re.sub(r'\.xyz$', '.tif', inputfile)
+            logger.debug(f"converting tile ... {inputfile} -> {tf1}")
+            # returns a tuple containing file handle and the abs pathname!
+            csvfile = tempfile.mkstemp(
+                prefix='dgm', suffix='.csv', dir=TEMP)[1]
+            xyz2csv(inputfile, csvfile)
+            os.remove(inputfile)
+            gdal.Translate(destName=tf1,
+                           srcDS=csvfile,
+                           outputSRS=srcsrs,
+                           noData=-9999,
+                           )
+            os.remove(csvfile)
+        else:
+            raise Exception(f'cannot handle {inputfile}')
+        tfxx = os.path.splitext(tf1)[0] + ".reduced.tif"
+        logger.debug(f"resampling tile ... {tf1} -> {tfxx}")
+        try:
+            gdal.Warp(destNameOrDestDS=tfxx,
+                      xRes=out_res,
+                      yRes=out_res,
+                      dstSRS="EPSG:5677",
+                      srcDSOrSrcDSTab=tf1,
+                      format="GTiff")
+            tile_files.append(tfxx)
+        except Exception as e:
+            logger.error(str(e))
+        os.remove(tf1)
+    if os.path.exists(dl_file):
+        os.remove(dl_file)
+    return tile_files
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+def assemble_DGMxx(path: str, name: str, replace: bool,
+                   provider: dict):
     target = os.path.join(path, DEM_FMT % name)
     logger.debug(f'data file path: {target}')
     if os.path.exists(target) and not replace:
@@ -609,86 +702,17 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         raise NotImplementedError(f'cannot handle meta format: {filelist}')
 
     tile_files = []
-    for inp in _tools.progress(input_files):
-        if re.match('^http[s]*://', inp):
-            url = inp
-            dl_file = os.path.basename(inp)
-        else:
-            url = f"{base_url}/{inp}"
-            dl_file = inp
-        logger.debug(f"downloading ... {url}")
-        failure_ok = False
-        for i in range(MAX_RETRY):
-            req = requests.get(url, verify=verify)
-            if req.status_code == requests.codes.ok:
-                with open(dl_file, 'wb') as f:
-                    f.write(req.content)
-                break
-            elif (req.status_code == 404 and
-                  'missing' in provider and
-                  provider['missing'] in ['ok', 'ignore']):
-                failure_ok = True
-                # break retry loop
-                break
-        else:
-            raise Exception("failed to download tile files")
-        if failure_ok:
-            # skip rest of inp loop
-            continue
 
-        if ('unpack' not in provider or
-            provider['unpack'] in ['', 'tif', 'false']) and \
-                dl_file.endswith('tif'):
-            inputfiles = [dl_file]
-        elif ('unpack' in provider and
-              provider['unpack'].startswith(('zip', 'unzip'))):
-            zf = zipfile.ZipFile(dl_file, 'r')
-            pattern = re.sub('^(un|)zip[:/]*', '', provider['unpack'])
-            unpack = [x for x in zf.namelist()
-                      if PurePath(x).match(pattern)]
-            inputfiles = []
-            for un in unpack:
-                with zf.open(un) as fz:
-                    with open(os.path.basename(un), 'wb') as fu:
-                        fu.write(fz.read())
-                inputfiles.append(os.path.basename(un))
-        else:
-            raise Exception("dont know how to handle download file")
+    # parallel processing of input_files:
+    thread_args = []
+    for inp in input_files:
+        thread_args.append((inp, base_url, verify, provider))
+    with multiprocessing.Pool() as pool:
+        for _ in _tools.progress(pool.imap_unordered(process_input_file,
+                                                     thread_args),
+                                 total= len(thread_args)):
+            pass
 
-        if 'CRS' in provider:
-            srcsrs = provider['CRS']
-        else:
-            srcsrs = None
-        for inputfile in inputfiles:
-            if inputfile.endswith('tif'):
-                tf1 = inputfile
-            elif inputfile.endswith('xyz'):
-                tf1 = re.sub(r'\.xyz$', '.tif', inputfile)
-                logger.debug(f"converting tile ... {inputfile} -> {tf1}")
-                xyz2csv(inputfile, 'dgm.csv')
-                gdal.Translate(destName=tf1,
-                               srcDS='dgm.csv',
-                               outputSRS=srcsrs,
-                               noData=-9999,
-                               )
-                os.remove(inputfile)
-            else:
-                raise Exception(f'cannot handle {inputfile}')
-            tfxx = os.path.splitext(tf1)[0] + ".reduced.tif"
-            logger.debug(f"resampling tile ... {tf1} -> {tfxx}")
-            try:
-                gdal.Warp(destNameOrDestDS=tfxx,
-                          xRes=out_res,
-                          yRes=out_res,
-                          dstSRS="EPSG:5677",
-                          srcDSOrSrcDSTab=tf1,
-                          format="GTiff")
-                tile_files.append(tfxx)
-            except Exception as e:
-                logger.error(str(e))
-            os.remove(tf1)
-        if os.path.exists(dl_file):
-            os.remove(dl_file)
     # merge the GeoTiff Files from all tiles into one file
     if os.path.exists(target):
         logger.info("removing old source file")
