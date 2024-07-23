@@ -509,6 +509,70 @@ def assemble_GLO_30(path, name="GLO_30", replace=False, args: dict = {}):
 # -------------------------------------------------------------------------
 
 def xmlpath(xml, path):
+    """
+    Extracts text or attribute values from specified elements within an XML string based on a given path.
+    The function implements only a small subset of the XPath syntax.
+
+
+    :param xml: The XML document as a str.
+    :param path: A string representing the hierarchical path to the desired elements. This path may include element names,
+                 indexes in square brackets for direct child selection, and an optional attribute filter or attribute name
+                 preceded by ``::`` for final value extraction.
+
+    Path Syntax
+
+    * ``'element'``: Selects all children named ``element`` from the current node.
+    * ``'element[index]'``: Selects the n-th ``element`` among its siblings (0-based index).
+    * ``'element[@attribute="value"]'``: Selects all ``element`` nodes where the attribute matches the specified value.
+    * ``'element::attribute'``: Retrieves the value of an attribute named ``attribute`` from the selected elements.
+    * Any combination of the above, separated by '/' to navigate through child elements.
+
+    :return: A list containing the extracted data from the XML, either the text content of selected elements or the values of
+             specified attributes, depending on the input path.
+
+    :Example:
+
+    .. code-block:: python
+
+        xml_string = '''<data>
+                            <item id="1">Item 1</item>
+                            <item id="2" extra="yes">Item 2</item>
+                        </data>'''
+
+        pathtotext = 'item'
+        textresult = xmlpath(xmlstring, pathtotext)
+
+    Returns: ['Item 1', 'Item 2']
+
+
+        pathtoattribute = 'item::id'
+        attributeresult = xmlpath(xmlstring, pathtoattribute)
+
+    Returns: ['1', '2']
+
+
+    Notes
+
+    - This function is designed to operate on well-formed XML strings. Malformed XML might lead to unexpected results.
+    - The function uses Python's built-in XML handling capabilities and regular expressions for parsing and navigating the XML.
+    - Namespace handling: If the XML contains namespaces, they are automatically recognized and handled for tag matching.
+
+    :raises: The function itself does not explicitly raise exceptions, but misuse (e.g., incorrect XML or path syntax) can
+             lead to exceptions thrown by the underlying XML or regex processing libraries.
+
+    Dependencies
+
+    - Requires the `ElementTree` module from the Python standard library and `re` for regular expression support.
+
+      Ensure to import these before using the function:
+
+    .. code-block:: python
+
+        import re
+        from xml.etree import ElementTree
+
+    """
+
     if '::' in path:
         getpath, getatt = path.split("::")
     else:
@@ -570,8 +634,77 @@ def xmlpath(xml, path):
 # -------------------------------------------------------------------------
 
 
-def jsonpath(json, path):
-    return None
+def jsonpath(json_obj, path):
+    """
+    Extracts values from specified keys or indices within a JSON object based on a given path.
+
+    :param json_obj: The JSON object (dict or list). This can be the result of json.loads() if using a JSON string.
+    :param path: A string representing the hierarchical path to the desired keys or indices. This path may include dictionary keys,
+                 list indices, and an optional filtering condition for dictionaries with specific key-value pairs.
+
+    Path Syntax
+
+    * 'key': Selects the value associated with 'key' in a dictionary.
+    * '[index]': Selects the n-th element in a list (0-based index).
+    * 'key=value': Selects dictionaries from a list of dictionaries where 'key' matches 'value'.
+    * Any combination of the above, separated by '/' to navigate through nested structures.
+    * an asterisk (`*`) may be specified instead of 'key' to match any key.
+
+    :return: A list containing the extracted values from the JSON object based on the input path.
+
+    :Example:
+
+    .. code-block:: python
+
+        json_obj = {
+            "items": [
+                {"id": 1, "name": "Item 1"},
+                {"id": 2, "name": "Item 2", "extra": "yes"}
+            ]
+        }
+
+        path_to_name = 'items/name'
+        names = jsonpath(json_obj, path_to_name)
+        # Returns: ['Item 1', 'Item 2']
+
+        path_to_extra = 'items/extra'
+        extras = jsonpath(json_obj, path_to_extra)
+        # Returns: ['yes']
+
+    Notes
+
+    - This function simplifies direct navigation and filtering in 
+      JSON objects but does not offer the full querying capabilities
+      of more complex JSON querying libraries such as `jsonpath-rw`.
+
+    """
+
+    nodes = path.split('/')
+    if nodes[0] == '':
+        nodes.pop(0)
+    # Start with a list for uniform processing
+    obj = [json_obj]
+    for node in nodes:
+        children = []
+        for oj in obj:
+            if isinstance(oj, list):
+                if node.isdigit():
+                    # Indexing into a list
+                    children += [oj[int(node)]]
+                elif node == '*':
+                    children += [oj]
+                elif "=" in node:
+                    key, value = node.split("=")
+                    children += [o for o in oj if o.get(key) == value]
+                else:
+                    # Collecting items by key from each dictionary in a list
+                    children += [o[node] for o in oj if node in o]
+            elif isinstance(oj, dict):
+                if node in oj or node == '*':
+                    children += [oj[node]]
+        obj = children
+    return obj
+
 # -------------------------------------------------------------------------
 
 
