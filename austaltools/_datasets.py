@@ -114,6 +114,46 @@ DATASET_DEFINITIONS = {
                   'www.geodaten.bayern.de", '
                   'licensed under CC-BY-4.0',
     },
+    'DGM10-HB': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
+            'resolution': 10,
+            'host': 'https://gdi2.geo.bremen.de',
+            'path': 'inspire/download/DGM/data',
+            'filelist': [
+                'Gitternetz_DGM1_2017_HB_ASCII_XYZ.zip',
+                'Gitternetz_DGM1_2015_BHV_ASCII_XYZ.zip',
+            ],
+            'unpack': 'zip://*/*.xyz',
+            'CRS': 'EPSG:25832'
+        },
+        'license': 'spdx:CC-BY-4.0',
+        'notice': 'Generated from DGM1 data '
+                  'by "Landesamt GeoInformation Bremen" (2015/17), '
+                  'licensed under CC-BY-4.0'
+    },
+    'DGM10-HH': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
+            'resolution': 10,
+            'host': 'https://daten-hamburg.de',
+            'path': 'geographie_geologie_geobasisdaten/'
+                    'Digitales_Hoehenmodell/DGM1',
+            'filelist': [
+                'dgm1_2x2km_XYZ_hh_2021_04_01.zip',
+            ],
+            'unpack': 'zip://*/*.xyz',
+            'CRS': 'EPSG:25832'
+        },
+        'license': 'spdx:DL-DE-BY-2.0',
+        'notice': 'Generated from DGM1 data '
+                  'by "Freie und Hansestadt Hamburg, '
+                  'Landesbetrieb Geoinformation und Vermessung '
+                  '(LGV)", 2021, licensed under '
+                  'Datenlizenz Deutschland Namensnennung 2.0'
+    },
     'DGM10-NI': {
         'storage': 'terrain',
         'assemble': 'assemble_DGMxx',
@@ -389,6 +429,32 @@ def find_writeable_storage(locs: str = None, stor: str = None) -> str or None:
 
 
 def download(url, file):
+    """
+    Downloads a file from a specified URL and saves it to a given local file path.
+
+    :param url: The URL of the file to download.
+    :type url: str
+    :param file: The local path, including the filename, where the downloaded file will be saved.
+    :type file: str
+    :returns: The name of the file saved locally.
+    :rtype: str
+    :raises Exception: An exception is raised if the download fails (HTTP status code is not 200).
+
+    This function sends a GET request to the specified URL. If the request is successful (HTTP status code 200),
+    it writes the content of the response to a file specified by the 'file' parameter. If the request fails,
+    it raises an exception with information about the failure.
+
+    Example usage:
+
+    .. code-block:: python
+
+        try:
+            file_name = download('http://example.com/file.jpg', '/path/to/local/file.jpg')
+            print(f"Downloaded file saved as {file_name}")
+        except Exception as e:
+            print(str(e))
+
+    """
     with requests.get(url, allow_redirects=True) as req:
         if req.status_code == 200:
             with open(file, 'wb') as f:
@@ -743,16 +809,16 @@ def process_input_file(args):
         inputfiles = [dl_file]
     elif ('unpack' in provider and
           provider['unpack'].startswith(('zip', 'unzip'))):
-        zf = zipfile.ZipFile(dl_file, 'r')
-        pattern = re.sub('^(un|)zip[:/]*', '', provider['unpack'])
-        unpack = [x for x in zf.namelist()
+        with zipfile.ZipFile(dl_file, 'r') as zf:
+            pattern = re.sub('^(un|)zip[:/]*', '', provider['unpack'])
+            unpack = [x for x in zf.namelist()
                   if PurePath(x).match(pattern)]
-        inputfiles = []
-        for un in unpack:
-            with zf.open(un) as fz:
-                with open(os.path.basename(un), 'wb') as fu:
-                    fu.write(fz.read())
-            inputfiles.append(os.path.basename(un))
+            inputfiles = []
+            for un in unpack:
+                with zf.open(un) as fz:
+                    with open(os.path.basename(un), 'wb') as fu:
+                        fu.write(fz.read())
+                inputfiles.append(os.path.basename(un))
     else:
         raise Exception("dont know how to handle download file")
 
@@ -818,24 +884,29 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     filelist = provider['filelist']
     url = '/'.join((base_url, filelist))
     # switch formats:
-    if filelist.endswith(('.xml', 'meta4')):
-        # xml
-        logger.debug("downloading xml metadata: %s" % url)
-        with requests.get(url, allow_redirects=True, verify=verify) as rsp:
-            input_files = xmlpath(xml=rsp.content.decode(),
-                                  path=provider['xmlpath'])
-    elif filelist.endswith(('.json', 'geojson')):
-        # xml
-        logger.debug("downloading json metadata: %s" % url)
-        with requests.get(url, allow_redirects=True, verify=verify) as rsp:
-            input_files = jsonpath(json=rsp.json(),
-                                   path=provider['jsonpath'])
-    elif filelist == 'generate':
-        exp_val = [_tools.parse_time_string(x) for x in provider['values']]
-        combval = itertools.product(*exp_val)
-        input_files = [provider['format'] % x for x in combval]
+    if isinstance(filelist, list):
+        input_files = filelist
+    elif isinstance(filelist, str):
+        if filelist.endswith(('.xml', 'meta4')):
+            # xml
+            logger.debug("downloading xml metadata: %s" % url)
+            with requests.get(url, allow_redirects=True, verify=verify) as rsp:
+                input_files = xmlpath(xml=rsp.content.decode(),
+                                      path=provider['xmlpath'])
+        elif filelist.endswith(('.json', 'geojson')):
+            # xml
+            logger.debug("downloading json metadata: %s" % url)
+            with requests.get(url, allow_redirects=True, verify=verify) as rsp:
+                input_files = jsonpath(json_obj=rsp.json(),
+                                       path=provider['jsonpath'])
+        elif filelist == 'generate':
+            exp_val = [_tools.parse_time_string(x) for x in provider['values']]
+            combval = itertools.product(*exp_val)
+            input_files = [provider['format'] % x for x in combval]
+        else:
+            raise NotImplementedError(f'can`t handle filelist: {filelist}')
     else:
-        raise NotImplementedError(f'cannot handle meta format: {filelist}')
+        raise TypeError('filelist muste be list or str')
 
     tile_files = []
 
@@ -986,8 +1057,40 @@ def show_notice(storage_path, source):
 
 
 def era5_getyear(opts):
-    y, path = opts
-    year = '{:04d}'.format(y)
+    """
+    Downloads ERA5 reanalysis data for a specific year and saves it as a NetCDF file.
+
+    The function calls the Climate Data Store (CDS) API to retrieve a specific set of meteorological variables for
+    the entire year specified by the user. It requests data in NetCDF format, covering a predefined geographic
+    extent focusing on Alaska and Europe. This function is specifically designed to automate the retrieval process
+    for ERA5 weather variables, saving the data in a structured format that's easier to work with for further analysis.
+
+    :param opts: A tuple containing two elements:
+                 - `y`: The year for which to download the data (integer).
+                 - `path`: The directory path where the NetCDF file should be saved (string).
+    :type opts: tuple
+
+    :returns: None. The function saves a NetCDF file to the specified path but does not return any value.
+
+    **Example usage**:
+
+    .. code-block:: python
+
+        # To download ERA5 data for the year 2020 and save it to the specified directory
+        era5_getyear((2020, '/path/to/directory'))
+
+    The function crafts a filename based on the year, prefixing it with `era5_ak_eu_` to denote the region and
+    type of data retrieved. Ensure that the specified directory exists and is writable. The CDS API key must also
+    be configured as per the `cdsapi` package documentation.
+
+    Note:
+    The retrieval of data from the CDS API may incur charges or require acceptance of license terms depending
+    on your use case and the volume of data requested. Please consult the Copernicus Climate Data Store's
+    documentation and licensing agreements for more information.
+    """
+
+    yy, path = opts
+    year = '{:04d}'.format(yy)
     ncname = 'era5_ak_eu_' + year + '.nc'
     target = os.path.join(path, ncname)
     c = cdsapi.Client()
@@ -1045,6 +1148,39 @@ def era5_getyear(opts):
 
 
 def assemble_ERA5(path: str, years: list):
+    """
+    Downloads and assembles ERA5 reanalysis data for a list of specified years, saving the data to a designated path.
+
+    This function serves as a wrapper around the `era5_getyear` function, facilitating the batch retrieval of ERA5
+    data for multiple years. It utilizes multiprocessing to download data in parallel, thereby significantly reducing
+    the overall time required for downloading large datasets. Each year's data is saved as a separate NetCDF file within
+    the specified directory path.
+
+    :param path: The file system path where the downloaded NetCDF files will be saved.
+    :type path: str
+    :param years: A list of years for which ERA5 data should be downloaded. Each year should be an integer within the
+                  valid range (1940 to the current year).
+    :type years: list
+
+    :raises ValueError: If any year in the `years` list is outside the allowable range of 1940 to the current year.
+
+    **Example usage**:
+
+    .. code-block:: python
+
+        # To download ERA5 data for the years 2018 to 2020 and save to '/data/ERA5'
+        assemble_ERA5('/data/ERA5', [2018, 2019, 2020])
+
+    Note:
+    - The function assumes that the `era5_getyear` function is defined and correctly set up to retrieve ERA5 data.
+    - The parallel downloading process is set to use 10 worker processes. Adjust this value in the `Pool` initialization
+      as needed based on system resources and desired performance.
+    - Ensure that sufficient disk space is available at the specified path to accommodate the downloaded data files.
+
+    Ensure that the necessary libraries are installed and configured, including `cdsapi` for data retrieval and `multiprocessing`
+    for parallel processing. Also, verify that your CDS API key is set up correctly as per the CDS API documentation.
+    """
+
     # create option tuples
     combi = []
     for y in years:
@@ -1070,6 +1206,44 @@ def cerraname(y, lt=None):
 
 
 def cerra_getyear(opts):
+    """
+    Downloads and processes a year's worth of CERRA dataset as GRIB files,
+    then converts them to NetCDF format for easier use.
+
+    This function takes a tuple containing the year (`y`) and lead time (`lt`) for the forecast data.
+    It builds the filename for the GRIB file from these parameters and checks if it exists locally.
+    If not, it uses the CDS API to retrieve the data for all specified variables over the entire year, saving it as a GRIB file.
+    After downloading, the function processes the GRIB file, converting it to a NetCDF file for more convenient analysis and removes
+    the original GRIB file to conserve space.
+
+    Requires the `cdsapi` and `cdo` (Climate Data Operators) packages, as well as an active Copernicus account for data retrieval.
+
+    :param opts: A tuple containing two elements:
+                 - `y` (int): The year of the dataset to retrieve.
+                 - `lt` (int): The lead time in hours for the forecast data.
+    :type opts: tuple
+
+    A sample of expected parameter format: `(2023, 48)`
+
+    :returns: None. The function's primary purpose is file I/O (downloading and converting data).
+              It does not return a value but will print status messages regarding its progress.
+
+    :raises FileNotFoundError: If the CDO command fails to find the downloaded GRIB file for conversion.
+
+    **Example usage**:
+
+    .. code-block:: python
+
+        # To download and process the CERRA data for the year 2023 with a lead time of 48 hours
+        cerra_getyear((2023, 48))
+
+    Ensure the `cerraname` function is defined globally and properly constructs the filename based on the year and lead time.
+    This function assumes `cerraname` returns a base filename to which `.grib` or `.nc` is appended for output files.
+
+    Note: The 'cdsapi' Client is used for data retrieval, requiring appropriate credentials set up as per the
+    CDS API's documentation. The 'cdo' tool is called for data processing, necessitating its installation and
+    availability in the system's PATH.
+    """
     y, lt = opts
     gribname = cerraname(y, lt) + '.grib'
     c = cdsapi.Client()
@@ -1131,7 +1305,43 @@ def cerra_getyear(opts):
 
 
 def assemble_CERRA(path: str, years: list):
-    temp_path = './tmp/'
+    """
+    Downloads, extracts, and merges CERRA dataset forecasts for specified years into single NetCDF files per year.
+
+    This function orchestrates the retrieval and processing of CERRA forecast datasets for a list of years.
+    For each year, it fetches data for multiple lead times, extracts a specific region from the datasets, and then merges
+    the forecast data into a single NetCDF file per year. The operation utilizes the Climate Data Operators (CDO) for data
+    manipulation and assumes a temporary directory is defined for intermediate data storage.
+
+    :param path: The directory path where the final merged NetCDF files will be stored.
+    :type path: str
+    :param years: A list of years (integer) for which CERRA data should be downloaded and processed. The years should fall
+                  within the range of 1940 to the current year.
+    :type years: list
+
+    :raises ValueError: If any of the years specified is outside the valid range (1940 to the current year).
+
+    Example usage:
+
+    .. code-block:: python
+
+
+    To process CERRA data for the years 2015 to 2017
+
+        assemble_CERRA('/path/to/final/storage', [2015, 2016, 2017])
+
+    Notes:
+    - The function utilizes `cdo.Cdo` for data manipulation tasks such as merging time steps. Make sure that python-cdo is
+      installed and properly configured along with the actual CDO command-line tools.
+    - A temporary directory for storing intermediate data files is required. This directory is assumed to be configured before
+      the function call.
+    - After processing, intermediate data files are removed to free up space.
+
+    This function assumes the presence and configurability of the `cerra_getyear` and `cerraname` functions, which are responsible
+    for retrieving yearly datasets and generating filenames based on the year and lead time, respectively. It also assumes that
+    a global `TEMP` variable is defined and points to a valid temporary directory for intermediate files.
+    """
+    temp_path = TEMP
     data = cdo.Cdo(tempdir=temp_path)
     print("python-cdo version: %s" % data.__version__())
     print("cdo        version: %s" % data.version())
@@ -1170,8 +1380,47 @@ def assemble_CERRA(path: str, years: list):
 # -------------------------------------------------------------------------
 
 
-def provide_weather(source: str, path: str = None, years: list = None,
-                    method: str = 'download'):
+def provide_weather(source: str, path: str = None,
+                    years: list = None, method: str = 'download'):
+    """
+    Manages the downloading and organizing of weather data from specified sources for given years into a target directory.
+
+    This function serves as a high-level interface for downloading weather datasets (for example, ERA5 or CERRA) for a specified
+    set of years and organizing them into a specified directory. The function currently supports the 'download' method with potential
+    for future expansion.
+
+    :param source: The name of the weather dataset source. Currently supports "ERA5" or "CERRA".
+    :type source: str
+    :param path: Optional; the file system path where the downloaded data will be saved. If not specified, the function
+                 attempts to find a writable storage location using `find_writeable_storage`.
+    :type path: str, optional
+    :param years: Optional; a list of integer years for which to download the data. If not specified, no year-specific
+                  data fetching is performed, which may depend on the implementation details of the dataset handling functions.
+    :type years: list, optional
+    :param method: Optional; the method to use for obtaining the data. Currently, only "download" is implemented, but the parameter
+                   is designed to accommodate future methods like "cache" or "stream".
+    :type method: str, optional
+
+    :returns: A boolean value indicating the success (`True`) or failure (`False`) of the data downloading and organization process.
+
+    Example usage:
+
+    .. code-block:: python
+
+        # To download ERA5 data for the years 2020 and 2021 into the default storage location
+        success = provide_weather("ERA5", years=[2020, 2021])
+
+    Note:
+    - This function logs its operations, including informational messages on progress and errors encountered.
+    - The actual implementation for finding writable storage or the setup for the logger is not defined in this function, and
+      should be provided in the surrounding context.
+
+    Raises:
+    - This function may raise exceptions internally but catches them to return a boolean success status. Detailed error
+      information is logged.
+    """
+
+    # param method is implemented for future use
     if path is None:
         path = find_writeable_storage(path, _tools.STORAGE_TERRAIN)
     logger.info("downloading weather source %s" % source)
