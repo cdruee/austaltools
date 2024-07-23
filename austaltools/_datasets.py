@@ -11,7 +11,6 @@ import gzip
 import itertools
 import logging
 import os
-import psutil
 import re
 import shutil
 import sys
@@ -940,7 +939,6 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         for _ in _tools.progress(pool.imap_unordered(process_input_file,
                                                      thread_args),
                                  total=len(thread_args)):
-            logger.debug('open files: %s' % str([x.open_files() for x in psutil.process_iter()]))
             pass
 
     # merge the GeoTiff Files from all tiles into one file
