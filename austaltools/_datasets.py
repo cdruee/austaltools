@@ -11,6 +11,7 @@ import gzip
 import itertools
 import logging
 import os
+import psutil
 import re
 import shutil
 import sys
@@ -73,6 +74,42 @@ DATASET_DEFINITIONS = {
         'notice': 'Generated from DGM1 data ' +
                   '"© GeoBasis-DE / LVermGeoRP 2024, ' +
                   ' www.lvermgeo.rlp.de", ' +
+                  'licensed under DL-DE-BY-2.0',
+    },
+    'DGM10-BB': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
+            'resolution': 10,
+            'host': 'https://data.geobasis-bb.de',
+            'path': 'geobasis/daten/dgm/tif',
+            'filelist': '::xml',
+            'xmlpath': '/body/table[@id=indexlist]/tr[*]/td[class=indexcolname]/a::href',
+            'unpack': 'zip://*.tif',
+            'CRS': 'EPSG:25832'
+        },
+        'license': 'spdx:DL-DE-BY-2.0',
+        'notice': 'Generated from DGM1 data '
+                  'by "GeoBasis-DE / LGB (Landesvermessung und '
+                  'Geobasisinformation Brandenburg)", www.lgl-bw.de", '
+                  'licensed under DL-DE-BY-2.0',
+    },
+    'DGM10-BE': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
+            'resolution': 10,
+            'host': 'https://fbinter.stadt-berlin.de',
+            'path': 'fb/feed/senstadt/a_dgm',
+            'filelist': '0::xml',
+            'xmlpath': '/entry/link::href',
+            'unpack': 'zip://*.xyz',
+            'CRS': 'EPSG:25832'
+        },
+        'license': 'spdx:DL-DE-BY-2.0',
+        'notice': 'Generated from DGM1 data '
+                  'by "Senatsverwaltung für Stadtentwicklung, '
+                  'Bauen und Wohnen Berlin", 2023, '
                   'licensed under DL-DE-BY-2.0',
     },
     'DGM10-BW': {
@@ -154,6 +191,22 @@ DATASET_DEFINITIONS = {
                   '(LGV)", 2021, licensed under '
                   'Datenlizenz Deutschland Namensnennung 2.0'
     },
+    'DGM10-MV': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
+            'resolution': 10,
+            'host': 'https://www.geodaten-mv.de',
+            'path': 'dienste',
+            'filelist': 'dgm_atom?type=dataset&id=ca268792-s2q1-4a39-b34c-9ec5bf9a4469::xml',
+            'xmlpath': '/entry/link[title=.*Gtiff.*]::href',
+            'CRS': 'EPSG:25832'
+        },
+        'license': 'spdx:CC-BY-4.0',
+        'notice': 'Generated from DGM1 data '
+                  'by "© GeoBasis-DE/M-V", 2024, '
+                  'licensed under CC-BY-4.0',
+    },
     'DGM10-NI': {
         'storage': 'terrain',
         'assemble': 'assemble_DGMxx',
@@ -182,7 +235,6 @@ DATASET_DEFINITIONS = {
             'path': 'produkte/geobasis/hm/dgm1_tiff/dgm1_tiff',
             'filelist': 'index.xml',
             'xmlpath': '/datasets/dataset[0]/files/file::name',
-            'xmlattribute': 'name',
             'datapath': '',
             'CRS': 'EPSG:25832'
         },
@@ -199,6 +251,57 @@ DATASET_DEFINITIONS = {
             'path': '/data/dgm1/current',
             'filelist': '/meta4/dgm1_tif_07.meta4',
             'xmlpath': '/file[@name=.tif$]/url',
+            'CRS': 'EPSG:25832'
+        },
+        'license': 'spdx:DL-DE-BY-2.0',
+        'notice': 'Generated from DGM1 data ' +
+                  '"© GeoBasis-DE / LVermGeoRP 2024, ' +
+                  ' www.lvermgeo.rlp.de", ' +
+                  'licensed under DL-DE-BY-2.0',
+    },
+    'DGM10-SN': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
+            'resolution': 10,
+            'host': 'https://geodownload.sachsen.de',
+            'path': 'inspire/el_atom',
+            'filelist': 'Dataset_el_dgm1.xml',
+            'xmlpath': '/entry/link::href',
+            'CRS': 'EPSG:25832'
+        },
+        'license': 'spdx:DL-DE-BY-2.0',
+        'notice': 'Generated from DGM1 data ' +
+                  '""Landesamt für Geobasisinformation Sachsen (GeoSN)", '
+                  ', https://www.landesvermessung.sachsen.de, 2024, ' +
+                  'licensed under DL-DE-BY-2.0',
+    },
+    'DGM10-ST': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
+            'resolution': 10,
+            'host': 'https://www.geodatenportal.sachsen-anhalt.de',
+            'path': 'gfds_webshare/download/LVermGeo/Geodatenportal/Online-Bereitstellung-LVermGeo/DGM',
+            'filelist': ['DGM2_1.zip', 'DGM2_2.zip', 'DGM2_3.zip', 'DGM2_4.zip'],
+            'unpack': 'zip://*/*.tif',
+            'CRS': 'EPSG:25832'
+        },
+        'license': 'spdx:DL-DE-BY-2.0',
+        'notice': 'Generated from DGM1 data ' +
+                  '"© GeoBasis-DE / LVermGeo ST" '
+                  ', https://www.lvermgeo.sachsen-anhalt.de, 2024, ' +
+                  'licensed under DL-DE-BY-2.0',
+    },
+    'DGM10-TH': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
+            'resolution': 10,
+            'host': 'https://geoportal.geobasis-th.de',
+            'path': 'dienste',
+            'filelist': 'atom_th_hoehendaten_dgm?type=dataset&id=14418d25-fcd7-4a3f-99a9-e3059a2772af&crs=EPSG:25832::xml',
+            'xmlpath': '/entry/link::href',
             'CRS': 'EPSG:25832'
         },
         'license': 'spdx:DL-DE-BY-2.0',
@@ -467,112 +570,30 @@ def download(url, file):
 # -------------------------------------------------------------------------
 
 
-def assebmle_GTOPO30(path: str, name="GTOPO30",
-                     replace=False, args: dict = {}):
-    support_url = ("https://data.rda.ucar.edu/ds758.0/support/"
-                   + "GTOPO30support.tar.gz")
-    download_fmt = ("https://data.rda.ucar.edu/ds758.0/elevtiles/" +
-                    "%s.DEM.gz")
-    tiles = ["W020N90"]
-    # known_tiles = \
-    # "W180N90 W140N90 W100N90 W060N90 W020N90 E020N90 E060N90 E100N90"\
-    # "E140N90 W180N40 W140N40 W100N40 W060N40 W020N40 E020N40 E060N40"\
-    # "E100N40 E140N40 W180S10 W140S10 W100S10 W060S10 W020S10 E020S10"\
-    # "E060S10 E100S10 E140S10 W180S60 W120S60 W060S60 W000S60 E060S60"\
-    # "E120S60 ".split()
-    # get the single archive that holds the supportive
-    # files for all tiles
-    target = os.path.join(path, DEM_FMT % "GTOPO30")
-    logger.debug(f'data file path: {target}')
-    if os.path.exists(target) and not replace:
-        logger.info("dataset exists ... %s" % name)
-        return False
-    logger.debug("downloading ... %s" % support_url)
-    support_file, _ = download(
-        support_url, os.path.basename(support_url))
-    with tarfile.open(support_file) as support_tar:
-        # no get every tile we want
-        for tile in tiles:
-            # extract the matching supportive files
-            to_extract = [x.name for x in support_tar.getmembers()
-                          if tile in x.name]
-            support_tar.extractall(members=to_extract)
-            # now download the actual data file for the tile
-            download_url = download_fmt % tile
-            logger.debug("downloading ... %s" % download_url)
-            tile_file, _ = download(
-                download_url, os.path.basename(download_url))
-            # expand the terrain data holding file *.DEM
-            # and convert it to a GeoTiff file
-            tile_dem = tile_file.replace(".gz", "")
-            tile_tif = tile_dem.replace(".DEM", ".tif")
-            logger.debug("... decompressing %s" % tile_dem)
-            with gzip.open(tile_file, 'rb') as tf:
-                with open(tile_dem, 'wb') as td:
-                    shutil.copyfileobj(tf, td, length=16 * 1024)
-            logger.debug("... converting to %s" % tile_tif)
-            gdal.Warp(destNameOrDestDS=tile_tif,
-                      srcDSOrSrcDSTab=tile_dem,
-                      format="GTiff")
-    # merge the GeoTiff Files from all tiles into one file
-    if os.path.exists(target):
-        logger.info("removing old source file")
-        os.remove(target)
-    logger.debug("merging tiles ...")
-    gdal_merge.main(["", "-co", "compress=lzw",
-                     "-o", target
-                     ] + glob.glob("*.tif"))
-    logger.debug("... done")
+def xyz2csv(inputfile, output):
+    df = pd.read_csv(inputfile,
+                     sep=r'\s+', header=None, names=['x', 'y', 'z'])
+    # get full grid axes
+    x_res = np.mean(np.diff(sorted(set(df['x']))))
+    x_vals = set(np.arange(df['x'].min(), df['x'].max() + x_res, x_res))
+    y_res = np.mean(np.diff(sorted(set(df['y']))))
+    y_vals = set(np.arange(df['y'].min(), df['y'].max() + y_res, y_res))
 
-    return
+    # create full dataframe
+    ff = pd.DataFrame.from_records(itertools.product(x_vals, y_vals),
+                                   columns=['x', 'y'])
+    of = pd.merge(ff, df, how='left', left_on=['x', 'y'], right_on=['x', 'y'])
+    del [ff, df]
+    of = of.replace(np.nan, -9999.)
+
+    # sort it so gdal doesnt complain
+    of = of.sort_values(['y', 'x'])
+
+    of.to_csv(output, index=False, header=False)
 
 
 # -------------------------------------------------------------------------
 
-
-def assemble_GLO_30(path, name="GLO_30", replace=False, args: dict = {}):
-    target = os.path.join(path, DEM_FMT % name)
-    logger.debug(f'data file path: {target}')
-    if os.path.exists(target) and not replace:
-        logger.info("dataset exists ... %s" % name)
-        return False
-
-    download_dir = ("https://prism-dem-open.copernicus.eu/" +
-                    "pd-desk-open-access/prismDownload/" +
-                    "COP-DEM_GLO-30-DGED__2022_1/")
-    file_fmt = "Copernicus_DSM_10_N%02i_00_E%03i_00.tar"
-
-    for lat in range(47, 54):
-        for lon in range(5, 16):
-            url = download_dir + file_fmt % (lat, lon)
-            logger.debug("downloading ... %s" % url)
-            tar_file, _ = download(url, os.path.basename(url))
-            name_root = tar_file.replace(".tar", "")
-            with tarfile.open(tar_file) as tf:
-                to_extract = [x for x in tf.getmembers()
-                              if name_root + "/DEM/" in x.name]
-                for x in to_extract:
-                    # remove path from name of tar member to extract
-                    x.name = os.path.basename(x.name)
-                    logger.debug("... extracting %s" % x.name)
-                    # now extract tar member to current dir
-                    tf.extract(x, '.')
-    # merge the GeoTiff Files from all tiles into one file
-    target = os.path.join(path, DEM_FMT % "GLO-30")
-    if os.path.exists(target):
-        logger.info("removing old source file")
-        os.remove(target)
-    logger.debug("merging tiles ...")
-    gdal_merge.main(["", "-co", "compress=lzw",
-                     "-o", target,
-                     "-ot", "Int16"] +
-                    glob.glob("Copernicus_*.tif"))
-    logger.debug("... done")
-
-    return
-
-
-# -------------------------------------------------------------------------
 
 def xmlpath(xml, path):
     """
@@ -697,8 +718,9 @@ def xmlpath(xml, path):
     else:
         res = [x.get(getatt, default='') for x in nodes]
     return res
-# -------------------------------------------------------------------------
 
+
+# -------------------------------------------------------------------------
 
 def jsonpath(json_obj, path):
     """
@@ -739,7 +761,7 @@ def jsonpath(json_obj, path):
 
     Notes
 
-    - This function simplifies direct navigation and filtering in 
+    - This function simplifies direct navigation and filtering in
       JSON objects but does not offer the full querying capabilities
       of more complex JSON querying libraries such as `jsonpath-rw`.
 
@@ -770,7 +792,6 @@ def jsonpath(json_obj, path):
                     children += [oj[node]]
         obj = children
     return obj
-
 # -------------------------------------------------------------------------
 
 
@@ -865,7 +886,8 @@ def process_input_file(args):
     if os.path.exists(dl_file):
         os.remove(dl_file)
     return tile_files
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+# -------------------------------------------------------------------------
 
 
 def assemble_DGMxx(path: str, name: str, replace: bool,
@@ -881,19 +903,19 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         verify = provider['check_cert']
     else:
         verify = True
-    filelist = provider['filelist']
+    filelist = re.sub(r'::.*$', '', provider['filelist'])
     url = '/'.join((base_url, filelist))
     # switch formats:
     if isinstance(filelist, list):
         input_files = filelist
     elif isinstance(filelist, str):
-        if filelist.endswith(('.xml', 'meta4')):
+        if filelist.endswith(('xml', 'meta4')):
             # xml
             logger.debug("downloading xml metadata: %s" % url)
             with requests.get(url, allow_redirects=True, verify=verify) as rsp:
                 input_files = xmlpath(xml=rsp.content.decode(),
                                       path=provider['xmlpath'])
-        elif filelist.endswith(('.json', 'geojson')):
+        elif filelist.endswith(('json', 'geojson')):
             # xml
             logger.debug("downloading json metadata: %s" % url)
             with requests.get(url, allow_redirects=True, verify=verify) as rsp:
@@ -918,6 +940,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         for _ in _tools.progress(pool.imap_unordered(process_input_file,
                                                      thread_args),
                                  total=len(thread_args)):
+            logger.debug('open files: %s' % str([x.open_files() for x in psutil.process_iter()]))
             pass
 
     # merge the GeoTiff Files from all tiles into one file
@@ -930,28 +953,109 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
                      ] + tile_files)
     logger.debug("... done")
     return True
+# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 
-def xyz2csv(inputfile, output):
-    df = pd.read_csv(inputfile,
-                     sep=r'\s+', header=None, names=['x', 'y', 'z'])
-    # get full grid axes
-    x_res = np.mean(np.diff(sorted(set(df['x']))))
-    x_vals = set(np.arange(df['x'].min(), df['x'].max() + x_res, x_res))
-    y_res = np.mean(np.diff(sorted(set(df['y']))))
-    y_vals = set(np.arange(df['y'].min(), df['y'].max() + y_res, y_res))
+def assemble_GLO_30(path, name="GLO_30", replace=False, args: dict = {}):
+    target = os.path.join(path, DEM_FMT % name)
+    logger.debug(f'data file path: {target}')
+    if os.path.exists(target) and not replace:
+        logger.info("dataset exists ... %s" % name)
+        return False
 
-    # create full dataframe
-    ff = pd.DataFrame.from_records(itertools.product(x_vals, y_vals),
-                                   columns=['x', 'y'])
-    of = pd.merge(ff, df, how='left', left_on=['x', 'y'], right_on=['x', 'y'])
-    del ff
-    of = of.replace(np.nan, -9999.)
+    download_dir = ("https://prism-dem-open.copernicus.eu/" +
+                    "pd-desk-open-access/prismDownload/" +
+                    "COP-DEM_GLO-30-DGED__2022_1/")
+    file_fmt = "Copernicus_DSM_10_N%02i_00_E%03i_00.tar"
 
-    # sort it so gdal doesnt complain
-    of = of.sort_values(['y', 'x'])
+    for lat in range(47, 54):
+        for lon in range(5, 16):
+            url = download_dir + file_fmt % (lat, lon)
+            logger.debug("downloading ... %s" % url)
+            tar_file, _ = download(url, os.path.basename(url))
+            name_root = tar_file.replace(".tar", "")
+            with tarfile.open(tar_file) as tf:
+                to_extract = [x for x in tf.getmembers()
+                              if name_root + "/DEM/" in x.name]
+                for x in to_extract:
+                    # remove path from name of tar member to extract
+                    x.name = os.path.basename(x.name)
+                    logger.debug("... extracting %s" % x.name)
+                    # now extract tar member to current dir
+                    tf.extract(x, '.')
+    # merge the GeoTiff Files from all tiles into one file
+    target = os.path.join(path, DEM_FMT % "GLO-30")
+    if os.path.exists(target):
+        logger.info("removing old source file")
+        os.remove(target)
+    logger.debug("merging tiles ...")
+    gdal_merge.main(["", "-co", "compress=lzw",
+                     "-o", target,
+                     "-ot", "Int16"] +
+                    glob.glob("Copernicus_*.tif"))
+    logger.debug("... done")
 
-    of.to_csv(output, index=False, header=False)
+    return
+
+
+def assebmle_GTOPO30(path: str, name="GTOPO30",
+                     replace=False, args: dict = {}):
+    support_url = ("https://data.rda.ucar.edu/ds758.0/support/"
+                   + "GTOPO30support.tar.gz")
+    download_fmt = ("https://data.rda.ucar.edu/ds758.0/elevtiles/" +
+                    "%s.DEM.gz")
+    tiles = ["W020N90"]
+    # known_tiles = \
+    # "W180N90 W140N90 W100N90 W060N90 W020N90 E020N90 E060N90 E100N90"\
+    # "E140N90 W180N40 W140N40 W100N40 W060N40 W020N40 E020N40 E060N40"\
+    # "E100N40 E140N40 W180S10 W140S10 W100S10 W060S10 W020S10 E020S10"\
+    # "E060S10 E100S10 E140S10 W180S60 W120S60 W060S60 W000S60 E060S60"\
+    # "E120S60 ".split()
+    # get the single archive that holds the supportive
+    # files for all tiles
+    target = os.path.join(path, DEM_FMT % "GTOPO30")
+    logger.debug(f'data file path: {target}')
+    if os.path.exists(target) and not replace:
+        logger.info("dataset exists ... %s" % name)
+        return False
+    logger.debug("downloading ... %s" % support_url)
+    support_file, _ = download(
+        support_url, os.path.basename(support_url))
+    with tarfile.open(support_file) as support_tar:
+        # no get every tile we want
+        for tile in tiles:
+            # extract the matching supportive files
+            to_extract = [x.name for x in support_tar.getmembers()
+                          if tile in x.name]
+            support_tar.extractall(members=to_extract)
+            # now download the actual data file for the tile
+            download_url = download_fmt % tile
+            logger.debug("downloading ... %s" % download_url)
+            tile_file, _ = download(
+                download_url, os.path.basename(download_url))
+            # expand the terrain data holding file *.DEM
+            # and convert it to a GeoTiff file
+            tile_dem = tile_file.replace(".gz", "")
+            tile_tif = tile_dem.replace(".DEM", ".tif")
+            logger.debug("... decompressing %s" % tile_dem)
+            with gzip.open(tile_file, 'rb') as tf:
+                with open(tile_dem, 'wb') as td:
+                    shutil.copyfileobj(tf, td, length=16 * 1024)
+            logger.debug("... converting to %s" % tile_tif)
+            gdal.Warp(destNameOrDestDS=tile_tif,
+                      srcDSOrSrcDSTab=tile_dem,
+                      format="GTiff")
+    # merge the GeoTiff Files from all tiles into one file
+    if os.path.exists(target):
+        logger.info("removing old source file")
+        os.remove(target)
+    logger.debug("merging tiles ...")
+    gdal_merge.main(["", "-co", "compress=lzw",
+                     "-o", target
+                     ] + glob.glob("*.tif"))
+    logger.debug("... done")
+
+    return
 
 
 # -------------------------------------------------------------------------
