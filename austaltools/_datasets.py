@@ -10,7 +10,6 @@ import glob
 import gzip
 import itertools
 import logging
-import multiprocessing
 import os
 import re
 import shutil
@@ -106,7 +105,7 @@ DATASET_DEFINITIONS = {
             'host': 'https://geodaten.bayern.de',
             'path': '/odd/a/dgm/dgm1',
             'filelist': '/meta/metalink/09.meta4',
-            'xmlpath': '/file[name=.tif$]/url[0]',
+            'xmlpath': '/file[@name=.tif$]/url[0]',
             'CRS': 'EPSG:25832'
         },
         'license': 'spdx:CC-BY-4.0',
@@ -159,7 +158,7 @@ DATASET_DEFINITIONS = {
             'host': 'https://geobasis-rlp.de',
             'path': '/data/dgm1/current',
             'filelist': '/meta4/dgm1_tif_07.meta4',
-            'xmlpath': '/file[name=.tif$]/url',
+            'xmlpath': '/file[@name=.tif$]/url',
             'CRS': 'EPSG:25832'
         },
         'license': 'spdx:DL-DE-BY-2.0',
@@ -240,9 +239,8 @@ class DataSet:
             logger.debug(f"resolving {doi_url}")
             for i in range(MAX_RETRY):
                 try:
-                    resolver = requests.head(doi_url)
-                    redirect = resolver.url
-                    resolver.close()
+                    with requests.head(doi_url) as resolver:
+                        redirect = resolver.url
                     break
                 except requests.HTTPError:
                     continue
@@ -258,7 +256,8 @@ class DataSet:
         else:
             raise ValueError(f'cannot handle URI: {uri}')
         with open(os.path.join(path, self.file_data), 'wb') as f:
-            f.write(requests.get(url, allow_redirects=True).content)
+            with requests.get(url, allow_redirects=True) as req:
+                f.write(req.content)
 
     # ----------------------------------------------------
 
@@ -390,12 +389,12 @@ def find_writeable_storage(locs: str = None, stor: str = None) -> str or None:
 
 
 def download(url, file):
-    req = requests.get(url, allow_redirects=True)
-    if req.status_code == 200:
-        with open(file, 'wb') as f:
-            f.write(req.content)
-    else:
-        raise Exception(f"Download failed: status code {req.status_code}")
+    with requests.get(url, allow_redirects=True) as req:
+        if req.status_code == 200:
+            with open(file, 'wb') as f:
+                f.write(req.content)
+        else:
+            raise Exception(f"Download failed: status code {req.status_code}")
     return os.path.basename(file)
 
 
@@ -531,32 +530,37 @@ def xmlpath(xml, path):
             spec = re.sub(r'.*\[(.*)].*', r'\1', level)
             try:
                 sel = int(spec)
-                attr = None
+                enti = None
             except ValueError:
                 if '=' in spec:
-                    attr, sel = [x.strip() for x in spec.split('=')]
+                    enti, sel = [x.strip() for x in spec.split('=')]
                 else:
-                    attr = spec
+                    enti = spec
                     sel = None
         else:
             name = level
-            spec = attr = sel = None
+            spec = enti = sel = None
         tag = ''.join((ns, name))
-        print(name, spec, attr, sel)
+        print(name, spec, enti, sel)
         next_nodes = []
         for node in nodes:
             # iterate over children
             for i, ele in enumerate(node):
                 if not ele.tag == tag:
                     continue
-                if sel is None and attr is None:
+                if sel is None and enti is None:
                     next_nodes.append(ele)
                 elif sel == i:
                     next_nodes.append(ele)
-                elif (attr is not None and
-                      attr in ele.attrib and
-                      bool(re.search(sel, ele.attrib[attr]))):
-                    next_nodes.append(ele)
+                elif enti is not None:
+                    if enti.startswith('@'):
+                        attr = enti.replace('@', '')
+                        if (attr in ele.attrib and
+                                bool(re.search(sel, ele.attrib[attr]))):
+                            next_nodes.append(ele)
+                    else:
+                        if len(node.findall(enti)) > 0:
+                            next_nodes.append(ele)
         nodes = next_nodes
     if getatt is None:
         res = [x.text for x in nodes]
@@ -583,17 +587,17 @@ def process_input_file(args):
     logger.debug(f"downloading ... {url}")
     failure_ok = False
     for i in range(MAX_RETRY):
-        req = requests.get(url, verify=verify)
-        if req.status_code == requests.codes.ok:
-            with open(dl_file, 'wb') as f:
-                f.write(req.content)
-            break
-        elif (req.status_code == 404 and
-              'missing' in provider and
-              provider['missing'] in ['ok', 'ignore']):
-            failure_ok = True
-            # break retry loop
-            break
+        with requests.get(url, verify=verify) as req:
+            if req.status_code == requests.codes.ok:
+                with open(dl_file, 'wb') as f:
+                    f.write(req.content)
+                break
+            elif (req.status_code == 404 and
+                  'missing' in provider and
+                  provider['missing'] in ['ok', 'ignore']):
+                failure_ok = True
+                # break retry loop
+                break
     else:
         raise Exception("failed to download tile files")
     if failure_ok:
@@ -684,16 +688,15 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     if filelist.endswith(('.xml', 'meta4')):
         # xml
         logger.debug("downloading xml metadata: %s" % url)
-        rsp = requests.get(url, allow_redirects=True, verify=verify)
-        input_files = xmlpath(xml=rsp.content.decode(),
-                              path=provider['xmlpath'])
+        with requests.get(url, allow_redirects=True, verify=verify) as rsp:
+            input_files = xmlpath(xml=rsp.content.decode(),
+                                  path=provider['xmlpath'])
     elif filelist.endswith(('.json', 'geojson')):
         # xml
         logger.debug("downloading json metadata: %s" % url)
-        rsp = requests.get(url, allow_redirects=True,
-                           verify=verify)
-        input_files = jsonpath(json=rsp.json(),
-                               path=provider['jsonpath'])
+        with requests.get(url, allow_redirects=True, verify=verify) as rsp:
+            input_files = jsonpath(json=rsp.json(),
+                                   path=provider['jsonpath'])
     elif filelist == 'generate':
         exp_val = [_tools.parse_time_string(x) for x in provider['values']]
         combval = itertools.product(*exp_val)
@@ -707,10 +710,10 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     thread_args = []
     for inp in input_files:
         thread_args.append((inp, base_url, verify, provider))
-    with multiprocessing.Pool() as pool:
+    with Pool() as pool:
         for _ in _tools.progress(pool.imap_unordered(process_input_file,
                                                      thread_args),
-                                 total= len(thread_args)):
+                                 total=len(thread_args)):
             pass
 
     # merge the GeoTiff Files from all tiles into one file
@@ -818,9 +821,9 @@ def provide_dem(source: str, path: str = None,
         if lic_src == 'spdx':
             lic_url = ("https://spdx.org/licenses/%s.json" %
                        DATASET_DEFINITIONS[source]['licence'])
-            lic_json = requests.get(lic_url).json()
-            with open(lic_file, 'wb') as f:
-                f.write(lic_json['licenseText'])
+            with requests.get(lic_url).json() as lic_json:
+                with open(lic_file, 'wb') as f:
+                    f.write(lic_json['licenseText'])
         elif lic_src == 'file':
             if lic_id in [None, '']:
                 lic_aux = os.path.join(str(DIST_AUX_FILES), lic_file)
@@ -1065,3 +1068,9 @@ def provide_weather(source: str, path: str = None, years: list = None,
 # initialize
 DATASETS = [DataSet(name=k, **v) for k, v in DATASET_DEFINITIONS.items()]
 dataset_scan()
+
+#https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/dl-dgm1.html
+# https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/multi.php?action=start&type=dgm1&id=513
+# {"success":true,"id":"cKdXn8","statusUrl":"https:\/\/geodaten.schleswig-holstein.de\/gaialight-sh\/_apps\/dladownload\/multi.php"}
+# https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/multi.php?action=status&job=cKdXn8
+# https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/multi.php?action=download&job=mBeZ3T
