@@ -857,8 +857,8 @@ def process_input_file(args):
             tf1 = re.sub(r'\.xyz$', '.tif', inputfile)
             logger.debug(f"converting tile ... {inputfile} -> {tf1}")
             # returns a tuple containing file handle and the abs pathname!
-            csvfile = tempfile.mkstemp(
-                prefix='dgm', suffix='.csv', dir=TEMP)[1]
+            csvhdl, csvfile = tempfile.mkstemp(
+                prefix='dgm', suffix='.csv', dir=TEMP)
             xyz2csv(inputfile, csvfile)
             os.remove(inputfile)
             gdal.Translate(destName=tf1,
@@ -866,6 +866,7 @@ def process_input_file(args):
                            outputSRS=srcsrs,
                            noData=-9999,
                            )
+            os.close(csvhdl)
             os.remove(csvfile)
         else:
             raise Exception(f'cannot handle {inputfile}')
@@ -935,11 +936,12 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     thread_args = []
     for inp in input_files:
         thread_args.append((inp, base_url, verify, provider))
+    tile_files=[]
     with Pool() as pool:
-        for _ in _tools.progress(pool.imap_unordered(process_input_file,
+        for l in _tools.progress(pool.imap_unordered(process_input_file,
                                                      thread_args),
                                  total=len(thread_args)):
-            pass
+            tile_files += l
 
     # merge the GeoTiff Files from all tiles into one file
     if os.path.exists(target):
