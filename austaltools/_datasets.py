@@ -23,8 +23,8 @@ from xml.etree import ElementTree
 
 import numpy as np
 import pandas as pd
-import requests
 import pip
+import requests
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from osgeo import gdal
@@ -59,7 +59,7 @@ logger = logging.getLogger()
 
 # -------------------------------------------------------------------------
 
-DEM_FMT = '%s.elevation.nc'  #'%s.lzw.tif'
+DEM_FMT = '%s.elevation.nc'  # '%s.lzw.tif'
 WEA_FMT = '%s_ak_eu_%04i.nc'
 DIST_AUX_FILES = resources.files(__title__ + '.data')
 TEMP = None
@@ -170,6 +170,83 @@ DATASET_DEFINITIONS = {
                   'by "Landesamt GeoInformation Bremen" (2015/17), '
                   'licensed under CC-BY-4.0'
     },
+    'DGM10-HE': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
+            'resolution': 10,
+            'host': 'https://gds.hessen.de',
+            'path': '/downloadcenter/20240726/3D-Daten/Digitales Geländemodell (DGM1)',
+            'filelist': 'generate',
+            'format': '%s/%s - DGM1.zip',
+            'values': [['Hochtaunuskreis', 'Lahn-Dill-Kreis', 'Landkreis Bergstraße', 'Landkreis Darmstadt-Dieburg',
+                        'Landkreis Fulda', 'Landkreis Gießen', 'Landkreis Groß-Gerau', 'Landkreis Hersfeld-Rotenburg',
+                        'Landkreis Kassel', 'Landkreis Limburg-Weilburg', 'Landkreis Marburg-Biedenkopf',
+                        'Landkreis Offenbach', 'Landkreis Waldeck-Frankenberg', 'Main-Kinzig-Kreis',
+                        'Main-Taunus-Kreis', 'Odenwaldkreis', 'Rheingau-Taunus-Kreis', 'Schwalm-Eder-Kreis',
+                        'Stadt Darmstadt', 'Stadt Frankfurt am Main', 'Stadt Kassel', 'Stadt Offenbach am Main',
+                        'Stadt Wiesbaden', 'Vogelsbergkreis', 'Werra-Meißner-Kreis', 'Wetteraukreis'],
+                       ['Bad', 'Friedrichsdorf', 'Glashütten', 'Grävenwiesbach', 'Königstein', 'Kronberg',
+                        'Neu-Anspach', 'Oberursel', 'Schmitten', 'Steinbach', 'Usingen', 'Wehrheim', 'Weilrod', 'Aßlar',
+                        'Bischoffen', 'Braunfels', 'Breitscheid', 'Dietzhölztal', 'Dillenburg', 'Driedorf',
+                        'Ehringshausen', 'Eschenburg', 'Greifenstein', 'Haiger', 'Herborn', 'Hohenahr', 'Hüttenberg',
+                        'Lahnau', 'Leun', 'Mittenaar', 'Schöffengrund', 'Siegbach', 'Sinn', 'Abtsteinach', 'Bensheim',
+                        'Biblis', 'Birkenau', 'Bürstadt', 'Einhausen', 'Fürth', 'Gemarkung', 'Gorxheimertal',
+                        'Grasellenbach', 'Groß-Rohrheim', 'Heppenheim', 'Hirschhorn', 'Lampertheim', 'Lautertal',
+                        'Lindenfels', 'Lorsch', 'Mörlenbach', 'Neckarsteinach', 'Rimbach', 'Alsbach-Hähnlein',
+                        'Babenhausen', 'Bickenbach', 'Dieburg', 'Eppertshausen', 'Erzhausen', 'Fischbachtal',
+                        'Griesheim', 'Groß-Bieberau', 'Groß-Umstadt', 'Groß-Zimmern', 'Messel', 'Modautal', 'Mühltal',
+                        'Münster', 'Ober-Ramstadt', 'Otzberg', 'Pfungstadt', 'Reinheim', 'Roßdorf', 'Burghaun',
+                        'Dipperz', 'Ebersburg', 'Ehrenberg', 'Eichenzell', 'Eiterfeld', 'Flieden', 'Fulda', 'Gersfeld',
+                        'Großenlüder', 'Hilders', 'Hofbieber', 'Hosenfeld', 'Hünfeld', 'Kalbach', 'Künzell', 'Neuhof',
+                        'Nüsttal', 'Petersberg', 'Allendorf', 'Biebertal', 'Buseck', 'Fernwald', 'Gießen', 'Grünberg',
+                        'Heuchelheim', 'Hungen', 'Langgöns', 'Laubach', 'Lich', 'Linden', 'Lollar', 'Pohlheim',
+                        'Rabenau', 'Reiskirchen', 'Staufenberg', 'Wettenberg', 'Biebesheim', 'Bischofsheim',
+                        'Büttelborn', 'Gernsheim', 'Ginsheim-Gustavsburg', 'Groß-Gerau', 'Kelsterbach',
+                        'Mörfelden-Walldorf', 'Nauheim', 'Raunheim', 'Riedstadt', 'Rüsselsheim', 'Stockstadt', 'Trebur',
+                        'Alheim', 'Bebra', 'Breitenbach', 'Cornberg', 'Friedewald', 'Hauneck', 'Haunetal', 'Heringen',
+                        'Hohenroda', 'Kirchheim', 'Ludwigsau', 'Nentershausen', 'Neuenstein', 'Niederaula',
+                        'Philippsthal', 'Ronshausen', 'Rotenburg', 'Schenklengsfeld', 'Wildeck', 'Ahnatal', 'Baunatal',
+                        'Breuna', 'Calden', 'Espenau', 'Fuldabrück', 'Fuldatal', 'Grebenstein', 'Gutsbezirk',
+                        'Habichtswald', 'Helsa', 'Hofgeismar', 'Immenhausen', 'Kaufungen', 'Liebenau', 'Lohfelden',
+                        'Naumburg', 'Nieste', 'Beselich', 'Brechen', 'Dornburg', 'Elbtal', 'Elz', 'Hadamar',
+                        'Hünfelden', 'Limburg', 'Löhnberg', 'Mengerskirchen', 'Merenberg', 'Runkel', 'Selters',
+                        'Villmar', 'Waldbrunn', 'Weilburg', 'Weilmünster', 'Weinbach', 'Amöneburg', 'Angelburg',
+                        'Biedenkopf', 'Breidenbach', 'Cölbe', 'Dautphetal', 'Ebsdorfergrund', 'Fronhausen',
+                        'Gladenbach', 'Kirchhain', 'Lahntal', 'Lohra', 'Marburg', 'Münchhausen', 'Neustadt',
+                        'Rauschenberg', 'Stadtallendorf', 'Steffenberg', 'Weimar', 'Dietzenbach', 'Dreieich',
+                        'Egelsbach', 'Hainburg', 'Heusenstamm', 'Langen', 'Mainhausen', 'Mühlheim', 'Neu-Isenburg',
+                        'Obertshausen', 'Rödermark', 'Rodgau', 'Seligenstadt', 'Battenberg', 'Burgwald', 'Diemelsee',
+                        'Diemelstadt', 'Edertal', 'Frankenau', 'Frankenberg', 'Gemünden', 'Haina', 'Hatzfeld',
+                        'Korbach', 'Lichtenfels', 'Rosenthal', 'Twistetal', 'Vöhl', 'Volkmarsen', 'Waldeck',
+                        'Biebergemünd', 'Birstein', 'Brachttal', 'Bruchköbel', 'Erlensee', 'Flörsbachtal',
+                        'Freigericht', 'Gelnhausen', 'Großkrotzenburg', 'Gründau', 'Hammersbach', 'Hanau', 'Hasselroth',
+                        'Jossgrund', 'Langenselbold', 'Linsengericht', 'Maintal', 'Eppstein', 'Eschborn', 'Flörsheim',
+                        'Hattersheim', 'Hochheim', 'Hofheim', 'Kelkheim', 'Kriftel', 'Liederbach', 'Schwalbach',
+                        'Sulzbach', 'Brensbach', 'Breuberg', 'Brombachtal', 'Erbach', 'Fränkisch-Crumbach', 'Höchst',
+                        'Lützelbach', 'Michelstadt', 'Mossautal', 'Oberzent', 'Reichelsheim', 'Aarbergen', 'Eltville',
+                        'Geisenheim', 'Heidenrod', 'Hohenstein', 'Hünstetten', 'Idstein', 'Kiedrich', 'Lorch',
+                        'Niedernhausen', 'Oestrich-Winkel', 'Rüdesheim', 'Schlangenbad', 'Taunusstein', 'Waldems',
+                        'Walluf', 'Borken', 'Edermünde', 'Felsberg', 'Frielendorf', 'Fritzlar', 'Gilserberg',
+                        'Gudensberg', 'Guxhagen', 'Homberg', 'Jesberg', 'Knüllwald', 'Körle', 'Malsfeld', 'Melsungen',
+                        'Morschen', 'Neuental', 'Neukirchen', 'Niedenstein', 'Oberaula', 'Darmstadt', 'Frankfurt',
+                        'Kassel', 'Offenbach', 'Wiesbaden', 'Alsfeld', 'Antrifttal', 'Feldatal', 'Freiensteinau',
+                        'Grebenau', 'Grebenhain', 'Herbstein', 'Kirtorf', 'Lauterbach', 'Mücke', 'Romrod', 'Schlitz',
+                        'Schotten', 'Schwalmtal', 'Ulrichstein', 'Wartenberg', 'Berkatal', 'Eschwege', 'Großalmerode',
+                        'Herleshausen', 'Hessisch', 'Meinhard', 'Meißner', 'Neu-Eichenberg', 'Ringgau', 'Sontra',
+                        'Waldkappel', 'Wanfried', 'Wehretal', 'Weißenborn', 'Witzenhausen', 'Altenstadt', 'Büdingen',
+                        'Butzbach', 'Echzell', 'Florstadt', 'Friedberg', 'Gedern', 'Glauburg', 'Hirzenhain', 'Karben',
+                        'Kefenrod', 'Limeshain', 'Münzenberg', 'Nidda', 'Niddatal', 'Ober-Mörlen', 'Ortenberg',
+                        'Ranstadt']
+
+                       ],
+            'missing': 'ignore',
+            'unpack': 'zip://*/*.xyz',
+            'CRS': 'EPSG:25832'
+        },
+        #'license': 'PD'
+        #'notice': None
+    },
     'DGM10-HH': {
         'storage': 'terrain',
         'assemble': 'assemble_DGMxx',
@@ -181,10 +258,10 @@ DATASET_DEFINITIONS = {
             'filelist': [
                 'dgm1_2x2km_XYZ_hh_2021_04_01.zip',
             ],
-            'unpack': 'zip://*/*.xyz',
+            'unpack': 'zip://*.tif',
             'CRS': 'EPSG:25832'
         },
-        'license': 'spdx:DL-DE-BY-2.0',
+        'license': 'spdx:CC-0',
         'notice': 'Generated from DGM1 data '
                   'by "Freie und Hansestadt Hamburg, '
                   'Landesbetrieb Geoinformation und Vermessung '
@@ -1618,7 +1695,7 @@ def provide_weather(source: str, path: str = None,
 DATASETS = [DataSet(name=k, **v) for k, v in DATASET_DEFINITIONS.items()]
 dataset_scan()
 
-#https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/dl-dgm1.html
+# https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/dl-dgm1.html
 # https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/multi.php?action=start&type=dgm1&id=513
 # {"success":true,"id":"cKdXn8","statusUrl":"https:\/\/geodaten.schleswig-holstein.de\/gaialight-sh\/_apps\/dladownload\/multi.php"}
 # https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/multi.php?action=status&job=cKdXn8
