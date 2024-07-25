@@ -1079,7 +1079,12 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
                                        path=provider['jsonpath'])
                 method = 'http'
         elif filelist == 'generate':
-            exp_val = [_tools.parse_time_string(x) for x in provider['values']]
+            exp_val = []
+            for x in provider['values']:
+                if isinstance(x, list):
+                    exp_val.append(x)
+                else:
+                    exp_val.append(_tools.parse_time_string(x))
             combval = itertools.product(*exp_val)
             input_files = [provider['format'] % x for x in combval]
             method = 'http'
