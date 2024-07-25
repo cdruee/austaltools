@@ -59,7 +59,7 @@ logger = logging.getLogger()
 
 # -------------------------------------------------------------------------
 
-DEM_FMT = '%s.lzw.tif'
+DEM_FMT = '%s.elevation.nc'  #'%s.lzw.tif'
 WEA_FMT = '%s_ak_eu_%04i.nc'
 DIST_AUX_FILES = resources.files(__title__ + '.data')
 TEMP = None
@@ -162,7 +162,8 @@ DATASET_DEFINITIONS = {
                 'Gitternetz_DGM1_2015_BHV_ASCII_XYZ.zip',
             ],
             'unpack': 'zip://*/*.xyz',
-            'CRS': 'EPSG:25832'
+            'CRS': 'EPSG:25832',
+            'utm_remove_zone': 'true'
         },
         'license': 'spdx:CC-BY-4.0',
         'notice': 'Generated from DGM1 data '
@@ -569,9 +570,18 @@ def download(url, file):
 # -------------------------------------------------------------------------
 
 
-def xyz2csv(inputfile, output):
+def xyz2csv(inputfile, output, utm_remove_zone=False):
+    # test if file has a header line
+    with open(inputfile, 'r') as fd:
+        line1 = fd.readline()
+    if bool(re.search('[a-zA-Z]', line1)) > 0:
+        header = 0
+    else:
+        header = None
     df = pd.read_csv(inputfile,
-                     sep=r'\s+', header=None, names=['x', 'y', 'z'])
+                     sep=r'\s+', header=header, names=['x', 'y', 'z'])
+    if utm_remove_zone:
+        df['x'] = np.sign(df['x']) * (np.abs(df['x']) % 1000000)
     # get full grid axes
     x_res = np.mean(np.diff(sorted(set(df['x']))))
     x_vals = set(np.arange(df['x'].min(), df['x'].max() + x_res, x_res))
@@ -791,10 +801,12 @@ def jsonpath(json_obj, path):
                     children += [oj[node]]
         obj = children
     return obj
+
+
 # -------------------------------------------------------------------------
 
 
-def process_input_file(args):
+def ass_process_input_file(args):
     inp, base_url, verify, provider = args
     tile_files = []
     if re.match('^http[s]*://', inp):
@@ -832,7 +844,7 @@ def process_input_file(args):
         with zipfile.ZipFile(dl_file, 'r') as zf:
             pattern = re.sub('^(un|)zip[:/]*', '', provider['unpack'])
             unpack = [x for x in zf.namelist()
-                  if PurePath(x).match(pattern)]
+                      if PurePath(x).match(pattern)]
             inputfiles = []
             for un in unpack:
                 with zf.open(un) as fz:
@@ -850,6 +862,11 @@ def process_input_file(args):
         srcsrs = provider['CRS']
     else:
         srcsrs = None
+    if 'utm_remove_zone' in provider and \
+            provider['utm_remove_zone'] in ['True', 'true', 'yes']:
+        utm_remove_zone = True
+    else:
+        utm_remove_zone = False
     for inputfile in inputfiles:
         if inputfile.endswith('tif'):
             tf1 = inputfile
@@ -859,7 +876,7 @@ def process_input_file(args):
             # returns a tuple containing file handle and the abs pathname!
             csvhdl, csvfile = tempfile.mkstemp(
                 prefix='dgm', suffix='.csv', dir=TEMP)
-            xyz2csv(inputfile, csvfile)
+            xyz2csv(inputfile, csvfile, utm_remove_zone=utm_remove_zone)
             os.remove(inputfile)
             gdal.Translate(destName=tf1,
                            srcDS=csvfile,
@@ -887,6 +904,33 @@ def process_input_file(args):
         os.remove(dl_file)
     return tile_files
 
+
+# -------------------------------------------------------------------------
+
+
+def ass_merge_tiles(target, tile_files):
+    # merge the GeoTiff Files from all tiles into one file
+    if os.path.exists(target):
+        logger.info("removing old source file")
+        os.remove(target)
+    logger.debug("merging tiles ...")
+    if DEM_FMT.endswith('.tif'):
+        gdal_merge.main(["", "-co", "compress=lzw",
+                         "-o", target,
+                         ] + tile_files)
+    elif DEM_FMT.endswith('.nc'):
+        gdal_merge.main(["",
+                         "-of", "netCDF",
+                         "-co", "FORMAT=NC4C",
+                         "-co", "COMPRESS=DEFLATE",
+                         "-co", "ZLEVEL=9",
+                         "-o", target,
+                         ] + tile_files)
+    else:
+        raise Exception(f'cannot handle DEM_FMT: {DEM_FMT}')
+    logger.debug(f"... written {target}")
+
+
 # -------------------------------------------------------------------------
 
 
@@ -903,12 +947,13 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         verify = provider['check_cert']
     else:
         verify = True
-    filelist = re.sub(r'::.*$', '', provider['filelist'])
-    url = '/'.join((base_url, filelist))
+    filelist = provider['filelist']
     # switch formats:
     if isinstance(filelist, list):
         input_files = filelist
     elif isinstance(filelist, str):
+        filelist = re.sub(r'::.*$', '', filelist)
+        url = '/'.join((base_url, filelist))
         if filelist.endswith(('xml', 'meta4')):
             # xml
             logger.debug("downloading xml metadata: %s" % url)
@@ -936,24 +981,25 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     thread_args = []
     for inp in input_files:
         thread_args.append((inp, base_url, verify, provider))
-    tile_files=[]
-    with Pool() as pool:
-        for l in _tools.progress(pool.imap_unordered(process_input_file,
-                                                     thread_args),
+    tile_files = []
+    with Pool(1) as pool:
+        for l in _tools.progress(pool.map(ass_process_input_file,
+                                          thread_args),
                                  total=len(thread_args)):
+            # with Pool() as pool:
+            #     for l in _tools.progress(pool.imap_unordered(process_input_file,
+            #                                                  thread_args),
+            #                              total=len(thread_args)):
+            #
             tile_files += l
 
     # merge the GeoTiff Files from all tiles into one file
-    if os.path.exists(target):
-        logger.info("removing old source file")
-        os.remove(target)
-    logger.debug("merging tiles ...")
-    gdal_merge.main(["", "-co", "compress=lzw",
-                     "-o", target,
-                     ] + tile_files)
-    logger.debug("... done")
+    ass_merge_tiles(target, tile_files)
+
     return True
-# - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+
+
+# -------------------------------------------------------------------------
 
 
 def assemble_GLO_30(path, name="GLO_30", replace=False, args: dict = {}):
@@ -985,17 +1031,13 @@ def assemble_GLO_30(path, name="GLO_30", replace=False, args: dict = {}):
                     tf.extract(x, '.')
     # merge the GeoTiff Files from all tiles into one file
     target = os.path.join(path, DEM_FMT % "GLO-30")
-    if os.path.exists(target):
-        logger.info("removing old source file")
-        os.remove(target)
-    logger.debug("merging tiles ...")
-    gdal_merge.main(["", "-co", "compress=lzw",
-                     "-o", target,
-                     "-ot", "Int16"] +
-                    glob.glob("Copernicus_*.tif"))
-    logger.debug("... done")
+    tile_files = glob.glob("Copernicus_*.tif")
+    ass_merge_tiles(target, tile_files)
 
     return
+
+
+# -------------------------------------------------------------------------
 
 
 def assebmle_GTOPO30(path: str, name="GTOPO30",
@@ -1046,14 +1088,8 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
                       srcDSOrSrcDSTab=tile_dem,
                       format="GTiff")
     # merge the GeoTiff Files from all tiles into one file
-    if os.path.exists(target):
-        logger.info("removing old source file")
-        os.remove(target)
-    logger.debug("merging tiles ...")
-    gdal_merge.main(["", "-co", "compress=lzw",
-                     "-o", target
-                     ] + glob.glob("*.tif"))
-    logger.debug("... done")
+    tile_files = glob.glob("*.tif")
+    ass_merge_tiles(target, tile_files)
 
     return
 
@@ -1085,14 +1121,8 @@ def assemble_DGM25_RP(path, name="DGM25-RP", replace=False):
         except Exception as e:
             logger.error(str(e))
     # merge the GeoTiff Files from all tiles into one file
-    if os.path.exists(target):
-        logger.info("removing old source file")
-        os.remove(target)
-    logger.debug("merging tiles ...")
-    gdal_merge.main(["", "-co", "compress=lzw",
-                     "-o", target,
-                     ] + glob.glob("DGM25_*.tif"))
-    logger.debug("... done")
+    tile_files = glob.glob("DGM25_*.tif")
+    ass_merge_tiles(target, tile_files)
 
     return True
 

@@ -27,7 +27,7 @@ logger = logging.getLogger()
 
 KNOWN_DEMS = ["DGM25-RP", "DGM25-NW", "GLO-30", "GTOPO30"]
 STORAGE_DIR = "terrain"
-DEM_FMT = "%s.lzw.tif"
+DEM_FMT = '%s.elevation.nc'
 STORAGE_AUX_FILES = resources.files(__title__ + '.data')
 
 
