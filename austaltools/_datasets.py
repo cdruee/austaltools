@@ -244,8 +244,8 @@ DATASET_DEFINITIONS = {
             'unpack': 'zip://*/*.xyz',
             'CRS': 'EPSG:25832'
         },
-        #'license': 'PD'
-        #'notice': None
+        'license': None, # PD
+        'notice': None
     },
     'DGM10-HH': {
         'storage': 'terrain',
@@ -258,7 +258,7 @@ DATASET_DEFINITIONS = {
             'filelist': [
                 'dgm1_2x2km_XYZ_hh_2021_04_01.zip',
             ],
-            'unpack': 'zip://*.tif',
+            'unpack': 'zip://*/*/*.xyz',
             'CRS': 'EPSG:25832'
         },
         'license': 'spdx:CC-0',
@@ -674,6 +674,10 @@ def xyz2csv(inputfile, output, utm_remove_zone=False):
         header = None
     df = pd.read_csv(inputfile,
                      sep=r'\s+', header=header, names=['x', 'y', 'z'])
+    if len(df.index) < 4:
+        # skip empty files
+        return False
+
     if utm_remove_zone:
         df['x'] = np.sign(df['x']) * (np.abs(df['x']) % 1000000)
     # get full grid axes
@@ -694,6 +698,7 @@ def xyz2csv(inputfile, output, utm_remove_zone=False):
 
     of.to_csv(output, index=False, header=False)
 
+    return True
 
 # -------------------------------------------------------------------------
 
@@ -965,13 +970,22 @@ def ass_process_input(args):
         if inputfile.endswith('tif'):
             tf1 = inputfile
         elif inputfile.endswith('xyz'):
+            if os.stat(inputfile).st_size == 0:
+                logger.debug(f"skipping empty  ... {inputfile}")
+                os.remove(inputfile)
+                continue
             tf1 = re.sub(r'\.xyz$', '.tif', inputfile)
             logger.debug(f"converting tile ... {inputfile} -> {tf1}")
             # returns a tuple containing file handle and the abs pathname!
             csvhdl, csvfile = tempfile.mkstemp(
                 prefix='dgm', suffix='.csv', dir=TEMP)
-            xyz2csv(inputfile, csvfile, utm_remove_zone=utm_remove_zone)
+            got_csv = xyz2csv(inputfile, csvfile,
+                              utm_remove_zone=utm_remove_zone)
             os.remove(inputfile)
+            if not got_csv:
+                logger.warning(f"did not convert ... {inputfile}")
+                os.remove(inputfile)
+                continue
             gdal.Translate(destName=tf1,
                            srcDS=csvfile,
                            outputSRS=srcsrs,
