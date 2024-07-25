@@ -806,7 +806,7 @@ def jsonpath(json_obj, path):
 # -------------------------------------------------------------------------
 
 
-def ass_process_input_file(args):
+def ass_process_input(args):
     inp, base_url, verify, provider = args
     tile_files = []
     if re.match('^http[s]*://', inp):
@@ -978,19 +978,19 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     tile_files = []
 
     # parallel processing of input_files:
-    thread_args = []
+    proc_args = []
     for inp in input_files:
-        thread_args.append((inp, base_url, verify, provider))
+        proc_args.append((inp, base_url, verify, provider))
     tile_files = []
-    with Pool(1) as pool:
-        for l in _tools.progress(pool.map(ass_process_input_file,
-                                          thread_args),
-                                 total=len(thread_args)):
-            # with Pool() as pool:
-            #     for l in _tools.progress(pool.imap_unordered(process_input_file,
-            #                                                  thread_args),
-            #                              total=len(thread_args)):
-            #
+    if logger.getEffectiveLevel() <= logging.DEBUG:
+        procs = 1
+    else:
+        procs = None
+    with Pool(procs) as pool:
+        for l in _tools.progress(pool.imap_unordered(ass_process_input,
+                                                     proc_args),
+                                 total=len(proc_args)):
+
             tile_files += l
 
     # merge the GeoTiff Files from all tiles into one file
