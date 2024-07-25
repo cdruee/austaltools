@@ -1263,7 +1263,8 @@ def provide_dem(source: str, path: str = None,
         raise ValueError("method must be either 'download' or 'assemble'")
 
     # auxiliary files:
-    if 'licence' in DATASET_DEFINITIONS[source]:
+    if 'licence' in DATASET_DEFINITIONS[source] and \
+            DATASET_DEFINITIONS[source]['license'] is not None:
         lic_file = os.path.join(path, dataset.file_license)
         lic_src, lic_id = DATASET_DEFINITIONS[source]['licence'].split(':')
         if lic_src == 'spdx':
@@ -1278,7 +1279,8 @@ def provide_dem(source: str, path: str = None,
             else:
                 lic_aux = os.path.join(str(DIST_AUX_FILES), lic_id)
             shutil.copy(lic_aux, lic_file)
-    if 'notice' in DATASET_DEFINITIONS[source]:
+    if 'notice' in DATASET_DEFINITIONS[source] and \
+            DATASET_DEFINITIONS[source]['notice'] is not None:
         not_file = os.path.join(path, dataset.file_license)
         with open(not_file, 'w') as f:
             f.write(DATASET_DEFINITIONS[source]['notice'])
