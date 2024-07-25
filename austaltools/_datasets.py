@@ -1046,6 +1046,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     method = input_files = capabilities = layer = None
     if isinstance(filelist, list):
         input_files = filelist
+        method = 'http'
     elif isinstance(filelist, str):
         filelist = re.sub(r'::.*$', '', filelist)
         url = '/'.join((base_url, filelist))
