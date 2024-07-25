@@ -276,6 +276,23 @@ DATASET_DEFINITIONS = {
                   ', https://www.landesvermessung.sachsen.de, 2024, ' +
                   'licensed under DL-DE-BY-2.0',
     },
+    'DGM10-SL': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
+            'resolution': 10,
+            'host': 'https://geoportal.saarland.de/mapbender',
+            'path': 'php/wms.php?inspire=1&layer_id=46159&withChilds=1',
+            'filelist': 'wms',
+            'layer': '6',
+            'CRS': 'EPSG:25832'
+        },
+        'license': 'spdx:DL-DE-BY-2.0',
+        'notice': 'Generated from DGM1 data ' +
+                  '""Landesamt für Geobasisinformation Sachsen (GeoSN)", '
+                  ', https://www.landesvermessung.sachsen.de, 2024, ' +
+                  'licensed under DL-DE-BY-2.0',
+    },
     'DGM10-ST': {
         'storage': 'terrain',
         'assemble': 'assemble_DGMxx',
@@ -949,6 +966,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         verify = True
     filelist = provider['filelist']
     # switch formats:
+    method = input_files = capabilities = layer = None
     if isinstance(filelist, list):
         input_files = filelist
     elif isinstance(filelist, str):
@@ -960,38 +978,53 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
             with requests.get(url, allow_redirects=True, verify=verify) as rsp:
                 input_files = xmlpath(xml=rsp.content.decode(),
                                       path=provider['xmlpath'])
+            method = 'http'
         elif filelist.endswith(('json', 'geojson')):
             # xml
             logger.debug("downloading json metadata: %s" % url)
             with requests.get(url, allow_redirects=True, verify=verify) as rsp:
                 input_files = jsonpath(json_obj=rsp.json(),
                                        path=provider['jsonpath'])
+                method = 'http'
         elif filelist == 'generate':
             exp_val = [_tools.parse_time_string(x) for x in provider['values']]
             combval = itertools.product(*exp_val)
             input_files = [provider['format'] % x for x in combval]
+            method = 'http'
+        elif filelist == 'wms':
+            capabilities = '/'.join((provider['host'], provider['path']))
+            if 'layer' in provider:
+                layer = provider['layer']
+            else:
+                layer = 'default'
+            method = 'wms'
         else:
             raise NotImplementedError(f'can`t handle filelist: {filelist}')
     else:
         raise TypeError('filelist muste be list or str')
 
-    tile_files = []
-
-    # parallel processing of input_files:
-    proc_args = []
-    for inp in input_files:
-        proc_args.append((inp, base_url, verify, provider))
-    tile_files = []
-    if logger.getEffectiveLevel() <= logging.DEBUG:
-        procs = 1
+    if method == 'http':
+        # parallel processing of input_files:
+        thread_args = []
+        for inp in input_files:
+            thread_args.append((inp, base_url, verify, provider))
+        tile_files = []
+        if logger.getEffectiveLevel() <= logging.DEBUG:
+            procs = 1
+        else:
+            procs = None
+        with Pool(procs) as pool:
+            for tfs in _tools.progress(pool.imap_unordered(
+                    ass_process_input, thread_args),
+                    total=len(thread_args)):
+                tile_files += tfs
+    elif method == 'wms':
+        import _wms_download
+        tile_files = _wms_download.download_wms(
+            url=capabilities, layer=layer, epsg=provider['CRS'],
+            res=provider['resolution'])
     else:
-        procs = None
-    with Pool(procs) as pool:
-        for l in _tools.progress(pool.imap_unordered(ass_process_input,
-                                                     proc_args),
-                                 total=len(proc_args)):
-
-            tile_files += l
+        raise ValueError(f'method {method} not implemented')
 
     # merge the GeoTiff Files from all tiles into one file
     ass_merge_tiles(target, tile_files)
