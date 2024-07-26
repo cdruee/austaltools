@@ -983,7 +983,8 @@ def ass_process_input(args):
             os.remove(inputfile)
             if not got_csv:
                 logger.warning(f"did not convert ... {inputfile}")
-                os.remove(inputfile)
+                os.close(csvhdl)
+                os.remove(csvfile)
                 continue
             gdal.Translate(destName=tf1,
                            srcDS=csvfile,
