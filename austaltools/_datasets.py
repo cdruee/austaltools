@@ -910,10 +910,9 @@ def ass_process_input(args):
     tile_files = []
     if re.match('^http[s]*://', inp):
         url = inp
-        dl_file = os.path.basename(inp)
     else:
         url = f"{base_url}/{inp}"
-        dl_file = inp
+    dl_file = os.path.basename(url)
     logger.debug(f"downloading ... {url}")
     failure_ok = False
     for i in range(MAX_RETRY):
