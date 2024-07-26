@@ -815,7 +815,13 @@ def xmlpath(xml, path):
         next_nodes = []
         for node in nodes:
             # iterate over children
-            for i, ele in enumerate(node):
+            last_tag = None
+            i = 0
+            for ele in node:
+                if ele.tag == last_tag:
+                    i == i + 1
+                else:
+                    i = 0
                 if not ele.tag == tag:
                     continue
                 if sel is None and enti is None:
