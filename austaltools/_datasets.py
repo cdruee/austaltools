@@ -345,6 +345,27 @@ DATASET_DEFINITIONS = {
                   ' www.lvermgeo.rlp.de", ' +
                   'licensed under DL-DE-BY-2.0',
     },
+    'DGM10-SL': {
+        'storage': 'terrain',
+        'assemble': 'assemble_DGMxx',
+        'arguments': {
+            'resolution': 10,
+            'host': 'file://',
+            'path': 'localdata/opt/DGM1_SL',
+            'filelist': ['DGM1_tif_MZG_25832.zip',
+                         'DGM1_tif_SB_25832.zip',
+                         'DGM1_tif_SLS_25832.zip',
+                         'DGM1_tif_SPK_25832.zip',
+                         'DGM1_tif_WND_25832.zip'],
+            'unpack': 'zip://*.tif',
+            'CRS': 'EPSG:25832'
+        },
+        'license': 'spdx:DL-DE-BY-2.0',
+        'notice': 'Generated from DGM1 data ' +
+                  '""Landesamt für Geobasisinformation Sachsen (GeoSN)", '
+                  ', https://www.landesvermessung.sachsen.de, 2024, ' +
+                  'licensed under DL-DE-BY-2.0',
+    },
     'DGM10-SN': {
         'storage': 'terrain',
         'assemble': 'assemble_DGMxx',
@@ -354,23 +375,7 @@ DATASET_DEFINITIONS = {
             'path': 'inspire/el_atom',
             'filelist': 'Dataset_el_dgm1.xml',
             'xmlpath': '/entry/link::href',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:DL-DE-BY-2.0',
-        'notice': 'Generated from DGM1 data ' +
-                  '""Landesamt für Geobasisinformation Sachsen (GeoSN)", '
-                  ', https://www.landesvermessung.sachsen.de, 2024, ' +
-                  'licensed under DL-DE-BY-2.0',
-    },
-    'DGM10-SL': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'https://geoportal.saarland.de/mapbender',
-            'path': 'php/wms.php?inspire=1&layer_id=46159&withChilds=1',
-            'filelist': 'wms',
-            'layer': '6',
+            'unpack': 'zip://*.xyz',
             'CRS': 'EPSG:25832'
         },
         'license': 'spdx:DL-DE-BY-2.0',
@@ -931,22 +936,32 @@ def ass_process_input(args):
     else:
         url = f"{base_url}/{inp}"
     dl_file = os.path.basename(url)
-    logger.debug(f"downloading ... {url}")
     failure_ok = False
-    for i in range(MAX_RETRY):
-        with requests.get(url, verify=verify) as req:
-            if req.status_code == requests.codes.ok:
-                with open(dl_file, 'wb') as f:
-                    f.write(req.content)
-                break
-            elif (req.status_code == 404 and
-                  'missing' in provider and
-                  provider['missing'] in ['ok', 'ignore']):
+    if re.match('^http[s]*://', url):
+        logger.debug(f"downloading ... {url}")
+        for i in range(MAX_RETRY):
+            with requests.get(url, verify=verify) as req:
+                if req.status_code == requests.codes.ok:
+                    with open(dl_file, 'wb') as f:
+                        f.write(req.content)
+                    break
+                elif (req.status_code == 404 and
+                      'missing' in provider and
+                      provider['missing'] in ['ok', 'ignore']):
+                    failure_ok = True
+                    # break retry loop
+                    break
+        else:
+            raise Exception("failed to download tile files")
+    elif re.match('^file://', url):
+        logger.debug(f"copying file... {url}")
+        url = re.sub('^file:/+','/', url)
+        try:
+            shutil.copy(url, dl_file)
+        except IOError:
+            if ('missing' in provider and
+                 provider['missing'] in ['ok', 'ignore']):
                 failure_ok = True
-                # break retry loop
-                break
-    else:
-        raise Exception("failed to download tile files")
     if failure_ok:
         # skip rest of inp loop
         return tile_files
@@ -967,8 +982,10 @@ def ass_process_input(args):
                     with open(os.path.basename(un), 'wb') as fu:
                         fu.write(fz.read())
                 inputfiles.append(os.path.basename(un))
+        if len(inputfiles) == 0:
+            logger.warning(f"no data unpacked from {dl_file}")
     else:
-        raise Exception("dont know how to handle download file")
+        raise Exception(f"dont know how to handle download: {dl_file}")
 
     if 'resolution' in provider:
         out_res = provider['resolution']
@@ -1128,10 +1145,13 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
             procs = 1
         else:
             procs = None
+        i = 0
         with Pool(procs) as pool:
             for tfs in _tools.progress(pool.imap_unordered(
                     ass_process_input, thread_args),
                     total=len(thread_args)):
+                i = i + 1
+                logger.debug("file %5d / %5d" % (i, len(thread_args)))
                 tile_files += tfs
     elif method == 'wms':
         import _wms_download
