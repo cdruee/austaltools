@@ -82,8 +82,8 @@ DATASET_DEFINITIONS = {
             'resolution': 10,
             'host': 'https://data.geobasis-bb.de',
             'path': 'geobasis/daten/dgm/tif',
-            'filelist': '::xml',
-            'xmlpath': '/body/table[@id=indexlist]/tr[*]/td[class=indexcolname]/a::href',
+            'filelist': '::html',
+            'links': 'dgm.*zip',
             'unpack': 'zip://*.tif',
             'CRS': 'EPSG:25832'
         },
@@ -101,7 +101,7 @@ DATASET_DEFINITIONS = {
             'host': 'https://fbinter.stadt-berlin.de',
             'path': 'fb/feed/senstadt/a_dgm',
             'filelist': '0::xml',
-            'xmlpath': '/entry/link::href',
+            'xmlpath': '/entry/link[@href=.*zip]::href',
             'unpack': 'zip://*.xyz',
             'CRS': 'EPSG:25832'
         },
@@ -285,7 +285,7 @@ DATASET_DEFINITIONS = {
             'host': 'https://www.geodaten-mv.de',
             'path': 'dienste',
             'filelist': 'dgm_atom?type=dataset&id=ca268792-s2q1-4a39-b34c-9ec5bf9a4469::xml',
-            'xmlpath': '/entry/link[title=.*Gtiff.*]::href',
+            'xmlpath': '/entry/link[@title=.*Gtiff.*]::href',
             'CRS': 'EPSG:25832'
         },
         'license': 'spdx:CC-BY-4.0',
@@ -362,8 +362,8 @@ DATASET_DEFINITIONS = {
         },
         'license': 'spdx:DL-DE-BY-2.0',
         'notice': 'Generated from DGM1 data ' +
-                  '""Landesamt für Geobasisinformation Sachsen (GeoSN)", '
-                  ', https://www.landesvermessung.sachsen.de, 2024, ' +
+                  '""© GeoBasis DE/LVGL-SL (2024)", '
+                  ', https://lvgl.saarland.de, 2024, ' +
                   'licensed under DL-DE-BY-2.0',
     },
     'DGM10-SN': {
@@ -985,7 +985,7 @@ def ass_process_input(args):
         if len(inputfiles) == 0:
             logger.warning(f"no data unpacked from {dl_file}")
     else:
-        raise Exception(f"dont know how to handle download: {dl_file}")
+        logger.error(f"dont know how to handle download: {dl_file}")
 
     if 'resolution' in provider:
         out_res = provider['resolution']
@@ -1112,6 +1112,15 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
             with requests.get(url, allow_redirects=True, verify=verify) as rsp:
                 input_files = jsonpath(json_obj=rsp.json(),
                                        path=provider['jsonpath'])
+                method = 'http'
+        elif filelist.endswith(('html')):
+            # html
+            logger.debug("downloading html metadata: %s" % url)
+            with requests.get(url, allow_redirects=True, verify=verify) as rsp:
+                text = rsp.content.decode()
+                links = [x for x in re.findall(r'href="(.+?)"', text)]
+                patt = provider['links']
+                input_files = [x for x in links if bool(re.match(patt,x))]
                 method = 'http'
         elif filelist == 'generate':
             exp_val = []
