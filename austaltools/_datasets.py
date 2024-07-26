@@ -137,7 +137,6 @@ DATASET_DEFINITIONS = {
         'assemble': 'assemble_DGMxx',
         'arguments': {
             'resolution': 10,
-            'check_cert': False,
             'host': 'https://geodaten.bayern.de',
             'path': '/odd/a/dgm/dgm1',
             'filelist': '/meta/metalink/09.meta4',
@@ -402,10 +401,11 @@ DATASET_DEFINITIONS = {
         'assemble': 'assemble_DGMxx',
         'arguments': {
             'resolution': 10,
-            'host': 'https://geoportal.geobasis-th.de',
+            'host': 'https://geoportal.geoportal-th.de',
             'path': 'dienste',
             'filelist': 'atom_th_hoehendaten_dgm?type=dataset&id=14418d25-fcd7-4a3f-99a9-e3059a2772af&crs=EPSG:25832::xml',
             'xmlpath': '/entry/link::href',
+            'unpack': 'zip://*.tif',
             'CRS': 'EPSG:25832'
         },
         'license': 'spdx:DL-DE-BY-2.0',
@@ -815,18 +815,19 @@ def xmlpath(xml, path):
         next_nodes = []
         for node in nodes:
             # iterate over children
-            last_tag = None
+            tag_counter = {}
             i = 0
             for ele in node:
-                if ele.tag == last_tag:
-                    i == i + 1
+                # count identical tags
+                if ele.tag in tag_counter:
+                    tag_counter[ele.tag] += 1
                 else:
-                    i = 0
+                    tag_counter[ele.tag] = 0
                 if not ele.tag == tag:
                     continue
                 if sel is None and enti is None:
                     next_nodes.append(ele)
-                elif sel == i:
+                elif sel == tag_counter[ele.tag]:
                     next_nodes.append(ele)
                 elif enti is not None:
                     if enti.startswith('@'):
@@ -1079,8 +1080,8 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         input_files = filelist
         method = 'http'
     elif isinstance(filelist, str):
-        filelist = re.sub(r'::.*$', '', filelist)
-        url = '/'.join((base_url, filelist))
+        filelist_name = re.sub(r'::.*$', '', filelist)
+        url = '/'.join((base_url, filelist_name))
         if filelist.endswith(('xml', 'meta4')):
             # xml
             logger.debug("downloading xml metadata: %s" % url)
