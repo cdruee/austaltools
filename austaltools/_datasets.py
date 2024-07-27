@@ -1765,6 +1765,8 @@ DATASETS = [DataSet(name=k, **v) for k, v in DATASET_DEFINITIONS.items()]
 dataset_scan()
 
 # https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/dl-dgm1.html
+# https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/multi.php?url=dgm1_32_478_6084_1_sh.xyz&buttonClass=file1&id=1288&type=dgm1&action=start&_=1722037371035
+# _ = unix-sec
 # https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/multi.php?action=start&type=dgm1&id=513
 # {"success":true,"id":"cKdXn8","statusUrl":"https:\/\/geodaten.schleswig-holstein.de\/gaialight-sh\/_apps\/dladownload\/multi.php"}
 # https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/multi.php?action=status&job=cKdXn8
