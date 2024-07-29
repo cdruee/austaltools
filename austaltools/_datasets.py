@@ -9,16 +9,20 @@ import datetime as dt
 import glob
 import gzip
 import itertools
+import json
 import logging
 import os
+import random
 import re
 import shutil
 import sys
 import tarfile
 import tempfile
+import time
 import zipfile
 from importlib import resources
 from pathlib import PurePath
+from urllib3 import disable_warnings, exceptions
 from xml.etree import ElementTree
 
 import numpy as np
@@ -54,396 +58,20 @@ try:
 except ImportError:
     from _version import __version__, __title__
 
+disable_warnings(exceptions.InsecureRequestWarning)
 logging.basicConfig()
 logger = logging.getLogger()
 
-# -------------------------------------------------------------------------
 
+# -------------------------------------------------------------------------
 DEM_FMT = '%s.elevation.nc'  # '%s.lzw.tif'
 WEA_FMT = '%s_ak_eu_%04i.nc'
 DIST_AUX_FILES = resources.files(__title__ + '.data')
 TEMP = None
 MAX_RETRY = 3
-DATASET_DEFINITIONS = {
-    'DGM25-RP': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGM25_RP',
-        'doi': '10.5281/zenodo.12740424',
-        'license': 'spdx:DL-DE-BY-2.0',
-        'notice': 'Generated from DGM1 data ' +
-                  '"© GeoBasis-DE / LVermGeoRP 2024, ' +
-                  ' www.lvermgeo.rlp.de", ' +
-                  'licensed under DL-DE-BY-2.0',
-    },
-    'DGM10-BB': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'https://data.geobasis-bb.de',
-            'path': 'geobasis/daten/dgm/tif',
-            'filelist': '::html',
-            'links': 'dgm.*zip',
-            'unpack': 'zip://*.tif',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:DL-DE-BY-2.0',
-        'notice': 'Generated from DGM1 data '
-                  'by "GeoBasis-DE / LGB (Landesvermessung und '
-                  'Geobasisinformation Brandenburg)", www.lgl-bw.de", '
-                  'licensed under DL-DE-BY-2.0',
-    },
-    'DGM10-BE': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'https://fbinter.stadt-berlin.de',
-            'path': 'fb/feed/senstadt/a_dgm',
-            'filelist': '0::xml',
-            'xmlpath': '/entry/link[@href=.*zip]::href',
-            'unpack': 'zip://*.xyz',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:DL-DE-BY-2.0',
-        'notice': 'Generated from DGM1 data '
-                  'by "Senatsverwaltung für Stadtentwicklung, '
-                  'Bauen und Wohnen Berlin", 2023, '
-                  'licensed under DL-DE-BY-2.0',
-    },
-    'DGM10-BW': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'https://opengeodata.lgl-bw.de',
-            #  re: 387-609/2  ho:5264-5514/2
-            'path': 'data/dgm',
-            'filelist': 'generate',
-            'format': 'dgm1_32_%i_%i_2_bw.zip',
-            'values': ['387-609/2', '5264-5514/2'],
-            'missing': 'ignore',
-            'unpack': 'zip://*/*.xyz',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:DL-DE-BY-2.0',
-        'notice': 'Generated from DGM1 data '
-                  'by "Landesamt für Geoinformation und Landentwicklung '
-                  'Baden-Württemberg (LGL), www.lgl-bw.de", '
-                  'licensed under DL-DE-BY-2.0',
-    },
-    'DGM10-BY': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'https://geodaten.bayern.de',
-            'path': '/odd/a/dgm/dgm1',
-            'filelist': '/meta/metalink/09.meta4',
-            'xmlpath': '/file[@name=.tif$]/url[0]',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:CC-BY-4.0',
-        'notice': 'Generated from DGM1 data '
-                  'by "Bayerische Vermessungsverwaltung – '
-                  'www.geodaten.bayern.de", '
-                  'licensed under CC-BY-4.0',
-    },
-    'DGM10-HB': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'https://gdi2.geo.bremen.de',
-            'path': 'inspire/download/DGM/data',
-            'filelist': [
-                'Gitternetz_DGM1_2017_HB_ASCII_XYZ.zip',
-                'Gitternetz_DGM1_2015_BHV_ASCII_XYZ.zip',
-            ],
-            'unpack': 'zip://*/*.xyz',
-            'CRS': 'EPSG:25832',
-            'utm_remove_zone': 'true'
-        },
-        'license': 'spdx:CC-BY-4.0',
-        'notice': 'Generated from DGM1 data '
-                  'by "Landesamt GeoInformation Bremen" (2015/17), '
-                  'licensed under CC-BY-4.0'
-    },
-    'DGM10-HE': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'https://gds.hessen.de',
-            'path': '/downloadcenter/20240726/3D-Daten/Digitales Geländemodell (DGM1)',
-            'filelist': 'generate',
-            'format': '%s/%s - DGM1.zip',
-            'values': [['Hochtaunuskreis', 'Lahn-Dill-Kreis', 'Landkreis Bergstraße', 'Landkreis Darmstadt-Dieburg',
-                        'Landkreis Fulda', 'Landkreis Gießen', 'Landkreis Groß-Gerau', 'Landkreis Hersfeld-Rotenburg',
-                        'Landkreis Kassel', 'Landkreis Limburg-Weilburg', 'Landkreis Marburg-Biedenkopf',
-                        'Landkreis Offenbach', 'Landkreis Waldeck-Frankenberg', 'Main-Kinzig-Kreis',
-                        'Main-Taunus-Kreis', 'Odenwaldkreis', 'Rheingau-Taunus-Kreis', 'Schwalm-Eder-Kreis',
-                        'Stadt Darmstadt', 'Stadt Frankfurt am Main', 'Stadt Kassel', 'Stadt Offenbach am Main',
-                        'Stadt Wiesbaden', 'Vogelsbergkreis', 'Werra-Meißner-Kreis', 'Wetteraukreis'],
-                       ['Bad Homburg v.d.Höhe', 'Friedrichsdorf', 'Glashütten', 'Grävenwiesbach',
-                        'Königstein im Taunus', 'Kronberg im Taunus', 'Neu-Anspach', 'Oberursel (Taunus)', 'Schmitten',
-                        'Steinbach (Taunus)', 'Usingen', 'Wehrheim', 'Weilrod', 'Aßlar', 'Bischoffen', 'Braunfels',
-                        'Breitscheid', 'Dietzhölztal', 'Dillenburg', 'Driedorf', 'Ehringshausen', 'Eschenburg',
-                        'Greifenstein', 'Haiger', 'Herborn', 'Hohenahr', 'Hüttenberg', 'Lahnau', 'Leun', 'Mittenaar',
-                        'Schöffengrund', 'Siegbach', 'Sinn', 'Abtsteinach', 'Bensheim', 'Biblis', 'Birkenau',
-                        'Bürstadt', 'Einhausen', 'Fürth', 'Gemarkung Michelbuch (gemeindefrei)', 'Gorxheimertal',
-                        'Grasellenbach', 'Groß-Rohrheim', 'Heppenheim (Bergstraße)', 'Hirschhorn (Neckar)',
-                        'Lampertheim', 'Lautertal (Odenwald)', 'Lindenfels', 'Lorsch', 'Mörlenbach', 'Neckarsteinach',
-                        'Rimbach', 'Alsbach-Hähnlein', 'Babenhausen', 'Bickenbach', 'Dieburg', 'Eppertshausen',
-                        'Erzhausen', 'Fischbachtal', 'Griesheim', 'Groß-Bieberau', 'Groß-Umstadt', 'Groß-Zimmern',
-                        'Messel', 'Modautal', 'Mühltal', 'Münster (Hessen)', 'Ober-Ramstadt', 'Otzberg', 'Pfungstadt',
-                        'Reinheim', 'Roßdorf', 'Bad Salzschlirf', 'Burghaun', 'Dipperz', 'Ebersburg',
-                        'Ehrenberg (Rhön)', 'Eichenzell', 'Eiterfeld', 'Flieden', 'Fulda', 'Gersfeld (Rhön)',
-                        'Großenlüder', 'Hilders', 'Hofbieber', 'Hosenfeld', 'Hünfeld', 'Kalbach', 'Künzell', 'Neuhof',
-                        'Nüsttal', 'Petersberg', 'Allendorf (Lumda)', 'Biebertal', 'Buseck', 'Fernwald', 'Gießen',
-                        'Grünberg', 'Heuchelheim a.d. Lahn', 'Hungen', 'Langgöns', 'Laubach', 'Lich', 'Linden',
-                        'Lollar', 'Pohlheim', 'Rabenau', 'Reiskirchen', 'Staufenberg', 'Wettenberg',
-                        'Biebesheim am Rhein', 'Bischofsheim', 'Büttelborn', 'Gernsheim', 'Ginsheim-Gustavsburg',
-                        'Groß-Gerau', 'Kelsterbach', 'Mörfelden-Walldorf', 'Nauheim', 'Raunheim', 'Riedstadt',
-                        'Rüsselsheim am Main', 'Stockstadt am Rhein', 'Trebur', 'Alheim', 'Bad Hersfeld', 'Bebra',
-                        'Breitenbach am Herzberg', 'Cornberg', 'Friedewald', 'Hauneck', 'Haunetal', 'Heringen (Werra)',
-                        'Hohenroda', 'Kirchheim', 'Ludwigsau', 'Nentershausen', 'Neuenstein', 'Niederaula',
-                        'Philippsthal (Werra)', 'Ronshausen', 'Rotenburg a. d. Fulda', 'Schenklengsfeld', 'Wildeck',
-                        'Ahnatal', 'Bad Emstal', 'Bad Karlshafen', 'Baunatal', 'Breuna', 'Calden', 'Espenau',
-                        'Fuldabrück', 'Fuldatal', 'Grebenstein', 'Gutsbezirk Reinhardswald', 'Habichtswald', 'Helsa',
-                        'Hofgeismar', 'Immenhausen', 'Kaufungen', 'Liebenau', 'Lohfelden', 'Naumburg', 'Nieste',
-                        'Bad Camberg', 'Beselich', 'Brechen', 'Dornburg', 'Elbtal', 'Elz', 'Hadamar', 'Hünfelden',
-                        'Limburg a. d. Lahn', 'Löhnberg', 'Mengerskirchen', 'Merenberg', 'Runkel', 'Selters (Taunus)',
-                        'Villmar', 'Waldbrunn (Westerwald)', 'Weilburg', 'Weilmünster', 'Weinbach', 'Amöneburg',
-                        'Angelburg', 'Bad Endbach', 'Biedenkopf', 'Breidenbach', 'Cölbe', 'Dautphetal',
-                        'Ebsdorfergrund', 'Fronhausen', 'Gladenbach', 'Kirchhain', 'Lahntal', 'Lohra', 'Marburg',
-                        'Münchhausen', 'Neustadt (Hessen)', 'Rauschenberg', 'Stadtallendorf', 'Steffenberg',
-                        'Weimar (Lahn)', 'Dietzenbach', 'Dreieich', 'Egelsbach', 'Hainburg', 'Heusenstamm',
-                        'Langen (Hessen)', 'Mainhausen', 'Mühlheim am Main', 'Neu-Isenburg', 'Obertshausen',
-                        'Rödermark', 'Rodgau', 'Seligenstadt', 'Allendorf (Eder)', 'Bad Arolsen', 'Bad Wildungen',
-                        'Battenberg (Eder)', 'Burgwald', 'Diemelsee', 'Diemelstadt', 'Edertal', 'Frankenau',
-                        'Frankenberg (Eder)', 'Gemünden (Wohra)', 'Haina (Kloster)', 'Hatzfeld (Eder)', 'Korbach',
-                        'Lichtenfels', 'Rosenthal', 'Twistetal', 'Vöhl', 'Volkmarsen', 'Waldeck', 'Bad Orb',
-                        'Bad Soden-Salmünster', 'Biebergemünd', 'Birstein', 'Brachttal', 'Bruchköbel', 'Erlensee',
-                        'Flörsbachtal', 'Freigericht', 'Gelnhausen', 'Großkrotzenburg', 'Gründau',
-                        'Gutsbezirk Spessart', 'Hammersbach', 'Hanau', 'Hasselroth', 'Jossgrund', 'Langenselbold',
-                        'Linsengericht', 'Maintal', 'Bad Soden am Taunus', 'Eppstein', 'Eschborn', 'Flörsheim am Main',
-                        'Hattersheim am Main', 'Hochheim am Main', 'Hofheim am Taunus', 'Kelkheim (Taunus)', 'Kriftel',
-                        'Liederbach am Taunus', 'Schwalbach am Taunus', 'Sulzbach (Taunus)', 'Bad König', 'Brensbach',
-                        'Breuberg', 'Brombachtal', 'Erbach (Odenwald)', 'Fränkisch-Crumbach', 'Höchst i. Odw',
-                        'Lützelbach', 'Michelstadt', 'Mossautal', 'Oberzent', 'Reichelsheim (Odenwald)', 'Aarbergen',
-                        'Bad Schwalbach', 'Eltville am Rhein', 'Geisenheim', 'Heidenrod', 'Hohenstein', 'Hünstetten',
-                        'Idstein', 'Kiedrich', 'Lorch', 'Niedernhausen', 'Oestrich-Winkel', 'Rüdesheim am Rhein',
-                        'Schlangenbad', 'Taunusstein', 'Waldems', 'Walluf', 'Bad Zwesten', 'Borken (Hessen)',
-                        'Edermünde', 'Felsberg', 'Frielendorf', 'Fritzlar', 'Gilserberg', 'Gudensberg', 'Guxhagen',
-                        'Homberg (Efze)', 'Jesberg', 'Knüllwald', 'Körle', 'Malsfeld', 'Melsungen', 'Morschen',
-                        'Neuental', 'Neukirchen (Knüllgebirge)', 'Niedenstein', 'Oberaula', 'Darmstadt',
-                        'Frankfurt am Main', 'Kassel', 'Offenbach am Main', 'Wiesbaden', 'Alsfeld', 'Antrifttal',
-                        'Feldatal', 'Freiensteinau', 'Gemünden (Felda)', 'Grebenau', 'Grebenhain', 'Herbstein',
-                        'Homberg (Ohm)', 'Kirtorf', 'Lauterbach (Hessen)', 'Lautertal (Vogelsberg)', 'Mücke', 'Romrod',
-                        'Schlitz', 'Schotten', 'Schwalmtal', 'Ulrichstein', 'Wartenberg', 'Bad Sooden-Allendorf',
-                        'Berkatal', 'Eschwege', 'Großalmerode', 'Gutsbezirk Kaufunger Wald', 'Herleshausen',
-                        'Hessisch Lichtenau', 'Meinhard', 'Meißner', 'Neu-Eichenberg', 'Ringgau', 'Sontra',
-                        'Waldkappel', 'Wanfried', 'Wehretal', 'Weißenborn', 'Witzenhausen', 'Altenstadt', 'Bad Nauheim',
-                        'Bad Vilbel', 'Büdingen', 'Butzbach', 'Echzell', 'Florstadt', 'Friedberg (Hessen)', 'Gedern',
-                        'Glauburg', 'Hirzenhain', 'Karben', 'Kefenrod', 'Limeshain', 'Münzenberg', 'Nidda', 'Niddatal',
-                        'Ober-Mörlen', 'Ortenberg', 'Ranstadt']
-                       ],
-            'missing': 'ignore',
-            'unpack': 'zip://*.tif',
-            'CRS': 'EPSG:25832'
-        },
-        'license': None,  # PD
-        'notice': None
-    },
-    'DGM10-HH': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'https://daten-hamburg.de',
-            'path': 'geographie_geologie_geobasisdaten/'
-                    'Digitales_Hoehenmodell/DGM1',
-            'filelist': [
-                'dgm1_2x2km_XYZ_hh_2021_04_01.zip',
-            ],
-            'unpack': 'zip://*/*/*.xyz',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:CC-0',
-        'notice': 'Generated from DGM1 data '
-                  'by "Freie und Hansestadt Hamburg, '
-                  'Landesbetrieb Geoinformation und Vermessung '
-                  '(LGV)", 2021, licensed under '
-                  'Datenlizenz Deutschland Namensnennung 2.0'
-    },
-    'DGM10-MV': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'https://www.geodaten-mv.de',
-            'path': 'dienste',
-            'filelist': 'dgm_atom?type=dataset&id=ca268792-s2q1-4a39-b34c-9ec5bf9a4469::xml',
-            'xmlpath': '/entry/link[@title=.*Gtiff.*]::href',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:CC-BY-4.0',
-        'notice': 'Generated from DGM1 data '
-                  'by "© GeoBasis-DE/M-V", 2024, '
-                  'licensed under CC-BY-4.0',
-    },
-    'DGM10-NI': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'https://arcgis-geojson.s3.eu-de.'
-                    'cloud-object-storage.appdomain.cloud',
-            'path': 'dgm1',
-            'filelist': 'lgln-opengeodata-dgm1.geojson',
-            'jsonpath': '/features/*/properties/dgm1',
-            'datapath': '',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:CC-BY-4.0',
-        'notice': 'Generated from DGM1 data '
-                  'by "Landesbetrieb Landesvermessung und '
-                  'Geobasisinformation Niedersachsen - LGLN" (2024), '
-                  'licensed under CC-BY-4.0'
-    },
-    'DGM10-NW': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'https://www.opengeodata.nrw.de',
-            'path': 'produkte/geobasis/hm/dgm1_tiff/dgm1_tiff',
-            'filelist': 'index.xml',
-            'xmlpath': '/datasets/dataset[0]/files/file::name',
-            'datapath': '',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:DL-DE-ZERO-2.0',
-        'notice': None
-    },
-    'DGM10-RP': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'check_cert': False,
-            'host': 'https://geobasis-rlp.de',
-            'path': '/data/dgm1/current',
-            'filelist': '/meta4/dgm1_tif_07.meta4',
-            'xmlpath': '/file[@name=.tif$]/url',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:DL-DE-BY-2.0',
-        'notice': 'Generated from DGM1 data ' +
-                  '"© GeoBasis-DE / LVermGeoRP 2024, ' +
-                  ' www.lvermgeo.rlp.de", ' +
-                  'licensed under DL-DE-BY-2.0',
-    },
-    'DGM10-SL': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'file://',
-            'path': 'localdata/opt/DGM1_SL',
-            'filelist': ['DGM1_tif_MZG_25832.zip',
-                         'DGM1_tif_SB_25832.zip',
-                         'DGM1_tif_SLS_25832.zip',
-                         'DGM1_tif_SPK_25832.zip',
-                         'DGM1_tif_WND_25832.zip'],
-            'unpack': 'zip://*.tif',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:DL-DE-BY-2.0',
-        'notice': 'Generated from DGM1 data ' +
-                  '""© GeoBasis DE/LVGL-SL (2024)", '
-                  ', https://lvgl.saarland.de, 2024, ' +
-                  'licensed under DL-DE-BY-2.0',
-    },
-    'DGM10-SN': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'https://geodownload.sachsen.de',
-            'path': 'inspire/el_atom',
-            'filelist': 'Dataset_el_dgm1.xml',
-            'xmlpath': '/entry/link::href',
-            'unpack': 'zip://*.xyz',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:DL-DE-BY-2.0',
-        'notice': 'Generated from DGM1 data ' +
-                  '""Landesamt für Geobasisinformation Sachsen (GeoSN)", '
-                  ', https://www.landesvermessung.sachsen.de, 2024, ' +
-                  'licensed under DL-DE-BY-2.0',
-    },
-    'DGM10-ST': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'https://www.geodatenportal.sachsen-anhalt.de',
-            'path': 'gfds_webshare/download/LVermGeo/Geodatenportal/Online-Bereitstellung-LVermGeo/DGM',
-            'filelist': ['DGM2_1.zip', 'DGM2_2.zip', 'DGM2_3.zip', 'DGM2_4.zip'],
-            'unpack': 'zip://*/*.tif',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:DL-DE-BY-2.0',
-        'notice': 'Generated from DGM1 data ' +
-                  '"© GeoBasis-DE / LVermGeo ST" '
-                  ', https://www.lvermgeo.sachsen-anhalt.de, 2024, ' +
-                  'licensed under DL-DE-BY-2.0',
-    },
-    'DGM10-TH': {
-        'storage': 'terrain',
-        'assemble': 'assemble_DGMxx',
-        'arguments': {
-            'resolution': 10,
-            'host': 'https://geoportal.geoportal-th.de',
-            'path': 'dienste',
-            'filelist': 'atom_th_hoehendaten_dgm?type=dataset&id=14418d25-fcd7-4a3f-99a9-e3059a2772af&crs=EPSG:25832::xml',
-            'xmlpath': '/entry/link::href',
-            'unpack': 'zip://*.tif',
-            'CRS': 'EPSG:25832'
-        },
-        'license': 'spdx:DL-DE-BY-2.0',
-        'notice': 'Generated from DGM1 data ' +
-                  '"© GeoBasis-DE / LVermGeoRP 2024, ' +
-                  ' www.lvermgeo.rlp.de", ' +
-                  'licensed under DL-DE-BY-2.0',
-    },
-    'GLO-30': {
-        'storage': 'terrain',
-        'assemble': 'assemble_GLO_30',
-        'license': 'file:',
-        'notice': '(C) DLR e.V. 2010-2014 and © Airbus Defence and Space '
-                  'GmbH 2014-2018 provided under COPERNICUS by the '
-                  'European Union and ESA; all rights reserved.\n'
-                  'EU users who use the Copernicus DEM in their research '
-                  'are requested to use the following DOI when citing '
-                  'the data source in their publications: '
-                  'https://doi.org/10.5270/ESA-c5d3d65',
-    },
-    'GTOPO30': {
-        'storage': 'terrain',
-        'assemble': 'assebmle_GTOPO30'
-    },
-    'ERA5': {
-        'storage': 'weather',
-        'assemble': 'assemble_ERA5'
-    },
-    'CERRA': {
-        'storage': 'weather',
-        'assemble': 'assemble_CERRA'
-    },
-}
+
+with (DIST_AUX_FILES / 'dataset_definitions.json').open() as f:
+    DATASET_DEFINITIONS = json.load(f)
 
 KNOWN_DEMS = [k for k, v in DATASET_DEFINITIONS.items()
               if v['storage'] == _tools.STORAGE_TERRAIN]
@@ -466,14 +94,18 @@ class DataSet:
     years = []
     arguments = None
 
-    # ----------------------------------------------------
 
+
+
+# -------------------------------------------------------------------------
     def assemble(self):
         """Placeholder for download function"""
         pass
 
-    # ----------------------------------------------------
 
+
+
+# -------------------------------------------------------------------------
     def download(self, path=None, uri=None):
         """Download assembled dataset from reopository"""
         if path is None:
@@ -511,8 +143,10 @@ class DataSet:
             with requests.get(url, allow_redirects=True) as req:
                 f.write(req.content)
 
-    # ----------------------------------------------------
 
+
+
+# -------------------------------------------------------------------------
     def __init__(self, **kwargs):
         if 'name' not in kwargs:
             raise ValueError('no name given')
@@ -542,22 +176,16 @@ def locations_available(locs):
 
 
 # -------------------------------------------------------------------------
-
-
 def locations_writable(locs):
     return [x for x in locs if os.access(x, os.W_OK)]
 
 
 # -------------------------------------------------------------------------
-
-
 def location_has_storage(location, storage):
     return os.path.exists(os.path.join(location, storage))
 
 
 # -------------------------------------------------------------------------
-
-
 def dataset_get(name):
     for x in DATASETS:
         if x.name == name:
@@ -567,14 +195,11 @@ def dataset_get(name):
 
 
 # -------------------------------------------------------------------------
-
-
 def dataset_available(name):
     return dataset_get(name).available
 
 
 # -------------------------------------------------------------------------
-
 def dataset_scan(locs=None):
     if locs is None:
         locs = _tools.STORAGE_LOCATIONS
@@ -594,8 +219,6 @@ def dataset_scan(locs=None):
 
 
 # -------------------------------------------------------------------------
-
-
 def find_writeable_storage(locs: str = None, stor: str = None) -> str or None:
     """
     Finds a viable data storage directory and returns its path.
@@ -638,8 +261,6 @@ def find_writeable_storage(locs: str = None, stor: str = None) -> str or None:
 
 
 # -------------------------------------------------------------------------
-
-
 def download(url, file):
     """
     Downloads a file from a specified URL and saves it to a given local file path.
@@ -677,8 +298,6 @@ def download(url, file):
 
 
 # -------------------------------------------------------------------------
-
-
 def xyz2csv(inputfile, output, utm_remove_zone=False):
     # test if file has a header line
     with open(inputfile, 'r') as fd:
@@ -717,8 +336,6 @@ def xyz2csv(inputfile, output, utm_remove_zone=False):
 
 
 # -------------------------------------------------------------------------
-
-
 def xmlpath(xml, path):
     """
     Extracts text or attribute values from specified elements within an XML string based on a given path.
@@ -852,7 +469,6 @@ def xmlpath(xml, path):
 
 
 # -------------------------------------------------------------------------
-
 def jsonpath(json_obj, path):
     """
     Extracts values from specified keys or indices within a JSON object based on a given path.
@@ -926,8 +542,101 @@ def jsonpath(json_obj, path):
 
 
 # -------------------------------------------------------------------------
+def _ass_xyz2tif(inputfile, srcsrs, utm_remove_zone):
+    if os.stat(inputfile).st_size == 0:
+        logger.debug(f"skipping empty  ... {inputfile}")
+        os.remove(inputfile)
+        return None
+    tf1 = re.sub(r'\.xyz$', '.tif', inputfile)
+    logger.debug(f"converting tile ... {inputfile} -> {tf1}")
+    # returns a tuple containing file handle and the abs pathname!
+    csvhdl, csvfile = tempfile.mkstemp(
+        prefix='dgm', suffix='.csv', dir=TEMP)
+    got_csv = xyz2csv(inputfile, csvfile,
+                      utm_remove_zone=utm_remove_zone)
+    os.remove(inputfile)
+    if not got_csv:
+        logger.warning(f"did not convert ... {inputfile}")
+        os.close(csvhdl)
+        os.remove(csvfile)
+        return None
+    gdal.Translate(destName=tf1,
+                   srcDS=csvfile,
+                   outputSRS=srcsrs,
+                   noData=-9999,
+                   )
+    os.close(csvhdl)
+    os.remove(csvfile)
+    return tf1
 
 
+# -------------------------------------------------------------------------
+def _ass_reduce_tile(tf1, out_res):
+    tfxx = os.path.splitext(tf1)[0] + ".reduced.tif"
+    logger.debug(f"resampling tile ... {tf1} -> {tfxx}")
+    try:
+        gdal.Warp(destNameOrDestDS=tfxx,
+                  xRes=out_res,
+                  yRes=out_res,
+                  dstSRS="EPSG:5677",
+                  srcDSOrSrcDSTab=tf1,
+                  format="GTiff")
+    except Exception as e:
+        logger.error(str(e))
+    os.remove(tf1)
+    return tfxx
+
+
+# -------------------------------------------------------------------------
+def _ass_unpack(dl_file, unpack):
+    inputfiles = []
+    if unpack in [None, '', 'tif', 'false'] and \
+            dl_file.endswith('tif'):
+            inputfiles = [dl_file]
+    elif unpack.startswith(('zip', 'unzip')):
+        with zipfile.ZipFile(dl_file, 'r') as zf:
+            pattern = re.sub('^(un|)zip[:/]*', '', unpack)
+            unpack_files = [x for x in zf.namelist()
+                      if PurePath(x).match(pattern)]
+            inputfiles = []
+            for un in unpack_files:
+                with zf.open(un) as fz:
+                    with open(os.path.basename(un), 'wb') as fu:
+                        fu.write(fz.read())
+                inputfiles.append(os.path.basename(un))
+    else:
+        logger.error(f"dont know how to handle download: {dl_file}")
+
+    if len(inputfiles) == 0:
+        logger.warning(f"no data unpacked from {dl_file}")
+    return inputfiles
+
+
+# -------------------------------------------------------------------------
+def _ass_merge_tiles(target, tile_files):
+    # merge the GeoTiff Files from all tiles into one file
+    if os.path.exists(target):
+        logger.info("removing old source file")
+        os.remove(target)
+    logger.debug("merging tiles ...")
+    if DEM_FMT.endswith('.tif'):
+        gdal_merge.main(["", "-co", "compress=lzw",
+                         "-o", target,
+                         ] + tile_files)
+    elif DEM_FMT.endswith('.nc'):
+        gdal_merge.main(["",
+                         "-of", "netCDF",
+                         "-co", "FORMAT=NC4C",
+                         "-co", "COMPRESS=DEFLATE",
+                         "-co", "ZLEVEL=9",
+                         "-o", target,
+                         ] + tile_files)
+    else:
+        raise Exception(f'cannot handle DEM_FMT: {DEM_FMT}')
+    logger.debug(f"... written {target}")
+
+
+# -------------------------------------------------------------------------
 def ass_process_input(args):
     inp, base_url, verify, provider = args
     tile_files = []
@@ -955,48 +664,23 @@ def ass_process_input(args):
             raise Exception("failed to download tile files")
     elif re.match('^file://', url):
         logger.debug(f"copying file... {url}")
-        url = re.sub('^file:/+','/', url)
+        url = re.sub('^file:/+', '/', url)
         try:
             shutil.copy(url, dl_file)
         except IOError:
             if ('missing' in provider and
-                 provider['missing'] in ['ok', 'ignore']):
+                    provider['missing'] in ['ok', 'ignore']):
                 failure_ok = True
     if failure_ok:
         # skip rest of inp loop
         return tile_files
 
-    if ('unpack' not in provider or
-        provider['unpack'] in ['', 'tif', 'false']) and \
-            dl_file.endswith('tif'):
-        inputfiles = [dl_file]
-    elif ('unpack' in provider and
-          provider['unpack'].startswith(('zip', 'unzip'))):
-        with zipfile.ZipFile(dl_file, 'r') as zf:
-            pattern = re.sub('^(un|)zip[:/]*', '', provider['unpack'])
-            unpack = [x for x in zf.namelist()
-                      if PurePath(x).match(pattern)]
-            inputfiles = []
-            for un in unpack:
-                with zf.open(un) as fz:
-                    with open(os.path.basename(un), 'wb') as fu:
-                        fu.write(fz.read())
-                inputfiles.append(os.path.basename(un))
-        if len(inputfiles) == 0:
-            logger.warning(f"no data unpacked from {dl_file}")
-    else:
-        logger.error(f"dont know how to handle download: {dl_file}")
+    unpack = provider.get('unpack', None)
+    inputfiles = _ass_unpack(dl_file, unpack)
 
-    if 'resolution' in provider:
-        out_res = provider['resolution']
-    else:
-        out_res = 25
-    if 'CRS' in provider:
-        srcsrs = provider['CRS']
-    else:
-        srcsrs = None
-    if 'utm_remove_zone' in provider and \
-            provider['utm_remove_zone'] in ['True', 'true', 'yes']:
+    out_res = provider.get('resolution', 25)
+    srcsrs = provider.get('CRS', None)
+    if provider.get('utm_remove_zone', 'true') in ['True', 'true', 'yes']:
         utm_remove_zone = True
     else:
         utm_remove_zone = False
@@ -1004,79 +688,19 @@ def ass_process_input(args):
         if inputfile.endswith('tif'):
             tf1 = inputfile
         elif inputfile.endswith('xyz'):
-            if os.stat(inputfile).st_size == 0:
-                logger.debug(f"skipping empty  ... {inputfile}")
-                os.remove(inputfile)
-                continue
-            tf1 = re.sub(r'\.xyz$', '.tif', inputfile)
-            logger.debug(f"converting tile ... {inputfile} -> {tf1}")
-            # returns a tuple containing file handle and the abs pathname!
-            csvhdl, csvfile = tempfile.mkstemp(
-                prefix='dgm', suffix='.csv', dir=TEMP)
-            got_csv = xyz2csv(inputfile, csvfile,
-                              utm_remove_zone=utm_remove_zone)
-            os.remove(inputfile)
-            if not got_csv:
-                logger.warning(f"did not convert ... {inputfile}")
-                os.close(csvhdl)
-                os.remove(csvfile)
-                continue
-            gdal.Translate(destName=tf1,
-                           srcDS=csvfile,
-                           outputSRS=srcsrs,
-                           noData=-9999,
-                           )
-            os.close(csvhdl)
-            os.remove(csvfile)
+            tf1 = _ass_xyz2tif(inputfile, srcsrs, utm_remove_zone)
         else:
             raise Exception(f'cannot handle {inputfile}')
-        tfxx = os.path.splitext(tf1)[0] + ".reduced.tif"
-        logger.debug(f"resampling tile ... {tf1} -> {tfxx}")
-        try:
-            gdal.Warp(destNameOrDestDS=tfxx,
-                      xRes=out_res,
-                      yRes=out_res,
-                      dstSRS="EPSG:5677",
-                      srcDSOrSrcDSTab=tf1,
-                      format="GTiff")
-            tile_files.append(tfxx)
-        except Exception as e:
-            logger.error(str(e))
-        os.remove(tf1)
+        if tf1 is None:
+            continue
+        tfxx = _ass_reduce_tile(tf1, out_res)
+        tile_files.append(tfxx)
     if os.path.exists(dl_file):
         os.remove(dl_file)
     return tile_files
 
 
 # -------------------------------------------------------------------------
-
-
-def ass_merge_tiles(target, tile_files):
-    # merge the GeoTiff Files from all tiles into one file
-    if os.path.exists(target):
-        logger.info("removing old source file")
-        os.remove(target)
-    logger.debug("merging tiles ...")
-    if DEM_FMT.endswith('.tif'):
-        gdal_merge.main(["", "-co", "compress=lzw",
-                         "-o", target,
-                         ] + tile_files)
-    elif DEM_FMT.endswith('.nc'):
-        gdal_merge.main(["",
-                         "-of", "netCDF",
-                         "-co", "FORMAT=NC4C",
-                         "-co", "COMPRESS=DEFLATE",
-                         "-co", "ZLEVEL=9",
-                         "-o", target,
-                         ] + tile_files)
-    else:
-        raise Exception(f'cannot handle DEM_FMT: {DEM_FMT}')
-    logger.debug(f"... written {target}")
-
-
-# -------------------------------------------------------------------------
-
-
 def assemble_DGMxx(path: str, name: str, replace: bool,
                    provider: dict):
     target = os.path.join(path, DEM_FMT % name)
@@ -1120,7 +744,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
                 text = rsp.content.decode()
                 links = [x for x in re.findall(r'href="(.+?)"', text)]
                 patt = provider['links']
-                input_files = [x for x in links if bool(re.match(patt,x))]
+                input_files = [x for x in links if bool(re.match(patt, x))]
                 method = 'http'
         elif filelist == 'generate':
             exp_val = []
@@ -1171,14 +795,136 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         raise ValueError(f'method {method} not implemented')
 
     # merge the GeoTiff Files from all tiles into one file
-    ass_merge_tiles(target, tile_files)
+    _ass_merge_tiles(target, tile_files)
 
     return True
 
 
 # -------------------------------------------------------------------------
+def _ass_sh_getfid(args):
+    i, ni, fid, provider = args
+    baseurl = ('https://geodaten.schleswig-holstein.de/'
+               'gaialight-sh/_apps/dladownload')
+    session = requests.Session()
+    _ = session.get(baseurl + 'dl-dgm1.html',
+                    verify=False)
+    request = session.get(baseurl + '/_ajax/details.php?' +
+                          f'type=dgm1&id={str(fid)}')
+    response = request.json()
+    if 'object' not in response:
+        print(f"problem with fid {fid}: {str(response)}")
+        return
+
+    tilename = response['object']['kachelname']
+    filename = tilename + '.xyz'
+
+    if os.path.exists(filename):
+        logger.debug("-- %5d/%5d -- exists   %s " % (i, ni, tilename))
+        return
+    else:
+        logger.debug("-- %5d/%5d -- download %s " % (i, ni, tilename))
+
+    timestr = time.strftime('%s', time.gmtime())
+    start = session.get(baseurl + '/multi.php?' +
+                        f'url={filename}&buttonClass=file1&id={str(fid)}&'
+                        f'type=dgm1&action=start&_={timestr}',
+                        verify=False)
+    response = start.json()
+    if response['success']:
+        job_id = response['id']
+    else:
+        if response['message'] == ('1 Datei konnte nicht '
+                                   'gefunden werden'):
+            logger.debug("                  file not found")
+            return
+        else:
+            raise Exception(response['message'])
+    running = True
+    downloadurl = None
+    while running:
+        request = session.get(baseurl +
+                              f'/multi.php?action=status&job={job_id}',
+                              verify=False)
+        response = request.json()
+        logger.debug(response)
+        if response['status'] in ['wait', 'work']:
+            time.sleep(2)
+        else:
+            downloadurl = response['downloadUrl']
+            break
+    request = session.get(downloadurl, verify=False)
+    dl_file = tilename + '.zip'
+    with open(dl_file, 'wb') as fn:
+                fn.write(request.content)
+
+    unpack = provider.get('unpack', None)
+    out_res = provider.get('out_res', 25)
+    inputfiles = _ass_unpack(dl_file, unpack)
+    srcsrs = provider['CRS']
+    utm_remove_zone = provider.get('UTM_ZONE', False)
+    tilefiles = []
+    for tile_xyz in inputfiles:
+        logger.debug("converting tile ... %s" % tile_xyz)
+        tile_tif = _ass_xyz2tif(tile_xyz,srcsrs, utm_remove_zone)
+        tfxx = _ass_reduce_tile(tile_tif, out_res)
+        tilefiles.append(tfxx)
+
+    if os.path.exists(dl_file): os.remove(dl_file)
+    return tilefiles
+
+def assemble_DGM_SH(path, name, replace, provider: dict):
+    target = os.path.join(path, DEM_FMT % name)
+    logger.debug(f'data file path: {target}')
+    if os.path.exists(target) and not replace:
+        logger.info("dataset exists ... %s" % name)
+        return False
+
+    # download all the tiles
+    fids = [x for x in range(1, 18700)]
+    random.shuffle(fids)
+    args = [(i, len(fids), x, provider) for i, x in enumerate(fids)]
+    tile_files = []
+    with Pool() as pool:
+        for tf in _tools.progress(pool.imap_unordered(_ass_sh_getfid, args)):
+            tile_files.append(tf)
+
+    _ass_merge_tiles(target, tile_files)
+
+    return True
 
 
+# -------------------------------------------------------------------------
+def assemble_DGM25_RP(path, name="DGM25-RP", replace=False):
+    target = os.path.join(path, DEM_FMT % name)
+    logger.debug(f'data file path: {target}')
+    if os.path.exists(target) and not replace:
+        logger.info("dataset exists ... %s" % name)
+        return False
+
+    url = "https://vermkv.service24.rlp.de/opendat/dgm25/dgm25.zip"
+    logger.debug("downloading ... %s" % url)
+    zip_file, _ = download(url, os.path.basename(url))
+    logger.debug("extracting ... %s" % zip_file)
+    shutil.unpack_archive(zip_file)
+    for tile_xyz in glob.glob("*.xyz"):
+        logger.debug("converting tile ... %s" % tile_xyz)
+        tile_tif = tile_xyz.replace(".xyz", ".tif")
+        try:
+            gdal.Warp(destNameOrDestDS=tile_tif,
+                      dstSRS="EPSG:5677",
+                      srcDSOrSrcDSTab=tile_xyz,
+                      srcSRS="EPSG:25832",
+                      format="GTiff")
+        except Exception as e:
+            logger.error(str(e))
+    # merge the GeoTiff Files from all tiles into one file
+    tile_files = glob.glob("DGM25_*.tif")
+    _ass_merge_tiles(target, tile_files)
+
+    return True
+
+
+# -------------------------------------------------------------------------
 def assemble_GLO_30(path, name="GLO_30", replace=False, args: dict = {}):
     target = os.path.join(path, DEM_FMT % name)
     logger.debug(f'data file path: {target}')
@@ -1209,14 +955,12 @@ def assemble_GLO_30(path, name="GLO_30", replace=False, args: dict = {}):
     # merge the GeoTiff Files from all tiles into one file
     target = os.path.join(path, DEM_FMT % "GLO-30")
     tile_files = glob.glob("Copernicus_*.tif")
-    ass_merge_tiles(target, tile_files)
+    _ass_merge_tiles(target, tile_files)
 
     return
 
 
 # -------------------------------------------------------------------------
-
-
 def assebmle_GTOPO30(path: str, name="GTOPO30",
                      replace=False, args: dict = {}):
     support_url = ("https://data.rda.ucar.edu/ds758.0/support/"
@@ -1266,47 +1010,12 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
                       format="GTiff")
     # merge the GeoTiff Files from all tiles into one file
     tile_files = glob.glob("*.tif")
-    ass_merge_tiles(target, tile_files)
+    _ass_merge_tiles(target, tile_files)
 
     return
 
 
 # -------------------------------------------------------------------------
-
-
-def assemble_DGM25_RP(path, name="DGM25-RP", replace=False):
-    target = os.path.join(path, DEM_FMT % name)
-    logger.debug(f'data file path: {target}')
-    if os.path.exists(target) and not replace:
-        logger.info("dataset exists ... %s" % name)
-        return False
-
-    url = "https://vermkv.service24.rlp.de/opendat/dgm25/dgm25.zip"
-    logger.debug("downloading ... %s" % url)
-    zip_file, _ = download(url, os.path.basename(url))
-    logger.debug("extracting ... %s" % zip_file)
-    shutil.unpack_archive(zip_file)
-    for tile_xyz in glob.glob("*.xyz"):
-        logger.debug("converting tile ... %s" % tile_xyz)
-        tile_tif = tile_xyz.replace(".xyz", ".tif")
-        try:
-            gdal.Warp(destNameOrDestDS=tile_tif,
-                      dstSRS="EPSG:5677",
-                      srcDSOrSrcDSTab=tile_xyz,
-                      srcSRS="EPSG:25832",
-                      format="GTiff")
-        except Exception as e:
-            logger.error(str(e))
-    # merge the GeoTiff Files from all tiles into one file
-    tile_files = glob.glob("DGM25_*.tif")
-    ass_merge_tiles(target, tile_files)
-
-    return True
-
-
-# -------------------------------------------------------------------------
-
-
 def provide_dem(source: str, path: str = None,
                 force: bool = False, method: str = 'download'):
     if path is None:
@@ -1355,8 +1064,6 @@ def provide_dem(source: str, path: str = None,
 
 
 # -------------------------------------------------------------------------
-
-
 def show_notice(storage_path, source):
     print('data copyright notice:')
     with open(os.path.join(storage_path,
@@ -1366,9 +1073,6 @@ def show_notice(storage_path, source):
 
 
 # -------------------------------------------------------------------------
-# -------------------------------------------------------------------------
-
-
 def era5_getyear(opts):
     """
     Downloads ERA5 reanalysis data for a specific year and saves it as a NetCDF file.
@@ -1458,8 +1162,6 @@ def era5_getyear(opts):
 
 
 # -------------------------------------------------------------------------
-
-
 def assemble_ERA5(path: str, years: list):
     """
     Downloads and assembles ERA5 reanalysis data for a list of specified years, saving the data to a designated path.
@@ -1506,8 +1208,6 @@ def assemble_ERA5(path: str, years: list):
 
 
 # -------------------------------------------------------------------------
-
-
 def cerraname(y, lt=None):
     name = 'cerra_ak_eu_%04i' % y
     if lt is not None:
@@ -1516,8 +1216,6 @@ def cerraname(y, lt=None):
 
 
 # -------------------------------------------------------------------------
-
-
 def cerra_getyear(opts):
     """
     Downloads and processes a year's worth of CERRA dataset as GRIB files,
@@ -1615,8 +1313,6 @@ def cerra_getyear(opts):
 
 
 # -------------------------------------------------------------------------
-
-
 def assemble_CERRA(path: str, years: list):
     """
     Downloads, extracts, and merges CERRA dataset forecasts for specified years into single NetCDF files per year.
@@ -1691,8 +1387,6 @@ def assemble_CERRA(path: str, years: list):
 
 
 # -------------------------------------------------------------------------
-
-
 def provide_weather(source: str, path: str = None,
                     years: list = None, method: str = 'download'):
     """
@@ -1758,16 +1452,6 @@ def provide_weather(source: str, path: str = None,
 
 
 # -------------------------------------------------------------------------
-
-
 # initialize
 DATASETS = [DataSet(name=k, **v) for k, v in DATASET_DEFINITIONS.items()]
 dataset_scan()
-
-# https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/dl-dgm1.html
-# https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/multi.php?url=dgm1_32_478_6084_1_sh.xyz&buttonClass=file1&id=1288&type=dgm1&action=start&_=1722037371035
-# _ = unix-sec
-# https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/multi.php?action=start&type=dgm1&id=513
-# {"success":true,"id":"cKdXn8","statusUrl":"https:\/\/geodaten.schleswig-holstein.de\/gaialight-sh\/_apps\/dladownload\/multi.php"}
-# https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/multi.php?action=status&job=cKdXn8
-# https://geodaten.schleswig-holstein.de/gaialight-sh/_apps/dladownload/multi.php?action=download&job=mBeZ3T

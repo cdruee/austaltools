@@ -21,7 +21,8 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'austaltools=command_line:main',
+            'austaltools=austaltools.command_line:main',
+            'austal_prepare_data=austaltools.austal_prepare_data:main',
         ],
     },
     author=v['__author__'],
