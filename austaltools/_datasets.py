@@ -315,11 +315,14 @@ def xyz2csv(inputfile, output, utm_remove_zone=False):
     if utm_remove_zone:
         df['x'] = np.sign(df['x']) * (np.abs(df['x']) % 1000000)
     # get full grid axes
-    x_res = np.mean(np.diff(sorted(set(df['x']))))
-    x_vals = set(np.arange(df['x'].min(), df['x'].max() + x_res, x_res))
-    y_res = np.mean(np.diff(sorted(set(df['y']))))
-    y_vals = set(np.arange(df['y'].min(), df['y'].max() + y_res, y_res))
-
+    try:
+        x_res = np.mean(np.diff(sorted(set(df['x']))))
+        x_vals = set(np.arange(df['x'].min(), df['x'].max() + x_res, x_res))
+        y_res = np.mean(np.diff(sorted(set(df['y']))))
+        y_vals = set(np.arange(df['y'].min(), df['y'].max() + y_res, y_res))
+    except ValueError:
+        # skip all-NaN files etc.
+        return False
     # create full dataframe
     ff = pd.DataFrame.from_records(itertools.product(x_vals, y_vals),
                                    columns=['x', 'y'])
