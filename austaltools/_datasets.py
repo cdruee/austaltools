@@ -694,10 +694,9 @@ def ass_process_input(args):
             tf1 = _ass_xyz2tif(inputfile, srcsrs, utm_remove_zone)
         else:
             raise Exception(f'cannot handle {inputfile}')
-        if tf1 is None:
-            continue
-        tfxx = _ass_reduce_tile(tf1, out_res)
-        tile_files.append(tfxx)
+        if tf1 is not None:
+            tfxx = _ass_reduce_tile(tf1, out_res)
+            tile_files.append(tfxx)
     if os.path.exists(dl_file):
         os.remove(dl_file)
     return tile_files
@@ -868,9 +867,10 @@ def _ass_sh_getfid(args):
     tilefiles = []
     for tile_xyz in inputfiles:
         logger.debug("converting tile ... %s" % tile_xyz)
-        tile_tif = _ass_xyz2tif(tile_xyz,srcsrs, utm_remove_zone)
-        tfxx = _ass_reduce_tile(tile_tif, out_res)
-        tilefiles.append(tfxx)
+        tf1 = _ass_xyz2tif(tile_xyz,srcsrs, utm_remove_zone)
+        if tf1 is not None:
+            tfxx = _ass_reduce_tile(tf1, out_res)
+            tilefiles.append(tfxx)
 
     if os.path.exists(dl_file): os.remove(dl_file)
     return tilefiles
