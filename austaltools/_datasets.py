@@ -776,12 +776,8 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         for inp in input_files:
             thread_args.append((inp, base_url, verify, provider))
         tile_files = []
-        if logger.getEffectiveLevel() <= logging.DEBUG:
-            procs = 1
-        else:
-            procs = None
         i = 0
-        with Pool(procs) as pool:
+        with Pool(PROCS) as pool:
             for tfs in _tools.progress(pool.imap_unordered(
                     ass_process_input, thread_args),
                     total=len(thread_args)):
@@ -807,57 +803,68 @@ def _ass_sh_getfid(args):
     i, ni, fid, provider = args
     baseurl = ('https://geodaten.schleswig-holstein.de/'
                'gaialight-sh/_apps/dladownload')
-    session = requests.Session()
-    _ = session.get(baseurl + 'dl-dgm1.html',
-                    verify=False)
-    request = session.get(baseurl + '/_ajax/details.php?' +
-                          f'type=dgm1&id={str(fid)}')
-    response = request.json()
-    if 'object' not in response:
-        print(f"problem with fid {fid}: {str(response)}")
-        return
 
-    tilename = response['object']['kachelname']
-    filename = tilename + '.xyz'
+    localstore = provider.get('localstore', '.')
+    localname = os.path.join(localstore, "id-%06d.zip" % fid)
 
-    if os.path.exists(filename):
-        logger.debug("-- %5d/%5d -- exists   %s " % (i, ni, tilename))
-        return
+    if os.path.exists(localname):
+        shutil.copy(localname, '.')
+        dl_file = os.path.basename(localname)
     else:
-        logger.debug("-- %5d/%5d -- download %s " % (i, ni, tilename))
-
-    timestr = time.strftime('%s', time.gmtime())
-    start = session.get(baseurl + '/multi.php?' +
-                        f'url={filename}&buttonClass=file1&id={str(fid)}&'
-                        f'type=dgm1&action=start&_={timestr}',
+        session = requests.Session()
+        _ = session.get(baseurl + 'dl-dgm1.html',
                         verify=False)
-    response = start.json()
-    if response['success']:
-        job_id = response['id']
-    else:
-        if response['message'] == ('1 Datei konnte nicht '
-                                   'gefunden werden'):
-            logger.debug("                  file not found")
+        request = session.get(baseurl + '/_ajax/details.php?' +
+                              f'type=dgm1&id={str(fid)}')
+        response = request.json()
+        if 'object' not in response:
+            print(f"problem with fid {fid}: {str(response)}")
+            return
+
+        tilename = response['object']['kachelname']
+        filename = tilename + '.xyz'
+
+        if os.path.exists(filename):
+            logger.debug("-- %5d/%5d -- exists   %s " % (i, ni, tilename))
             return
         else:
-            raise Exception(response['message'])
-    running = True
-    downloadurl = None
-    while running:
-        request = session.get(baseurl +
-                              f'/multi.php?action=status&job={job_id}',
-                              verify=False)
-        response = request.json()
-        logger.debug(response)
-        if response['status'] in ['wait', 'work']:
-            time.sleep(2)
+            logger.debug("-- %5d/%5d -- download %s " % (i, ni, tilename))
+
+        timestr = time.strftime('%s', time.gmtime())
+        start = session.get(baseurl + '/multi.php?' +
+                            f'url={filename}&buttonClass=file1&id={str(fid)}&'
+                            f'type=dgm1&action=start&_={timestr}',
+                            verify=False)
+        response = start.json()
+        if response['success']:
+            job_id = response['id']
         else:
-            downloadurl = response['downloadUrl']
-            break
-    request = session.get(downloadurl, verify=False)
-    dl_file = tilename + '.zip'
-    with open(dl_file, 'wb') as fn:
+            if response['message'] == ('1 Datei konnte nicht '
+                                       'gefunden werden'):
+                logger.debug("                  file not found")
+                return
+            else:
+                raise Exception(response['message'])
+        running = True
+        downloadurl = None
+        while running:
+            request = session.get(baseurl +
+                                  f'/multi.php?action=status&job={job_id}',
+                                  verify=False)
+            response = request.json()
+            logger.debug(response)
+            if response['status'] in ['wait', 'work']:
+                time.sleep(2)
+            else:
+                downloadurl = response['downloadUrl']
+                break
+        request = session.get(downloadurl, verify=False)
+        dl_file = tilename + '.zip'
+        with open(dl_file, 'wb') as fn:
                 fn.write(request.content)
+
+        if localstore is not None:
+            shutil.copy(dl_file, localname)
 
     unpack = provider.get('unpack', None)
     out_res = provider.get('out_res', 25)
@@ -887,7 +894,7 @@ def assemble_DGM_SH(path, name, replace, provider: dict):
     random.shuffle(fids)
     args = [(i, len(fids), x, provider) for i, x in enumerate(fids)]
     tile_files = []
-    with Pool() as pool:
+    with Pool(3*PROCS) as pool:
         for tf in _tools.progress(pool.imap_unordered(_ass_sh_getfid, args)):
             tile_files.append(tf)
 
@@ -1457,4 +1464,8 @@ def provide_weather(source: str, path: str = None,
 # -------------------------------------------------------------------------
 # initialize
 DATASETS = [DataSet(name=k, **v) for k, v in DATASET_DEFINITIONS.items()]
+if logger.getEffectiveLevel() <= logging.DEBUG:
+    PROCS = 1
+else:
+    PROCS = 0
 dataset_scan()

@@ -252,6 +252,7 @@
         "assemble": "assemble_DGM_SH",
         "arguments": {
             "resolution": 10,
+            "localstore": "/local/data/opt/DGM1/DGM1-SH",
             "unpack": "zip://*.xyz",
             "CRS": "EPSG:25832"
         },
