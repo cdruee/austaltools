@@ -16,6 +16,11 @@ _dispersion
 .. automodule:: austaltools._dispersion
    :members:
 
+_datasets
+^^^^^^^^^^^
+.. automodule:: austaltools._datasets
+   :members:
+
 _dwd_stationinfo
 ^^^^^^^^^^^^^^^^
 .. automodule:: austaltools._dwd_stationinfo
@@ -35,49 +40,49 @@ _version
 austal_eap
 ==========
 
-.. automodule:: austaltools.austal_eap
+.. automodule:: austaltools.eap
    :members:
 
 ========================
 austal_buildings_geojson
 ========================
 
-.. automodule:: austaltools.austal_buildings_geojson
+.. automodule:: austaltools.buildings_geojson
    :members:
 
 ======================
 austal_fill timeseries
 ======================
 
-.. automodule:: austaltools.austal_fill_timeseries
+.. automodule:: austaltools.fill_timeseries
    :members:
 
 ===========
 austal_plot
 ===========
 
-.. automodule:: austaltools.austal_plot
+.. automodule:: austaltools.plot
    :members:
 
 ============================
 austaltools.austal_steepness
 ============================
 
-.. automodule:: austaltools.austal_steepness
+.. automodule:: austaltools.steepness
    :members:
 
 ==============
 austal_terrain
 ==============
 
-.. automodule:: austaltools.austal_terrain
+.. automodule:: austaltools.input_terrain
    :members:
 
 ==============
 austal_weather
 ==============
 
-.. automodule:: austaltools.austal_weather
+.. automodule:: austaltools.input_weather
    :members:
 
 ==========

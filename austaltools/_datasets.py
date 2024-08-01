@@ -59,7 +59,6 @@ except ImportError:
     from _version import __version__, __title__
 
 disable_warnings(exceptions.InsecureRequestWarning)
-logging.basicConfig()
 logger = logging.getLogger()
 
 # -------------------------------------------------------------------------
@@ -695,6 +694,23 @@ def ass_process_input(args):
 # -------------------------------------------------------------------------
 def assemble_DGMxx(path: str, name: str, replace: bool,
                    provider: dict):
+    """
+    Versatile function to assemble a dataset containing a
+    digital elevation model (DEM),
+    German: "digitales Geländemodell (DGM) of user selectable resolution.
+
+    :param path: Path and filename of the file to generate
+    :type path: str
+    :param name: name (code) of the dataset to assemble
+    :type name: str
+    :param replace: If True, an existing file is overwritten.
+        If False, an error is raises if the file already exists.
+    :type replace: bool
+    :param provider: The arguments neede to preform the asembly.
+    :type provider: dict
+    :return: Success (True) of Failure (False)
+    :rtype: bool
+    """
     target = os.path.join(path, DEM_FMT % name)
     logger.debug(f'data file path: {target}')
     if os.path.exists(target) and not replace:
@@ -890,8 +906,11 @@ def assemble_DGM_SH(path, name, replace, provider: dict):
     random.shuffle(fids)
     args = [(i, len(fids), x, provider) for i, x in enumerate(fids)]
     tile_files = []
-    with Pool(3 * PROCS) as pool:
-        for tf in _tools.progress(pool.imap_unordered(_ass_sh_getfid, args)):
+    with Pool(PROCS) as pool:
+        for tf in _tools.progress(
+                pool.imap_unordered(_ass_sh_getfid, args),
+                total=len(args)
+        ):
             tile_files.append(tf)
 
     _ass_merge_tiles(target, tile_files)
@@ -1460,8 +1479,5 @@ def provide_weather(source: str, path: str = None,
 # -------------------------------------------------------------------------
 # initialize
 DATASETS = [DataSet(name=k, **v) for k, v in DATASET_DEFINITIONS.items()]
-if logger.getEffectiveLevel() <= logging.DEBUG:
-    PROCS = 1
-else:
-    PROCS = 0
+PROCS = None
 dataset_scan()

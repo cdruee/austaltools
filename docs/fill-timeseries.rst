@@ -1,5 +1,5 @@
 -----------------------
-austal-fill-timeseries
+austaltools fill-timeseries
 -----------------------
 
 .. argparse::

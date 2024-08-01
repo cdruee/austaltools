@@ -170,7 +170,7 @@
             "CRS": "EPSG:25832"
         },
         "license": "none",
-        "notice":  "none"
+        "notice":  null
     },
     "DGM10-HH": {
         "storage": "terrain",
@@ -230,7 +230,7 @@
             "CRS": "EPSG:25832"
         },
         "license": "spdx:DL-DE-ZERO-2.0",
-        "notice": "none"
+        "notice": null
     },
     "DGM10-RP": {
         "storage": "terrain",

@@ -219,6 +219,11 @@ def main():
         logger.setLevel(args['verb'])
     else:
         logger.setLevel(logging.WARNING)
+    logger.warning('level = %s' % logger.getEffectiveLevel())
+
+    if logger.getEffectiveLevel() <= logging.DEBUG:
+        global PROCS
+        PROCS = 1
 
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
 
