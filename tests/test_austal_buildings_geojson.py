@@ -5,7 +5,7 @@ import unittest
 
 import numpy as np
 
-import austaltools.austal_buildings_geojson as prog
+import austaltools.buildings_geojson as prog
 import austaltools._tools as _tools
 
 NAME = os.path.join('austaltools','austal_buildings_geojson.py')

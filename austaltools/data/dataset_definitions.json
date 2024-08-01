@@ -2,7 +2,7 @@
     "DGM25-RP": {
         "storage": "terrain",
         "assemble": "assemble_DGM25_RP",
-        "doi": "10.5281/zenodo.12740424",
+        "uri": "doi://10.5281/zenodo.12740424",
         "license": "spdx:DL-DE-BY-2.0",
         "notice": "Generated from DGM1 data '(c) GeoBasis-DE / LVermGeoRP, 2024)',  www.lvermgeo.rlp.de, licensed under DL-DE-BY-2.0"
     },

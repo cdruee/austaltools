@@ -15,9 +15,11 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 try:
     from . import _tools
+    from . import _datasets
     from ._version import __title__
 except ImportError:
     import _tools
+    import _datasets
     from _version import __title__
 
 logging.basicConfig()
@@ -25,7 +27,7 @@ logger = logging.getLogger()
 
 # -------------------------------------------------------------------------
 
-KNOWN_DEMS = ["DGM25-RP", "DGM25-NW", "GLO-30", "GTOPO30"]
+KNOWN_DEMS = _datasets.KNOWN_DEMS
 STORAGE_DIR = "terrain"
 DEM_FMT = '%s.elevation.nc'
 STORAGE_AUX_FILES = resources.files(__title__ + '.data')
@@ -35,17 +37,13 @@ STORAGE_AUX_FILES = resources.files(__title__ + '.data')
 
 
 def find_terrain_data():
-    extension = DEM_FMT % ""
     datasets = {}
-    # if a location is found, we are happy
-    # but does it contain any data?
-    for dd in _tools.STORAGE_LOCATIONS:
-        path = os.path.join(dd, STORAGE_DIR)
-        if os.path.isdir(path):
-            for dem in KNOWN_DEMS:
-                if DEM_FMT % dem in os.listdir(path):
-                    file = os.path.join(path, DEM_FMT % dem)
-                    datasets[dem] = (file.replace(extension, ""))
+    for ds in _datasets.DATASETS:
+        # is ds a terrain dataset?
+        if ds.storage == 'terrain':
+            # is it locally available (i.e. downloaded already?):
+            if ds.available:
+                datasets[ds.name] = ds.path
     return datasets
 
 
@@ -53,16 +51,16 @@ def find_terrain_data():
 
 
 def show_notice(storage_path, source):
+    noticefile = os.path.join(storage_path,
+                           "%s.NOTICE.txt" % source)
     print('data copyright notice:')
-    with open(os.path.join(storage_path,
-                           "%s.NOTICE.txt" % source), "r") as f:
-        for x in f.readlines():
-            print(x)
+    if os.path.exists(noticefile):
+        with open(noticefile, "r") as f:
+            for x in f.readlines():
+                print(x)
 
 
 # -------------------------------------------------------------------------
-
-
 def main(args: dict):
     """
     This is the main working function
@@ -84,7 +82,7 @@ def main(args: dict):
     else:
         return
 
-    if args["source"] in AVAILABLE_DEMS.keys:
+    if args["source"] in AVAILABLE_DEMS:
         source = args["source"]
         storage_path = AVAILABLE_DEMS[source]
     else:

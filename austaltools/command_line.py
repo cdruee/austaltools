@@ -8,6 +8,7 @@ import sys
 try:
     from . import _tools
     from ._version import __version__
+    from . import _datasets
     from . import eap
     from . import fill_timeseries
     from . import input_terrain
@@ -17,6 +18,7 @@ try:
 except ImportError:
     import _tools
     from _version import __version__
+    import _datasets
     import eap
     import fill_timeseries
     import input_terrain
@@ -134,7 +136,7 @@ def cli_parser():
 
     # ----------------------------------------------------
 
-    default_source = input_weather.KNOWN_SOURCES[0]
+    default_source = _datasets.KNOWN_WEATHER[0]
     default_year = 2020
     #
     # command line args
@@ -147,7 +149,7 @@ def cli_parser():
     pars_wea.add_argument(dest="output", metavar="NAME", nargs='?',
                           help="file name to store data in."
                           )
-    wea_pos = pars_wea.add_mutually_exclusive_group()
+    wea_pos = pars_wea.add_mutually_exclusive_group(required=True)
     wea_pos.add_argument('-L', '--ll',
                          metavar=("LAT", "LON"),
                          dest="ll",
@@ -196,6 +198,7 @@ def cli_parser():
     pars_wea.add_argument('-y', '--year', dest='year',
                         metavar='YEAR',
                         nargs=None,
+                          required=True,
                         help='year of interest [%04i]' % default_year)
 
     pars_wea.add_argument('-e', '--elevation', dest='ele',
@@ -215,7 +218,7 @@ def cli_parser():
 
     # ----------------------------------------------------
 
-    default_dem = input_terrain.AVAILABLE_DEMS[0]
+    default_dem = _datasets.KNOWN_DEMS[0]
     default_extent = 6.
 
     pars_ter = subparsers.add_parser(

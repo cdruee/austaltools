@@ -1185,20 +1185,6 @@ def austal_weather(args):
     elif args["ll"] is not None:
         lat, lon = [float(x) for x in args['ll']]
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
-    elif args["sources"] is not None:
-        source_action = args["sources"]
-        # source actions
-        if source_action == 'list':
-            for x in KNOWN_SOURCES:
-                print('%-8s :' % x)
-        elif source_action == 'download':
-            provide_dwd_station(storage_path, force=False)
-        elif source_action == 'force':
-            provide_dwd_station(storage_path, force=True)
-        else:
-            raise ValueError("Unknown source action: %s" %
-                             source_action)
-        return
     else:
         return
 
@@ -1397,21 +1383,19 @@ def main(args):
 
     if ((args['dwd'] is not None or args['wmo'] is not None)
             and args['ele'] is not None):
-        parser.print_help()
-        logger.critical('-D and -W are mutually exclusive with -e')
+
+        print("ERROR: options -D and -W are mutually exclusive with -e")
         sys.exit(1)
     # if ((args['dwd'] is None and args['wmo'] is None)
     #         and args['station'] is not None):
     #     parser.print_help()
-    #     logger.critical('-w is only valid with -D or -W')
+    #     print("ERROR: options -w is only valid with -D or -W')
     #     sys.exit(1)
-    if args['year'] is None and args['sources'] is None:
-        parser.print_help()
-        logger.critical('-y is required with -L, -G, -U, -D or -W')
+    if args['year'] is None:
+        print("ERROR: options -y is required with -L, -G, -U, -D or -W")
         sys.exit(1)
-    if args['output'] is None and args['sources'] is None:
-        parser.print_help()
-        logger.critical('NAME is required with -L, -G, -U, -D or -W')
+    if args['output'] is None:
+        print("ERROR: options NAME is required with -L, -G, -U, -D or -W")
         sys.exit(1)
 
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)

@@ -6,7 +6,7 @@ from . import _tools
 from . import _corine
 from . import _dwd_stationinfo
 
-from . import austal_buildings_geojson
+from . import buildings_geojson
 from . import eap
 from . import fill_timeseries
 from . import austal_input

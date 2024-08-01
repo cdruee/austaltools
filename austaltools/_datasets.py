@@ -62,7 +62,6 @@ disable_warnings(exceptions.InsecureRequestWarning)
 logging.basicConfig()
 logger = logging.getLogger()
 
-
 # -------------------------------------------------------------------------
 DEM_FMT = '%s.elevation.nc'  # '%s.lzw.tif'
 WEA_FMT = '%s_ak_eu_%04i.nc'
@@ -94,18 +93,12 @@ class DataSet:
     years = []
     arguments = None
 
-
-
-
-# -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def assemble(self):
         """Placeholder for download function"""
         pass
 
-
-
-
-# -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def download(self, path=None, uri=None):
         """Download assembled dataset from reopository"""
         if path is None:
@@ -143,10 +136,7 @@ class DataSet:
             with requests.get(url, allow_redirects=True) as req:
                 f.write(req.content)
 
-
-
-
-# -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
     def __init__(self, **kwargs):
         if 'name' not in kwargs:
             raise ValueError('no name given')
@@ -595,12 +585,12 @@ def _ass_unpack(dl_file, unpack):
     inputfiles = []
     if unpack in [None, '', 'tif', 'false'] and \
             dl_file.endswith('tif'):
-            inputfiles = [dl_file]
+        inputfiles = [dl_file]
     elif unpack.startswith(('zip', 'unzip')):
         with zipfile.ZipFile(dl_file, 'r') as zf:
             pattern = re.sub('^(un|)zip[:/]*', '', unpack)
             unpack_files = [x for x in zf.namelist()
-                      if PurePath(x).match(pattern)]
+                            if PurePath(x).match(pattern)]
             inputfiles = []
             for un in unpack_files:
                 with zf.open(un) as fz:
@@ -758,13 +748,6 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
             combval = itertools.product(*exp_val)
             input_files = [provider['format'] % x for x in combval]
             method = 'http'
-        elif filelist == 'wms':
-            capabilities = '/'.join((provider['host'], provider['path']))
-            if 'layer' in provider:
-                layer = provider['layer']
-            else:
-                layer = 'default'
-            method = 'wms'
         else:
             raise NotImplementedError(f'can`t handle filelist: {filelist}')
     else:
@@ -784,11 +767,6 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
                 i = i + 1
                 logger.debug("file %5d / %5d" % (i, len(thread_args)))
                 tile_files += tfs
-    elif method == 'wms':
-        import _wms_download
-        tile_files = _wms_download.download_wms(
-            url=capabilities, layer=layer, epsg=provider['CRS'],
-            res=provider['resolution'])
     else:
         raise ValueError(f'method {method} not implemented')
 
@@ -809,59 +787,76 @@ def _ass_sh_getfid(args):
 
     if os.path.exists(localname):
         shutil.copy(localname, '.')
+        logger.debug('locally avalable fid: %s' % fid)
         dl_file = os.path.basename(localname)
     else:
-        session = requests.Session()
-        _ = session.get(baseurl + 'dl-dgm1.html',
-                        verify=False)
-        request = session.get(baseurl + '/_ajax/details.php?' +
-                              f'type=dgm1&id={str(fid)}')
-        response = request.json()
-        if 'object' not in response:
-            print(f"problem with fid {fid}: {str(response)}")
-            return
+        for ntry in range(MAX_RETRY):
+            try:
+                session = requests.Session()
+                _ = session.get(baseurl + 'dl-dgm1.html',
+                                verify=False)
+                request = session.get(baseurl + '/_ajax/details.php?' +
+                                      f'type=dgm1&id={str(fid)}')
+                response = request.json()
+                if 'object' not in response:
+                    print(f"problem with fid {fid}: {str(response)}")
+                    return
 
-        tilename = response['object']['kachelname']
-        filename = tilename + '.xyz'
+                tilename = response['object']['kachelname']
+                filename = tilename + '.xyz'
 
-        if os.path.exists(filename):
-            logger.debug("-- %5d/%5d -- exists   %s " % (i, ni, tilename))
-            return
-        else:
-            logger.debug("-- %5d/%5d -- download %s " % (i, ni, tilename))
+                if os.path.exists(filename):
+                    logger.debug("-- %5d/%5d -- exists   %s " % (i, ni, tilename))
+                    return
+                else:
+                    logger.debug("-- %5d/%5d -- download %s " % (i, ni, tilename))
 
-        timestr = time.strftime('%s', time.gmtime())
-        start = session.get(baseurl + '/multi.php?' +
-                            f'url={filename}&buttonClass=file1&id={str(fid)}&'
-                            f'type=dgm1&action=start&_={timestr}',
-                            verify=False)
-        response = start.json()
-        if response['success']:
-            job_id = response['id']
-        else:
-            if response['message'] == ('1 Datei konnte nicht '
-                                       'gefunden werden'):
-                logger.debug("                  file not found")
-                return
-            else:
-                raise Exception(response['message'])
-        running = True
-        downloadurl = None
-        while running:
-            request = session.get(baseurl +
-                                  f'/multi.php?action=status&job={job_id}',
-                                  verify=False)
-            response = request.json()
-            logger.debug(response)
-            if response['status'] in ['wait', 'work']:
-                time.sleep(2)
-            else:
-                downloadurl = response['downloadUrl']
+                timestr = time.strftime('%s', time.gmtime())
+                start = session.get(baseurl + '/multi.php?' +
+                                    f'url={filename}&buttonClass=file1&id={str(fid)}&'
+                                    f'type=dgm1&action=start&_={timestr}',
+                                    verify=False)
+                response = start.json()
+                if response['success']:
+                    job_id = response['id']
+                else:
+                    if response['message'] == ('1 Datei konnte nicht '
+                                               'gefunden werden'):
+                        logger.debug("                  file not found")
+                        return
+                    else:
+                        raise Exception(response['message'])
+                running = True
+                downloadurl = None
+                while running:
+                    request = session.get(baseurl +
+                                          f'/multi.php?action=status&job={job_id}',
+                                          verify=False)
+                    response = request.json()
+                    logger.debug(response)
+                    if response.get('status', '') in ['wait', 'work']:
+                        # wait
+                        time.sleep(2)
+                    elif response.get('msg', '') ==  'Interner Fehler':
+                        # next ty
+                        continue
+                    else:
+                        # proceed to download
+                        downloadurl = response['downloadUrl']
+                        break
+                request = session.get(downloadurl, verify=False)
+                dl_file = tilename + '.zip'
+                with open(dl_file, 'wb') as fn:
+                    fn.write(request.content)
                 break
-        request = session.get(downloadurl, verify=False)
-        dl_file = tilename + '.zip'
-        with open(dl_file, 'wb') as fn:
-                fn.write(request.content)
+            except (requests.exceptions.ConnectionError,
+                    exceptions.ProtocolError) as e:
+                logger.error("exception downloading %s; %s" % (fid, e))
+
+            ntry = ntry + 1
+        else:
+            raise IOError("downloading failed %s times: fid %s" %
+                          (MAX_RETRY, fid))
 
         if localstore is not None:
             shutil.copy(dl_file, localname)
@@ -874,13 +869,14 @@ def _ass_sh_getfid(args):
     tilefiles = []
     for tile_xyz in inputfiles:
         logger.debug("converting tile ... %s" % tile_xyz)
-        tf1 = _ass_xyz2tif(tile_xyz,srcsrs, utm_remove_zone)
+        tf1 = _ass_xyz2tif(tile_xyz, srcsrs, utm_remove_zone)
         if tf1 is not None:
             tfxx = _ass_reduce_tile(tf1, out_res)
             tilefiles.append(tfxx)
 
     if os.path.exists(dl_file): os.remove(dl_file)
     return tilefiles
+
 
 def assemble_DGM_SH(path, name, replace, provider: dict):
     target = os.path.join(path, DEM_FMT % name)
@@ -894,7 +890,7 @@ def assemble_DGM_SH(path, name, replace, provider: dict):
     random.shuffle(fids)
     args = [(i, len(fids), x, provider) for i, x in enumerate(fids)]
     tile_files = []
-    with Pool(3*PROCS) as pool:
+    with Pool(3 * PROCS) as pool:
         for tf in _tools.progress(pool.imap_unordered(_ass_sh_getfid, args)):
             tile_files.append(tf)
 
