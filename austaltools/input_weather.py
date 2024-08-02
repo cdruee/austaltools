@@ -537,28 +537,30 @@ def read_cerra_nc(ncfile, lat, lon):
     actual surface roughness
     values:
 
-    ========  =========   ==========================
-     name     unit        description
-    ========  =========   ==========================
-    'time'
-    '10wdir'  deg         10-metre wind direction true
-    '10si'    m s**-1     10-metre wind speed
-    '2r'      %           2-metre relative humidity
-    '2t'      K           2-metre temperature
-    'lcc'     %           low-level cloud cover
-    'mcc'     %           medium-level cloud cover
-    'tisemf'  N m**-2 s   time intregral of surface eastward momentum flux
-    'tisnmf'  N m**-2 s   time intregral of surface northward momentum flux
-    'slhf'    J m**-2     surface latent heat flux
-    'sp'      Pa          surface pressure
-    'sr'      m           surface roughness
-    'sshf'    J m**-2     surface sensible heat flux
-    'tcc'     %           total cloud cover
-    ------    --------    --------------------------
-    optional:
-    ------------------------------------------------
-    'tp'      kg m**-2    total_precipitation
-    ======    ========    ==========================
+    +---------+-----------+------------------------------------+
+    | name    | unit      | description                        |
+    +=========+===========+====================================+
+    | 'time'  |           |                                    |
+    | '10wdir'| deg       | 10-metre wind direction true       |
+    | '10si'  | m s**-1   | 10-metre wind speed                |
+    | '2r'    | %         | 2-metre relative humidity          |
+    | '2t'    | K         | 2-metre temperature                |
+    | 'lcc'   | %         | low-level cloud cover              |
+    | 'mcc'   | %         | medium-level cloud cover           |
+    | 'tisemf'| N m**-2 s | time integral of surface eastward  |
+    |         |           | momentum flux                      |
+    | 'tisnmf'| N m**-2 s | time integral of surface northward |
+    |         |           | momentum flux                      |
+    | 'slhf'  | J m**-2   | surface latent heat flux           |
+    | 'sp'    | Pa        | surface pressure                   |
+    | 'sr'    | m         | surface roughness                  |
+    | 'sshf'  | J m**-2   | surface sensible heat flux         |
+    | 'tcc'   | %         | total cloud cover                  |
+    +---------+-----------+------------------------------------+
+    | optional:                                                |
+    +----------------------------------------------------------+
+    | 'tp'    | kg m**-2  | total precipitation                |
+    +---------+---------+--------------------------------------+
     """
     import netCDF4
 
@@ -1160,9 +1162,27 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.') \
 
 
 # -------------------------------------------------------------------------
-
-
 def austal_weather(args):
+
+    """
+    This function processes weather data based on the provided arguments and retrieves weather observations from various sources.
+
+    :param dict args: A dictionary containing the following keys:
+        - dwd (str or None): DWD station ID, used to retrieve station information.
+        - wmo (str or None): WMO station ID, used to retrieve station information.
+        - gk (list of float or None): Gauss-Krüger coordinates [rechts, hoch].
+        - ut (list of float or None): UTM coordinates.
+        - ll (list of float or None): Latitude and longitude coordinates.
+        - ele (float or None): Elevation information.
+        - year (int): Year for which the weather data is required.
+        - output (str): Output name for the results.
+        - source (str): Source of the weather data (e.g., "ERA5", "CERRA", "DWD").
+        - prec (bool): Flag indicating whether precipitation data should be included.
+
+    :raises ValueError: If an unknown source is provided.
+    :return: None
+    :rtype: None
+    """
     logger.debug("args: %s" % format(args))
 
     storage_path = provide_storage()
@@ -1375,12 +1395,18 @@ def austal_weather(args):
 
 def main(args):
     """
-    This is the main routine
+    This is the main routine that processes the input arguments and calls the main working function `austal_weather`.
 
-    :return: configuration values
-    :rtype: dict
+    :param dict args: A dictionary containing the following keys:
+        - dwd (str or None): DWD option, mutually exclusive with 'wmo' and required with 'ele'.
+        - wmo (str or None): WMO option, mutually exclusive with 'dwd' and required with 'ele'.
+        - ele (str or None): Element option, required with either 'dwd' or 'wmo'.
+        - year (int or None): Year option, required with '-L', '-G', '-U', '-D', or '-W'.
+        - output (str or None): Output name, required with '-L', '-G', '-U', '-D', or '-W'.
+        - station (str or None): Station option, only valid with 'dwd' or 'wmo'.
+
+    :raises SystemExit: If mutually exclusive options are provided or required options are missing.
     """
-
     if ((args['dwd'] is not None or args['wmo'] is not None)
             and args['ele'] is not None):
 

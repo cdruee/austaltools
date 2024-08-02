@@ -36,6 +36,7 @@ setup(
         'numpy',
         'gdal',
         'pandas',
+        'numpy',
         'pyyaml',
         'readmet',
         'scipy'
@@ -44,3 +45,19 @@ setup(
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
 )
+
+austaltools
+numpy
+pandas
+matplotlib
+readmet
+tqdm
+meteolib
+scipy
+PyYAML
+setuptools
+requests
+pip
+cdo
+cdsapi
+urllib3

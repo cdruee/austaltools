@@ -59,47 +59,47 @@ class TestCheckTolerances(unittest.TestCase):
     org_build = _tools.Building(x=100, y=0, a=100, b=150, w=0)
     def test_check_tolerances_0(self):
         self.assertTrue(prog.check_tolerances(
-            prog.DEFAULT_TOLERANCE, self.org_build, self.org_corners))
+            prog.DEFT_TOLRANCE, self.org_build, self.org_corners))
 
     def test_check_tolerances_stillok(self):
         corners = []
         for i,p in enumerate(self.org_corners):
             corners.append(
-                (p[0] + 0.9 * prog.DEFAULT_TOLERANCE * np.sin(i),
-                 p[1] + 0.9 * prog.DEFAULT_TOLERANCE * np.cos(i))
+                (p[0] + 0.9 * prog.DEFT_TOLRANCE * np.sin(i),
+                 p[1] + 0.9 * prog.DEFT_TOLRANCE * np.cos(i))
             )
         self.assertTrue(prog.check_tolerances(
-            prog.DEFAULT_TOLERANCE, self.org_build, corners))
+            prog.DEFT_TOLRANCE, self.org_build, corners))
 
     def test_check_tolerances_notok(self):
         corners = []
         for i,p in enumerate(self.org_corners):
             corners.append(
-                (p[0] + 1.1 * prog.DEFAULT_TOLERANCE * np.sin(i),
-                 p[1] + 1.1 * prog.DEFAULT_TOLERANCE * np.cos(i))
+                (p[0] + 1.1 * prog.DEFT_TOLRANCE * np.sin(i),
+                 p[1] + 1.1 * prog.DEFT_TOLRANCE * np.cos(i))
             )
         self.assertFalse(prog.check_tolerances(
-            prog.DEFAULT_TOLERANCE, self.org_build, corners))
+            prog.DEFT_TOLRANCE, self.org_build, corners))
 
     def test_check_tolerances_otherok(self):
         corners = []
         for i,p in enumerate(self.org_corners):
             corners.append(
-                (p[0] + 1.1 * prog.DEFAULT_TOLERANCE * np.sin(i),
-                 p[1] + 1.1 * prog.DEFAULT_TOLERANCE * np.cos(i))
+                (p[0] + 1.1 * prog.DEFT_TOLRANCE * np.sin(i),
+                 p[1] + 1.1 * prog.DEFT_TOLRANCE * np.cos(i))
             )
         self.assertTrue(prog.check_tolerances(
-            1.2 * prog.DEFAULT_TOLERANCE, self.org_build, corners))
+            1.2 * prog.DEFT_TOLRANCE, self.org_build, corners))
 
     def test_check_tolerances_otherok(self):
         corners = []
         for i,p in enumerate(self.org_corners):
             corners.append(
-                (p[0] + 1.1 * prog.DEFAULT_TOLERANCE * np.sin(i),
-                 p[1] + 1.1 * prog.DEFAULT_TOLERANCE * np.cos(i))
+                (p[0] + 1.1 * prog.DEFT_TOLRANCE * np.sin(i),
+                 p[1] + 1.1 * prog.DEFT_TOLRANCE * np.cos(i))
             )
         self.assertTrue(prog.check_tolerances(
-            1.2 * prog.DEFAULT_TOLERANCE, self.org_build, corners))
+            1.2 * prog.DEFT_TOLRANCE, self.org_build, corners))
 
 class TestRectangleFinding(unittest.TestCase):
     org_corners = [(100, 0), (200, 0), (200, 150), (100, 150)]
@@ -109,7 +109,7 @@ class TestRectangleFinding(unittest.TestCase):
         rot_corners = rot_corn(self.org_corners, angle)
         rot_build = rot_bldg(self.org_build, angle)
         build = prog.find_building_around(rot_corners,
-                                          prog.DEFAULT_TOLERANCE)
+                                          prog.DEFT_TOLRANCE)
         print(format(self.org_corners) + '\n' +
               format(rot_corners)+ '\n' +
               format(rot_build) + '\n' +
@@ -118,9 +118,9 @@ class TestRectangleFinding(unittest.TestCase):
               format(prog.building_corners(build))
               )
         return prog.check_tolerances(
-            prog.DEFAULT_TOLERANCE,
+            prog.DEFT_TOLRANCE,
             prog.find_building_around(rot_corners,
-                                      prog.DEFAULT_TOLERANCE),
+                                      prog.DEFT_TOLRANCE),
             rot_corners)
     def test_check_rotate_0_1(self):
         self.assertTrue(self.check_rotate(0.1))
@@ -150,12 +150,12 @@ class TestBadPoints(unittest.TestCase):
 
     def check_num_points(self, num):
         bdg = prog.find_building_around(self.rot_corners[0:num],
-                                        prog.DEFAULT_TOLERANCE)
+                                        prog.DEFT_TOLRANCE)
         if bdg is None:
             res = False
         else:
             res = prog.check_tolerances(
-            prog.DEFAULT_TOLERANCE, bdg, self.rot_corners[0:4])
+            prog.DEFT_TOLRANCE, bdg, self.rot_corners[0:4])
         return res
     def test_2_points(self):
         with self.assertRaises(ValueError):

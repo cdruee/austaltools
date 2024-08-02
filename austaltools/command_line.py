@@ -9,6 +9,7 @@ try:
     from . import _tools
     from ._version import __version__
     from . import _datasets
+    from . import buildings_geojson
     from . import eap
     from . import fill_timeseries
     from . import input_terrain
@@ -19,6 +20,7 @@ except ImportError:
     import _tools
     from _version import __version__
     import _datasets
+    import buildings_geojson
     import eap
     import fill_timeseries
     import input_terrain
@@ -72,6 +74,35 @@ def cli_parser():
 
     # ------------------------------------------------------------
 
+    pars_bldg = subparsers.add_parser(
+        name='buildings_geojson',
+        aliases=['bg'],
+        description="get buildings from geojson and write to `austal.txt`")
+    pars_bldg.add_argument('-g', '--geojson',
+                        help='file containing building info' +
+                             '[%s]' % buildings_geojson.DEFAULT_FILE,
+                        default=buildings_geojson.DEFAULT_FILE)
+    pars_bldg.add_argument('-n', '--dry-run',
+                        action="store_true",
+                        help='do not change austal.txt, ' +
+                             'show changes instead.')
+    pars_bldg.add_argument('-t', '--tolerance',
+                           help='limit for accepting a polygon as rectangle' +
+                             ' (max difference of the lenght of the' +
+                             ' diagonals)' +
+                             ' [%.2f]' % buildings_geojson.DEFT_TOLRANCE,
+                           default=buildings_geojson.DEFT_TOLRANCE)
+    pars_bldg_hgt = parser.add_mutually_exclusive_group()
+    pars_bldg_hgt.add_argument('-z', '--zvalue',
+                        help='name of property that gives building height' +
+                             '[%s]' % buildings_geojson.DEFAULT_ZVALUE,
+                        default=buildings_geojson.DEFAULT_ZVALUE)
+    pars_bldg_hgt.add_argument('-c', '--height',
+                        help='height of all buildings')
+    pars_bldg = _tools.add_arguents_common_plot(pars_bldg)
+
+    # ----------------------------------------------------
+
     pars_fts = subparsers.add_parser(
         name='fill-timeseries',
         aliases=['ft'],
@@ -96,14 +127,14 @@ def cli_parser():
                           nargs=1,
                           help='daily work begin time in hours 0-23. ' +
                                'Only relevant with -w or -W. ' +
-                               '[%02i]' % default['hour-begin'],
-                          default=default['hour-begin'])
+                               '[%02i]' % fill_timeseries.DEFAULT_BEGIN,
+                          default=fill_timeseries.DEFAULT_BEGIN)
     pars_fts.add_argument('-e', '--hour-end', metavar='HOUR',
                           nargs=1,
                           help='daily work end time in hours, ' +
                                '0-23. Only relevant with -w or -W .' +
-                               '[%02i]' % default['hour-end'],
-                          default=default['hour-end'])
+                               '[%02i]' % fill_timeseries.DEFAULT_END,
+                          default=fill_timeseries.DEFAULT_END)
     hold = pars_fts.add_mutually_exclusive_group()
     hold.add_argument('-u', '--holiday-week', nargs="+",
                       help='work-free weeks 1-52 as space-delimited list. ' +
@@ -136,7 +167,6 @@ def cli_parser():
 
     # ----------------------------------------------------
 
-    default_source = _datasets.KNOWN_WEATHER[0]
     default_year = 2020
     #
     # command line args
@@ -190,11 +220,12 @@ def cli_parser():
                         metavar="CODE",
                         nargs=None,
                         choices=input_weather.KNOWN_SOURCES,
-                        default=default_source,
+                        default=input_weather.KNOWN_SOURCES[0],
                         help='select the source for the weather data. ' +
                              'Known ``CODE`` values are ' +
-                             ' '.join(input_weather.KNOWN_SOURCES) + ' ' +
-                             'Defaults to ' + default_source)
+                             ' '.join(input_weather.KNOWN_SOURCES) +
+                             ' Defaults to ' +
+                             input_weather.KNOWN_SOURCES[0])
     pars_wea.add_argument('-y', '--year', dest='year',
                         metavar='YEAR',
                         nargs=None,
@@ -218,7 +249,7 @@ def cli_parser():
 
     # ----------------------------------------------------
 
-    default_dem = _datasets.KNOWN_DEMS[0]
+    default_dem = list(input_terrain.AVAILABLE_DEMS)[0]
     default_extent = 6.
 
     pars_ter = subparsers.add_parser(
@@ -335,13 +366,13 @@ def cli_parser():
     pars_eap = _tools.add_arguents_common_plot(pars_eap)
 
     # ----------------------------------------------------
-    plot = subparsers.add_parser(
+    pars_plot = subparsers.add_parser(
         name='plot',
         description='plot AUSTAL output data')
-    plot.add_argument(dest="file", metavar="DATA",
+    pars_plot.add_argument(dest="file", metavar="DATA",
                       help="data file to plot."
                       )
-    plot.add_argument('-s', '--stdvs',
+    pars_plot.add_argument('-s', '--stdvs',
                       metavar="STDVs",
                       nargs='?',
                       default=0.,
@@ -352,11 +383,11 @@ def cli_parser():
                            'deviation caculated by austal. ' +
                            'If missing, `STDVs` defaults to 1.0.')
 
-    plot.add_argument("--version",
+    pars_plot.add_argument("--version",
                       version="%(prog)s " + str(__version__),
                       action="version")
 
-    plot = _tools.add_arguents_common_plot(plot)
+    pars_plot = _tools.add_arguents_common_plot(pars_plot)
 
     # ----------------------------------------------------
 

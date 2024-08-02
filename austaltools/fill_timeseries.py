@@ -22,6 +22,12 @@ logging.basicConfig()
 logger = logging.getLogger()
 # ----------------------------------------------------
 
+DEFAULT_BEGIN = 8
+DEFAULT_END = 178
+
+
+# ----------------------------------------------------
+
 def parse_time_unit(string):
     if string.lower() in ['month', 'months']:
         period = 'months'
@@ -40,7 +46,7 @@ def parse_time_unit(string):
 def parse_time(info, name='', multi=True):
     if "time" not in info.keys():
         raise ValueError('no time info: %s' % name)
-    count = _tools.parse_time_string(format(info['time']))
+    count = _tools.parse_sequence_string(format(info['time']))
     logger.debug('count: ' + format(count))
     if "unit" not in info.keys():
         raise ValueError('no unit info: %s' % name)

@@ -22,13 +22,13 @@ import time
 import zipfile
 from importlib import resources
 from pathlib import PurePath
-from urllib3 import disable_warnings, exceptions
 from xml.etree import ElementTree
 
 import numpy as np
 import pandas as pd
 import pip
 import requests
+from urllib3 import disable_warnings, exceptions
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from osgeo import gdal
@@ -208,7 +208,8 @@ def dataset_scan(locs=None):
 
 
 # -------------------------------------------------------------------------
-def find_writeable_storage(locs: str = None, stor: str = None) -> str or None:
+def find_writeable_storage(locs: str = None,
+                           stor: str = None) -> str or None:
     """
     Finds a viable data storage directory and returns its path.
     If `storage_path` is provided, only this path is checked
@@ -252,29 +253,32 @@ def find_writeable_storage(locs: str = None, stor: str = None) -> str or None:
 # -------------------------------------------------------------------------
 def download(url, file):
     """
-    Downloads a file from a specified URL and saves it to a given local file path.
+    Downloads a file from a specified URL and saves it
+    to a given local file path.
 
     :param url: The URL of the file to download.
     :type url: str
-    :param file: The local path, including the filename, where the downloaded file will be saved.
+    :param file: The local path, including the filename,
+      where the downloaded file will be saved.
     :type file: str
     :returns: The name of the file saved locally.
     :rtype: str
-    :raises Exception: An exception is raised if the download fails (HTTP status code is not 200).
+    :raises Exception: An exception is raised if the download
+      fails (HTTP status code is not 200).
 
-    This function sends a GET request to the specified URL. If the request is successful (HTTP status code 200),
-    it writes the content of the response to a file specified by the 'file' parameter. If the request fails,
+    This function sends a GET request to the specified URL. If the request
+    is successful (HTTP status code 200),
+    it writes the content of the response to a file specified by
+    the 'file' parameter. If the request fails,
     it raises an exception with information about the failure.
 
-    Example usage:
+    :example:
 
-    .. code-block:: python
-
-        try:
-            file_name = download('http://example.com/file.jpg', '/path/to/local/file.jpg')
-            print(f"Downloaded file saved as {file_name}")
-        except Exception as e:
-            print(str(e))
+    >>> try:
+    >>>     file_name = download('http://example.com/file.jpg', '/path/to/local/file.jpg')
+    >>>     print(f"Downloaded file saved as {file_name}")
+    >>> except Exception as e:
+    >>>     print(str(e))
 
     """
     with requests.get(url, allow_redirects=True) as req:
@@ -282,7 +286,8 @@ def download(url, file):
             with open(file, 'wb') as f:
                 f.write(req.content)
         else:
-            raise Exception(f"Download failed: status code {req.status_code}")
+            raise Exception(
+                f"Download failed: status code {req.status_code}")
     return os.path.basename(file)
 
 
@@ -306,16 +311,19 @@ def xyz2csv(inputfile, output, utm_remove_zone=False):
     # get full grid axes
     try:
         x_res = np.mean(np.diff(sorted(set(df['x']))))
-        x_vals = set(np.arange(df['x'].min(), df['x'].max() + x_res, x_res))
+        x_vals = set(
+            np.arange(df['x'].min(), df['x'].max() + x_res, x_res))
         y_res = np.mean(np.diff(sorted(set(df['y']))))
-        y_vals = set(np.arange(df['y'].min(), df['y'].max() + y_res, y_res))
+        y_vals = set(
+            np.arange(df['y'].min(), df['y'].max() + y_res, y_res))
     except ValueError:
         # skip all-NaN files etc.
         return False
     # create full dataframe
     ff = pd.DataFrame.from_records(itertools.product(x_vals, y_vals),
                                    columns=['x', 'y'])
-    of = pd.merge(ff, df, how='left', left_on=['x', 'y'], right_on=['x', 'y'])
+    of = pd.merge(ff, df, how='left', left_on=['x', 'y'],
+                  right_on=['x', 'y'])
     del [ff, df]
     of = of.replace(np.nan, -9999.)
 
@@ -330,66 +338,64 @@ def xyz2csv(inputfile, output, utm_remove_zone=False):
 # -------------------------------------------------------------------------
 def xmlpath(xml, path):
     """
-    Extracts text or attribute values from specified elements within an XML string based on a given path.
+    Extracts text or attribute values from specified elements
+    within an XML string based on a given path.
     The function implements only a small subset of the XPath syntax.
 
 
     :param xml: The XML document as a str.
-    :param path: A string representing the hierarchical path to the desired elements. This path may include element names,
-                 indexes in square brackets for direct child selection, and an optional attribute filter or attribute name
-                 preceded by ``::`` for final value extraction.
+    :param path: A string representing the hierarchical path to the
+      desired elements. This path may include element names,
+      indexes in square brackets for direct child selection,
+      and an optional attribute filter or attribute name
+      preceded by ``::`` for final value extraction.
 
     Path Syntax
 
-    * ``'element'``: Selects all children named ``element`` from the current node.
-    * ``'element[index]'``: Selects the n-th ``element`` among its siblings (0-based index).
-    * ``'element[@attribute="value"]'``: Selects all ``element`` nodes where the attribute matches the specified value.
-    * ``'element::attribute'``: Retrieves the value of an attribute named ``attribute`` from the selected elements.
-    * Any combination of the above, separated by '/' to navigate through child elements.
+    * ``'element'``: Selects all children named ``element``
+      from the current node.
+    * ``'element[index]'``: Selects the n-th ``element`` among its
+      siblings (0-based index).
+    * ``'element[@attribute="value"]'``: Selects all ``element`` nodes
+      where the attribute matches the specified value.
+    * ``'element::attribute'``: Retrieves the value of an attribute
+      named ``attribute`` from the selected elements.
+    * Any combination of the above, separated by '/' to navigate
+      through child elements.
 
-    :return: A list containing the extracted data from the XML, either the text content of selected elements or the values of
-             specified attributes, depending on the input path.
+    :return: A list containing the extracted data from the XML, either
+      the text content of selected elements or the values of
+      specified attributes, depending on the input path.
 
-    :Example:
+    :example:
 
-    .. code-block:: python
-
-        xml_string = '''<data>
-                            <item id="1">Item 1</item>
-                            <item id="2" extra="yes">Item 2</item>
-                        </data>'''
-
-        pathtotext = 'item'
-        textresult = xmlpath(xmlstring, pathtotext)
-
-    Returns: ['Item 1', 'Item 2']
-
-
-        pathtoattribute = 'item::id'
-        attributeresult = xmlpath(xmlstring, pathtoattribute)
-
-    Returns: ['1', '2']
+    >>> xml_string = '''<data>
+    >>>                     <item id="1">Item 1</item>
+    >>>                     <item id="2" extra="yes">Item 2</item>
+    >>>                </data>'''
+    >>>
+    >>> pathtotext = 'item'
+    >>> textresult = xmlpath(xmlstring, pathtotext)
+    ['Item 1', 'Item 2']
+    >>>
+    >>> pathtoattribute = 'item::id'
+    >>> attributeresult = xmlpath(xmlstring, pathtoattribute)
+    ['1', '2']
 
 
-    Notes
+    :note:
 
-    - This function is designed to operate on well-formed XML strings. Malformed XML might lead to unexpected results.
-    - The function uses Python's built-in XML handling capabilities and regular expressions for parsing and navigating the XML.
-    - Namespace handling: If the XML contains namespaces, they are automatically recognized and handled for tag matching.
+    - This function is designed to operate on well-formed XML strings.
+      Malformed XML might lead to unexpected results.
+    - The function uses Python's built-in XML handling capabilities and
+      regular expressions for parsing and navigating the XML.
+    - Namespace handling: If the XML contains namespaces, they are
+      automatically recognized and handled for tag matching.
 
-    :raises: The function itself does not explicitly raise exceptions, but misuse (e.g., incorrect XML or path syntax) can
-             lead to exceptions thrown by the underlying XML or regex processing libraries.
-
-    Dependencies
-
-    - Requires the `ElementTree` module from the Python standard library and `re` for regular expression support.
-
-      Ensure to import these before using the function:
-
-    .. code-block:: python
-
-        import re
-        from xml.etree import ElementTree
+    :raises: The function itself does not explicitly raise exceptions,
+      but misuse (e.g., incorrect XML or path syntax) can
+      lead to exceptions thrown by the underlying XML or
+      regex processing libraries.
 
     """
 
@@ -463,42 +469,47 @@ def xmlpath(xml, path):
 # -------------------------------------------------------------------------
 def jsonpath(json_obj, path):
     """
-    Extracts values from specified keys or indices within a JSON object based on a given path.
+    Extracts values from specified keys or indices within a
+    JSON object based on a given path.
 
-    :param json_obj: The JSON object (dict or list). This can be the result of json.loads() if using a JSON string.
-    :param path: A string representing the hierarchical path to the desired keys or indices. This path may include dictionary keys,
-                 list indices, and an optional filtering condition for dictionaries with specific key-value pairs.
+    :param json_obj: The JSON object (dict or list). This can be the
+      result of json.loads() if using a JSON string.
+    :param path: A string representing the hierarchical path to
+      the desired keys or indices. This path may include dictionary keys,
+      list indices, and an optional filtering condition for
+      dictionaries with specific key-value pairs.
 
     Path Syntax
 
     * 'key': Selects the value associated with 'key' in a dictionary.
     * '[index]': Selects the n-th element in a list (0-based index).
-    * 'key=value': Selects dictionaries from a list of dictionaries where 'key' matches 'value'.
-    * Any combination of the above, separated by '/' to navigate through nested structures.
+    * 'key=value': Selects dictionaries from a list of dictionaries
+      where 'key' matches 'value'.
+    * Any combination of the above, separated by '/' to navigate
+      through nested structures.
     * an asterisk (`*`) may be specified instead of 'key' to match any key.
 
-    :return: A list containing the extracted values from the JSON object based on the input path.
+    :return: A list containing the extracted values from the
+      JSON object based on the input path.
 
-    :Example:
+    :example:
 
-    .. code-block:: python
+    >>> json_obj = {
+    >>>   "items": [
+    >>>       {"id": 1, "name": "Item 1"},
+    >>>       {"id": 2, "name": "Item 2", "extra": "yes"}
+    >>>   ]
+    >>>  }
+    >>>
+    >>> path_to_name = 'items/name'
+    >>> names = jsonpath(json_obj, path_to_name)
+    ['Item 1', 'Item 2']
+    >>>
+    >>> path_to_extra = 'items/extra'
+    >>> extras = jsonpath(json_obj, path_to_extra)
+    ['yes']
 
-        json_obj = {
-            "items": [
-                {"id": 1, "name": "Item 1"},
-                {"id": 2, "name": "Item 2", "extra": "yes"}
-            ]
-        }
-
-        path_to_name = 'items/name'
-        names = jsonpath(json_obj, path_to_name)
-        # Returns: ['Item 1', 'Item 2']
-
-        path_to_extra = 'items/extra'
-        extras = jsonpath(json_obj, path_to_extra)
-        # Returns: ['yes']
-
-    Notes
+    :note:
 
     - This function simplifies direct navigation and filtering in
       JSON objects but does not offer the full querying capabilities
@@ -524,7 +535,7 @@ def jsonpath(json_obj, path):
                     key, value = node.split("=")
                     children += [o for o in oj if o.get(key) == value]
                 else:
-                    # Collecting items by key from each dictionary in a list
+                    # Collecting items by key from each dictionary in list
                     children += [o[node] for o in oj if node in o]
             elif isinstance(oj, dict):
                 if node in oj or node == '*':
@@ -734,21 +745,24 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         if filelist.endswith(('xml', 'meta4')):
             # xml
             logger.debug("downloading xml metadata: %s" % url)
-            with requests.get(url, allow_redirects=True, verify=verify) as rsp:
+            with requests.get(url, allow_redirects=True,
+                              verify=verify) as rsp:
                 input_files = xmlpath(xml=rsp.content.decode(),
                                       path=provider['xmlpath'])
             method = 'http'
         elif filelist.endswith(('json', 'geojson')):
             # xml
             logger.debug("downloading json metadata: %s" % url)
-            with requests.get(url, allow_redirects=True, verify=verify) as rsp:
+            with requests.get(url, allow_redirects=True,
+                              verify=verify) as rsp:
                 input_files = jsonpath(json_obj=rsp.json(),
                                        path=provider['jsonpath'])
                 method = 'http'
         elif filelist.endswith(('html')):
             # html
             logger.debug("downloading html metadata: %s" % url)
-            with requests.get(url, allow_redirects=True, verify=verify) as rsp:
+            with requests.get(url, allow_redirects=True,
+                              verify=verify) as rsp:
                 text = rsp.content.decode()
                 links = [x for x in re.findall(r'href="(.+?)"', text)]
                 patt = provider['links']
@@ -760,7 +774,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
                 if isinstance(x, list):
                     exp_val.append(x)
                 else:
-                    exp_val.append(_tools.parse_time_string(x))
+                    exp_val.append(_tools.parse_sequence_string(x))
             combval = itertools.product(*exp_val)
             input_files = [provider['format'] % x for x in combval]
             method = 'http'
@@ -822,16 +836,19 @@ def _ass_sh_getfid(args):
                 filename = tilename + '.xyz'
 
                 if os.path.exists(filename):
-                    logger.debug("-- %5d/%5d -- exists   %s " % (i, ni, tilename))
+                    logger.debug(
+                        "-- %5d/%5d -- exists   %s " % (i, ni, tilename))
                     return
                 else:
-                    logger.debug("-- %5d/%5d -- download %s " % (i, ni, tilename))
+                    logger.debug(
+                        "-- %5d/%5d -- download %s " % (i, ni, tilename))
 
                 timestr = time.strftime('%s', time.gmtime())
-                start = session.get(baseurl + '/multi.php?' +
-                                    f'url={filename}&buttonClass=file1&id={str(fid)}&'
-                                    f'type=dgm1&action=start&_={timestr}',
-                                    verify=False)
+                start = session.get(
+                    baseurl + '/multi.php?' +
+                    f'url={filename}&buttonClass=file1&id={str(fid)}&'
+                    f'type=dgm1&action=start&_={timestr}',
+                    verify=False)
                 response = start.json()
                 if response['success']:
                     job_id = response['id']
@@ -845,15 +862,15 @@ def _ass_sh_getfid(args):
                 running = True
                 downloadurl = None
                 while running:
-                    request = session.get(baseurl +
-                                          f'/multi.php?action=status&job={job_id}',
-                                          verify=False)
+                    request = session.get(
+                        baseurl + f'/multi.php?action=status&job={job_id}',
+                        verify=False)
                     response = request.json()
                     logger.debug(response)
                     if response.get('status', '') in ['wait', 'work']:
                         # wait
                         time.sleep(2)
-                    elif response.get('msg', '') ==  'Interner Fehler':
+                    elif response.get('msg', '') == 'Interner Fehler':
                         # next ty
                         continue
                     else:
@@ -906,8 +923,7 @@ def assemble_DGM_SH(path, name, replace, provider: dict):
     random.shuffle(fids)
     args = [(i, len(fids), x, provider) for i, x in enumerate(fids)]
     tile_files = []
-    pp = os.cpu_count() * 3 if PROCS is None else PROCS
-    with Pool(pp) as pool:
+    with Pool(PROCS) as pool:
         for tf in _tools.progress(
                 pool.imap_unordered(_ass_sh_getfid, args),
                 total=len(args)
@@ -1101,35 +1117,39 @@ def show_notice(storage_path, source):
 # -------------------------------------------------------------------------
 def _ass_era5_getyear(opts):
     """
-    Downloads ERA5 reanalysis data for a specific year and saves it as a NetCDF file.
+    Downloads ERA5 reanalysis data for a specific year and
+    saves it as a NetCDF file.
 
-    The function calls the Climate Data Store (CDS) API to retrieve a specific set of meteorological variables for
-    the entire year specified by the user. It requests data in NetCDF format, covering a predefined geographic
-    extent focusing on Alaska and Europe. This function is specifically designed to automate the retrieval process
-    for ERA5 weather variables, saving the data in a structured format that's easier to work with for further analysis.
+    The function calls the Climate Data Store (CDS) API to retrieve
+    a specific set of meteorological variables for
+    the entire year specified by the user. It requests data in
+    NetCDF format, covering a predefined geographic
+    extent focusing on Alaska and Europe. This function is specifically
+    designed to automate the retrieval process
+    for ERA5 weather variables, saving the data in a structured format
+    that's easier to work with for further analysis.
 
     :param opts: A tuple containing two elements:
                  - `y`: The year for which to download the data (integer).
-                 - `path`: The directory path where the NetCDF file should be saved (string).
+                 - `path`: The directory path where the NetCDF file should
+                   be saved (string).
     :type opts: tuple
 
-    :returns: None. The function saves a NetCDF file to the specified path but does not return any value.
+    :returns: None. The function saves a NetCDF file to the specified
+      path but does not return any value.
 
-    **Example usage**:
+    :example:
+    >>> # To download ERA5 data for the year 2020 and
+    >>> save it to the specified directory
+    >>> era5_getyear((2020, '/path/to/directory'))
 
-    .. code-block:: python
-
-        # To download ERA5 data for the year 2020 and save it to the specified directory
-        era5_getyear((2020, '/path/to/directory'))
-
-    The function crafts a filename based on the year, prefixing it with `era5_ak_eu_` to denote the region and
-    type of data retrieved. Ensure that the specified directory exists and is writable. The CDS API key must also
-    be configured as per the `cdsapi` package documentation.
-
-    Note:
-    The retrieval of data from the CDS API may incur charges or require acceptance of license terms depending
-    on your use case and the volume of data requested. Please consult the Copernicus Climate Data Store's
-    documentation and licensing agreements for more information.
+    :note:
+    - The function crafts a filename based on the year, prefixing it
+      with `era5_ak_eu_` to denote the region and
+      type of data retrieved. Ensure that the specified directory exists
+      and is writable.
+    - The library `cdsapi` must be installed and a **valid CDS API key**
+      must be configured as per the `cdsapi` package documentation.
     """
 
     yy, path = opts
@@ -1142,9 +1162,12 @@ def _ass_era5_getyear(opts):
         {
             'product_type': 'reanalysis',
             'variable': [
-                '10m_u_component_of_wind', '10m_v_component_of_wind', '2m_dewpoint_temperature',
-                '2m_temperature', 'forecast_surface_roughness', 'friction_velocity',
-                'surface_latent_heat_flux', 'surface_pressure', 'surface_sensible_heat_flux',
+                '10m_u_component_of_wind', '10m_v_component_of_wind',
+                '2m_dewpoint_temperature',
+                '2m_temperature', 'forecast_surface_roughness',
+                'friction_velocity',
+                'surface_latent_heat_flux', 'surface_pressure',
+                'surface_sensible_heat_flux',
                 'low_cloud_cover', 'total_cloud_cover',
                 'cloud_base_height', 'total_precipitation',
             ],
@@ -1190,36 +1213,45 @@ def _ass_era5_getyear(opts):
 # -------------------------------------------------------------------------
 def assemble_ERA5(path: str, years: list):
     """
-    Downloads and assembles ERA5 reanalysis data for a list of specified years, saving the data to a designated path.
+    Downloads and assembles ERA5 reanalysis data for a list of specified
+    years, saving the data to a designated path.
 
-    This function serves as a wrapper around the `era5_getyear` function, facilitating the batch retrieval of ERA5
-    data for multiple years. It utilizes multiprocessing to download data in parallel, thereby significantly reducing
-    the overall time required for downloading large datasets. Each year's data is saved as a separate NetCDF file within
+    This function serves as a wrapper around the `era5_getyear` function,
+    facilitating the batch retrieval of ERA5
+    data for multiple years. It utilizes multiprocessing to download data
+    in parallel, thereby significantly reducing
+    the overall time required for downloading large datasets. Each year's
+    data is saved as a separate NetCDF file within
     the specified directory path.
 
-    :param path: The file system path where the downloaded NetCDF files will be saved.
+    :param path: The file system path where the downloaded NetCDF files
+      will be saved.
     :type path: str
-    :param years: A list of years for which ERA5 data should be downloaded. Each year should be an integer within the
-                  valid range (1940 to the current year).
+    :param years: A list of years for which ERA5 data should be downloaded.
+      Each year should be an integer within the
+      valid range (1940 to the current year).
     :type years: list
 
-    :raises ValueError: If any year in the `years` list is outside the allowable range of 1940 to the current year.
+    :raises ValueError: If any year in the `years` list is outside the
+      allowable range of 1940 to the current year.
 
-    **Example usage**:
+    :example:
 
-    .. code-block:: python
+    >>> # To download ERA5 data for the years 2018 to 2020
+    >>> # and save to '/data/ERA5'
+    >>> assemble_ERA5('/data/ERA5', [2018, 2019, 2020])
 
-        # To download ERA5 data for the years 2018 to 2020 and save to '/data/ERA5'
-        assemble_ERA5('/data/ERA5', [2018, 2019, 2020])
+    :note:
 
-    Note:
-    - The function assumes that the `era5_getyear` function is defined and correctly set up to retrieve ERA5 data.
-    - The parallel downloading process is set to use 10 worker processes. Adjust this value in the `Pool` initialization
+    - The function assumes that the `era5_getyear` function is defined
+      and correctly set up to retrieve ERA5 data.
+    - The parallel downloading process is set to use 10 worker processes.
+      Adjust this value in the `Pool` initialization
       as needed based on system resources and desired performance.
-    - Ensure that sufficient disk space is available at the specified path to accommodate the downloaded data files.
+    - Ensure that sufficient disk space is available at the specified
+      path to accommodate the downloaded data files.
+    - Needs `cdsapi` for data retrieval and a **valid CDS API** key.
 
-    Ensure that the necessary libraries are installed and configured, including `cdsapi` for data retrieval and `multiprocessing`
-    for parallel processing. Also, verify that your CDS API key is set up correctly as per the CDS API documentation.
     """
 
     # create option tuples
@@ -1247,13 +1279,18 @@ def _ass_cerra_getyear(opts):
     Downloads and processes a year's worth of CERRA dataset as GRIB files,
     then converts them to NetCDF format for easier use.
 
-    This function takes a tuple containing the year (`y`) and lead time (`lt`) for the forecast data.
-    It builds the filename for the GRIB file from these parameters and checks if it exists locally.
-    If not, it uses the CDS API to retrieve the data for all specified variables over the entire year, saving it as a GRIB file.
-    After downloading, the function processes the GRIB file, converting it to a NetCDF file for more convenient analysis and removes
+    This function takes a tuple containing the year (`y`)
+    and lead time (`lt`) for the forecast data.
+    It builds the filename for the GRIB file from these parameters
+    and checks if it exists locally.
+    If not, it uses the CDS API to retrieve the data for all
+    specified variables over the entire year, saving it as a GRIB file.
+    After downloading, the function processes the GRIB file,
+    converting it to a NetCDF file for more convenient analysis and removes
     the original GRIB file to conserve space.
 
-    Requires the `cdsapi` and `cdo` (Climate Data Operators) packages, as well as an active Copernicus account for data retrieval.
+    Requires the `cdsapi` and `cdo` (Climate Data Operators) packages,
+    as well as an active Copernicus account for data retrieval.
 
     :param opts: A tuple containing two elements:
                  - `y` (int): The year of the dataset to retrieve.
@@ -1262,24 +1299,30 @@ def _ass_cerra_getyear(opts):
 
     A sample of expected parameter format: `(2023, 48)`
 
-    :returns: None. The function's primary purpose is file I/O (downloading and converting data).
-              It does not return a value but will print status messages regarding its progress.
+    :returns: None. The function's primary purpose is file I/O
+              (downloading and converting data).
+              It does not return a value but will print status messages
+              regarding its progress.
 
-    :raises FileNotFoundError: If the CDO command fails to find the downloaded GRIB file for conversion.
+    :raises FileNotFoundError: If the CDO command fails to find the
+            downloaded GRIB file for conversion.
 
-    **Example usage**:
+    :example:
 
-    .. code-block:: python
+    >>> # To download and process the CERRA data for the year 2023
+    >>> # with a lead time of 48 hours
+    >>> cerra_getyear((2023, 48))
 
-        # To download and process the CERRA data for the year 2023 with a lead time of 48 hours
-        cerra_getyear((2023, 48))
+    :note:
 
-    Ensure the `cerraname` function is defined globally and properly constructs the filename based on the year and lead time.
-    This function assumes `cerraname` returns a base filename to which `.grib` or `.nc` is appended for output files.
+    - The 'cdsapi' Client is used for data retrieval, requiring
+      a **valid CDS API key**
+      set up as per the CDS API's documentation.
+    - The 'cdo' tool is called for data processing, necessitating
+      its installation and availability in the system's PATH.
+    - This function assumes `cerraname` returns a base filename to which
+      `.grib` or `.nc` is appended for output files.
 
-    Note: The 'cdsapi' Client is used for data retrieval, requiring appropriate credentials set up as per the
-    CDS API's documentation. The 'cdo' tool is called for data processing, necessitating its installation and
-    availability in the system's PATH.
     """
     y, lt = opts
     gribname = _cerraname(y, lt) + '.grib'
@@ -1292,11 +1335,15 @@ def _ass_cerra_getyear(opts):
                 'data_type': 'reanalysis',
                 'product_type': 'forecast',
                 'variable': [
-                    '10m_wind_direction', '10m_wind_speed', '2m_relative_humidity',
-                    '2m_temperature', 'low_cloud_cover', 'medium_cloud_cover',
+                    '10m_wind_direction', '10m_wind_speed',
+                    '2m_relative_humidity',
+                    '2m_temperature', 'low_cloud_cover',
+                    'medium_cloud_cover',
                     'momentum_flux_at_the_surface_u_component',
-                    'momentum_flux_at_the_surface_v_component', 'surface_latent_heat_flux',
-                    'surface_pressure', 'surface_roughness', 'surface_sensible_heat_flux',
+                    'momentum_flux_at_the_surface_v_component',
+                    'surface_latent_heat_flux',
+                    'surface_pressure', 'surface_roughness',
+                    'surface_sensible_heat_flux',
                     'total_cloud_cover', 'total_precipitation',
                 ],
                 'level_type': 'surface_or_atmosphere',
@@ -1341,40 +1388,48 @@ def _ass_cerra_getyear(opts):
 # -------------------------------------------------------------------------
 def assemble_CERRA(path: str, years: list):
     """
-    Downloads, extracts, and merges CERRA dataset forecasts for specified years into single NetCDF files per year.
+    Downloads, extracts, and merges CERRA dataset forecasts for specified
+    years into single NetCDF files per year.
 
-    This function orchestrates the retrieval and processing of CERRA forecast datasets for a list of years.
-    For each year, it fetches data for multiple lead times, extracts a specific region from the datasets, and then merges
-    the forecast data into a single NetCDF file per year. The operation utilizes the Climate Data Operators (CDO) for data
-    manipulation and assumes a temporary directory is defined for intermediate data storage.
+    This function orchestrates the retrieval and processing of
+    CERRA forecast datasets for a list of years.
+    For each year, it fetches data for multiple lead times, extracts a
+    specific region from the datasets, and then merges
+    the forecast data into a single NetCDF file per year. The operation
+    utilizes the Climate Data Operators (CDO) for data
+    manipulation and assumes a temporary directory is defined for
+    intermediate data storage.
 
-    :param path: The directory path where the final merged NetCDF files will be stored.
+    :param path: The directory path where the final merged NetCDF files
+      will be stored.
     :type path: str
-    :param years: A list of years (integer) for which CERRA data should be downloaded and processed. The years should fall
-                  within the range of 1940 to the current year.
+    :param years: A list of years (integer) for which CERRA data should
+      be downloaded and processed. The years should fall
+      within the range of 1940 to the current year.
     :type years: list
 
-    :raises ValueError: If any of the years specified is outside the valid range (1940 to the current year).
+    :raises ValueError: If any of the years specified is outside the
+      valid range (1940 to the current year).
 
-    Example usage:
+    :example:
 
-    .. code-block:: python
+    >>> # To process CERRA data for the years 2015 to 2017
+    >>> assemble_CERRA('/path/to/final/storage', [2015, 2016, 2017])
 
+    :note:
 
-    To process CERRA data for the years 2015 to 2017
-
-        assemble_CERRA('/path/to/final/storage', [2015, 2016, 2017])
-
-    Notes:
-    - The function utilizes `cdo.Cdo` for data manipulation tasks such as merging time steps. Make sure that python-cdo is
-      installed and properly configured along with the actual CDO command-line tools.
-    - A temporary directory for storing intermediate data files is required. This directory is assumed to be configured before
+    - The function utilizes `cdo.Cdo` for data manipulation tasks such as
+      merging time steps. Make sure that python-cdo is
+      installed and properly configured along with the actual CDO
+      command-line tools.
+    - A temporary directory for storing intermediate data files is
+      required. This directory is assumed to be configured before
       the function call.
-    - After processing, intermediate data files are removed to free up space.
+    - After processing, intermediate data files are removed to free
+      up space.
+    - This function assumes that a global `TEMP` variable is defined and
+      points to a valid temporary directory for intermediate files.
 
-    This function assumes the presence and configurability of the `cerra_getyear` and `cerraname` functions, which are responsible
-    for retrieving yearly datasets and generating filenames based on the year and lead time, respectively. It also assumes that
-    a global `TEMP` variable is defined and points to a valid temporary directory for intermediate files.
     """
     temp_path = TEMP
     data = cdo.Cdo(tempdir=temp_path)
@@ -1416,40 +1471,55 @@ def assemble_CERRA(path: str, years: list):
 def provide_weather(source: str, path: str = None,
                     years: list = None, method: str = 'download'):
     """
-    Manages the downloading and organizing of weather data from specified sources for given years into a target directory.
+    Manages the downloading and organizing of weather data from
+    specified sources for given years into a target directory.
 
-    This function serves as a high-level interface for downloading weather datasets (for example, ERA5 or CERRA) for a specified
-    set of years and organizing them into a specified directory. The function currently supports the 'download' method with potential
-    for future expansion.
+    This function serves as a high-level interface for downloading
+    weather datasets (for example, ERA5 or CERRA) for a specified set of
+    years and organizing them into a specified directory. The function
+    currently supports the 'download' method with potential for future
+    expansion.
 
-    :param source: The name of the weather dataset source. Currently supports "ERA5" or "CERRA".
+    :param source: The name of the weather dataset source.
+      Currently supports "ERA5" or "CERRA".
     :type source: str
-    :param path: Optional; the file system path where the downloaded data will be saved. If not specified, the function
-                 attempts to find a writable storage location using `find_writeable_storage`.
+    :param path: Optional; the file system path where the downloaded
+      data will be saved. If not specified, the function
+      attempts to find a writable storage location using
+      `find_writeable_storage`.
     :type path: str, optional
-    :param years: Optional; a list of integer years for which to download the data. If not specified, no year-specific
-                  data fetching is performed, which may depend on the implementation details of the dataset handling functions.
+    :param years: Optional; a list of integer years for which to download
+      the data. If not specified, no year-specific
+      data fetching is performed, which may depend on the
+      implementation details of the dataset handling functions.
     :type years: list, optional
-    :param method: Optional; the method to use for obtaining the data. Currently, only "download" is implemented, but the parameter
-                   is designed to accommodate future methods like "cache" or "stream".
+    :param method: Optional; the method to use for obtaining the data.
+      Currently, only "download" is implemented, but the parameter
+      is designed to accommodate future methods like "cache" or "stream".
     :type method: str, optional
 
-    :returns: A boolean value indicating the success (`True`) or failure (`False`) of the data downloading and organization process.
+    :returns: A boolean value indicating the success (`True`) or failure
+      (`False`) of the data downloading and organization process.
 
-    Example usage:
+    :example:
 
-    .. code-block:: python
+    >>> # To download ERA5 data for the years 2020 and 2021
+    >>> # into the default storage location
+    >>> success = provide_weather("ERA5", years=[2020, 2021])
+    True
 
-        # To download ERA5 data for the years 2020 and 2021 into the default storage location
-        success = provide_weather("ERA5", years=[2020, 2021])
+    :note:
 
-    Note:
-    - This function logs its operations, including informational messages on progress and errors encountered.
-    - The actual implementation for finding writable storage or the setup for the logger is not defined in this function, and
+    - This function logs its operations, including informational messages
+      on progress and errors encountered.
+    - The actual implementation for finding writable storage or the setup
+      for the logger is not defined in this function, and
       should be provided in the surrounding context.
 
-    Raises:
-    - This function may raise exceptions internally but catches them to return a boolean success status. Detailed error
+    :raises:
+
+    - This function may raise exceptions internally but catches them to
+      return a boolean success status. Detailed error
       information is logged.
     """
 

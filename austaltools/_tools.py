@@ -46,19 +46,29 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 # -------------------------------------------------------------------------
 
 DEFAULT_WORKING_DIR = "."
-"""Default location for input and output"""
+"""
+Default location for input and output
+"""
 STORAGE_LOCATIONS = ["/opt/%s" % __title__,
                      os.path.expanduser("~/.local/share/%s" % __title__),
                      os.path.expanduser("~/.%s" % __title__),
                          "."
                      ]
-"""Default locations where downloaded or cashed data are expected"""
+"""
+Default locations where downloaded or cashed data are expected
+"""
 STORAGE_TERRAIN = "terrain"
-"""storage directory that holds terrain data inside the storage locations"""
+"""
+storage directory that holds terrain data inside the storage locations
+"""
 STORAGE_WAETHER = "weather"
-"""storage directory that holds weather data inside the storage locations"""
+"""
+storage directory that holds weather data inside the storage locations
+"""
 STORAGES = [STORAGE_TERRAIN, STORAGE_WAETHER]
-"""storage directories that hold data inside the storage locations"""
+"""
+storage directories that hold data inside the storage locations
+"""
 
 
 # -------------------------------------------------------------------------
@@ -67,15 +77,32 @@ AUSTAL_POLLUTANTS_GAS = ["so2", "nox", "no", "no2", "nh3", "hg0",
                          "hg", "bzl", "f", "xx", "odor",
                          "odor_050", "odor_065", "odor_075",
                          "odor_100", "odor_150"]
-"""Pollutant gases that are defined by austal"""
+"""
+Pollutant gases that are defined by austal: 
+    "so2", "nox", "no", "no2", "nh3", "hg0",
+    "hg", "bzl", "f", "xx", "odor",
+    "odor_050", "odor_065", "odor_075",
+    "odor_100", "odor_150"
+
+:meta hide-value:
+"""
 AUSTAL_POLLUTANTS_DUST = ["pm", "as", "cd", "hg", "ni", "pb", "tl",
                           "ba", "dx", "xx"]
-"""Pollutant dust substances that are defined by austal"""
+"""
+Pollutant dust substances that are defined by austal:
+    "pm", "as", "cd", "hg", "ni", "pb", "tl", "ba", "dx", "xx"
+
+:meta hide-value:
+"""
 AUSTAL_POLLUTANTS_DUST_CLASSES = ["%s_%s" % (x, y)
                                   for y in ["x", "1", "2", "3", "4"]
                                   for x in AUSTAL_POLLUTANTS_DUST]
-"""Pollutant dusts that are defined by austal, 
-each composed of a substance and grain-size class 1-4 or `x`"""
+"""
+Pollutant dusts that are defined by austal, 
+each composed of a substance and grain-size class 1-4 or `x`
+
+:meta hide-value:
+"""
 Z0_CLASSES = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 1.5, 2.0]
 """Surface roughness values corresponding to the roughness classes
 defined by austal"""
@@ -107,6 +134,19 @@ class Geometry(object):
     that austal uses for sources and buildings.
     It is a cuboid of given widht, depth, and height,
     that may be rotated around its southwest corner.
+
+    :param x: x position of the south-west corner
+    :type x: float (optional), default 0.
+    :param y: y position of the south-west corner
+    :type y: float (optional), default 0.
+    :param a: width (along x-axis) of the cuboid
+    :type a: float (optional), default 0.
+    :param b: depth (along y-axis) of cuboid
+    :type b: float (optional), default 0.
+    :param c: height (along z-axis) of cuboid
+    :type c: float (optional), default 0.
+    :param w: rotation angle anticlockwise around the south-west corner
+    :type w: float (optional), default 0.
     """
     x = 0.
     y = 0.
@@ -119,22 +159,6 @@ class Geometry(object):
 
     def __init__(self, x: float = 0, y: float = 0,
                  a: float = 0, b: float = 0, c: float = 0, w: float = 0):
-        """
-        Initilaize a Geometry
-
-        :param x: x position of the south-west corner
-        :type x: float (optional), default 0.
-        :param y: y position of the south-west corner
-        :type y: float (optional), default 0.
-        :param a: width (along x-axis) of the cuboid
-        :type a: float (optional), default 0.
-        :param b: depth (along y-axis) of cuboid
-        :type b: float (optional), default 0.
-        :param c: height (along z-axis) of cuboid
-        :type c: float (optional), default 0.
-        :param w: rotation angle anticlockwise around the south-west corner
-        :type w: float (optional), default 0.
-        """
         self.x = x
         self.y = y
         self.a = a
@@ -146,10 +170,6 @@ class Geometry(object):
     def __format__(self, spec: str = "") -> str:
         """
         return a string representing the properties of a Geometry
-        :param spec: format string (optional)
-        :type spec: str
-        :return: formatted string
-        :rtype: str
         """
         if spec != "":
             fmt = spec
@@ -182,7 +202,38 @@ class Source(Geometry):
 # -------------------------------------------------------------------------
 
 
-def parse_time_string(string):
+def parse_sequence_string(string):
+    """
+    Parse a string representing a sequence of values
+
+    :param string: The string to parse. The string can take the form
+        of a comma-seperated list `<value>, <value>, ..., <value>`
+        or the form `<start>-<stop>/<step>` (in which step is optional).
+    :type string: str
+    :return: The sequence of values as describe by the string
+    :rtype: list[int]
+
+    :example:
+
+    >>> parse_sequence_string("1,2,3,4,5")
+    [1, 2, 3, 4, 5]
+    >>> parse_sequence_string("1-9/2")
+    [1, 3, 5, 7, 9]
+
+    :note:
+
+    If the string is a comma-seperated list of integers,
+    the values must in increasing order.
+
+    List form and start-stop form are mutually exclusive
+
+    :raises: ValueError if the string contains any characters other than
+        digits, ",", "-", or "/"
+    :raises: ValueError if the string contains "," and "-" or "/"
+    :raises: ValueError if the string is comma-seperated list of integers,
+        but is not ordered.
+
+    """
     logger.debug('parse_time_string: %s' % string)
     for x in string:
         if x not in ['-', ',', '/'] and not x.isdigit():
@@ -222,13 +273,17 @@ def parse_time_string(string):
 
 def get_buildings(conf):
     """
-    read the buildings defined in ``austal.txt`` and rerturn a list
+    read the buildings defined in ``austal.txt`` and rerurn a list
     of :class:`Building` objects.
 
     :param conf: austal configuration as dict
     :type conf: dict
-    :return: list of :ref:`Building` objects
+    :return: list of :class:`Building` objects
     :rtype: list[::class:`Building`]
+
+    :raises: ValueError if the lists in each of the
+      building-related configuration values are not all
+      the same length.
     """
     pars = ["xb", "yb", "ab", "bb", "cb", "wb"]
     res = []
@@ -294,8 +349,6 @@ def gk2ll(rechts: float, hoch: float) -> (float, float, float):
     return transform.TransformPoint(rechts, hoch)
 # -------------------------------------------------------------------------
 
-
-# -------------------------------------------------------------------------
 
 def ll2gk(lat: float, lon: float) -> (float, float):
     """
@@ -407,7 +460,7 @@ def find_austxt(wdir='.'):
 
 def get_austxt(path="austal.txt"):
     """
-    Get AUSTAL configuration as dict
+    Get AUSTAL configuration fron the file 'austal.txt' as dictionary
 
     :param path: Configuration file. Defaults to
     :type: str, optional
@@ -456,7 +509,7 @@ def get_austxt(path="austal.txt"):
 
 def put_austxt(path="austal.txt", data=None):
     """
-    Write AUSTAL configuration file.
+    Write AUSTAL configuration file 'austal.txt'.
 
     If the file exists, it will be rewritten.
     Configuration values in the file are kept unless
@@ -464,7 +517,7 @@ def put_austxt(path="austal.txt", data=None):
 
     A Backup file is created wit a tilde appended to the filename.
 
-    :param path: File name. Defaults to
+    :param path: File name. Defaults to 'austal.txt'
     :type: str, optional
     :param data: Dictionary of configuration data.
         The keys are the AUSTAL configuration codes,

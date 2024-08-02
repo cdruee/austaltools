@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+"""
+This module provides funtions to determine the stability classes
+as used by atmospheric dispersion model by varius methods.
+"""
 import logging
 import os
 
@@ -20,12 +24,12 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     _isscalar = pd.api.types.is_scalar
 
 
-# =============================================================================
+# =========================================================================
 
 
 class StabiltyClass:
     """
-    Class that holds information about a list of stabilty classes.
+    Class that holds information about a set of stabilty classes.
 
     :param bounds: for each stability class, a 2-element list or tuple
         must be given. The first list must contain the z0 vlaues for
@@ -139,6 +143,7 @@ class StabiltyClass:
         return re
 
     def _getval(self, z0, line):
+        # interpolate z0 along a line
         lz0, lil = line
         if z0 in lz0:
             il = lil[lz0.index(z0)]
@@ -153,6 +158,7 @@ class StabiltyClass:
         return il
 
     def _bounds2centers(self):
+        # calculate center values if bounds values are defined
         bz0, bil = self._bounds[0]
         lbounds = [[bz0, [1. / 9999. for x in bil]], ] + self._bounds[:-1]
         bz0, bil = self._bounds[-1]
@@ -168,6 +174,7 @@ class StabiltyClass:
         self._centers.append([cz0, cil])
 
     def _centers2bounds(self):
+        # calculate bounds values if center values are defined
         lcenters = self._centers[:-1]
         rcenters = self._centers[1:]
 
@@ -184,12 +191,13 @@ class StabiltyClass:
         """
         get the upper boundary value of Obukhov lentgh :math:`L` for the
         class with index `num` for roughness length `z0`.
+
         :param num: numeric class index
         :type num: int
         :param z0: roughness length in m
         :type z0: float
         :param inverted: True if :math:`1/L` should be returned instead
-            of :math:`L`
+          of :math:`L`
         :type inverted: bool (optional)
         :return: Obukhov length :math:`L` in m
         :rtype: float
@@ -208,12 +216,13 @@ class StabiltyClass:
         """
         get the center value of Obukhov lentgh :math:`L` for the
         class with index `num` for roughness length `z0`.
+
         :param num: numeric class index
         :type num: int
         :param z0: roughness length in m
         :type z0: float
         :param inverted: True if :math:`1/L` should be returned instead
-            of :math:`L`
+          of :math:`L`
         :type inverted:  bool (optional)
         :return: Obukhov length :math:`L` in m
         :rtype: float
@@ -230,11 +239,12 @@ class StabiltyClass:
         """
         get the numeric class index for roughness length `z0` and
         Obukhov lentgh :math:`L`.
+
         :param z0: roughness length in m
         :type z0: float
         :param lob: Obukhov lentgh
         :param inverted: True if `lob` is :math:`1/L` instead
-            of :math:`L`
+          of :math:`L`
         :type inverted:  bool (optional)
         :return: Numeric class index
         :rtype: int
@@ -324,6 +334,8 @@ TA Luft 2021 [TAL2021]_.
 
 
 Tabelle 17: Klassierung der Obukhov-Länge L in m
+
+:meta hide-value:
 """
 # ----------------------------------------------------
 #
@@ -349,6 +361,8 @@ Klug/Manier stabilty classes. Class center values taken from TA Luft 2002
 [TAL2002]_.
 
 Tabelle 17: Bestimmung der Monin–Obukhov–Länge L_M
+
+:meta hide-value:
 """
 
 # ----------------------------------------------------
@@ -399,12 +413,44 @@ Pasquill-Gifford stability classes.
 Class Boundaries scraped from [GOL1972]_ Fig 5
 
 According to EPA (link?) class G is neglected for regulatory modeling
+
+:meta hide-value:
 """
 
 
 # ----------------------------------------------------
 #
 def stabilty_class(classifyer, time, z0, L):
+    """
+    Returns the atmospheric stability class according to
+     the selected classification scheme.
+
+    :param str classifyer: The classification method
+        ('Klug/Manier', 'KM2021', 'KM', 'TA Luft 2021',
+        'KM2002', or 'TA Luft 2002').
+    :param time: Date and time
+    :type time: pandas.DatetimeIndex or datetime64
+    :param z0: Roughness length(s)
+    :type z0: pandas.Series or float
+    :param L: Monin-Obukhov length(s) in m
+     :type L: pd.Series or float
+
+    :return: Stability class indices (1-6; 9 for missing values)
+    :rtype: numpy.ndarray
+
+    :raises ValueError: If shapes of time, z0, and L are not equal.
+    :raises ValueError: If an unknown classification method is provided.
+
+    :example:
+        >>> import pandas as pd
+        >>> time = pd.DatetimeIndex(['2024-08-02 12:00:00'])
+        >>> z0 = pd.Series(0.1, index=time)
+        >>> L = pd.Series(-100, index=time)  # Example Monin-Obukhov length
+        >>> result = stabilty_class('KM2021', time, z0, L)
+        >>> print("Stability class indices:", result)
+        Stability class indices: [2]
+
+    """
     # check / adjust types
     if _isscalar(time):
         time = pd.DatetimeIndex([time])
@@ -1565,7 +1611,8 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
 def klug_manier_scheme(*args, **kwargs):
     """
     shorthand for the currently valid version of the
-    Klug/Manier scheme :meth:`austaltools._dispersion.klug_manier_scheme_2017`
+    Klug/Manier scheme
+    :meth:`austaltools._dispersion.klug_manier_scheme_2017`
     """
     return klug_manier_scheme_2017(*args, **kwargs)
 
@@ -1573,6 +1620,76 @@ def klug_manier_scheme(*args, **kwargs):
 # =============================================================================
 
 def pasquill_taylor_scheme(time, ff, tcc, lat, lon, ceil):
+    """
+    Calulate stability class after Pasquill an Turner [EPA2000]_
+
+    ========== ================= =======
+      Category  Atmospheric        Index
+                stability
+    ========== ================= =======
+      I         very stable         1
+      II        stable              2
+      III/1     neutral/stable      3
+      III/2     neutral/unstable    4
+      IV        unstable            5
+      V         very unstable       6
+    ========== ================= =======
+
+    The norm states:
+      Strictly speaking, the above correction conditions apply
+      only to locations in Central Europe with a pronounced
+      seasonal climate and sunrise and sunset times definable over the
+      whole year, which in particular during the winter months
+      always exhibit a time difference exceeding six hours. These
+      conditions are met in Germany. For other countries, CET
+      should be replaced where relevant by the corresponding zone-
+      time. In climatic zones with diurnal climate or other calendar
+      classifications of astronomical seasons, the correction
+      conditions are not directly applicable in the above form. Adaptation
+      of subsections a to d for other global climatic zones does not
+      form a part of this standard.
+
+    :param time: (required, time-like)
+        An arbitrary time during the day of year for which
+        surise and sunset should be calculated.
+        May be supplied as any form accepted by `pandas.to_datetime()`,
+        e.g. timestamp (`"2000-12-14 18:00:00"`) or datetime64.
+        If timezone is not supplied, UTC is assumed.
+        If timezone is supplied, time is converted to CET.
+    :param ff: (required, float)
+        wind speed in 10m height. VDI 3782 Part 6 states:
+
+        The standard conditions for
+        the wind speed (υa) are the standard measurement
+        height of 10 m above ground (VDI 3786 Part 2;
+        VDI 3783 Part 8) in combination with a
+        roughness length of z0 = 0,1 m. Other measurement
+        heights are suitable if they equal at least twelve
+        times the roughness length and are at least 4 m
+        above ground level. If the wind speed is available
+        for other than the above standard conditions,
+        i.e. for another suitable measurement height
+        or a different roughness length,
+        a conversion needs to be carried out.
+    :param tcc: (required, float)
+        total cloud cover as fraction of 1
+        (equals value in octa divided by 8).
+    :param lat: (required, float) latitude in degrees.
+        Southern latitudes must be nagtive.
+    :param lon: (required, float) longitude in degrees.
+        Eastern longitudes are positive,
+        western longitudes are negative.
+    :param ele: (required, float) surface elvation above sea level in m.
+    :param cty: (optional, str) cloud type of lowest cloud layer.
+        When it is "CI", "CS", or "CC", the condition
+        "cloud coverage exclusively consits of high clouds (Cirrus)" is met.
+        If absent, "CU" is assumed.
+    :param _cloudout: (optional, boolean) for verification only.
+
+    :return: class value (numeric index)
+    :rtype: `int` if `time` is a scalar,
+        `pandas.Series(int64)` if `time` is array-like.
+    """
     # if arguments are scalars, convert to arrays
     if pd.api.types.is_scalar(time):
         scalar = True
@@ -1758,16 +1875,22 @@ def taylor_insolation_class(solar_altitude):
 
 def obukhov_length(ust, rho, Tv, H, E, Kelvin=None):
     """
-    The class LogWind represents a logarithmic wind profile that
-    my be described and requested in any possible compination of
-    parameters.
+    Returns the Obuhkov lenght [GOL1972]_ from surface values
+    of air density, virtual temperature, latent and sensible
+    heat-flux density.
 
-    :param ust: friction velocity in m/s (float).
-    :param rho: density of air kg/m^3 (float).
-    :param Tv:  virtual temperature in K of C, depending on `Kelvin`.
-    :param H:   surface sensible heat flux density in W/m^2 (float).
-    :param E:   surface latent heat flux density in W/m^2 (float).
-    :param Kelvin: (optional) if ``False``, all temperatures are assumed to
+    :param ust: friction velocity in m/s.
+    :type ust: pandas.Series or float
+    :param rho: density of air kg/m^3.
+    :type rho: pandas.Series or float
+    :param Tv:  virtual temperature in K or C, depending on `Kelvin`.
+    :type Tv: pandas.Series or float
+    :param H:   surface sensible heat flux density in W/m^2.
+    :type H: pandas.Series or float
+    :param E:   surface latent heat flux density in W/m^2.
+    :type E: pandas.Series or float
+    :param Kelvin: (optional)
+      If ``False``, all temperatures are assumed to
       be Kelvin. If ``False``, all temperatures are assumed to be Celsius.
       If missing of ``None``, unit  temperatures are autodetected.
       Defaults to ``None``.
@@ -1784,6 +1907,25 @@ def obukhov_length(ust, rho, Tv, H, E, Kelvin=None):
 # ----------------------------------------------------
 
 def h_eff(has, z0s):
+    """
+    Calculate effective anemometer heights for all nine
+     z0 class values used by AUSTAL [AST31]_
+     from the actual height of the wind measurement
+
+    :param has: actual height of the wind measurement
+    :type has: pandas.Series of float
+    :param z0s: roughness lenght at the position of the wind measurement
+    :type z0s:  pandas.Series of float
+    :return: height for nine roughness lenght at the model position
+      ordered from the smallest to the lagrest roughness length
+    :rtype: list[float]
+
+    :note: The effective roughness height is the height where
+      the same wind speed would be measured considering the roughness
+      at the model site as it is measured by a nearby the anemometer
+      that is mounted at height `has` on a site where the roughness is
+      `z0s`
+    """
     z0_vals = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1., 1.5, 2]
     href = 250
     d0s = m.wind.DISPLACEMENT_FACTOR * z0s
@@ -1798,12 +1940,30 @@ def h_eff(has, z0s):
 # ----------------------------------------------------
 
 def z0_verkaik(z, speed, gust, dirct, rose=False):
+    """
+    Calculates an estimate for the roughness lentgh of a site
+    from the gustiness of the wind, according to the Method
+    by Verkaik (as used by Koßmann and Namyslo [KoNa2019]_.
+
+    :param z: height of the wind measurement in meters
+    :type z: float, list or pandas.Series
+    :param speed:
+    :type speed:
+    :param gust:
+    :type gust: float, list or pandas.Series
+    :param dirct:
+    :type dirct: float, list or pandas.Series
+    :param rose: If `True` individual values of roughness length in m
+      and number of intervals when the wind cam from this sector.
+      are returned for 12 wind-direction sectors (clockwise from north).
+      If `False` one mean roughness lenght value in m
+      for the site is returned.
+      Default is `False`.
+    :type rose: bool
+    :return: roughness lenght either as mean or as sector-wise value(s)
+    :rtype: float or tuple[list,list], depending on `rose`
+    """
     df = pd.DataFrame({'u_m': speed, 'u_x': gust, 'd': dirct})
-    # roughness length from gustiness
-    # Koßmann, M., and J. Namyslo, 2019:
-    # Effektive Rauigkeitslänge aus Windmessungen : Merkblatt.
-    # Deutscher Wetterdienst (DWD),
-    # https://nbn-resolving.org/urn:nbn:de:101:1-2019052914504228790801.
     #
     # Verkaik - method
     #
