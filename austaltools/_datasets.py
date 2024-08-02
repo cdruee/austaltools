@@ -629,7 +629,7 @@ def _ass_merge_tiles(target, tile_files):
 
 
 # -------------------------------------------------------------------------
-def ass_process_input(args):
+def _ass_process_input(args):
     inp, base_url, verify, provider = args
     tile_files = []
     if re.match('^http[s]*://', inp):
@@ -778,7 +778,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         i = 0
         with Pool(PROCS) as pool:
             for tfs in _tools.progress(pool.imap_unordered(
-                    ass_process_input, thread_args),
+                    _ass_process_input, thread_args),
                     total=len(thread_args)):
                 i = i + 1
                 logger.debug("file %5d / %5d" % (i, len(thread_args)))
@@ -906,7 +906,8 @@ def assemble_DGM_SH(path, name, replace, provider: dict):
     random.shuffle(fids)
     args = [(i, len(fids), x, provider) for i, x in enumerate(fids)]
     tile_files = []
-    with Pool(PROCS) as pool:
+    pp = os.cpu_count() * 3 if PROCS is not None else None
+    with Pool(pp) as pool:
         for tf in _tools.progress(
                 pool.imap_unordered(_ass_sh_getfid, args),
                 total=len(args)
@@ -1098,7 +1099,7 @@ def show_notice(storage_path, source):
 
 
 # -------------------------------------------------------------------------
-def era5_getyear(opts):
+def _ass_era5_getyear(opts):
     """
     Downloads ERA5 reanalysis data for a specific year and saves it as a NetCDF file.
 
@@ -1229,11 +1230,11 @@ def assemble_ERA5(path: str, years: list):
         combi.append((y, path))
     # get data in parallel directly to storage
     with Pool(10) as pool:
-        pool.map(era5_getyear, combi)
+        pool.map(_ass_era5_getyear, combi)
 
 
 # -------------------------------------------------------------------------
-def cerraname(y, lt=None):
+def _cerraname(y, lt=None):
     name = 'cerra_ak_eu_%04i' % y
     if lt is not None:
         name += '_%01i' % lt
@@ -1241,7 +1242,7 @@ def cerraname(y, lt=None):
 
 
 # -------------------------------------------------------------------------
-def cerra_getyear(opts):
+def _ass_cerra_getyear(opts):
     """
     Downloads and processes a year's worth of CERRA dataset as GRIB files,
     then converts them to NetCDF format for easier use.
@@ -1281,7 +1282,7 @@ def cerra_getyear(opts):
     availability in the system's PATH.
     """
     y, lt = opts
-    gribname = cerraname(y, lt) + '.grib'
+    gribname = _cerraname(y, lt) + '.grib'
     c = cdsapi.Client()
     if not os.path.exists(gribname):
         print("cds getting: " + gribname)
@@ -1330,7 +1331,7 @@ def cerra_getyear(opts):
             gribname
         )
         c.retrieve(*opts)
-        ncname = cerraname(y, lt) + '.nc'
+        ncname = _cerraname(y, lt) + '.nc'
         print("cdo processing: " + ncname)
         cdo.selindexbox('489,649,479,659', options='-f nc',
                         input=gribname, output=ncname)
@@ -1392,13 +1393,13 @@ def assemble_CERRA(path: str, years: list):
 
     # get data and extract region
     with Pool(10) as pool:
-        p = pool.map(cerra_getyear, combi)
+        p = pool.map(_ass_cerra_getyear, combi)
 
     # combine forecasts
     for yr in set([x for x, _ in combi]):
         lts = set([y for x, y in combi if x == yr])
-        infiles = [cerraname(yr, lt) + '.nc' for lt in lts]
-        target = os.path.join(path, cerraname(yr, None) + '.nc')
+        infiles = [_cerraname(yr, lt) + '.nc' for lt in lts]
+        target = os.path.join(path, _cerraname(yr, None) + '.nc')
         data.mergetime(
             input=" ".join([
                 data.setgridtype('curvilinear', input=x)
