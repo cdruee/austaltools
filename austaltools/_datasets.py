@@ -906,7 +906,7 @@ def assemble_DGM_SH(path, name, replace, provider: dict):
     random.shuffle(fids)
     args = [(i, len(fids), x, provider) for i, x in enumerate(fids)]
     tile_files = []
-    pp = os.cpu_count() * 3 if PROCS is not None else None
+    pp = os.cpu_count() * 3 if PROCS is None else PROCS
     with Pool(pp) as pool:
         for tf in _tools.progress(
                 pool.imap_unordered(_ass_sh_getfid, args),
