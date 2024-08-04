@@ -936,7 +936,7 @@ def assemble_DGM_SH(path, name, replace, provider: dict):
                 pool.imap_unordered(_ass_sh_getfid, args),
                 total=len(args)
         ):
-            tile_files.append(tf)
+            tile_files += tf
 
     _ass_merge_tiles(target, tile_files)
 
