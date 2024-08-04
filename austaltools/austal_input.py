@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sun Mar 20 09:57:48 2022
-
-@author: clemens
+Convenience script to provie a simple-to-use interface
+to the most basic funtionality of `austaltools`,
+the creation of input files for simulations with the
+German regulatory dispersion model AUSTAL [AST31]_
 """
 import logging
 import argparse
@@ -71,6 +72,9 @@ def cli_parser():
 
 
 def main():
+    """
+    The main function
+    """
     parser = cli_parser()
     args = vars(parser.parse_args())
 
@@ -101,7 +105,7 @@ def main():
     w_args['prec'] = False
     w_args['station'] = None
     # call program
-    austal_weather.austal_weather(w_args)
+    input_weather.austal_weather(w_args)
     # select one output file, simply file name, remove the rest
     pick = 'kms'
     file_to_pick = ("%s_%s_%04i_%s.%s" %
@@ -124,7 +128,7 @@ def main():
     t_args['source'] = "DGM25-RP"
     t_args['extent'] = 6.
     # call program
-    austal_terrain.austal_terrain(t_args)
+    input_terrain.main(t_args)
     # remove confusing extra files
     for x in ['grid.aux.xml', 'prj']:
         file_to_remove = args['output'] + '.' + x
@@ -142,9 +146,7 @@ def main():
         f.write('%.1f : z0 at position of wind measurement\n' % z0)
 
 
-
-
 # -------------------------------------------------------------------------
-# initialize: call main routine
+# call main routine
 if __name__ == "__main__":
     main()

@@ -29,7 +29,7 @@ The module contains the following scripts
 :doc:`austaltools`
     The main comand that provides all user-facing functionality.
 
-:doc:`prepare-data`
+:doc:`configure-austaltools`
     Download dataset for use with austaltools (or assemble them from the original sources)
 
 `austal-input`_

@@ -1,9 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sun Mar 20 09:57:48 2022
-
-@author: clemens
 """
 import argparse
 import logging
@@ -229,6 +226,7 @@ def main():
 
     logger.debug(args)
 
+    prepare_data(args)
     if args['temp'] is not None:
         DS.TEMP = args['temp']
 

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sun Mar 20 09:57:48 2022
-
-@author: clemens
+This module provides funtionailty to generate
+terrain input files for simulations with the
+German regulatory dispersion model AUSTAL [AST31]_
 """
 import logging
 import os
@@ -27,16 +27,33 @@ logger = logging.getLogger()
 
 # -------------------------------------------------------------------------
 
-KNOWN_DEMS = _datasets.KNOWN_DEMS
 STORAGE_DIR = "terrain"
+"""
+keyword that marks terrain datasets and is the name of the subdirectory 
+of each storage locaton, where terrain data are stored
+"""
 DEM_FMT = '%s.elevation.nc'
+"""
+string format that forms the data file name from the ID of a dataset
+"""
 STORAGE_AUX_FILES = resources.files(__title__ + '.data')
+"""
+location where auxiliary files (e.g. license texts and dataset definitions)
+that are part of the module are stored
+"""
 
 
 # -------------------------------------------------------------------------
 
 
 def find_terrain_data():
+    """
+    Searches all known storage locations for the known terrain datasets
+    and yields a list of the datasets available locally.
+
+    :return: dataset IDs of the locally available datasets
+    :rtype: list[str]
+    """
     datasets = {}
     for ds in _datasets.DATASETS:
         # is ds a terrain dataset?
@@ -63,10 +80,34 @@ def show_notice(storage_path, source):
 # -------------------------------------------------------------------------
 def main(args: dict):
     """
-    This is the main working function
+    This is the main working function.
 
-    :param args: the command line arguments as dictionary
+    :param args: The command line arguments as a dictionary.
     :type args: dict
+    :param args["gk"]: Gauß-Krüger coordinates
+      as a list of two floats [rechts, hoch].
+    :type args["gk"]: list[float, float]
+    :param args["ut"]: UTM coordinates
+      as a list of three floats [rechts, hoch, zone].
+    :type args["ut"]: list[float, float]
+    :param args["ll"]: Latitude and longitude
+      as a list of two floats [lat, lon].
+    :type args["ll"]: list[float, float]
+    :param args["source"]: The source of the terrain data,
+      must be one of the available source IDs.
+    :type args["source"]: str
+    :param args["extent"]: The extent of the area
+      to be extracted in kilometers.
+    :type args["extent"]: float
+    :param args["output"]: The output file name without extension.
+    :type args["output"]: str
+
+    :note:
+
+    - ``args["gk"]``, ``args["ut"]``, and ``args["ll"]``
+      are mutally exclusive.
+
+    :raises ValueError: If the source is not one of the available sources.
     """
     logger.debug("args: %s" % format(args))
 
@@ -96,7 +137,7 @@ def main(args: dict):
     #
     # show notice
     #
-    logger.info('reading topography data: %s' % source)
+    logger.info('reading terrain data: %s' % source)
     show_notice(storage_path=storage_path, source=source)
     #
     # load dataset
@@ -142,3 +183,8 @@ def main(args: dict):
 # init at import:
 
 AVAILABLE_DEMS = find_terrain_data()
+"""
+List of locally available DEMs (filled upon imorting the module)
+
+:meta hide-value:
+"""

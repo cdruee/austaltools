@@ -1,5 +1,11 @@
 #!/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+This module allows to create time-dependent source strenght
+timeseries as input for simulations with the
+German regulatory dispersion model AUSTAL [AST31]_
 
+"""
 import os
 import logging
 import sys
@@ -23,19 +29,39 @@ logger = logging.getLogger()
 # ----------------------------------------------------
 
 DEFAULT_BEGIN = 8
-DEFAULT_END = 178
+"""
+Default staring hour for a workday 
+(first hour during which emsssions are created)
+"""
+
+DEFAULT_END = 17
+"""
+Default end hour for a workday
+(last hour during which emsssions are created)
+"""
 
 
 # ----------------------------------------------------
 
 def parse_time_unit(string):
-    if string.lower() in ['month', 'months']:
+    """
+    Parse a string and determine which time unit it describes:
+    - 'month', 'months', 'mon' for months
+    - 'day', 'days', 'd' for days
+    - 'hour', 'hours', 'hr', 'hrs', 'h' for hours
+
+    :param string: the string to parse
+    :type string: str
+    :return: the parsed time unit
+    :rtype: str
+    """
+    if string.lower() in ['month', 'months', 'mon']:
         period = 'months'
-    elif string.lower() in ['week', 'weeks']:
+    elif string.lower() in ['week', 'weeks', 'w']:
         period = 'weeks'
-    elif string.lower() in ['day', 'days']:
+    elif string.lower() in ['day', 'days', 'd']:
         period = 'days'
-    elif string.lower() in ['hour', 'hours']:
+    elif string.lower() in ['hour', 'hours', 'hr', 'hrs', 'h']:
         period = 'hours'
     else:
         raise ValueError('parse unit: unknown: %s' % string)
@@ -44,6 +70,26 @@ def parse_time_unit(string):
 
 
 def parse_time(info, name='', multi=True):
+    """
+    Parse time information from a given dictionary.
+
+    The dictionary `info` must contain the following keys:
+    - 'time': A string representing the time information.
+    - 'unit': A string representing the unit of time.
+
+    :param info: Dictionary containing time information.
+    :type info: dict
+    :param name: Optional name for the time info, used in error messages.
+    :type name: str
+    :param multi: Flag indicating whether multiple times are allowed.
+    :type multi: bool
+    :raises ValueError:
+      If 'time' or 'unit' keys are missing in the info dictionary.
+    :raises ValueError:
+      If multiple times are defined when multi is False.
+    :return: A tuple containing the parsed time count and unit.
+    :rtype: tuple
+    """
     if "time" not in info.keys():
         raise ValueError('no time info: %s' % name)
     count = _tools.parse_sequence_string(format(info['time']))
@@ -61,9 +107,88 @@ def parse_time(info, name='', multi=True):
 # ----------------------------------------------------
 
 
-def parse_cycle(c_id, c_info, time, dt):
+def parse_cycle(c_id, c_info, time):
+    """
+    Parse cycle information and
+    generate an emission time series.
+
+    :param c_id: Cycle identifier
+    :type c_id: str
+    :param c_info: Cycle information dictionary.
+         Must contain the keys:
+
+         - "source": str, source identifier (must not be equal to c_id)
+         - "start": dict, must contain:
+           - "at": str, start time information
+           - "offset" (optional): str, offset time information
+         - "sequence" or "list": list, sequence or list of values
+         - "unit" (optional): str, unit information in the
+           format "<mass unit>/<time interval>"
+    :type c_info: dict
+    :param time: Time series
+    :type time: pandas.Series
+
+    :raises ValueError: If required keys are missing or invalid values are
+        found in c_info. Possible errors include:
+
+        - if time is an invalid type or time series
+          does not have a unique interval
+        - if ``c_info`` does not contain the referred source name
+        - if the cycle name ``c_id`` is equal to the source name
+        - if ``c_info`` has neithert none or both of
+          a ``cycle`` or ``list`` entry
+        - if ``c_info`` has not ``start`` entry
+        - if the ``start`` entry is not a dict or
+          does not contain an ``at`` entry
+        - 'sequence' item contains more or less than one entry
+          or the entry cannot be parsed
+        - ``c_info['list']`` does not contain a list
+        - the unit info in ``c_info['unit']s`` cannot be parsed
+        - the mass unit in ``c_info['unit']`` is not al valid weight unit
+        - the time interval in ``c_info['unit']`` is not a valid time unit
+    :return: Source identifier and generated cycle series
+    :rtype: tuple (str, pandas.Series)
+
+    :example:
+
+        >>> c_id = "foo"
+        >>> c_info = {'source': '01.so2',
+        ...   'start': {'at': {'time': '1-11/2', 'unit': 'month'},
+        ...   'offset': {'time': '1,3', 'unit': 'week'}},
+        ...   'sequence': [
+        ...     {'ramp': {'time': 1, 'unit': 'day', 'value': 9.0}
+        ...    },
+        ...    {'const': {'time': 36, 'unit': 'hour', 'value': 1.1}}]}
+        >>> time = pandas.date_range("2000-01-01 00:00",
+        ...                          "2000-01-02 00:00", freq="1h")
+        >>> fill_timeseries.parse_cycle(c_id, c_info, time)
+            ('01.so2',
+             2000-01-01 00:00:00    0.0
+             2000-01-01 01:00:00    0.0
+             2000-01-01 02:00:00    0.0
+             2000-01-01 03:00:00    0.0
+             2000-01-01 04:00:00    0.0
+                                   ...
+             2000-12-24 07:00:00    1.1
+             2000-12-24 08:00:00    1.1
+             2000-12-24 09:00:00    1.1
+             2000-12-24 10:00:00    1.1
+             2000-12-24 11:00:00    1.1
+             Name: foo, Length: 745, dtype: float64)
+
+    """
+    # test and evaluate time
+    if not type(time) in [list, pd.Series, pd.DatetimeIndex]:
+        raise ValueError('time is not list-like')
+    time = pd.to_datetime(time)
+    dt = time.diff()[1:].unique()
+    if len(dt) > 1:
+        raise ValueError('time intervals are not uniform')
+    dt = pd.Timedelta(dt[0])
+
+    # parse source
     if "source" not in c_info.keys():
-        raise ValueError('cycle has no start info: %s' % c_id)
+        raise ValueError('cycle has no source info: %s' % c_id)
     source = c_info['source']
     if source == c_id:
         raise ValueError('cycle name equal to source name: %s' % c_id)
@@ -200,14 +325,68 @@ def parse_cycle(c_id, c_info, time, dt):
 
 # noinspection SpellCheckingInspection
 def get_cycle(file, time):
-    # test and evaluate time
-    if not type(time) in [list, pd.Series]:
-        raise ValueError('time is not list-like')
-    time = pd.to_datetime(time)
-    dt = time.diff()[1:].unique()
-    if len(dt) > 1:
-        raise ValueError('time intervals are not uniform')
-    dt = pd.Timedelta(dt[0])
+    """
+    Parse yaml file containing cycle(s) information and
+    generate an emission time series.
+
+    This funtion is essentially a wrapper that applies
+    for :py:func:`parse_cycle` to a yaml file.
+
+    :param file: filename (optionally containing a path)
+    :type file: str
+    :param time: Time series
+    :type time: pandas.Series
+
+    :return: time series of emssions of all sources descrcibed in file
+    :rtype: pandas.Dataframe with `time` as index and sources as colums
+
+    :example:
+
+        >>> yaml_text = '''
+        ... meinname:
+        ...   source: 01.so2
+        ...   start:
+        ...     at:
+        ...       time: 1-11/2
+        ...       unit: month
+        ...     offset:
+        ...       time: 1,3
+        ...       unit: week
+        ...   sequence:
+        ...   - ramp:
+        ...       time: 1
+        ...       unit: day
+        ...       value: 9.0
+        ...   - const:
+        ...       time: 36
+        ...       unit: hour
+        ...       value: 1.1
+        ...'''
+        >>> with open("cycle.yaml, "w") as f:
+        >>>     f.write(yaml_text)
+        >>> time = pandas.date_range("2000-01-01 00:00",
+        ...                          "2000-01-02 00:00", freq="1h")
+        >>> get_cycle(file, time)
+            ('01.so2',
+             2000-01-01 00:00:00    0.0
+             2000-01-01 01:00:00    0.0
+             2000-01-01 02:00:00    0.0
+             2000-01-01 03:00:00    0.0
+             2000-01-01 04:00:00    0.0
+                                   ...
+             2000-12-24 07:00:00    1.1
+             2000-12-24 08:00:00    1.1
+             2000-12-24 09:00:00    1.1
+             2000-12-24 10:00:00    1.1
+             2000-12-24 11:00:00    1.1
+             Name: foo, Length: 745, dtype: float64)
+
+    :note:
+
+    The format of the yaml file is described
+    under :ref:`variable values`
+
+    """
 
     # read cycle file
     with open(file, 'r') as f:
@@ -222,7 +401,7 @@ def get_cycle(file, time):
         raise ValueError('cyclefile top-level is not associative list')
     for c_id, c_info in yinfo.items():
         logger.info('working on cycle: %s' % c_id)
-        source, cycle = parse_cycle(c_id, c_info, time, dt)
+        source, cycle = parse_cycle(c_id, c_info, time)
 
         # add cyle as column or add values to existing column
         if source not in res.columns:
@@ -238,6 +417,49 @@ def get_cycle(file, time):
 
 # noinspection SpellCheckingInspection
 def main(args):
+    """
+    Process the data file based on the provided arguments.
+
+    :param args: Dictionary containing the following keys:
+    :type args: dict
+    :param args["path"]: (str) -- The path
+      to the directory containing the data file.
+      The datafile is named ``zeitreihe.dmna`` or
+      ``timeseries.dmna``, defending on the language setting
+      of the AUSTAL model.
+    :param args["action"]: (str) -- The action to perform.
+      Possible values are 'list', 'week-5', 'week-6', or 'cycle'.
+    :param args["source_id"]: (str) -- The source ID to process
+      (required for 'week-5' and 'week-6' actions).
+    :param args["output"]: (list) -- The source strength (in g/s)
+      when the source is emitting
+      (required for 'week-5' and 'week-6' actions).
+    :param args["hour_begin"]: (*int, optional) --
+      The daily start of the working time,
+      i.e. the first hour of each working day
+      the source emits pollutants
+      (evaluated for 'week-5' and 'week-6' actions).
+      Defaults to :py:const:`DEFAULT__BEGIN`.
+    :param args["hour_end"]: (*int, optional) --
+      The daily end of the working time,
+      i.e. the last hour of each working day
+      the source emits pollutants
+      (evaluated for 'week-5' and 'week-6' actions).
+      Defaults to :py:const:`DEFAULT_END` .
+    :param args["holiday_month"]: (*list, optional) --
+      List of months (1-12) considered as holidays.
+    :param args["holiday_week"]: (*list, optional) -- List of weeks
+      (1-52) considered as holidays.
+    :param args["cycle_file"]: (str) -- The name of the cycle file
+     (required for 'cycle' action).
+
+    :raises ValueError: If the data file is not in DMNA timeseries format.
+    :raises ValueError: If the action is unknown.
+    :raises ValueError: If required arguments are missing or invalid.
+
+    :note: the datafile ``zeitreihe.dmna``/``timeseries.dmna`` must be
+      created by invoking AUSTAL with paramter ``-z``
+    """
     #
     logger.debug('args: %s' % args)
     #

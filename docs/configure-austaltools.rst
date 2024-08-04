@@ -1,11 +1,11 @@
--------------------
-austal-prepare-data
--------------------
+---------------------
+configure-austaltools
+---------------------
 
 .. argparse::
-   :module: austaltools.austal_prepare_data
+   :module: austaltools.configure_austaltools
    :func: cli_parser
-   :prog: austal-prepare-data
+   :prog: configure-austaltools
 
 Dataset definitions
 -------------------
@@ -32,16 +32,18 @@ Each dict has the follwing entries:
     The license full text will be stored as "<dataset code>.LICENSE.txt"
     in the same data as the dataset when it is downloaded or assembled.
     Licenses may be specified:
-* by an idenfifier recogized by the Linux foundation
-  `SPDX project <https://spdx.org/>`_
-  (see `this list <https://spdx.org/licenses/>`_)
-  prefixed by "spdx:". For example: :json:`"license": "spdx:DL-DE-BY-2.0"`
-* in a file that should reside in `austaltools/data`.
-  The filename must be prefixed by "file:".
-  If the filename is empty, the file "<dataset code>.LICENSE.txt"
-  in `austaltools/data` will be used.
-  For example: :json:`"license": "file:"`
 
+* by an idenfifier recogized by the
+    Linux foundation `SPDX project <https://spdx.org/>`_
+    (see `this list <https://spdx.org/licenses/>`_)
+    prefixed by "spdx:".
+    For example: :json:`"license": "spdx:DL-DE-BY-2.0"`
+
+* in a file that should reside in `austaltools/data`.
+    The filename must be prefixed by "file:".
+    If the filename is empty, the file "<dataset code>.LICENSE.txt"
+    in `austaltools/data` will be used.
+    For example: :json:`"license": "file:"`
 
 "notice"
     (optional, str)
@@ -176,7 +178,8 @@ Each dict has the follwing entries:
         If an entry is a sting of the form "<start>-<stop>/<step>",
         it is expanded into a list of values. If <step> is missing,
         a step of 1 is used.
-        Example: :json:`["1-9/2", ...]` is expanded to: :json:`[[1, 3, 5, 7, 9], ...]`.
+        Example: :json:`["1-9/2", ...]` is expanded
+        to: :json:`[[1, 3, 5, 7, 9], ...]`.
         After expanding strings, a (possibly long) list of possible
         combinations of the values for each field is generated and
         fed to the format. This gives the list of files to download.
@@ -210,21 +213,21 @@ Each dict has the follwing entries:
 
 Example:
 
-.. code-block:: json
+    .. code-block:: json
 
-    "DGM10-NW": {
-        "storage": "terrain",
-        "assemble": "assemble_DGMxx",
-        "arguments": {
-            "resolution": 10,
-            "host": "https://www.opengeodata.nrw.de",
-            "path": "produkte/geobasis/hm/dgm1_tiff/dgm1_tiff",
-            "filelist": "index.xml",
-            "xmlpath": "/datasets/dataset[0]/files/file::name",
-            "datapath": "",
-            "CRS": "EPSG:25832"
+        "DGM10-NW": {
+            "storage": "terrain",
+            "assemble": "assemble_DGMxx",
+            "arguments": {
+                "resolution": 10,
+                "host": "https://www.opengeodata.nrw.de",
+                "path": "produkte/geobasis/hm/dgm1_tiff/dgm1_tiff",
+                "filelist": "index.xml",
+                "xmlpath": "/datasets/dataset[0]/files/file::name",
+                "datapath": "",
+                "CRS": "EPSG:25832"
+            },
+            "license": "spdx:DL-DE-ZERO-2.0",
+            "notice": "none"
         },
-        "license": "spdx:DL-DE-ZERO-2.0",
-        "notice": "none"
-    },
 

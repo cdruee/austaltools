@@ -169,7 +169,7 @@
             "unpack": "zip://*.tif",
             "CRS": "EPSG:25832"
         },
-        "license": "none",
+        "license": "file:",
         "notice":  null
     },
     "DGM10-HH": {

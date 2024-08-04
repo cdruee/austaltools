@@ -116,3 +116,15 @@ References
     Luft - TA Luft.
     Bundesministerium für Umwelt, Naturschutz und Reaktorsicherheit,
     Bonn, Germany.
+.. [VDI3783p8] VDI (2017)
+    VDI norm 3783 part 8:
+    Environmental meteorology - Turbulence parameters
+    for dispersion models supported by measurement data..
+    VDI/DIN-Kommission Reinhaltung der Luft (KRdL) - Normenausschuss (Ed.),
+    Verein Deutscher Ingenieure, Düsseldorf, Germany
+.. [VDI3783p16] VDI (2017)
+    VDI 3783 part 16:
+    Environmental meteorology – prognostic mesoscale wind field models;
+    Methods for licensing procedures according to TA Luft.
+    VDI/DIN-Kommission Reinhaltung der Luft (KRdL) - Normenausschuss (Ed.),
+    Verein Deutscher Ingenieure, Düsseldorf, Germany

@@ -1,6 +1,13 @@
 #!/usr/bin/env python3
 """
-create basic plot for austal result files
+Module containing functions to
+create a basic plot from austal result data
+
+Plots can be shon interactively if the user operates
+on a terminal that has an X-server running.
+For example Linux with a running desktop environment,
+an Anaconda environment or a ssh connection with
+active X-forwarding and a local X-server running.
 """
 import logging
 import os
@@ -34,6 +41,7 @@ def parse_austal_outputname(filename: str):
     :param filename: str
 
     :return: information about file contents:
+
       - substance: name of pollutant (xx for unknown/not specified)
       - averaging: duration of averaging interval
         (accumulation, year, day or hour)
@@ -41,6 +49,7 @@ def parse_austal_outputname(filename: str):
         of the same length
       - kind: type of output (load, stdev or index)
       - grid: number of grid. 0 if not given / no staggered grids.
+
     :rtype: dict
 
     """
@@ -101,8 +110,29 @@ def main(args):
     """
     This is the main working function
 
-    :param args: the command line arguments as dictionary
+    :param args: The command line arguments as a dictionary.
     :type args: dict
+    :param args['working_dir']: The working directory where
+      files are located (i.e. where ``austal.txt`` is stored).
+    :type args['working_dir']: str
+    :param args['file']: The input file name. If it doesn't have a '.dmna'
+      extension, it will be added.
+    :type args['file']: str
+    :param args['buildings']: A flag indicating whether to plot
+      buildings from the configuration.
+    :type args['buildings']: bool
+    :param args['stdvs']: The standard deviation value to mark (additional)
+      concentrations as significant by overlaying dots..
+    :type args['stdvs']: float
+    :param args['plot']: The plot file name.
+      If None or '-', the plot will be shown interactively.
+      If '__default__', the name of the displayed data file with
+      extension `.png` will beused.
+    :type args['plot']: str or None
+
+    :raises OSError: If the configuration file cannot be found or read.
+    :raises ValueError: If the data shape is not understood or if the
+      standard deviation shape does not match the data shape.
     """
     logger.debug("args: %s" % format(args))
 

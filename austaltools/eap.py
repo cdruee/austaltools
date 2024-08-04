@@ -1,5 +1,16 @@
 #!/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+This module is a custom implementation ot the process decsribed in
+VDI 3783 part 16 [VDI3783p16]_ to find a replacement position
+in case the wind measurements provided as input to the dispesion model
+AUSTAL [AST31]_ are **not** taken by an anemometer inside the AUSTAL
+model domain (i.e. on a nearby waether station or taken from a weather
+model).
 
+This position is referred to as "EAP" since in German,
+it is called "Ersatz-AnemometerPosition" (anemometer spare position).
+"""
 import glob
 import logging
 import os
@@ -35,22 +46,46 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 # VDI 3783 part 8:
 N_CLASS = 6
+"""number of stability classes"""
 N_EGDE_NODES = 3
+"""
+number of model nodes alon each side of the model domain
+that should be excluded to avoid edge effects
+"""
 MIN_FF = 0.5
+"""
+minimum wind speed for which wind data are included
+in the search algorithm
+"""
 MAX_HEIGHT = 100.
+"""
+maximum height to which wind data are included
+in the search algorithm
+"""
 # VDI 3783 part 8 : "roughness matching the CLC land use class
 # 'Meadows and Pastures (231)' of the LBM-DE"
 # UBA Texte  36/2015: Tables 8
 # CLC-class 231 corresponds to METRAS-class 3100 "Gras, kurz"
 # Table 7: class 3100 -> z_0 = 0.0100
 Z0_REFERENCE = 0.0100
-
+"""
+roughness lenght $z_0$ used for the calculation of reference wind
+profiles, corresponding to CORINE class 231 "short grass",
+according to VDI 3783 part 8 [VDI3783p8]_
+"""
 
 # -------------------------------------------------------------------------
 
 
 def wind_library(path):
-    # find directory that contains wind library
+    """
+    Find the directory that contains the wind library
+
+    :param path: user supplied path
+    :type path: str
+    :return: path to wind library
+    :rtype: str
+    """
     if os.path.basename(path) == "lib":
         # path ist the lib-dir:
         libpath = path
@@ -65,6 +100,15 @@ def wind_library(path):
 
 
 def analyze_name(name):
+    """
+    determine wind direction, stability class and grid index
+    from the filename of a file in the wind library
+
+    :param name: filename
+    :type name: str
+    :return: grid ID, wind direction, snd stability class
+    :rtype: tuple[int, int, int]
+    """
     # grid index
     try:
         grid = int(name[6])
@@ -95,10 +139,14 @@ def analyze_name(name):
 def wind_files(path):
     """
     find wind library files
+
     :param path: path where to search. Wind library files are expected
-    to be in this path or in the subdirectory 'lib' of this path.
+      to be in this path or in the subdirectory 'lib' of this path.
+    :type path: str
+
     :return: dict of lists containing names, stability classes,
-    general wind directions, and grid indexes of all files.
+      general wind directions, and grid indexes of all files.
+    :rtype: dict[str, list]
     """
     wn = re.compile(r"w[0-9asnwe]{7}\.dmna")
     f_name = [x for x in os.listdir(path) if wn.match(x)]
@@ -125,10 +173,10 @@ def read_wind(file_info: dict, path: str = '.', grid: int = 0):
     read wind library files
 
     :param file_info: dict of lists containing names, stability classes,
-    general wind directions, and grid indexes of all files.
+      general wind directions, and grid indexes of all files.
     :type file_info: dict
     :param path: Wind library files are expected
-    to be in this path
+      to be in this path
     :type path: str
     :param grid: index of the grid for which to read the wind data
     :type grid: int
@@ -189,10 +237,12 @@ def read_heff(working_dir):
     given in the akterm file (weather timeseries) given
     as parameter 'az'
 
-    :param working_dir: the working directoty of austal[2000],
-    where austal.txt resides
+    :param working_dir: the working directoty of austal(2000),
+      where austal.txt resides
+    :type working_dir: str
+
     :return: effective anemometer height
-    :rtype float
+    :rtype: float
 
     """
     austxt = _tools.find_austxt(working_dir)
@@ -248,6 +298,16 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
                          nedge=N_EGDE_NODES, minff=MIN_FF,
                          maxlev=-1):
     """
+    Caluclate the quality measure `g` according to VDI 3783 pt 16
+    [VDI3783p16]_ by comparing a AUSTAL wind library to a reference
+    profile.
+
+    The wind library ist provided via the paramters `u_grid` and `v_grid`;
+    the reference profile via the parameters `u_ref` and `v_ref`.
+    Shape of wind fields: (nx, ny, nz, nstab, ndir),
+    Shape of reference wind profiles: (nz, nstab, ndir),
+    where nx, ny and nz are the dimensions of the AUSTAL model grid.
+
     :param u_grid: np.array of wind field eastward components
     :param v_grid: np.array of wind field northward components
     :param u_ref: np.array of reference wind eastward component
@@ -256,9 +316,17 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
     :param minff: exclude data below this minimum wind speed
     :param maxlev: index of highest level to evaluate. <0 = evaluate all
 
-    shape of wind fields: (nx, ny, nz, nstab, ndir)
-    shape of reference wind profiles: (nz, nstab, ndir)
-    levels of wind fields must match heights of the reference wind profiles
+    :return: fields of the quality criteria `g` and the individual
+      measures `gd` (for the wind direction) and `gf` (for the wind speed),
+      from which `g` is calculated (see Sect. 6.1 of VDI 3783 pt 16
+      [VDI3783p16]_).
+    :rtype: tuple[numpy.narray, numpy.narray, numpy.narray]
+      The levels of wind fields must match heights of
+      the reference wind profiles
+
+    :raises: ValueError: if the levels of wind fields do not
+      match the heights of the reference wind profiles
+
     """
     #
     # check if wind grid sizes do match:
@@ -362,8 +430,40 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
 
 # ----------------------------------------------------
 
-
 def find_eap(g_lower):
+    """
+    Find the anemometer-position replacement
+    (german: Ersatz-AnemometerPosition, EAP) location.
+
+    :param g_lower: A 2D array representing the quality measure g
+      for each x, y position in the model grid
+    :type g_lower: numpy.ndarray
+    :return:
+      - List of EAP cancidate coordinates (x,y) in the grid.
+      - List of corresponding upper-level quality measure 'g' values.
+    :rtype: tuple[list[tuple[int, int]], list[float]]
+
+    :note:
+        - Within each individual contiguous region with wind direction
+          rotating in the same sense,
+          the overall criteria 'g' are added up to form 'G'.
+        - In the contiguous region with the largest sum 'G',
+          the grid point that exhibits the largest 'g'
+          is considered the EAP location at each level.
+        - If no contiguous regions are found,
+          an empty list is returned.
+
+    :example:
+        >>> g_lower = np.array([[0.5, 0.8, 0.3],
+        ...                     [0.2, 0.7, 0.9],
+        ...                     [0.4, 0.6, 0.1]])
+        >>> eap, g_upper = find_eap(g_lower)
+        >>> print(eap)
+        [(1, 2), (1, 1), (0, 1)]
+        >>> print(g_upper)
+        [2.4, 1.6, 1.3]
+    """
+    #
     # 5) Within each individual contiguous region with
     # the wind direction rotating in the same sense,
     # the overall criteria g are added up to G.
@@ -402,6 +502,49 @@ def find_eap(g_lower):
 # ----------------------------------------------------
 
 def calc_all_eap(g, mx_lvl=None):
+    """
+     Find the anemometer-position replacement (EAP) location
+     for all levels.
+
+     :param g: A 3D array representing the criteria 'g'
+       at all levels.
+     :type g: numpy.ndarray
+
+     :param mx_lvl: Maximum level to consider.
+       If None, all levels are processed.
+     :type mx_lvl: int, optional
+
+     :return:
+
+        A tuple containing two lists:
+
+        - List of EAP coordinates (x, y) for each level.
+        - List of corresponding upper-level 'g' values for each level.
+
+     :rtype: tuple
+
+     :notes:
+
+       - For each level, the EAP location is determined
+         using the `find_eap` function.
+       - If `mx_lvl` is specified, only levels up to that
+         value are processed.
+       - Empty lists are returned for levels beyond `mx_lvl`.
+
+     :example:
+
+         >>> g = np.array([[[0.5, 0.8, 0.3],
+         ...                [0.2, 0.7, 0.9],
+         ...                [0.4, 0.6, 0.1]],
+         ...               [[0.3, 0.6, 0.4],
+         ...                [0.1, 0.5, 0.7],
+         ...                [0.2, 0.8, 0.3]]])
+         >>> eap_levels, g_upper_levels = calc_all_eap(g, mx_lvl=1)
+         >>> print(eap_levels)
+         [[[(1, 2), (1, 1), (0, 1)], [(1, 2), (1, 1), (0, 1)]]]
+         >>> print(g_upper_levels)
+         [[2.4, 1.6, 1.3], [1.6, 1.3, 1.1]]
+     """
     g_upper_levels = []
     eap_levels = []
     for lvl in range(np.shape(g)[2]):
@@ -418,6 +561,33 @@ def calc_all_eap(g, mx_lvl=None):
 # ----------------------------------------------------
 
 def interpolate_wind(u_in: list, v_in: list, z_in: list, levels: list):
+    """
+    Interpolates wind components (u, v) to specified levels.
+
+    :param u_in: List of u-component wind values.
+    :type u_in: list
+    :v_in v_in: List of v-component wind values.
+    :type v_in: list
+    :param z_in: List of corresponding heights (z) for wind measurements.
+    :type z_in: list
+    :param levels: List of target heights to interpolate to.
+    :type levels: list
+
+    :return: Tuple containing interpolated u-component and v-component
+      wind values.
+    :rtype: tuple
+
+    :raises: `ValueError` if lists are not all of the same length
+
+    :example:
+
+        >>> u_values = [10.0, 15.0, 20.0]
+        >>> v_values = [5.0, 8.0, 12.0]
+        >>> heights = [0.0, 100.0, 200.0]
+        >>> target_levels = [50.0, 150.0]
+        >>> interpolate_wind(u_values, v_values, heights, target_levels)
+        ([12.5, 17.5], [6.5, 10.0])
+    """
     if not (len(u_in) == len(v_in) == len(z_in)):
         raise ValueError('u, v,, and z must have the same length')
     u_out = []
@@ -461,16 +631,44 @@ def interpolate_wind(u_in: list, v_in: list, z_in: list, levels: list):
 
 
 class GridASCII(object):
+    """
+    Class that represents a grid in ASCII format.
+
+
+    Example:
+        >>> grid = GridASCII("my_grid.asc")
+        >>> grid.read("my_grid.asc")
+        >>> print(grid.header["ncols"])  # Access header values
+        >>> grid.write("output_grid.asc")  # Write grid data to a new file
+    """
     file = None
+    """Path to the ASCII file."""
     data = None
+    """ grided data """
     _keys = ["ncols", "nrows", "xllcorner", "yllcorner", "cellsize", "NODATA_value"]
     header = {x: None for x in _keys}
+    """Dictionary containing header information."""
 
     def __init__(self, file=None):
+        """
+
+        :param file:
+            Path to the ASCII file (default: None).
+        :type file:
+            str (optional)
+        """
         if file is not None:
             self.read(file)
 
     def read(self, file):
+        """
+        Reads the data from a GridASCII file in to the object.
+
+        :param file: file name (optionally including path)
+        :type file: str
+
+        :raises: ValueError if file is not a GridASCII file
+        """
         self.file = file
         self.data = np.loadtxt(file, skiprows=6)
         with open(file, "r") as f:
@@ -485,6 +683,15 @@ class GridASCII(object):
                     raise ValueError('unknown header value in file: %s' % k)
 
     def write(self, file=None):
+        """
+        Writes the data the object into a GridASCII file.
+
+        :param file: file name (optionally including path).
+          If missing, the name contained in the attribute `name` is used.
+        :type file: str, optional
+
+        :raises: ValueError if file is not a GridASCII file
+        """
         if file is None:
             file = self.file
         ascii_header = "\n".join(["%-12s %s" % (k, self.header[k])
@@ -498,6 +705,22 @@ class GridASCII(object):
 
 
 def run_austal(workdir, tmproot=None):
+    """
+    Creates a wind library using the diagnostig model TALdia
+    by invoking the model AUSTAL with parameter ``-l``
+    for the same location, but flat terrain,
+    with the anemometer at the model origin.
+
+    :param workdir: path to the working directory,
+      i.e. the directory where ``austal.txt`` is stored
+    :type workdir: str
+    :param tmproot: path to a directory where temporary files are stored
+    :type tmproot: str
+    :return: grids of u and v windcomponents,
+      dictionary containing axes, wind direction and stabilty classes,
+      as out by `read_wind` and `read_grid`
+    :rtype: tuple(numpy.ndarray, numpy.ndarray, dict)
+    """
     if tmproot is None:
         tmpdir = tempfile.mkdtemp(prefix="eap_", dir=workdir)
     else:
@@ -609,6 +832,27 @@ def run_austal(workdir, tmproot=None):
 
 
 def austal_ref(workdir, levels, dirs, tmproot=None):
+    """
+    Extract the reference windprofile from the TALdia
+    output generated by `run_austal`.
+
+    :param workdir: path to the working directory,
+      i.e. the directory where ``austal.txt`` is stored
+    :type workdir: str
+    :param levels: levels to interpolate the modeled wind profile to
+    :type levels: list[float]
+    :param dirs: wind directions wor which a reference profile should
+      be generated. For each direction, the modeled wind profile with
+      the nearest (input) wind direction is returned.
+    :type dirs: list[float]
+    :param tmproot: path to a directory where temporary files are stored
+    :type tmproot: str
+    :return: reference profiles at `levels` for each stability and each
+       direction in `dirs`
+    :rtype: numpy.ndarray of shape
+      (<number of `levels`>, <number of stabilty classes>,
+      <number of `dirs`>)
+    """
     logger.debug("calculating refernce wind fields")
     u_tmp, v_tmp, ax_tmp = run_austal(workdir, tmproot)
     z_tmp = ax_tmp['z']
@@ -662,8 +906,8 @@ def calc_ref(levels, dirs):
     :param levels: desired levels to get reference winds for
     :param dirs: desired wind directions to get reference winds for
     :return: u-reference wind and v-reference wind,
-    dimensions: levels, stability classes, wind directions
-    :rtype numpy.ndarray, numpy.ndarray
+      dimensions (#levels, #stability classes, #wind directions)
+    :rtype: numpy.ndarray, numpy.ndarray
     """
     logger.debug("calculating wind reference profile")
     # z0 = 0.02 # value for LBM-DE landcover class 231 (Wiesen und Weiden)
@@ -761,8 +1005,8 @@ def read_ref(file, levels, dirs):
     :param levels: desired levels to get reference winds for
     :param dirs: desired wind directions to get reference winds for
     :return: u-reference wind and v-reference wind,
-    dimensions: levels, stability classes, wind directions
-    :rtype numpy.ndarray, numpy.ndarray
+      dimensions: levels, stability classes, wind directions
+    :rtype: numpy.ndarray, numpy.ndarray
 
     """
     logger.debug("reading wind reference file")
@@ -821,6 +1065,28 @@ def read_ref(file, levels, dirs):
 
 
 def write_ref(file, out_levels, out_dirs, u_ref, v_ref, axes_ref):
+    """
+    Write a set of windprofiles (one for each stability calass and each
+    wind direction) into a file in the format of the example file
+    ``Ref1d.dat`` provided as part of the reference implemetation in
+    ``TAL-Anemo.zip`` wich belongs to the auxiliary material published
+    with VDI norm 3783 part 16 [VDI3783p16]_
+
+    :param file: fiell name of the file to write
+    :type file: str
+    :param out_levels: Levels at which the wind profiles should be stored
+    :type out_levels: list[float]
+    :param out_dirs: Directions for which the wind should be stored.
+      This is the input wind (i.e. the larger-scale wind direction)
+    :type out_dirs: list[float]
+    :param u_ref: u-reference wind field as out by `read_wind`
+    :type u_ref: numpy.ndarray
+    :param v_ref: v-reference wind field as out by `read_wind`
+    :type v_ref: numpy.ndarray
+    :param axes_ref: dictionary containing axes, wind direction and stabilty classes,
+      as out by `read_wind` and `read_grid`
+    :type axes_ref: dict[numpy.ndarray]
+    """
     logger.debug("writing wind reference file")
     levels, stabs, dirs = axes_ref
     ndir = len(dirs)
@@ -854,42 +1120,91 @@ def write_ref(file, out_levels, out_dirs, u_ref, v_ref, axes_ref):
 
 
 def print_report(args, g, gd, gf, eaps, g_upper, axes):
+    """
+    print a report that mimics the output of the reference implemetation in
+    ``TAL-Anemo.zip`` wich belongs to the auxiliary material published
+    with VDI norm 3873 part 16 [VDI3783p16]_
+
+    :param args:  the command line arguments as dictionary
+    :type args: dict
+    :param g: quality measure `g` (see `calc_quality_measure`)
+    :type g: numpy.ndarray
+    :param gd: quality measure `gd` (see `calc_quality_measure`)
+    :type gd: numpy.ndarray
+    :param gf: quality measure `gf` (see `calc_quality_measure`)
+    :type gf: numpy.ndarray
+    :param eaps: ErsatzAneometerPosition EAPs
+      (anemometer replacement positions)
+      as output by `calc_all_eap`
+    :type eaps: numpy.ndarray
+    :param g_upper: List of quality measures `g` calculates at the EAP
+      positions
+    :type g_upper: numpy.ndarray
+    :param axes: grid positions alon each axis of the AUSTAL model domain
+      in m
+    :type axes: dict[str, list]
+    """
+
     print('Bibliotheksverzeichnis ist %s' % args['working_dir'])
     print()
-    print('-----------------------------------------------------------------------------------------------')
-    print('Mindestanforderungen fuer Eignung von Modellgitterpunkten als Ersatz-Anemometerstandort:')
-    print('Anzahl nicht ausgewerteter Randpunkte im aeusseren Gitter: %i' % N_EGDE_NODES)
-    print('Windgeschwindigkeit immer groesser oder gleich ..........: %.1f m/s' % MIN_FF)
-    print('-----------------------------------------------------------------------------------------------')
+    print('------------------------------------------------------------'
+          '-----------------------------------')
+    print('Mindestanforderungen fuer Eignung von Modellgitterpunkten '
+          'als Ersatz-Anemometerstandort:')
+    print('Anzahl nicht ausgewerteter Randpunkte im aeusseren Gitter: '
+          '%i' % N_EGDE_NODES)
+    print('Windgeschwindigkeit immer groesser oder gleich ..........: '
+          '%.1f m/s' % MIN_FF)
+    print('------------------------------------------------------------'
+          '-----------------------------------')
     print()
-    print('Auswertegebiet Gitter  1  West - Ost : %9.0f bis %9.0f' % (min(axes['x']), max(axes['x'])))
-    print('                          Sued - Nord: %9.0f bis %9.0f' % (min(axes['y']), max(axes['y'])))
+    print('Auswertegebiet Gitter  1  West - Ost : %9.0f bis %9.0f' %
+          (min(axes['x']), max(axes['x'])))
+    print('                          Sued - Nord: %9.0f bis %9.0f' %
+          (min(axes['y']), max(axes['y'])))
     print()
     print(
-        '===============================================================================================================')
+        '=============================================================='
+        '=================================================')
     print(
-        '==================    Objektiv bestimmte Ersatz-Anemometerorte im Gitter 1 je Modellebene:    =================')
+        '==================    Objektiv bestimmte Ersatz-Anemometerorte'
+        ' im Gitter 1 je Modellebene:    =================')
     print(
-        '===============================================================================================================')
+        '=============================================================='
+        '=================================================')
     print()
     for lvl, height in enumerate(axes['z']):
         if len(eaps[lvl]) > 0:
             i, j = eaps[lvl][0]
             print()
-            print('******************    Modelllevel:%4i - Levelhoehe ueber Grund:%7.1f m         ******************'
+            print('******************    Modelllevel:%4i - Levelhoehe '
+                  'ueber Grund:%7.1f m         ******************'
                   % (lvl + 1, axes['z'][lvl]))
             print()
-            print('...............................................................................................')
-            print('Empfohlener Ersatzanemometerort:   Gesamt-G =%9.1f' % g_upper[lvl][0])
-            print('                                   EAP-Punkt:')
-            print('                                    i-Index =%9i' % (i + 1))
-            print('                                    j-Index =%9i' % (j + 1))
-            print('                                      x (m) =%9.0f' % axes['x'][i])
-            print('                                      y (m) =%9.0f' % axes['y'][j])
-            print('                                         gd =%9.2f' % gd[i, j, lvl])
-            print('                                         gf =%9.2f' % gf[i, j, lvl])
-            print('                                          g =%9.2f' % g[i, j, lvl])
-            print('...............................................................................................')
+            print('...................................'
+                  '...................................'
+                  '.........................')
+            print('Empfohlener Ersatzanemometerort:   '
+                  'Gesamt-G =%9.1f' % g_upper[lvl][0])
+            print('                                   '
+                  'EAP-Punkt:')
+            print('                                   '
+                  ' i-Index =%9i' % (i + 1))
+            print('                                   '
+                  ' j-Index =%9i' % (j + 1))
+            print('                                   '
+                  '   x (m) =%9.0f' % axes['x'][i])
+            print('                                   '
+                  '   y (m) =%9.0f' % axes['y'][j])
+            print('                                   '
+                  '      gd =%9.2f' % gd[i, j, lvl])
+            print('                                   '
+                  '      gf =%9.2f' % gf[i, j, lvl])
+            print('                                   '
+                  '       g =%9.2f' % g[i, j, lvl])
+            print('...................................'
+                  '...................................'
+                  '.........................')
 
 
 # ----------------------------------------------------

@@ -22,7 +22,7 @@ setup(
     entry_points={
         'console_scripts': [
             'austaltools=austaltools.command_line:main',
-            'austal_prepare_data=austaltools.austal_prepare_data:main',
+            'configure-austaltools=austaltools.configure_austaltools:main',
         ],
     },
     author=v['__author__'],
@@ -33,6 +33,7 @@ setup(
         'matplotlib',
         'meteolib',
         'netCDF4',
+        'meteolib',
         'numpy',
         'gdal',
         'pandas',
@@ -45,19 +46,3 @@ setup(
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
 )
-
-austaltools
-numpy
-pandas
-matplotlib
-readmet
-tqdm
-meteolib
-scipy
-PyYAML
-setuptools
-requests
-pip
-cdo
-cdsapi
-urllib3

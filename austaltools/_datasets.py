@@ -274,11 +274,11 @@ def download(url, file):
 
     :example:
 
-    >>> try:
-    >>>     file_name = download('http://example.com/file.jpg', '/path/to/local/file.jpg')
-    >>>     print(f"Downloaded file saved as {file_name}")
-    >>> except Exception as e:
-    >>>     print(str(e))
+        >>> try:
+        >>>     file_name = download('http://example.com/file.jpg', '/path/to/local/file.jpg')
+        >>>     print(f"Downloaded file saved as {file_name}")
+        >>> except Exception as e:
+        >>>     print(str(e))
 
     """
     with requests.get(url, allow_redirects=True) as req:
@@ -369,18 +369,18 @@ def xmlpath(xml, path):
 
     :example:
 
-    >>> xml_string = '''<data>
-    >>>                     <item id="1">Item 1</item>
-    >>>                     <item id="2" extra="yes">Item 2</item>
-    >>>                </data>'''
-    >>>
-    >>> pathtotext = 'item'
-    >>> textresult = xmlpath(xmlstring, pathtotext)
-    ['Item 1', 'Item 2']
-    >>>
-    >>> pathtoattribute = 'item::id'
-    >>> attributeresult = xmlpath(xmlstring, pathtoattribute)
-    ['1', '2']
+        >>> xml_string = '''<data>
+        ...                     <item id="1">Item 1</item>
+        ...                     <item id="2" extra="yes">Item 2</item>
+        ...                </data>'''
+        ...
+        >>> pathtotext = 'item'
+        >>> textresult = xmlpath(xmlstring, pathtotext)
+        ['Item 1', 'Item 2']
+        ...
+        >>> pathtoattribute = 'item::id'
+        >>> attributeresult = xmlpath(xmlstring, pathtoattribute)
+        ['1', '2']
 
 
     :note:
@@ -500,11 +500,11 @@ def jsonpath(json_obj, path):
     >>>       {"id": 2, "name": "Item 2", "extra": "yes"}
     >>>   ]
     >>>  }
-    >>>
+    ...
     >>> path_to_name = 'items/name'
     >>> names = jsonpath(json_obj, path_to_name)
     ['Item 1', 'Item 2']
-    >>>
+    ...
     >>> path_to_extra = 'items/extra'
     >>> extras = jsonpath(json_obj, path_to_extra)
     ['yes']
@@ -808,6 +808,13 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
 
 # -------------------------------------------------------------------------
 def _ass_sh_getfid(args):
+    """
+    get individual file for DGM1-SH
+    :param args: download number, total no of downloads, file-id, args
+    :type args: tupe[int, int, int, dict]
+    :return: names of extracted files
+    :rtype: list[str]
+    """
     i, ni, fid, provider = args
     baseurl = ('https://geodaten.schleswig-holstein.de/'
                'gaialight-sh/_apps/dladownload')
@@ -1139,9 +1146,9 @@ def _ass_era5_getyear(opts):
       path but does not return any value.
 
     :example:
-    >>> # To download ERA5 data for the year 2020 and
-    >>> save it to the specified directory
-    >>> era5_getyear((2020, '/path/to/directory'))
+        >>> # To download ERA5 data for the year 2020 and
+        >>> save it to the specified directory
+        >>> era5_getyear((2020, '/path/to/directory'))
 
     :note:
     - The function crafts a filename based on the year, prefixing it
@@ -1503,10 +1510,10 @@ def provide_weather(source: str, path: str = None,
 
     :example:
 
-    >>> # To download ERA5 data for the years 2020 and 2021
-    >>> # into the default storage location
-    >>> success = provide_weather("ERA5", years=[2020, 2021])
-    True
+        >>> # To download ERA5 data for the years 2020 and 2021
+        >>> # into the default storage location
+        >>> success = provide_weather("ERA5", years=[2020, 2021])
+        True
 
     :note:
 
