@@ -226,7 +226,6 @@ def main():
 
     logger.debug(args)
 
-    prepare_data(args)
     if args['temp'] is not None:
         DS.TEMP = args['temp']
 

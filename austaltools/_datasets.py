@@ -926,7 +926,8 @@ def assemble_DGM_SH(path, name, replace, provider: dict):
         return False
 
     # download all the tiles
-    fids = [x for x in range(1, 18700)]
+    # number of tiles manually retrieved 2024-08-4:
+    fids = [x for x in range(1, 18686)]
     random.shuffle(fids)
     args = [(i, len(fids), x, provider) for i, x in enumerate(fids)]
     tile_files = []
