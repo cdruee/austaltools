@@ -902,7 +902,7 @@ def _ass_sh_getfid(args):
             shutil.copy(dl_file, localname)
 
     unpack = provider.get('unpack', None)
-    out_res = provider.get('out_res', 25)
+    out_res = provider.get('resolution', 25)
     inputfiles = _ass_unpack(dl_file, unpack)
     srcsrs = provider['CRS']
     utm_remove_zone = provider.get('UTM_ZONE', False)
