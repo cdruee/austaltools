@@ -640,6 +640,20 @@ def _ass_merge_tiles(target, tile_files):
 
 
 # -------------------------------------------------------------------------
+def _ass_clear_target(path, name, replace):
+    target = os.path.join(path, DEM_FMT % name)
+    logger.debug(f'data file path: {target}')
+    if os.path.exists(target):
+        if not replace:
+            logger.info("dataset exists ... %s" % name)
+            return None
+        else:
+            logger.info("deleting existig : %s" % name)
+            os.remove(target)
+    return target
+
+
+# -------------------------------------------------------------------------
 def _ass_process_input(args):
     inp, base_url, verify, provider = args
     tile_files = []
@@ -722,9 +736,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, DEM_FMT % name)
-    logger.debug(f'data file path: {target}')
-    if os.path.exists(target) and not replace:
+    if (target := _ass_clear_target(path, name, replace)) is None:
         logger.info("skipping because dataset exists: %s" % name)
         return False
 
@@ -919,10 +931,8 @@ def _ass_sh_getfid(args):
 
 
 def assemble_DGM_SH(path, name, replace, provider: dict):
-    target = os.path.join(path, DEM_FMT % name)
-    logger.debug(f'data file path: {target}')
-    if os.path.exists(target) and not replace:
-        logger.info("dataset exists ... %s" % name)
+    if (target := _ass_clear_target(path, name, replace)) is None:
+        logger.info("skipping because dataset exists: %s" % name)
         return False
 
     # download all the tiles
@@ -945,10 +955,8 @@ def assemble_DGM_SH(path, name, replace, provider: dict):
 
 # -------------------------------------------------------------------------
 def assemble_DGM25_RP(path, name="DGM25-RP", replace=False):
-    target = os.path.join(path, DEM_FMT % name)
-    logger.debug(f'data file path: {target}')
-    if os.path.exists(target) and not replace:
-        logger.info("dataset exists ... %s" % name)
+    if (target := _ass_clear_target(path, name, replace)) is None:
+        logger.info("skipping because dataset exists: %s" % name)
         return False
 
     url = "https://vermkv.service24.rlp.de/opendat/dgm25/dgm25.zip"
@@ -975,11 +983,83 @@ def assemble_DGM25_RP(path, name="DGM25-RP", replace=False):
 
 
 # -------------------------------------------------------------------------
+def assemble_DGM_composit(path: str, name: str, replace: bool, args: dict):
+    if (target := _ass_clear_target(path, name, replace)) is None:
+        logger.info("skipping because dataset exists: %s" % name)
+        return False
+
+    logger.info("compositing ... %s" % name)
+    logger.debug("target file ... %s" % target)
+    members = []
+    for x in args['filelist']:
+        logger.debug("scanning input ... %s" % x)
+        if x in KNOWN_DEMS:
+            # expand dataset codes
+            if not dataset_available(x):
+                logger.error("dataset not available %s" % x)
+                continue
+            filename = os.path.join(dataset_get(x).path,
+                                    dataset_get(x).file_data)
+            if not os.path.isfile(filename):
+                logger.error(f"dataset file {filename} not available")
+                continue
+        else:
+            # use filename
+            if os.path.exists(x):
+                filename = x
+            elif os.path.exists(os.path.join(path, x)):
+                filename = os.path.join(path, x)
+            else:
+                logger.error("file not available %s" % x)
+                continue
+        members.append(filename)
+
+    logger.debug("found input file: %s" % len(members))
+    if len(members) <= 1:
+        raise ValueError('no datasets available for compositing')
+
+    # merge file one after another to reduce risk of memory exhaustion
+    with (tempfile.TemporaryDirectory(dir=TEMP) as tmp):
+        tmp1 = os.path.join(tmp, DEM_FMT % 'tmp1')
+        tmp2 = os.path.join(tmp, DEM_FMT % 'tmp2')
+        iwpd = os.path.join(tmp, 'iwpd.nc')
+        for i, mm in enumerate(members):
+            if 'resolution' in args:
+                out_res = args['resolution']
+                logger.debug("warping input ... %s" % mm)
+                gdal.Warp(destNameOrDestDS=iwpd,
+                          srcDSOrSrcDSTab=mm,
+                          format="netCDF",
+                          xRes=out_res,
+                          yRes=out_res,
+                          dstSRS="EPSG:5677",
+                          )
+            else:
+                logger.debug("adding input ... %s" % mm)
+                shutil.copy2(mm, iwpd)
+            logger.debug("... done")
+            if i == 0:
+                logger.debug("... starting composit")
+                shutil.move(iwpd, tmp1)
+            else:
+                logger.debug("... adding to composit")
+                shutil.move(tmp1, tmp2)
+                _ass_merge_tiles(tmp1, [tmp2, iwpd])
+            logger.debug("... done")
+        logger.debug("writing data file %s" % target)
+        shutil.move(tmp1, target)
+        logger.debug("cleaning up")
+        for x in [tmp2, iwpd]:
+            if os.path.exists(x):
+                os.remove(x)
+
+    return True
+
+
+# -------------------------------------------------------------------------
 def assemble_GLO_30(path, name="GLO_30", replace=False, args: dict = {}):
-    target = os.path.join(path, DEM_FMT % name)
-    logger.debug(f'data file path: {target}')
-    if os.path.exists(target) and not replace:
-        logger.info("dataset exists ... %s" % name)
+    if (target := _ass_clear_target(path, name, replace)) is None:
+        logger.info("skipping because dataset exists: %s" % name)
         return False
 
     download_dir = ("https://prism-dem-open.copernicus.eu/" +
