@@ -636,6 +636,30 @@ def common_plot(args: dict,
     Standard plot function for the package.
 
     :param args: dict containing the plot configuration
+    :type args: dict
+    :param args["colormap"]: name of colormap to use
+      Defaults to :py:const:`DEFAULT_COLORMAP`:.
+    :type args["colormap"]: str
+    :param args['display']: How to display the data. Permitted values are
+       "contour" for colour filled contour levels and
+       "grid" for color-coded rectangular grid.
+    :type args["display"]: str
+    :param args['fewcols']: if True, a colormap of at most 9
+      (or the numer of levels if explicitly passed by `scale`)
+      discrete colors ist generated for easy print reproduction.
+    :type args['fewcols']: bool
+    :param args["plot"]: Destination for the plot.
+      If empty or :py:const:`None` no plot is produced. If the value is
+      a string, the plot will be saved to file with that name. If
+      the name does have the extension ``.png``, this extension
+      is appendend. If the string does not contain a path,
+      the file will besaved in the current working directory.
+      If the string contains a path, the file will be saved
+      in the respective location.
+    :param args['working_dir']: Working directory,
+      where the data files reside.
+    :type args["working_dir"]: str
+
     :param dat: dictionary of `x`, `y`, and `z` values to plot.
       'x' and 'y' must be lists of float or 1-D ndarray.
       'z' must be ndarray of a shape matching the lenght of `x` and `y`
@@ -665,6 +689,8 @@ def common_plot(args: dict,
        or a pandas data frame containing such columns.
        `symbol` are matplotlib symbol strings. If missing 'o' is used.
     :type mark: dict or pandas.Dataframe
+
+
 
     """
     if not have_matplotlib:
@@ -714,7 +740,11 @@ def common_plot(args: dict,
     if args['fewcols']:
         cmap = plt.get_cmap(cmap_name, len(levels) + 1)
     else:
-        cmap = plt.get_cmap(cmap_name)
+        cmap = plt.get_cmap(cmap_name,1000)
+        cl = levels
+        levels = [cl[0]]
+        for i in range(1,len(cl)):
+            levels += list(np.linspace(cl[i-1], cl[i], 10))[1:]
     if args['display'] == "contour":
         #
         # Note to self: "TypeError: 'NoneType' object is not callable"
@@ -725,7 +755,8 @@ def common_plot(args: dict,
                            origin="lower",
                            levels=levels,
                            cmap=cmap,
-                           extend='both'
+                           extend='both',
+                           norm=matplotlib.colors.PowerNorm(.66)
                            )
         plt.colorbar(img, label=unit, extend='both')
     elif args['display'] == "grid":
@@ -733,7 +764,8 @@ def common_plot(args: dict,
                          datz.T,
                          shading="nearest",
                          cmap=cmap,
-                         )
+                         norm=matplotlib.colors.PowerNorm(.66)
+        )
         plt.colorbar(img, label=unit, extend='both', boundaries=levels)
     else:
         raise ValueError('argument display missing or invalid')

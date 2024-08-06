@@ -181,7 +181,7 @@ def main(args):
 
     stdvs = float(args["stdvs"])
     if stdvs > 0:
-        stdfile = re.sub(r'(.+-...)[sz]([0-9]{0,2}\.dmna)',
+        stdfile = re.sub(r'(.+-...)[az]([0-9]{0,2}\.dmna)',
                          r'\1s\2', infile)
         stdfile_path = os.path.join(args['working_dir'], stdfile)
         logger.info('reading stdev from %s' % infile_path)

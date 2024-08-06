@@ -684,7 +684,7 @@ def main(args):
     rect_tolerance = float(args['tolerance'])
     #
     # read austal config and get gauss-krüger position of model origin
-    ausfile = _tools.find_austxt(args['wdir'])
+    ausfile = _tools.find_austxt(args['working_dir'])
     austxt = _tools.get_austxt(ausfile)
     if 'gx' in austxt and 'gy' in austxt:
         gx = austxt['gx'][0]
@@ -698,7 +698,7 @@ def main(args):
     if os.path.sep in args['file']:
         buildings_file = args['file']
     else:
-        buildings_file = os.path.join(args['wdir'], args['file'])
+        buildings_file = os.path.join(args['working_dir'], args['file'])
     logger.info('reading: %s' % buildings_file)
     with open(buildings_file) as f:
         data = json.load(f)
@@ -730,7 +730,8 @@ def main(args):
         build.c = -1.
         if zvalue is not None:
             if zvalue in data['features'][i]['properties']:
-                build.c = round(float(data['features'][i]['properties'][zvalue]))
+                build.c = round(float(
+                    data['features'][i]['properties'][zvalue]))
         if height is not None:
             build.c = float(height)
         if build.c < 0:
@@ -748,7 +749,8 @@ def main(args):
     data = {}
     for k in building_new().keys:
         key = "%sb" % k
-        data[key] = ' '.join(['{:7.1f}'.format(getattr(x, k)) for x in buildings])
+        data[key] = ' '.join(['{:7.1f}'.format(getattr(x, k))
+                              for x in buildings])
     #
     # output
     if args["dry_run"]:

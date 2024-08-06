@@ -422,18 +422,14 @@ def main(args):
 
     :param args: Dictionary containing the following keys:
     :type args: dict
-    :param args["path"]: (str) -- The path
-      to the directory containing the data file.
-      The datafile is named ``zeitreihe.dmna`` or
-      ``timeseries.dmna``, defending on the language setting
-      of the AUSTAL model.
     :param args["action"]: (str) -- The action to perform.
       Possible values are 'list', 'week-5', 'week-6', or 'cycle'.
-    :param args["source_id"]: (str) -- The source ID to process
-      (required for 'week-5' and 'week-6' actions).
-    :param args["output"]: (list) -- The source strength (in g/s)
-      when the source is emitting
-      (required for 'week-5' and 'week-6' actions).
+    :param args["cycle_file"]: (str) -- The name of the cycle file
+     (required for 'cycle' action).
+    :param args["holiday_month"]: (*list, optional) --
+      List of months (1-12) considered as holidays.
+    :param args["holiday_week"]: (*list, optional) -- List of weeks
+      (1-52) considered as holidays.
     :param args["hour_begin"]: (*int, optional) --
       The daily start of the working time,
       i.e. the first hour of each working day
@@ -446,12 +442,16 @@ def main(args):
       the source emits pollutants
       (evaluated for 'week-5' and 'week-6' actions).
       Defaults to :py:const:`DEFAULT_END` .
-    :param args["holiday_month"]: (*list, optional) --
-      List of months (1-12) considered as holidays.
-    :param args["holiday_week"]: (*list, optional) -- List of weeks
-      (1-52) considered as holidays.
-    :param args["cycle_file"]: (str) -- The name of the cycle file
-     (required for 'cycle' action).
+    :param args["source_id"]: (str) -- The source ID to process
+      (required for 'week-5' and 'week-6' actions).
+    :param args["output"]: (list) -- The source strength (in g/s)
+      when the source is emitting
+      (required for 'week-5' and 'week-6' actions).
+    :param args["working_dir"]: (str) -- The path
+      to the directory containing the data file.
+      The datafile is named ``zeitreihe.dmna`` or
+      ``timeseries.dmna``, depending on the language setting
+      of the AUSTAL model.
 
     :raises ValueError: If the data file is not in DMNA timeseries format.
     :raises ValueError: If the action is unknown.
@@ -463,7 +463,7 @@ def main(args):
     #
     logger.debug('args: %s' % args)
     #
-    name = os.path.join(args["path"], 'zeitreihe.dmna')
+    name = os.path.join(args["working_dir"], 'zeitreihe.dmna')
     zeitreihe = readmet.dmna.DataFile(file=name)
     if zeitreihe.filetype != 'timeseries':
         raise ValueError('is not dmna timeseries format: %s' % name)
@@ -504,9 +504,10 @@ def main(args):
             if ((args["action"] == 'week-5' and 0 <= t.weekday() < 5) or
                     (args["action"] == 'week-6' and 0 <= t.weekday() < 6)):
                 if args["hour_begin"] <= t.hour <= args["hour_end"]:
-                    values.loc[i, args["source_id"]] = float(args["output"][0])
+                    values.loc[i, args["source_id"]] = float(
+                        args["output"][0])
     elif args["action"] in ['cycle']:
-        cyclefile = os.path.join(args["path"], args["cycle_file"])
+        cyclefile = os.path.join(args["working_dir"], args["cycle_file"])
         logger.info('filling cycles from: %s' % cyclefile)
         cycle = get_cycle(cyclefile, zeitreihe.data['te'])
         for c in _tools.progress(cycle.columns, desc="applying cycle"):
