@@ -1,9 +1,29 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sun Mar 20 09:57:48 2022
+Module that provides funtions to assembe, download, and handle
+datasets that serve as input for austaltools
 
-@author: clemens
+:_`unpack string`:
+    Several funtions make use of the unpack string that describes
+    how to extract data from a (downloaded) file.
+    The syntax is simple:
+
+    - Empty, missing, 'false', or 'tif' the downloaded file itself
+      is regared as the file.
+    - strings starting with 'zip://', 'unzip://' command unpacking
+      of files matching the glob pattern following '://'.
+      Any path contained in this epxression are discarded, all files
+      are extracted to the working diretory.
+
+    Example:
+      ::
+
+        zip://data/*.tif
+
+      unpack all files from the archive that are in directory `data`
+      and en on `.tif`
+
 """
 import datetime as dt
 import glob
@@ -81,25 +101,75 @@ KNOWN_WEATHER = [k for k, v in DATASET_DEFINITIONS.items()
 
 
 class DataSet:
+    """
+    Class that describes and handles a dataset
+    """
     name = str()
+    """ID of the dataset (short uppercase code)"""
     available = False
+    """If dataset is available on the system"""
     path = None
+    """Path of the storage location where the dataset resides 
+        (if available)"""
     storage = None
+    """Kind of dataset. 
+    Also the name of the storage (i.e. subdiretory of the storage location)
+    the dataset is stored in.
+    """
     file_license = None
+    """name of the file containing the license of the dataset"""
     file_notice = None
+    """name of the file containing the notice to be shown
+        if the dataset is used"""
     file_data = None
+    """name of the file containing the data of the dataset"""
     uri = None
+    """uri describing the location from where the assembled dataset 
+        can be downloaded. Currently supported: http(s):// and doi://
+        (if such a location exists)"""
     years = []
+    """list of years covered by the dataset (if `storage` is 'weather'"""
     arguments = None
+    """arguments to the assemble funtion that generates the dataset
+        from the original source."""
 
     # -------------------------------------------------------------------------
-    def assemble(self):
-        """Placeholder for download function"""
-        pass
+    def assemble(self, path, name, replace, args):
+        """
+        Funtion that generates the dataset from the original source.
+
+        In an empty Dataset onject, this function is just a placeholder
+        and does nothing.
+
+        :param path: path to the storage location where the
+          dataset shall reside
+        :type path: str
+        :param name: name of the dataset (short uppercase code)
+        :type name: str
+        :param replace: replace the dataset if it alread exists
+        :type replace: bool
+        :param args: arguments to the assemble funtion that generates the dataset
+        :type args: dict
+        :returns: If the assembly was successful
+        :rtype: bool
+        """
+        return True
 
     # -------------------------------------------------------------------------
     def download(self, path=None, uri=None):
-        """Download assembled dataset from reopository"""
+        """
+        Download assembled dataset from reopository
+        :param path: path to the storage location where the
+        dataset shall reside. Only needed if the attribute
+        :py:attr:`DataSet.path` is not set or should be overridden.
+        :type path: str, optional
+        :param uri: uri describing the location from where the assembled
+        dataset shall be downloaded. Only needed if the attribute
+        :py:attr:`DataSet.uri` is not set or should be overridden.
+        :type uri: str, optional
+        """
+        if uri is None:
+            uri = self.uri
         if path is None:
             path = self.path
         else:
@@ -161,21 +231,53 @@ class DataSet:
 
 
 def locations_available(locs):
+    """
+    Check whether locations exist
+    :param locs: paths of storage location directories
+    :type locs: list[str]
+    :return: True if locations exist, False otherwise
+    :rtype: bool
+    """
     return [x for x in locs if os.path.isdir(x)]
 
 
 # -------------------------------------------------------------------------
 def locations_writable(locs):
+    """
+    Check whether locations are writable
+    :param locs: paths of storage location directories
+    :type locs: list[str]
+    :return: True if locations are writable, False otherwise
+    :rtype: bool
+    """
     return [x for x in locs if os.access(x, os.W_OK)]
 
 
 # -------------------------------------------------------------------------
 def location_has_storage(location, storage):
+    """
+    Check if location has storage
+    :param location: path to storage location
+    :type location: str
+    :param storage: name of storage
+    :type storage: str
+    :return: True if location has storage
+    :rtype: bool
+    """
     return os.path.exists(os.path.join(location, storage))
 
 
 # -------------------------------------------------------------------------
 def dataset_get(name):
+    """
+    Yield the dataset with the given ID
+    :param name: dataset ID
+    :type name: str
+    :return: the requested dataset object
+    :rtype: Dataset
+
+    :raises ValueError: if the dataset does not exist
+    """
     for x in DATASETS:
         if x.name == name:
             return x
@@ -185,11 +287,27 @@ def dataset_get(name):
 
 # -------------------------------------------------------------------------
 def dataset_available(name):
+    """
+    Return if dataset is available
+    :param name:  dataset id of dataset to be checked
+    :type name: str
+    :return: True if dataset is available, False otherwise
+    :rtype: bool
+
+    """
     return dataset_get(name).available
 
 
 # -------------------------------------------------------------------------
-def dataset_scan(locs=None):
+def dataset_scan(locs:list=None):
+    """
+    Scan for datasets available on the system.
+    Set the :py:attr:`DataSet.available` attribute
+    in the global list :py:const:`DATASETS` accordingly.
+
+    :param locs: list of possible storage loactions
+    :type locs: list[str]
+    """
     if locs is None:
         locs = _tools.STORAGE_LOCATIONS
     loc_avail = locations_available(locs)
@@ -293,6 +411,21 @@ def download(url, file):
 
 # -------------------------------------------------------------------------
 def xyz2csv(inputfile, output, utm_remove_zone=False):
+    """
+    Clean the xyz flies downloaded in a way that gdal accepts them as csv
+
+    :param inputfile: input file
+    :type inputfile: str
+    :param output: output file
+    :type output: str
+    :param utm_remove_zone: Some providers prefix UTM easting with the
+      zone numer, which results in easting values exceeding 1000km.
+      Remove the leading digits to keep easting in the allowed range
+      0m < easting < 1000000 m. defaults to False.
+    :type utm_remove_zone: bool
+    :return: True if successful, False otherwise
+    :rtype: bool
+    """
     # test if file has a header line
     with open(inputfile, 'r') as fd:
         line1 = fd.readline()
@@ -546,6 +679,21 @@ def jsonpath(json_obj, path):
 
 # -------------------------------------------------------------------------
 def _ass_xyz2tif(inputfile, srcsrs, utm_remove_zone):
+    """
+    convert xyz file (via csv) to GeoTiff
+
+    :param inputfile: input file
+    :type inputfile: str
+    :param srcsrs: SRS of the input file (as "EPSG:xxxxx")
+    :type srcsrs: str
+    :param utm_remove_zone: Some providers prefix UTM easting with the
+      zone numer, which results in easting values exceeding 1000km.
+      Remove the leading digits to keep easting in the allowed range
+      0m < easting < 1000000 m. defaults to False.
+    :type utm_remove_zone: bool
+    :return: output file name (GeoTiff)
+    :rtype: str
+    """
     if os.stat(inputfile).st_size == 0:
         logger.debug(f"skipping empty  ... {inputfile}")
         os.remove(inputfile)
@@ -575,6 +723,18 @@ def _ass_xyz2tif(inputfile, srcsrs, utm_remove_zone):
 
 # -------------------------------------------------------------------------
 def _ass_reduce_tile(tf1, out_res):
+    """
+    Resamples a tile (or any file that can be autodetected by gdal)
+    to a differen (only lower makse sense) resolution and saves ist as
+    GeoTiff in PSG:5677 projection.
+
+    :param tf1: name (and optionally path) of the input file
+    :type tf1: str
+    :param out_res: output resolution (i.e. pixel width) in km
+    :type out_res: float
+    :return: name (and path if supplied in `tf1`) of the output file
+    :rtype: str
+    """
     tfxx = os.path.splitext(tf1)[0] + ".reduced.tif"
     logger.debug(f"resampling tile ... {tf1} -> {tfxx}")
     try:
@@ -592,13 +752,23 @@ def _ass_reduce_tile(tf1, out_res):
 
 # -------------------------------------------------------------------------
 def _ass_unpack(dl_file, unpack):
+    """
+    Unpack files from an archive
+
+    :param dl_file: filename, otionally incl. path, of the archive (downloadad file)
+    :type dl_file: str
+    :param unpack: string describing what to unpack
+    :type unpack: str
+    :return: names of the files extracted
+    :rtype: list[str]
+    :raises ValeError: if `unpack` string is invalid
+    """
     inputfiles = []
-    if unpack in [None, '', 'tif', 'false'] and \
-            dl_file.endswith('tif'):
+    if unpack in [None, '', 'tif', 'false']:
         inputfiles = [dl_file]
     elif unpack.startswith(('zip', 'unzip')):
         with zipfile.ZipFile(dl_file, 'r') as zf:
-            pattern = re.sub('^(un|)zip[:/]*', '', unpack)
+            pattern = re.sub('^(un|)zip://', '', unpack)
             unpack_files = [x for x in zf.namelist()
                             if PurePath(x).match(pattern)]
             inputfiles = []
@@ -617,7 +787,16 @@ def _ass_unpack(dl_file, unpack):
 
 # -------------------------------------------------------------------------
 def _ass_merge_tiles(target, tile_files):
-    # merge the GeoTiff Files from all tiles into one file
+    """
+    merge the GeoTiff Files from all tiles into one file
+
+    :param target: name, optionally including path) of the file to generate
+    :type target:  str
+    :param tile_files: Input files to merge
+    :type tile_files: list[str]
+    :raises Exception: if gdal_merge aborts with error
+
+    """
     if os.path.exists(target):
         logger.info("removing old source file")
         os.remove(target)
@@ -641,6 +820,19 @@ def _ass_merge_tiles(target, tile_files):
 
 # -------------------------------------------------------------------------
 def _ass_clear_target(path, name, replace):
+    """
+    assure that a datafile is not already present
+
+    :param path: path of the datafile
+    :type path: str
+    :param name: name of the datafile
+    :type name: str
+    :param replace: If True, the file is removed if it exists;
+      if False, None is returned
+    :type replace: bool
+    :return: name and path of the datafile or None
+    :rtype: str or None
+    """
     target = os.path.join(path, DEM_FMT % name)
     logger.debug(f'data file path: {target}')
     if os.path.exists(target):
@@ -655,6 +847,29 @@ def _ass_clear_target(path, name, replace):
 
 # -------------------------------------------------------------------------
 def _ass_process_input(args):
+    """
+    Worker funtion to process a downloaded file into one or more
+    data (tile) file(s) of the desired resolution and projection
+
+    :param args: tuple containg the arguments
+      - inp: location of the input file. Either file and path or URL
+      - base_url: base url to prepend to inp, omitted if inp is a URL
+      - verify: enable (True) or disable (False) server certificate check
+      - provider: dict containing the processing arguments
+        - provider['missing']: (str, optional)
+          if 'ok', 'ignore', an empty list is returned,
+          if the URL download fails with error 404 (not found)
+        - provider["unpack"]: (str, optional)
+          the description, what to unpack.
+        - provider["CRS"]: (str, optional)
+          the referecnce system of the input data (in the form "EPSG:xxxx")
+        - provider["utm_remove_zone"]: (str, optional)
+          If 'True', 'true', 'yes', True is passed
+          to :py:func:`_ass_reduce`
+    :type args: tuple[str, str, bool, dict]
+    :return: list of the generated files
+    :rtype: list[str]
+    """
     inp, base_url, verify, provider = args
     tile_files = []
     if re.match('^http[s]*://', inp):
@@ -732,6 +947,41 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         If False, an error is raises if the file already exists.
     :type replace: bool
     :param provider: The arguments neede to preform the asembly.
+        for more details see :doc:`configure-austaltools`.
+
+        - provider['host']: (str)
+          Hostname and protocol from where to download data.
+          Supported protocols are :code:`"http://..."`,
+          :code:`"https://..."`, and  :code:`"file:///..."`.
+        - provider['cert-check']: (str, optional)
+          Wether to check the server certificates of `host` or not.
+          Disables verification by setting this value to
+          "no" or "false". Defaults to "true".
+        - provider['filelist']: (str or list, optional)
+          list of filenames to download or "generate" or Path or URL
+          to file that contains this list.
+        - provider['jsonpath']: (str, optional)
+          Pattern how to extract file list from `filelist`
+          if it points to a json file
+          See :py:func:`jsonpath`
+        - provider['xmlpath']: (str, optional)
+          Pattern how to extract file list from `filelist`
+          if it points to an xml file
+          See :py:func:`xmlpath`
+        - provider['links']: (str, optional)
+          Regular expression to extract file list from `filelist`
+          if it points to a htmls file,
+          by filtering all links in `filelist`.
+        - provider['missing']: (str, optional)
+          if 'ok', 'ignore', an empty list is returned,
+          if the URL download fails with error 404 (not found)
+        - provider["unpack"]: (str, optional)
+          the description, what to unpack (see `unpack string`_)
+        - provider["CRS"]: (str, optional)
+          the referecnce system of the input data (in the form "EPSG:xxxx")
+        - provider["utm_remove_zone"]: (str, optional)
+          If 'True', 'true', 'yes', True is passed
+          to :py:func:`_ass_reduce`
     :type provider: dict
     :return: Success (True) of Failure (False)
     :rtype: bool
@@ -822,6 +1072,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
 def _ass_sh_getfid(args):
     """
     get individual file for DGM1-SH
+
     :param args: download number, total no of downloads, file-id, args
     :type args: tupe[int, int, int, dict]
     :return: names of extracted files
@@ -931,6 +1182,24 @@ def _ass_sh_getfid(args):
 
 
 def assemble_DGM_SH(path, name, replace, provider: dict):
+    """
+    Special function to assemble a digital elevation model (DEM)
+    of the German state Schlewig-Holstein (SH)
+    It is designed to scrape their "Downloadclient" website.
+
+    :param path: Path and filename of the file to generate
+    :type path: str
+    :param name: name (code) of the dataset to assemble
+    :type name: str
+    :param replace: If True, an existing file is overwritten.
+        If False, an error is raises if the file already exists.
+    :type replace: bool
+    :param provider: Optionally accepted for compatiblity with the
+        general asseble funtion call. Is not evalueated.
+    :type provider: dict
+    :return: Success (True) of Failure (False)
+    :rtype: bool
+    """
     if (target := _ass_clear_target(path, name, replace)) is None:
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -954,7 +1223,30 @@ def assemble_DGM_SH(path, name, replace, provider: dict):
 
 
 # -------------------------------------------------------------------------
-def assemble_DGM25_RP(path, name="DGM25-RP", replace=False):
+def assemble_DGM25_RP(path, name="DGM25-RP",
+                      replace=False, args: dict = {}):
+    """
+    Special function to assemble the 25-m digital elevation model (DEM)
+    of the German state Rheinland-Pfalz (RP) that has been
+    avaliable online before all states had to licence their 1-m DEM
+    as open data.
+
+    .. deprecated:: 1.0
+       use :py:func:`assemble_DGMxx` instead.
+
+    :param path: Path and filename of the file to generate
+    :type path: str
+    :param name: name (code) of the dataset to assemble
+    :type name: str
+    :param replace: If True, an existing file is overwritten.
+        If False, an error is raises if the file already exists.
+    :type replace: bool
+    :param provider: Optionally accepted for compatiblity with the
+        general asseble funtion call. Is not evalueated.
+    :type provider: dict
+    :return: Success (True) of Failure (False)
+    :rtype: bool
+    """
     if (target := _ass_clear_target(path, name, replace)) is None:
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -983,7 +1275,29 @@ def assemble_DGM25_RP(path, name="DGM25-RP", replace=False):
 
 
 # -------------------------------------------------------------------------
-def assemble_DGM_composit(path: str, name: str, replace: bool, args: dict):
+def assemble_DGM_composit(path: str, name: str,
+                          replace: bool, args: dict):
+    """
+    Special function to assemble a digital elevation model (DEM)
+    that is a composit of other datasets or files or a mixture thereof.
+
+    .. note::
+       If a composit includes other datasets, they must be assembled
+       *before* calling this function.
+
+    :param path: Path and filename of the file to generate
+    :type path: str
+    :param name: name (code) of the dataset to assemble
+    :type name: str
+    :param replace: If True, an existing file is overwritten.
+        If False, an error is raises if the file already exists.
+    :type replace: bool
+    :param provider: Optionally accepted for compatiblity with the
+        general asseble funtion call. Is not evalueated.
+    :type provider: dict
+    :return: Success (True) of Failure (False)
+    :rtype: bool
+    """
     if (target := _ass_clear_target(path, name, replace)) is None:
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -1058,6 +1372,29 @@ def assemble_DGM_composit(path: str, name: str, replace: bool, args: dict):
 
 # -------------------------------------------------------------------------
 def assemble_GLO_30(path, name="GLO_30", replace=False, args: dict = {}):
+    """
+    Special function to assemble the GLO_30 digital elevation model (DEM)
+    from European Copernicus service.
+
+    .. note::
+        To run this funtion successfully,
+        the user must have an active Copernicus user account that can be
+        obtained at the Copernicus user's portal:
+        <https://cdsportal.copernicus.eu/web/spdm/registeruser>
+
+    :param path: Path and filename of the file to generate
+    :type path: str
+    :param name: name (code) of the dataset to assemble
+    :type name: str
+    :param replace: If True, an existing file is overwritten.
+        If False, an error is raises if the file already exists.
+    :type replace: bool
+    :param provider: Optionally accepted for compatiblity with the
+        general asseble funtion call. Is not evalueated.
+    :type provider: dict
+    :return: Success (True) of Failure (False)
+    :rtype: bool
+    """
     if (target := _ass_clear_target(path, name, replace)) is None:
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -1093,6 +1430,28 @@ def assemble_GLO_30(path, name="GLO_30", replace=False, args: dict = {}):
 # -------------------------------------------------------------------------
 def assebmle_GTOPO30(path: str, name="GTOPO30",
                      replace=False, args: dict = {}):
+    """
+    Special function to assemble the GTOPO30 elevation model (DEM)
+    from UCAR.edu.
+
+    .. note::
+        GTOPO30 has a worlwide coverage but only the tile 'W020N90'
+        is downloaded as only this one covers the area where the
+        target SRS is valid.
+
+    :param path: Path and filename of the file to generate
+    :type path: str
+    :param name: name (code) of the dataset to assemble
+    :type name: str
+    :param replace: If True, an existing file is overwritten.
+        If False, an error is raises if the file already exists.
+    :type replace: bool
+    :param provider: Optionally accepted for compatiblity with the
+        general asseble funtion call. Is not evalueated.
+    :type provider: dict
+    :return: Success (True) of Failure (False)
+    :rtype: bool
+    """
     support_url = ("https://data.rda.ucar.edu/ds758.0/support/"
                    + "GTOPO30support.tar.gz")
     download_fmt = ("https://data.rda.ucar.edu/ds758.0/elevtiles/" +
@@ -1148,6 +1507,31 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
 # -------------------------------------------------------------------------
 def provide_dem(source: str, path: str = None,
                 force: bool = False, method: str = 'download'):
+    """
+    Funciton that makes a terrain dataset (digital elevation model, DEM)
+    locally available, using the chosen method.
+
+    :param source: ID of the dataset to make vailable
+    :type source: str
+    :param path: Path to where to write the dataset files.
+      If None, the lowest-proirity (i.e. most system-wide)
+      writable location of the standard stroage locations in
+      :py:const:`_tools.STORAGE_LOCATIONS` is selected.
+      Defaults to None.
+    :type path: str or None, optional
+    :param force: Wheter to overwrite a dataset that is already avialable.
+      Defaults to False.
+    :type force: bool, options
+    :param method: The method how to get the dataset.
+      Defaults to `'download'`.
+        :`'download'`: the ready-assembled dataset ist downloadad
+          form a location specified in the dataset definition.
+        :`'assemble'`: the dataset is created from data that are acquired
+          (if possible) from an original supplier.
+    :type method: str
+
+    :raises ValueError: if `method` is not one of the allowed values.
+    """
     if path is None:
         path = find_writeable_storage(path, _tools.STORAGE_TERRAIN)
     dataset = dataset_get(source)
@@ -1195,6 +1579,16 @@ def provide_dem(source: str, path: str = None,
 
 # -------------------------------------------------------------------------
 def show_notice(storage_path, source):
+    """
+    Shows a notice to the user when a dataset is accessed,
+    if this is required by the original supplier of the dataset.
+
+    :param storage_path: path to the dataset files
+    :type storage_path: str
+    :param source: dataset ID
+    :type source: str
+
+    """
     print('data copyright notice:')
     with open(os.path.join(storage_path,
                            "%s.NOTICE.txt" % source), "r") as f:
@@ -1325,9 +1719,9 @@ def assemble_ERA5(path: str, years: list):
 
     :example:
 
-    >>> # To download ERA5 data for the years 2018 to 2020
-    >>> # and save to '/data/ERA5'
-    >>> assemble_ERA5('/data/ERA5', [2018, 2019, 2020])
+        >>> # To download ERA5 data for the years 2018 to 2020
+        >>> # and save to '/data/ERA5'
+        >>> assemble_ERA5('/data/ERA5', [2018, 2019, 2020])
 
     :note:
 
@@ -1355,6 +1749,15 @@ def assemble_ERA5(path: str, years: list):
 
 # -------------------------------------------------------------------------
 def _cerraname(y, lt=None):
+    """
+    assembles CERRA data file name from year and part
+    :param y: year
+    :type y: int
+    :param lt: part number
+    :type lt: int
+    :return:  filename
+    :rtype: str
+    """
     name = 'cerra_ak_eu_%04i' % y
     if lt is not None:
         name += '_%01i' % lt
@@ -1397,9 +1800,9 @@ def _ass_cerra_getyear(opts):
 
     :example:
 
-    >>> # To download and process the CERRA data for the year 2023
-    >>> # with a lead time of 48 hours
-    >>> cerra_getyear((2023, 48))
+        >>> # To download and process the CERRA data for the year 2023
+        >>> # with a lead time of 48 hours
+        >>> cerra_getyear((2023, 48))
 
     :note:
 
@@ -1501,8 +1904,8 @@ def assemble_CERRA(path: str, years: list):
 
     :example:
 
-    >>> # To process CERRA data for the years 2015 to 2017
-    >>> assemble_CERRA('/path/to/final/storage', [2015, 2016, 2017])
+        >>> # To process CERRA data for the years 2015 to 2017
+        >>> assemble_CERRA('/path/to/final/storage', [2015, 2016, 2017])
 
     :note:
 
@@ -1638,5 +2041,14 @@ def provide_weather(source: str, path: str = None,
 # -------------------------------------------------------------------------
 # initialize
 DATASETS = [DataSet(name=k, **v) for k, v in DATASET_DEFINITIONS.items()]
+"""
+All known datasets as :py:class:`DataSet` instances.
+
+:meta hide-value:
+"""
 PROCS = None
+"""
+Number of parallel processes to run downlading data or  
+`None`. If `None` the number of processor cores in the system is used.
+"""
 dataset_scan()

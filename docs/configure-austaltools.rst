@@ -94,6 +94,16 @@ Each dict has the follwing entries:
         as :code:`"file:///..."`.
         Example: :json:`"host": "https://geodata.example.com"`
 
+    "check_cert":
+        (optional, str)
+        Wether to check the server certificates of `host` or not.
+        To do so is a normal part of establishing a https connection
+        and is done if the value is "true" or "yes".
+        But since some of the providers use certificates that,
+        although accepted by popular browsers, fail a strict
+        verification, it can be disables by setting this value to
+        "no" or "false". Defaults to "true".
+
     "path":
         (optional, str)
         The path to the data on the download server.
