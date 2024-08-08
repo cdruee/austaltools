@@ -399,6 +399,13 @@ def cli_parser():
                         help='woking directory '
                              '[%s]' % default['working_dir'],
                         default=default['working_dir'])
+    parser.add_argument('--temp-dir',
+                        dest='temp_dir',
+                        metavar='PATH',
+                        help='directory where temporary files'
+                             'are stored. None means use system'
+                             'temporary files dir. [None]',
+                        default=None)
     return parser
 
 # ----------------------------------------------------
@@ -423,6 +430,9 @@ def main():
         raise ValueError('PATH not given')
 
     logger.debug('args: %s' % args)
+
+    if args["temp_dir"] is not None:
+        _datasets.TEMP = args["temp_dir"]
 
     try:
         if args['command'] in ['buildings-geojson', 'bg']:

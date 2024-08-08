@@ -8,7 +8,8 @@ import numpy as np
 import austaltools.buildings_geojson as prog
 import austaltools._tools as _tools
 
-NAME = os.path.join('austaltools','austal_buildings_geojson.py')
+NAME = os.path.join('austaltools','command_line.py')
+SUBCMD = "buildings-geojson"
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
@@ -19,6 +20,7 @@ def capture(command):
                             stderr=subprocess.PIPE,
                             )
     out, err = proc.communicate()
+    print('command: %s' % command )
     print('command stdout: \n' + out.decode())
     print('command stderr: \n' + err.decode())
     print('cmd exit code : \n%s' % proc.returncode)
@@ -43,13 +45,13 @@ def rot_bldg(build, angle):
 
 class TestCommandLine(unittest.TestCase):
     def test_no_param(self):
-        command = [NAME]
+        command = [NAME, SUBCMD]
         out, err, exitcode = capture(command)
-        self.assertEqual(exitcode, 1)
+        assert exitcode == 1
+        self.assertRegex(err.decode(), "not found")
 
     def test_help(self):
-        command = [NAME,
-                   '-h']
+        command = [NAME, SUBCMD, '-h']
         out, err, exitcode = capture(command)
         self.assertEqual(exitcode, 0)
         self.assertRegex(out.decode(), "^usage")

@@ -52,6 +52,7 @@ from urllib3 import disable_warnings, exceptions
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from osgeo import gdal
+    from osgeo import osr
     from osgeo_utils import gdal_merge
     from multiprocessing import Pool
     import cdo
@@ -83,6 +84,7 @@ logger = logging.getLogger()
 
 # -------------------------------------------------------------------------
 DEM_FMT = '%s.elevation.nc'  # '%s.lzw.tif'
+DEM_CRS = "EPSG:5677"
 WEA_FMT = '%s_ak_eu_%04i.nc'
 DIST_AUX_FILES = resources.files(__title__ + '.data')
 TEMP = None
@@ -564,7 +566,7 @@ def xmlpath(xml, path):
             name = level
             spec = enti = sel = None
         tag = ''.join((ns, name))
-        print(name, spec, enti, sel)
+        #print(name, spec, enti, sel)
         next_nodes = []
         for node in nodes:
             # iterate over children
@@ -678,6 +680,23 @@ def jsonpath(json_obj, path):
 
 
 # -------------------------------------------------------------------------
+def get_crs(filename):
+    """
+    Query the projection of a geo data file
+    :param filename: name of the file (optionally with leading path)
+    :type filename: str
+    :return: Projection of the geo data file ind the form "EPSG:xxxx"
+    :rtype: str
+    """
+    with gdal.open(filename) as ds:
+        prj = ds.GetProjection()
+    srs = osr.SpatialReference(wkt=prj)
+    jsrs = srs.ExportToPROJJSON()
+    srsid = json.loads(jsrs)['id']
+    epsg = '%s:%i:' % (srsid['authority'], srsid['id'])
+    return epsg
+
+# -------------------------------------------------------------------------
 def _ass_xyz2tif(inputfile, srcsrs, utm_remove_zone):
     """
     convert xyz file (via csv) to GeoTiff
@@ -726,7 +745,8 @@ def _ass_reduce_tile(tf1, out_res):
     """
     Resamples a tile (or any file that can be autodetected by gdal)
     to a differen (only lower makse sense) resolution and saves ist as
-    GeoTiff in PSG:5677 projection.
+    GeoTiff
+    #FIXME in PSG:5677 projection.
 
     :param tf1: name (and optionally path) of the input file
     :type tf1: str
@@ -741,7 +761,8 @@ def _ass_reduce_tile(tf1, out_res):
         gdal.Warp(destNameOrDestDS=tfxx,
                   xRes=out_res,
                   yRes=out_res,
-                  dstSRS="EPSG:5677",
+                  #FIXME keep projection
+                  # dstSRS="EPSG:5677",
                   srcDSOrSrcDSTab=tf1,
                   format="GTiff")
     except Exception as e:
@@ -767,18 +788,21 @@ def _ass_unpack(dl_file, unpack):
     if unpack in [None, '', 'tif', 'false']:
         inputfiles = [dl_file]
     elif unpack.startswith(('zip', 'unzip')):
-        with zipfile.ZipFile(dl_file, 'r') as zf:
-            pattern = re.sub('^(un|)zip://', '', unpack)
-            unpack_files = [x for x in zf.namelist()
-                            if PurePath(x).match(pattern)]
-            inputfiles = []
-            for un in unpack_files:
-                with zf.open(un) as fz:
-                    with open(os.path.basename(un), 'wb') as fu:
-                        fu.write(fz.read())
-                inputfiles.append(os.path.basename(un))
+        try:
+            with zipfile.ZipFile(dl_file, 'r') as zf:
+                pattern = re.sub('^(un|)zip://', '', unpack)
+                unpack_files = [x for x in zf.namelist()
+                                if PurePath(x).match(pattern)]
+                inputfiles = []
+                for un in unpack_files:
+                    with zf.open(un) as fz:
+                        with open(os.path.basename(un), 'wb') as fu:
+                            fu.write(fz.read())
+                    inputfiles.append(os.path.basename(un))
+        except Exception as e:
+            raise IOError(f'zip file error processing {dl_file}')
     else:
-        logger.error(f"dont know how to handle download: {dl_file}")
+        raise IOError(f"dont know how to handle download: {dl_file}")
 
     if len(inputfiles) == 0:
         logger.warning(f"no data unpacked from {dl_file}")
@@ -797,22 +821,36 @@ def _ass_merge_tiles(target, tile_files):
     :raises Exception: if gdal_merge aborts with error
 
     """
+    merged_file = 'merged.tif'
     if os.path.exists(target):
         logger.info("removing old source file")
         os.remove(target)
     logger.debug("merging tiles ...")
+    gdal_merge.main(["", "-co", "compress=lzw",
+                     "-o", merged_file,
+                     ] + tile_files)
+    s_srs = get_crs(merged_file)
     if DEM_FMT.endswith('.tif'):
-        gdal_merge.main(["", "-co", "compress=lzw",
-                         "-o", target,
-                         ] + tile_files)
+        if s_srs == DEM_CRS:
+            # we already have the wanted product
+            shutil.move(merged_file, target)
+        else:
+            logger.debug(f"reprojecting to target projection {DEM_CRS}")
+            gdal.Warp(destNameOrDestDS=target,
+                      dstSRS=DEM_CRS,
+                      srcDSOrSrcDSTab=merged_file,
+                      format="GTiff")
     elif DEM_FMT.endswith('.nc'):
-        gdal_merge.main(["",
-                         "-of", "netCDF",
-                         "-co", "FORMAT=NC4C",
-                         "-co", "COMPRESS=DEFLATE",
-                         "-co", "ZLEVEL=9",
-                         "-o", target,
-                         ] + tile_files)
+        logger.debug("converting and reprojecting to {t_srs}")
+        gdal.Warp(srcDSOrSrcDSTab=merged_file,
+                  destNameOrDestDS=target,
+                  dstSRS=DEM_CRS,
+                  format="netCDF",
+                  creationOptions=[
+                      "FORMAT=NC4C",
+                      "COMPRESS=DEFLATE",
+                      "ZLEVEL=9"]
+                  )
     else:
         raise Exception(f'cannot handle DEM_FMT: {DEM_FMT}')
     logger.debug(f"... written {target}")
@@ -877,6 +915,7 @@ def _ass_process_input(args):
     else:
         url = f"{base_url}/{inp}"
     dl_file = os.path.basename(url)
+    unpack = provider.get('unpack', None)
     failure_ok = False
     if re.match('^http[s]*://', url):
         logger.debug(f"downloading ... {url}")
@@ -885,15 +924,27 @@ def _ass_process_input(args):
                 if req.status_code == requests.codes.ok:
                     with open(dl_file, 'wb') as f:
                         f.write(req.content)
+                elif req.status_code == 404:
+                    missing = provider.get('missing', None)
+                    if missing in ['ok', 'ignore']:
+                        failure_ok = True
+                        logger.info(f"ignoring failed download: {url}")
+                        # break retry loop
+                        break
+                    elif missing == 'wait':
+                        logger.info(f"wait after failed download: {url}")
+                        time.sleep(30)
+                        # netx try
+                        continue
+                try:
+                    inputfiles = _ass_unpack(dl_file, unpack)
+                    # no retry if unpack successful
                     break
-                elif (req.status_code == 404 and
-                      'missing' in provider and
-                      provider['missing'] in ['ok', 'ignore']):
-                    failure_ok = True
-                    # break retry loop
-                    break
+                except IOError as e:
+                    logger.error(f"retry download after error "
+                                 f"unpacking {dl_file}")
         else:
-            raise Exception("failed to download tile files")
+            raise Exception(f"failed to download: {url}")
     elif re.match('^file://', url):
         logger.debug(f"copying file... {url}")
         url = re.sub('^file:/+', '/', url)
@@ -906,9 +957,6 @@ def _ass_process_input(args):
     if failure_ok:
         # skip rest of inp loop
         return tile_files
-
-    unpack = provider.get('unpack', None)
-    inputfiles = _ass_unpack(dl_file, unpack)
 
     out_res = provider.get('resolution', 25)
     srcsrs = provider.get('CRS', None)
@@ -1064,6 +1112,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
 
     # merge the GeoTiff Files from all tiles into one file
     _ass_merge_tiles(target, tile_files)
+    logger.info(f"data file written: {target}")
 
     return True
 

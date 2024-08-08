@@ -280,13 +280,13 @@
         "arguments": {
             "resolution": 10,
             "host": "file://",
-            "path": "localdata/opt/DGM1_SL",
-            "filelist": ["DGM1_tif_MZG_25832.zip",
-                         "DGM1_tif_SB_25832.zip",
-                         "DGM1_tif_SLS_25832.zip",
-                         "DGM1_tif_SPK_25832.zip",
-                         "DGM1_tif_WND_25832.zip"],
-            "unpack": "zip://*.tif",
+            "path": "localdata/opt/DGM1/DGM1-SL",
+            "filelist": ["DGM1_xyz_MZG.zip",
+                         "DGM1_xyz_SB.zip",
+                         "DGM1_xyz_SLS.zip",
+                         "DGM1_xyz_SPK.zip",
+                         "DGM1_xyz_WND.zip"],
+            "unpack": "zip://*.xyz",
             "CRS": "EPSG:25832"
         },
         "license": "spdx:DL-DE-BY-2.0",
@@ -300,9 +300,10 @@
             "host": "https://geodownload.sachsen.de",
             "path": "inspire/el_atom",
             "filelist": "Dataset_el_dgm1.xml",
+            "missing": "wait",
             "xmlpath": "/entry/link::href",
             "unpack": "zip://*.xyz",
-            "CRS": "EPSG:25832"
+            "CRS": "EPSG:25833"
         },
         "license": "spdx:DL-DE-BY-2.0",
         "notice": "Generated from DGM1 data 'Landesamt für Geobasisinformation Sachsen (GeoSN)', www.landesvermessung.sachsen.de, 2024, licensed under DL-DE-BY-2.0"
