@@ -688,7 +688,7 @@ def get_crs(filename):
     :return: Projection of the geo data file ind the form "EPSG:xxxx"
     :rtype: str
     """
-    with gdal.open(filename) as ds:
+    with gdal.Open(filename) as ds:
         prj = ds.GetProjection()
     srs = osr.SpatialReference(wkt=prj)
     jsrs = srs.ExportToPROJJSON()
