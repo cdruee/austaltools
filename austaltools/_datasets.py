@@ -840,7 +840,9 @@ def _ass_merge_tiles(target, tile_files):
             gdal.Warp(destNameOrDestDS=target,
                       dstSRS=DEM_CRS,
                       srcDSOrSrcDSTab=merged_file,
-                      format="GTiff")
+                      format="GTiff",
+                      creationOptions=["BIGTIFF=YES"]
+                      )
     elif DEM_FMT.endswith('.nc'):
         logger.debug(f"converting and reprojecting to {DEM_CRS}")
         gdal.Warp(srcDSOrSrcDSTab=merged_file,
