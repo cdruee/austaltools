@@ -694,7 +694,7 @@ def get_crs(filename):
     srs = osr.SpatialReference(wkt=prj)
     jsrs = srs.ExportToPROJJSON()
     srsid = json.loads(jsrs)['id']
-    epsg = '%s:%i:' % (srsid['authority'], srsid['id'])
+    epsg = '%s:%i:' % (srsid['authority'], srsid['code'])
     return epsg
 
 # -------------------------------------------------------------------------
@@ -842,7 +842,7 @@ def _ass_merge_tiles(target, tile_files):
                       srcDSOrSrcDSTab=merged_file,
                       format="GTiff")
     elif DEM_FMT.endswith('.nc'):
-        logger.debug("converting and reprojecting to {t_srs}")
+        logger.debug(f"converting and reprojecting to {DEM_CRS}")
         gdal.Warp(srcDSOrSrcDSTab=merged_file,
                   destNameOrDestDS=target,
                   dstSRS=DEM_CRS,
