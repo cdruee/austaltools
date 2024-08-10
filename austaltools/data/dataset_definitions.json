@@ -31,7 +31,7 @@
             "filelist": "::html",
             "links": "dgm.*zip",
             "unpack": "zip://*.tif",
-            "CRS": "EPSG:25832"
+            "CRS": "EPSG:25833"
         },
         "license": "spdx:DL-DE-BY-2.0",
         "notice": "Generated from DGM1 data by '(c) GeoBasis-DE / LGB (Landesvermessung und Geobasisinformation Brandenburg), 2024, www.lgl-bw.de', licensed under DL-DE-BY-2.0"
@@ -301,6 +301,7 @@
             "path": "inspire/el_atom",
             "filelist": "Dataset_el_dgm1.xml",
             "missing": "wait",
+            "localstore": "/local/data/opt/DGM1/DGM1-SN",
             "xmlpath": "/entry/link::href",
             "unpack": "zip://*.xyz",
             "CRS": "EPSG:25833"

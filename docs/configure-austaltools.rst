@@ -148,6 +148,15 @@ Each dict has the follwing entries:
         building the url to download.
         Example: "atom_feed?id=awsomedata&crs=25832::xml"
 
+    "localstore":
+        (optional, str)
+        Path where downloaded files are stored locally.
+        If locally stored versions of some or all files in filelist
+        are present, these copies are used. Only missing files are
+        downloaded.
+        Intended to reduce traffic an transfer time in case multiple
+        datasets are assebled from the same original data.
+
     "jsonpath":
         (required for json or geojson filelist, str)
         An path-like expression that selects filenames from a json-file.

@@ -688,8 +688,9 @@ def get_crs(filename):
     :return: Projection of the geo data file ind the form "EPSG:xxxx"
     :rtype: str
     """
-    with gdal.Open(filename) as ds:
-        prj = ds.GetProjection()
+    ds = gdal.Open(filename, gdal.GA_ReadOnly)
+    prj = ds.GetProjection()
+    del ds
     srs = osr.SpatialReference(wkt=prj)
     jsrs = srs.ExportToPROJJSON()
     srsid = json.loads(jsrs)['id']
@@ -894,6 +895,10 @@ def _ass_process_input(args):
       - base_url: base url to prepend to inp, omitted if inp is a URL
       - verify: enable (True) or disable (False) server certificate check
       - provider: dict containing the processing arguments
+        - provider['localstore']: (str, optional)
+          path where local copies of the download files are stored.
+          Files that exist in this directory are copied from there and not downloaded.
+          Successfully downloaded files are copied to this location.
         - provider['missing']: (str, optional)
           if 'ok', 'ignore', an empty list is returned,
           if the URL download fails with error 404 (not found)
@@ -909,13 +914,29 @@ def _ass_process_input(args):
     :rtype: list[str]
     """
     inp, base_url, verify, provider = args
-    tile_files = []
-    if re.match('^http[s]*://', inp):
-        url = inp
-    else:
-        url = f"{base_url}/{inp}"
-    dl_file = os.path.basename(url)
     unpack = provider.get('unpack', None)
+    localstore = provider.get('localstore', None)
+    out_res = provider.get('resolution', 25)
+    srcsrs = provider.get('CRS', None)
+    if provider.get('utm_remove_zone', 'true') in ['True', 'true', 'yes']:
+        utm_remove_zone = True
+    else:
+        utm_remove_zone = False
+    dl_file = os.path.basename(inp)
+
+    url = None
+    if localstore is not None:
+        # 1st priority: get a locally stored file
+        localfile = os.path.join(localstore, dl_file)
+        if os.path.exists(localfile):
+            url = 'file://' + os.path.abspath(localfile)
+    if url is None:
+        # 2nd priority: download the file
+        if re.match('^http[s]*://', inp):
+            url = inp
+        else:
+            url = f"{base_url}/{inp}"
+
     failure_ok = False
     if re.match('^http[s]*://', url):
         logger.debug(f"downloading ... {url}")
@@ -938,6 +959,8 @@ def _ass_process_input(args):
                         continue
                 try:
                     inputfiles = _ass_unpack(dl_file, unpack)
+                    if localstore is not None:
+                        shutil.move(dl_file, localstore)
                     # no retry if unpack successful
                     break
                 except IOError as e:
@@ -953,27 +976,23 @@ def _ass_process_input(args):
         except IOError:
             if ('missing' in provider and
                     provider['missing'] in ['ok', 'ignore']):
+                logger.info(f"ignoring missing file: {url}")
                 failure_ok = True
-    if failure_ok:
-        # skip rest of inp loop
-        return tile_files
+        inputfiles = _ass_unpack(dl_file, unpack)
 
-    out_res = provider.get('resolution', 25)
-    srcsrs = provider.get('CRS', None)
-    if provider.get('utm_remove_zone', 'true') in ['True', 'true', 'yes']:
-        utm_remove_zone = True
-    else:
-        utm_remove_zone = False
-    for inputfile in inputfiles:
-        if inputfile.endswith('tif'):
-            tf1 = inputfile
-        elif inputfile.endswith('xyz'):
-            tf1 = _ass_xyz2tif(inputfile, srcsrs, utm_remove_zone)
-        else:
-            raise Exception(f'cannot handle {inputfile}')
-        if tf1 is not None:
-            tfxx = _ass_reduce_tile(tf1, out_res)
-            tile_files.append(tfxx)
+    tile_files = []
+    if not failure_ok:
+        for inputfile in inputfiles:
+            if inputfile.endswith('tif'):
+                tf1 = inputfile
+            elif inputfile.endswith('xyz'):
+                tf1 = _ass_xyz2tif(inputfile, srcsrs, utm_remove_zone)
+            else:
+                raise Exception(f'cannot handle {inputfile}')
+            if tf1 is not None:
+                tfxx = _ass_reduce_tile(tf1, out_res)
+                tile_files.append(tfxx)
+
     if os.path.exists(dl_file):
         os.remove(dl_file)
     return tile_files
@@ -1008,6 +1027,10 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         - provider['filelist']: (str or list, optional)
           list of filenames to download or "generate" or Path or URL
           to file that contains this list.
+        - provider['localstore']: (str, optional)
+          path to local storage of the downloaded files.
+          Locally saved files have priority over downloaded files.
+          Successfully downloaded files are copied to this location.
         - provider['jsonpath']: (str, optional)
           Pattern how to extract file list from `filelist`
           if it points to a json file
