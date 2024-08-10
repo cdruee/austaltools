@@ -827,7 +827,9 @@ def _ass_merge_tiles(target, tile_files):
         logger.info("removing old source file")
         os.remove(target)
     logger.debug("merging tiles ...")
-    gdal_merge.main(["", "-co", "compress=lzw",
+    gdal_merge.main(["",
+                     "-co", "compress=lzw",
+                     "-co", "bigtiff=yes",
                      "-o", merged_file,
                      ] + tile_files)
     s_srs = get_crs(merged_file)
