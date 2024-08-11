@@ -316,7 +316,7 @@
             "resolution": 10,
             "host": "https://www.geodatenportal.sachsen-anhalt.de",
             "path": "gfds_webshare/download/LVermGeo/Geodatenportal/Online-Bereitstellung-LVermGeo/DGM",
-            "filelist": ["DGM2_1.zip", "DGM2_2.zip", "DGM2_3.zip", "DGM2_4.zip"],
+            "filelist": ["DGM1_1.zip", "DGM1_2.zip", "DGM1_3.zip", "DGM1_4.zip"],
             "unpack": "zip://*/*.tif",
             "CRS": "EPSG:25832"
         },
