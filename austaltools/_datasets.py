@@ -54,7 +54,7 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from osgeo import gdal
     from osgeo import osr
     from osgeo_utils import gdal_merge
-    from multiprocessing import Pool
+    import multiprocessing as mp
     import cdo
 
 try:
@@ -945,10 +945,12 @@ def _ass_process_input(args):
     if re.match('^http[s]*://', url):
         logger.debug(f"downloading ... {url}")
         for i in range(MAX_RETRY):
-            with requests.get(url, verify=verify) as req:
+            with requests.get(url, verify=verify, stream=True) as req:
                 if req.status_code == requests.codes.ok:
                     with open(dl_file, 'wb') as f:
-                        f.write(req.content)
+                        for chunk in req.iter_content(chunk_size=4096):
+                            if chunk:
+                                f.write(chunk)
                 elif req.status_code == 404:
                     missing = provider.get('missing', None)
                     if missing in ['ok', 'ignore']:
@@ -1126,8 +1128,13 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         for inp in input_files:
             thread_args.append((inp, base_url, verify, provider))
         tile_files = []
+        if ((PROCS is None and os.cpu_count() > len(input_files)) or
+                (PROCS is not None and PROCS > len(input_files))):
+                pp = len(input_files)
+        else:
+            pp = PROCS
         i = 0
-        with Pool(PROCS) as pool:
+        with mp.Pool(pp) as pool:
             for tfs in _tools.progress(pool.imap_unordered(
                     _ass_process_input, thread_args),
                     total=len(thread_args)):
@@ -1286,7 +1293,7 @@ def assemble_DGM_SH(path, name, replace, provider: dict):
     random.shuffle(fids)
     args = [(i, len(fids), x, provider) for i, x in enumerate(fids)]
     tile_files = []
-    with Pool(PROCS) as pool:
+    with mp.Pool(PROCS) as pool:
         for tf in _tools.progress(
                 pool.imap_unordered(_ass_sh_getfid, args),
                 total=len(args)
@@ -1819,7 +1826,7 @@ def assemble_ERA5(path: str, years: list):
             raise ValueError(f"year is out of range (1940-today): {y}")
         combi.append((y, path))
     # get data in parallel directly to storage
-    with Pool(10) as pool:
+    with mp.Pool(10) as pool:
         pool.map(_ass_era5_getyear, combi)
 
 
@@ -2014,7 +2021,7 @@ def assemble_CERRA(path: str, years: list):
             combi.append((y, lt))
 
     # get data and extract region
-    with Pool(10) as pool:
+    with mp.Pool(10) as pool:
         p = pool.map(_ass_cerra_getyear, combi)
 
     # combine forecasts

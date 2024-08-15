@@ -106,7 +106,7 @@
         "arguments": {
             "resolution": 10,
             "host": "https://gds.hessen.de",
-            "path": "/downloadcenter/20240726/3D-Daten/Digitales Geländemodell (DGM1)",
+            "path": "/downloadcenter/20240815/3D-Daten/Digitales Geländemodell (DGM1)",
             "filelist": "generate",
             "format": "%s/%s - DGM1.zip",
             "values": [["Hochtaunuskreis", "Lahn-Dill-Kreis", "Landkreis Bergstraße", "Landkreis Darmstadt-Dieburg",
