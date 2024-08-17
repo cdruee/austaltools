@@ -40,7 +40,7 @@
       "resolution": 10,
       "host": "https://data.geobasis-bb.de",
       "path": "geobasis/daten/dgm/tif",
-      "filelist": "::json",
+      "filelist": "::html",
       "links": "dgm.*zip",
       "unpack": "zip://*.tif",
       "CRS": "EPSG:25833"
@@ -58,7 +58,7 @@
       "filelist": "0::xml",
       "xmlpath": "/entry/link[@href=.*zip]::href",
       "unpack": "zip://*.xyz",
-      "CRS": "EPSG:25832"
+      "CRS": "EPSG:25833"
     },
     "license": "spdx:DL-DE-BY-2.0",
     "notice": "Generated from DGM1 data by 'Senatsverwaltung für Stadtentwicklung, Bauen und Wohnen Berlin', 2023, licensed under DL-DE-BY-2.0"
