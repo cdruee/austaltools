@@ -89,6 +89,7 @@ WEA_FMT = '%s_ak_eu_%04i.nc'
 DIST_AUX_FILES = resources.files(__title__ + '.data')
 TEMP = None
 MAX_RETRY = 3
+NODATA = 9.96920996838686905e+36
 
 with (DIST_AUX_FILES / 'dataset_definitions.json').open() as f:
     DATASET_DEFINITIONS = json.load(f)
@@ -688,14 +689,35 @@ def get_crs(filename):
     :return: Projection of the geo data file ind the form "EPSG:xxxx"
     :rtype: str
     """
+    # with ... does not work with gda.Open()
     ds = gdal.Open(filename, gdal.GA_ReadOnly)
     prj = ds.GetProjection()
+    # make sure file is closed
     del ds
     srs = osr.SpatialReference(wkt=prj)
     jsrs = srs.ExportToPROJJSON()
     srsid = json.loads(jsrs)['id']
     epsg = '%s:%i:' % (srsid['authority'], srsid['code'])
     return epsg
+
+# -------------------------------------------------------------------------
+def get_nodata(filename):
+    """
+    Query the NODATA valueof a geo data file
+    :param filename: name of the file (optionally with leading path)
+    :type filename: str
+    :return: nodata value
+    :rtype: float
+    """
+    # with ... does not work with gda.Open()
+    ds = gdal.Open(filename, gdal.GA_ReadOnly)
+    rc = ds.RasterCount
+    if rc != 1:
+        logger.warning(f'multiple Bands, returning Band1 of: {filename}')
+    nodata = ds.GetRasterBand(1).GetNoDataValue()
+    # make sure file is closed
+    del ds
+    return nodata
 
 # -------------------------------------------------------------------------
 def _ass_xyz2tif(inputfile, srcsrs, utm_remove_zone):
@@ -742,7 +764,7 @@ def _ass_xyz2tif(inputfile, srcsrs, utm_remove_zone):
 
 
 # -------------------------------------------------------------------------
-def _ass_reduce_tile(tf1, out_res):
+def _ass_reduce_tile(tf1, out_res, overwrite=True):
     """
     Resamples a tile (or any file that can be autodetected by gdal)
     to a differen (only lower makse sense) resolution and saves ist as
@@ -753,10 +775,16 @@ def _ass_reduce_tile(tf1, out_res):
     :type tf1: str
     :param out_res: output resolution (i.e. pixel width) in km
     :type out_res: float
+    :param overwrite: overwrite existing output file
+    :type overwrite: bool
     :return: name (and path if supplied in `tf1`) of the output file
+    or empty stringif no file is written
     :rtype: str
     """
     tfxx = os.path.splitext(tf1)[0] + ".reduced.tif"
+    if os.path.exists(tfxx) and not overwrite:
+        # reduced file exist and shall be kept
+        return ''
     logger.debug(f"resampling tile ... {tf1} -> {tfxx}")
     try:
         gdal.Warp(destNameOrDestDS=tfxx,
@@ -796,10 +824,14 @@ def _ass_unpack(dl_file, unpack):
                                 if PurePath(x).match(pattern)]
                 inputfiles = []
                 for un in unpack_files:
-                    with zf.open(un) as fz:
-                        with open(os.path.basename(un), 'wb') as fu:
-                            fu.write(fz.read())
-                    inputfiles.append(os.path.basename(un))
+                    if not os.path.exists(os.path.basename(un)):
+                        # in case of overlapping archives
+                        # do not overwrite existing files
+                        # leave the processing to the other thread
+                        with zf.open(un) as fz:
+                            with open(os.path.basename(un), 'wb') as fu:
+                                fu.write(fz.read())
+                        inputfiles.append(os.path.basename(un))
         except Exception as e:
             raise IOError(f'zip file error processing {dl_file}')
     else:
@@ -827,11 +859,21 @@ def _ass_merge_tiles(target, tile_files):
         logger.info("removing old source file")
         os.remove(target)
     logger.debug("merging tiles ...")
-    gdal_merge.main(["",
+    # handling of nodata: see https://gis.stackexchange.com/a/304202
+    in_nodata = get_nodata(tile_files[0])
+    if in_nodata is None:
+        n_option = []
+    else:
+        n_option = ['-n', str(in_nodata)]
+    gdal_merge_options = ["",
+                     "-init", str(NODATA),
+                     "-a_nodata", str(NODATA)
+                     ] + n_option + [
                      "-co", "compress=lzw",
                      "-co", "bigtiff=yes",
                      "-o", merged_file,
-                     ] + tile_files)
+                     ] + tile_files
+    gdal_merge.main(gdal_merge_options)
     s_srs = get_crs(merged_file)
     if DEM_FMT.endswith('.tif'):
         if s_srs == DEM_CRS:
@@ -860,6 +902,50 @@ def _ass_merge_tiles(target, tile_files):
         raise Exception(f'cannot handle DEM_FMT: {DEM_FMT}')
     logger.debug(f"... written {target}")
 
+
+# -------------------------------------------------------------------------
+
+def _ass_expand_filelist_string(string, base_url, verify,
+                                xmlp, jsonp, linkp):
+
+    list_name = re.sub(r'::.*$', '', string)
+    url = '/'.join((base_url, list_name))
+    if string.endswith(('xml', 'meta4')):
+        # xml
+        if xmlp in ["",None]:
+            ValueError("xmlpath needed but not defined")
+        logger.debug("downloading xml metadata: %s" % url)
+        with requests.get(url, allow_redirects=True,
+                          verify=verify) as rsp:
+            input_files = xmlpath(xml=rsp.content.decode(),
+                                  path=xmlp)
+    elif string.endswith(('json', 'geojson')):
+        # json
+        if jsonp in ["",None]:
+            ValueError("jsonpath needed but not defined")
+        logger.debug("downloading json metadata: %s" % url)
+        with requests.get(url, allow_redirects=True,
+                          verify=verify) as rsp:
+            input_files = jsonpath(json_obj=rsp.json(),
+                                   path=jsonp)
+    elif string.endswith(('html')):
+        # html
+        if linkp in ["",None]:
+            ValueError("links pattern needed but not defined")
+        logger.debug("downloading html metadata: %s" % url)
+        with requests.get(url, allow_redirects=True,
+                          verify=verify) as rsp:
+            text = rsp.content.decode()
+            links = [x for x in re.findall(r'href="(.+?)"', text)]
+            input_files = [x for x in links if bool(re.match(linkp, x))]
+            method = 'http'
+    elif '::' in string:
+        # type specified but not known
+        raise ValueError(f'unknown filelist type in: {string}')
+    else:
+        # no expansion
+        input_files = [string]
+    return input_files
 
 # -------------------------------------------------------------------------
 def _ass_clear_target(path, name, replace):
@@ -996,8 +1082,9 @@ def _ass_process_input(args):
             else:
                 raise Exception(f'cannot handle {inputfile}')
             if tf1 is not None:
-                tfxx = _ass_reduce_tile(tf1, out_res)
-                tile_files.append(tfxx)
+                tfxx = _ass_reduce_tile(tf1, out_res, overwrite=False)
+                if tfxx != "":
+                    tile_files.append(tfxx)
 
     if os.path.exists(dl_file):
         os.remove(dl_file)
@@ -1076,38 +1163,17 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     # switch formats:
     method = input_files = capabilities = layer = None
     if isinstance(filelist, list):
-        input_files = filelist
+        input_files = []
+        for string in filelist:
+            x = _ass_expand_filelist_string(
+                string, base_url, verify,
+                provider.get('xmlpath',None),
+                provider.get('jsonpath',None),
+                provider.get('links',None))
+            input_files += x
         method = 'http'
     elif isinstance(filelist, str):
-        filelist_name = re.sub(r'::.*$', '', filelist)
-        url = '/'.join((base_url, filelist_name))
-        if filelist.endswith(('xml', 'meta4')):
-            # xml
-            logger.debug("downloading xml metadata: %s" % url)
-            with requests.get(url, allow_redirects=True,
-                              verify=verify) as rsp:
-                input_files = xmlpath(xml=rsp.content.decode(),
-                                      path=provider['xmlpath'])
-            method = 'http'
-        elif filelist.endswith(('json', 'geojson')):
-            # xml
-            logger.debug("downloading json metadata: %s" % url)
-            with requests.get(url, allow_redirects=True,
-                              verify=verify) as rsp:
-                input_files = jsonpath(json_obj=rsp.json(),
-                                       path=provider['jsonpath'])
-                method = 'http'
-        elif filelist.endswith(('html')):
-            # html
-            logger.debug("downloading html metadata: %s" % url)
-            with requests.get(url, allow_redirects=True,
-                              verify=verify) as rsp:
-                text = rsp.content.decode()
-                links = [x for x in re.findall(r'href="(.+?)"', text)]
-                patt = provider['links']
-                input_files = [x for x in links if bool(re.match(patt, x))]
-                method = 'http'
-        elif filelist == 'generate':
+        if filelist == 'generate':
             exp_val = []
             for x in provider['values']:
                 if isinstance(x, list):
@@ -1118,9 +1184,12 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
             input_files = [provider['format'] % x for x in combval]
             method = 'http'
         else:
-            raise NotImplementedError(f'can`t handle filelist: {filelist}')
-    else:
-        raise TypeError('filelist muste be list or str')
+            input_files = _ass_expand_filelist_string(
+                filelist, base_url, verify,
+                provider.get('xmlpath',None),
+                provider.get('jsonpath',None),
+                provider.get('links',None))
+            method = 'http'
 
     if method == 'http':
         # parallel processing of input_files:
@@ -1258,7 +1327,8 @@ def _ass_sh_getfid(args):
         tf1 = _ass_xyz2tif(tile_xyz, srcsrs, utm_remove_zone)
         if tf1 is not None:
             tfxx = _ass_reduce_tile(tf1, out_res)
-            tilefiles.append(tfxx)
+            if tfxx != "":
+                tilefiles.append(tfxx)
 
     if os.path.exists(dl_file): os.remove(dl_file)
     return tilefiles
