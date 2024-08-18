@@ -308,9 +308,9 @@
       "resolution": 10,
       "host": "https://geoportal.geoportal-th.de",
       "path": "dienste",
-      "filelist": "atom_th_hoehendaten_dgm?type=dataset&id=14418d25-fcd7-4a3f-99a9-e3059a2772af&crs=EPSG:25832::xml",
+      "filelist": "atom_th_hoehendaten_dgm?type=dataset&id=14418d25-fcd7-4a3f-99a9-e3059a2772af#2&crs=EPSG:25832::xml",
       "xmlpath": "/entry/link::href",
-      "unpack": "zip://*.tif",
+      "unpack": "zip://*.xyz",
       "CRS": "EPSG:25832"
     },
     "license": "spdx:DL-DE-BY-2.0",
