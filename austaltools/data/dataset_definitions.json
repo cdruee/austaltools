@@ -190,7 +190,7 @@
       "path": "dienste",
       "filelist": "dgm_atom?type=dataset&id=ca268792-s2q1-4a39-b34c-9ec5bf9a4469::xml",
       "xmlpath": "/entry/link[@title=.*Gtiff.*]::href",
-      "CRS": "EPSG:25832"
+      "CRS": "EPSG:25833"
     },
     "license": "spdx:CC-BY-4.0",
     "notice": "Generated from DGM1 data by '(c) GeoBasis-DE / M-V', 2024, licensed under CC-BY-4.0"
