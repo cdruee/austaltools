@@ -1162,17 +1162,8 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     filelist = provider['filelist']
     # switch formats:
     method = input_files = capabilities = layer = None
-    if isinstance(filelist, list):
-        input_files = []
-        for string in filelist:
-            x = _ass_expand_filelist_string(
-                string, base_url, verify,
-                provider.get('xmlpath',None),
-                provider.get('jsonpath',None),
-                provider.get('links',None))
-            input_files += x
-        method = 'http'
-    elif isinstance(filelist, str):
+    # if filelist is string, make a list
+    if isinstance(filelist, str):
         if filelist == 'generate':
             exp_val = []
             for x in provider['values']:
@@ -1181,15 +1172,18 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
                 else:
                     exp_val.append(_tools.parse_sequence_string(x))
             combval = itertools.product(*exp_val)
-            input_files = [provider['format'] % x for x in combval]
-            method = 'http'
+            filelist = [provider['format'] % x for x in combval]
         else:
-            input_files = _ass_expand_filelist_string(
-                filelist, base_url, verify,
-                provider.get('xmlpath',None),
-                provider.get('jsonpath',None),
-                provider.get('links',None))
-            method = 'http'
+            filelist = [filelist]
+    input_files = []
+    for string in filelist:
+        x = _ass_expand_filelist_string(
+            string, base_url, verify,
+            provider.get('xmlpath',None),
+            provider.get('jsonpath',None),
+            provider.get('links',None))
+        input_files += x
+    method = 'http'
 
     if method == 'http':
         # parallel processing of input_files:
