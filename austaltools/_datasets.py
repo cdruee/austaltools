@@ -681,7 +681,7 @@ def jsonpath(json_obj, path):
 
 
 # -------------------------------------------------------------------------
-def get_crs(filename):
+def get_dataset_crs(filename):
     """
     Query the projection of a geo data file
     :param filename: name of the file (optionally with leading path)
@@ -701,9 +701,25 @@ def get_crs(filename):
     return epsg
 
 # -------------------------------------------------------------------------
-def get_nodata(filename):
+def get_dataset_driver(filename):
     """
-    Query the NODATA valueof a geo data file
+    Query the driver (i.e. fiel format) of a geo data file
+    :param filename: name of the file (optionally with leading path)
+    :type filename: str
+    :return: Projection of the geo data file ind the form "EPSG:xxxx"
+    :rtype: str
+    """
+    # with ... does not work with gda.Open()
+    ds = gdal.Open(filename, gdal.GA_ReadOnly)
+    drv = ds.GetDriver().ShortName
+    # make sure file is closed
+    del ds
+    return drv
+
+# -------------------------------------------------------------------------
+def get_dataset_nodata(filename):
+    """
+    Query the NODATA value of a geo data file
     :param filename: name of the file (optionally with leading path)
     :type filename: str
     :return: nodata value
@@ -854,27 +870,44 @@ def _ass_merge_tiles(target, tile_files):
     :raises Exception: if gdal_merge aborts with error
 
     """
-    merged_file = 'merged.tif'
     if os.path.exists(target):
         logger.info("removing old source file")
         os.remove(target)
     logger.debug("merging tiles ...")
     # handling of nodata: see https://gis.stackexchange.com/a/304202
-    in_nodata = get_nodata(tile_files[0])
+    in_nodata = get_dataset_nodata(tile_files[0])
     if in_nodata is None:
         n_option = []
     else:
         n_option = ['-n', str(in_nodata)]
+    tile_drvs = [get_dataset_driver(x) for x in tile_files]
+    drivers = sorted(set(tile_drvs), key = lambda x: tile_drvs.count(x))
+    if len(drivers) > 1:
+        logger.warning("merging mixed-format tiles")
+    driver = drivers.pop()
+    if driver == "GTiff":
+        merged_file = 'merged.tif'
+        co_opts = [
+            "-co", "compress=lzw",
+            "-co", "bigtiff=yes",
+        ]
+    elif driver == "netCDF":
+        merged_file = 'merged.nc'
+        co_opts = [
+            "-co", "FORMAT=NC4C",
+            "-co", "COMPRESS=DEFLATE",
+            "-co", "ZLEVEL=9"
+        ]
+    else:
+        raise ValueError(f"unsopported driver {driver}")
     gdal_merge_options = ["",
                      "-init", str(NODATA),
                      "-a_nodata", str(NODATA)
-                     ] + n_option + [
-                     "-co", "compress=lzw",
-                     "-co", "bigtiff=yes",
+                     ] + n_option + co_opts + [
                      "-o", merged_file,
                      ] + tile_files
     gdal_merge.main(gdal_merge_options)
-    s_srs = get_crs(merged_file)
+    s_srs = get_dataset_crs(merged_file)
     if DEM_FMT.endswith('.tif'):
         if s_srs == DEM_CRS:
             # we already have the wanted product

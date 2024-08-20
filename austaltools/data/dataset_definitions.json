@@ -13,7 +13,6 @@
       "resolution": 25,
       "filelist": [
         "DGM10-BB",
-        "DGM10-BE",
         "DGM10-BW",
         "DGM10-BY",
         "DGM10-HB",
@@ -261,6 +260,7 @@
       "path": "localdata/opt/DGM1/DGM1-SL",
       "filelist": [
         "DGM1_xyz_MZG.zip",
+        "DGM1_xyz_NK.zip",
         "DGM1_xyz_SB.zip",
         "DGM1_xyz_SLS.zip",
         "DGM1_xyz_SPK.zip",
