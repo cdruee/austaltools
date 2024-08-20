@@ -10,7 +10,6 @@
     "storage": "terrain",
     "assemble": "assemble_DGM_composit",
     "arguments": {
-      "resolution": 10,
       "filelist": [
         "DGM10-BB",
         "DGM10-BW",
