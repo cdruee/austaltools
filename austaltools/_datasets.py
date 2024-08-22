@@ -785,7 +785,6 @@ def _ass_reduce_tile(tf1, out_res, overwrite=True):
     Resamples a tile (or any file that can be autodetected by gdal)
     to a differen (only lower makse sense) resolution and saves ist as
     GeoTiff
-    #FIXME in PSG:5677 projection.
 
     :param tf1: name (and optionally path) of the input file
     :type tf1: str
@@ -806,8 +805,6 @@ def _ass_reduce_tile(tf1, out_res, overwrite=True):
         gdal.Warp(destNameOrDestDS=tfxx,
                   xRes=out_res,
                   yRes=out_res,
-                  #FIXME keep projection
-                  # dstSRS="EPSG:5677",
                   srcDSOrSrcDSTab=tf1,
                   format="GTiff")
     except Exception as e:
@@ -1508,45 +1505,41 @@ def assemble_DGM_composit(path: str, name: str,
                 continue
         members.append(filename)
 
-    logger.debug("found input file: %s" % len(members))
+    logger.debug("found input files: %s" % len(members))
     if len(members) <= 1:
         raise ValueError('no datasets available for compositing')
 
-    # merge file one after another to reduce risk of memory exhaustion
-    with (tempfile.TemporaryDirectory(dir=TEMP) as tmp):
-        tmp1 = os.path.join(tmp, DEM_FMT % 'tmp1')
-        tmp2 = os.path.join(tmp, DEM_FMT % 'tmp2')
-        iwpd = os.path.join(tmp, 'iwpd.nc')
-        for i, mm in enumerate(members):
-            if 'resolution' in args:
-                out_res = args['resolution']
-                logger.debug("warping input ... %s" % mm)
-                gdal.Warp(destNameOrDestDS=iwpd,
-                          srcDSOrSrcDSTab=mm,
-                          format="netCDF",
-                          xRes=out_res,
-                          yRes=out_res,
-                          dstSRS="EPSG:5677",
-                          )
-            else:
-                logger.debug("adding input ... %s" % mm)
-                shutil.copy2(mm, iwpd)
-            logger.debug("... done")
-            if i == 0:
-                logger.debug("... starting composit")
-                shutil.move(iwpd, tmp1)
-            else:
-                logger.debug("... adding to composit")
-                shutil.move(tmp1, tmp2)
-                _ass_merge_tiles(tmp1, [tmp2, iwpd])
-            logger.debug("... done")
-        logger.debug("writing data file %s" % target)
-        shutil.move(tmp1, target)
-        logger.debug("cleaning up")
-        for x in [tmp2, iwpd]:
-            if os.path.exists(x):
-                os.remove(x)
+    vrt_name = "merged.vrt"
+    out_res = args.get('resolution', None)
+    if out_res is not None:
+        res_opts = {"xRes": out_res, "yRes": out_res}
+    else:
+        res_opts = {}
 
+    # tip from https://gis.stackexchange.com/a/385864
+    with (tempfile.TemporaryDirectory(dir=TEMP) as tmp):
+        logger.debug("build virtual dataset")
+        gdal.BuildVRT(os.path.join(tmp, vrt_name), members)
+        logger.debug("writing data file %s" % target)
+        if DEM_FMT.endswith('.tif'):
+            gdal.Translate(destName=target,
+                           srcDS=os.path.join(tmp, vrt_name),
+                           format="GTiff",
+                           creationOptions=["BIGTIFF=YES"],
+                           **res_opts
+                           )
+        elif DEM_FMT.endswith('.nc'):
+            gdal.Translate(destName=target,
+                           srcDS=os.path.join(tmp, vrt_name),
+                           format="netCDF",
+                           creationOptions=[
+                               "FORMAT=NC4C",
+                               "COMPRESS=DEFLATE",
+                               "ZLEVEL=9"],
+                           **res_opts
+                           )
+        else:
+            raise Exception(f'cannot handle DEM_FMT: {DEM_FMT}')
     return True
 
 
