@@ -83,7 +83,7 @@ disable_warnings(exceptions.InsecureRequestWarning)
 logger = logging.getLogger()
 
 # -------------------------------------------------------------------------
-DEM_FMT = '%s.elevation.nc'  # '%s.lzw.tif'
+DEM_FMT = '%s.elevation.nc'  # % NAME
 DEM_CRS = "EPSG:5677"
 WEA_FMT = '%s_ak_eu_%04i.nc'
 DIST_AUX_FILES = resources.files(__title__ + '.data')
@@ -151,7 +151,7 @@ class DataSet:
         :type name: str
         :param replace: replace the dataset if it alread exists
         :type replace: bool
-        :param args: arguments to the assemble funtion that generates the dataset
+        :param args: arguments to the assembling funtion that generates the dataset
         :type args: dict
         :returns: If the assembly was successful
         :rtype: bool
@@ -1123,7 +1123,7 @@ def _ass_process_input(args):
 
 # -------------------------------------------------------------------------
 def assemble_DGMxx(path: str, name: str, replace: bool,
-                   provider: dict):
+                   args: dict):
     """
     Versatile function to assemble a dataset containing a
     digital elevation model (DEM),
@@ -1136,7 +1136,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     :param replace: If True, an existing file is overwritten.
         If False, an error is raises if the file already exists.
     :type replace: bool
-    :param provider: The arguments neede to preform the asembly.
+    :param args: The arguments neede to preform the asembly.
         for more details see :doc:`configure-austaltools`.
 
         - provider['host']: (str)
@@ -1176,7 +1176,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         - provider["utm_remove_zone"]: (str, optional)
           If 'True', 'true', 'yes', True is passed
           to :py:func:`_ass_reduce`
-    :type provider: dict
+    :type args: dict
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
@@ -1184,34 +1184,34 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         logger.info("skipping because dataset exists: %s" % name)
         return False
 
-    base_url = '/'.join((provider['host'], provider['path']))
-    if 'check_cert' in provider:
-        verify = provider['check_cert']
+    base_url = '/'.join((args['host'], args['path']))
+    if 'check_cert' in args:
+        verify = args['check_cert']
     else:
         verify = True
-    filelist = provider['filelist']
+    filelist = args['filelist']
     # switch formats:
     method = input_files = capabilities = layer = None
     # if filelist is string, make a list
     if isinstance(filelist, str):
         if filelist == 'generate':
             exp_val = []
-            for x in provider['values']:
+            for x in args['values']:
                 if isinstance(x, list):
                     exp_val.append(x)
                 else:
-                    exp_val.append(_tools.parse_sequence_string(x))
+                    exp_val.append(_tools.expand_sequence(x))
             combval = itertools.product(*exp_val)
-            filelist = [provider['format'] % x for x in combval]
+            filelist = [args['format'] % x for x in combval]
         else:
             filelist = [filelist]
     input_files = []
     for string in filelist:
         x = _ass_expand_filelist_string(
             string, base_url, verify,
-            provider.get('xmlpath',None),
-            provider.get('jsonpath',None),
-            provider.get('links',None))
+            args.get('xmlpath', None),
+            args.get('jsonpath', None),
+            args.get('links', None))
         input_files += x
     method = 'http'
 
@@ -1219,7 +1219,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         # parallel processing of input_files:
         thread_args = []
         for inp in input_files:
-            thread_args.append((inp, base_url, verify, provider))
+            thread_args.append((inp, base_url, verify, args))
         tile_files = []
         if ((PROCS is None and os.cpu_count() > len(input_files)) or
                 (PROCS is not None and PROCS > len(input_files))):
@@ -1358,7 +1358,7 @@ def _ass_sh_getfid(args):
     return tilefiles
 
 
-def assemble_DGM_SH(path, name, replace, provider: dict):
+def assemble_DGM_SH(path, name, replace, args: dict):
     """
     Special function to assemble a digital elevation model (DEM)
     of the German state Schlewig-Holstein (SH)
@@ -1371,9 +1371,9 @@ def assemble_DGM_SH(path, name, replace, provider: dict):
     :param replace: If True, an existing file is overwritten.
         If False, an error is raises if the file already exists.
     :type replace: bool
-    :param provider: Optionally accepted for compatiblity with the
-        general asseble funtion call. Is not evalueated.
-    :type provider: dict
+    :param args: Optionally accepted for compatiblity with the
+        general asseble funtion call. Is not evaluated.
+    :type args: dict
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
@@ -1385,7 +1385,7 @@ def assemble_DGM_SH(path, name, replace, provider: dict):
     # number of tiles manually retrieved 2024-08-4:
     fids = [x for x in range(1, 18686)]
     random.shuffle(fids)
-    args = [(i, len(fids), x, provider) for i, x in enumerate(fids)]
+    args = [(i, len(fids), x, args) for i, x in enumerate(fids)]
     tile_files = []
     with mp.Pool(PROCS) as pool:
         for tf in _tools.progress(
@@ -1419,7 +1419,7 @@ def assemble_DGM25_RP(path, name="DGM25-RP",
         If False, an error is raises if the file already exists.
     :type replace: bool
     :param provider: Optionally accepted for compatiblity with the
-        general asseble funtion call. Is not evalueated.
+        general asseble funtion call. Is not evaluated.
     :type provider: dict
     :return: Success (True) of Failure (False)
     :rtype: bool
@@ -1453,7 +1453,7 @@ def assemble_DGM25_RP(path, name="DGM25-RP",
 
 # -------------------------------------------------------------------------
 def assemble_DGM_composit(path: str, name: str,
-                          replace: bool, args: dict):
+                          replace: bool = False, args: dict = {}):
     """
     Special function to assemble a digital elevation model (DEM)
     that is a composit of other datasets or files or a mixture thereof.
@@ -1470,7 +1470,7 @@ def assemble_DGM_composit(path: str, name: str,
         If False, an error is raises if the file already exists.
     :type replace: bool
     :param provider: Optionally accepted for compatiblity with the
-        general asseble funtion call. Is not evalueated.
+        general asseble funtion call. Is not evaluated.
     :type provider: dict
     :return: Success (True) of Failure (False)
     :rtype: bool
@@ -1544,7 +1544,8 @@ def assemble_DGM_composit(path: str, name: str,
 
 
 # -------------------------------------------------------------------------
-def assemble_GLO_30(path, name="GLO_30", replace=False, args: dict = {}):
+def assemble_GLO_30(path, name = "GLO_30",
+                    replace : bool = False, args: dict = {}):
     """
     Special function to assemble the GLO_30 digital elevation model (DEM)
     from European Copernicus service.
@@ -1562,9 +1563,9 @@ def assemble_GLO_30(path, name="GLO_30", replace=False, args: dict = {}):
     :param replace: If True, an existing file is overwritten.
         If False, an error is raises if the file already exists.
     :type replace: bool
-    :param provider: Optionally accepted for compatiblity with the
-        general asseble funtion call. Is not evalueated.
-    :type provider: dict
+    :param args: Optionally accepted for compatiblity with the
+        general asseble funtion call. Is not evaluated.
+    :type args: dict
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
@@ -1620,7 +1621,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
         If False, an error is raises if the file already exists.
     :type replace: bool
     :param provider: Optionally accepted for compatiblity with the
-        general asseble funtion call. Is not evalueated.
+        general asseble funtion call. Is not evaluated.
     :type provider: dict
     :return: Success (True) of Failure (False)
     :rtype: bool
@@ -1678,8 +1679,8 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
 
 
 # -------------------------------------------------------------------------
-def provide_dem(source: str, path: str = None,
-                force: bool = False, method: str = 'download'):
+def provide_terrain(source: str, path: str = None,
+                    force: bool = False, method: str = 'download'):
     """
     Funciton that makes a terrain dataset (digital elevation model, DEM)
     locally available, using the chosen method.
@@ -1708,7 +1709,7 @@ def provide_dem(source: str, path: str = None,
     if path is None:
         path = find_writeable_storage(path, _tools.STORAGE_TERRAIN)
     dataset = dataset_get(source)
-    logger.info("downloading terrain source %s" % source)
+    logger.info("providing terrain source %s" % source)
     if method == 'download':
         if dataset.uri is None:
             raise Exception("Dataset has no download uri, assemble it.")
@@ -2097,8 +2098,8 @@ def assemble_CERRA(path: str, years: list):
     """
     temp_path = TEMP
     data = cdo.Cdo(tempdir=temp_path)
-    print("python-cdo version: %s" % data.__version__())
-    print("cdo        version: %s" % data.version())
+    logger.info("python-cdo version: %s" % data.__version__())
+    logger.info("cdo        version: %s" % data.version())
     data.debug = True
     data.cleanTempDir()
 
@@ -2152,12 +2153,12 @@ def provide_weather(source: str, path: str = None,
       attempts to find a writable storage location using
       `find_writeable_storage`.
     :type path: str, optional
-    :param years: Optional; a list of integer years for which to download
+    :param years: A list of integer years for which to download
       the data. If not specified, no year-specific
       data fetching is performed, which may depend on the
       implementation details of the dataset handling functions.
     :type years: list, optional
-    :param method: Optional; the method to use for obtaining the data.
+    :param method: The method to use for obtaining the data.
       Currently, only "download" is implemented, but the parameter
       is designed to accommodate future methods like "cache" or "stream".
     :type method: str, optional

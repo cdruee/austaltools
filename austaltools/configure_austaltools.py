@@ -237,10 +237,10 @@ def main():
             if DS.dataset_available(args['source']) and not args['force']:
                 sys.tracebacklimit = 0
                 raise ValueError(f"dataset exists: {args['source']} ")
-            DS.provide_dem(args['source'],
-                                    path=args['path'],
-                                    force=args['force'],
-                                    method=args['action'])
+            DS.provide_terrain(args['source'],
+                               path=args['path'],
+                               force=args['force'],
+                               method=args['action'])
         elif args['source'] in DS.KNOWN_WEATHER:
             if 'years' not in args:
                 sys.tracebacklimit = 0

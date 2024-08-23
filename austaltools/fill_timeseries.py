@@ -92,7 +92,7 @@ def parse_time(info, name='', multi=True):
     """
     if "time" not in info.keys():
         raise ValueError('no time info: %s' % name)
-    count = _tools.parse_sequence_string(format(info['time']))
+    count = _tools.expand_sequence(format(info['time']))
     logger.debug('count: ' + format(count))
     if "unit" not in info.keys():
         raise ValueError('no unit info: %s' % name)

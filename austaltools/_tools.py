@@ -202,7 +202,7 @@ class Source(Geometry):
 # -------------------------------------------------------------------------
 
 
-def parse_sequence_string(string):
+def expand_sequence(string):
     """
     Parse a string representing a sequence of values
 
@@ -215,9 +215,9 @@ def parse_sequence_string(string):
 
     :example:
 
-    >>> parse_sequence_string("1,2,3,4,5")
+    >>> expand_sequence("1,2,3,4,5")
     [1, 2, 3, 4, 5]
-    >>> parse_sequence_string("1-9/2")
+    >>> expand_sequence("1-9/2")
     [1, 3, 5, 7, 9]
 
     :note:
