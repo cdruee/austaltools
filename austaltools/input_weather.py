@@ -5,59 +5,36 @@ Created on Fri Dec 17 13:36:08 2021
 
 @author: clemens
 """
-import argparse
 import datetime as dt
 import itertools
 import logging
 import os
-import re
-import shutil
-import io
 import sys
-import tempfile
-import zipfile
 from urllib.request import urlretrieve
 
 import numpy as np
 import pandas as pd
+
+import austaltools._tools
+#from ._dwd_observations import download_DWD_weather
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import meteolib as m
     import readmet
 
 try:
-    from . import _dwd_stationinfo
-except ImportError:
-    import _dwd_stationinfo
-
-try:
-    from ._dispersion import (klug_manier_scheme_1992,
-                              klug_manier_scheme_2017,
-                              pasquill_taylor_scheme,
-                              stabilty_class,
-                              obukhov_length,
-                              vdi_3872_6_standard_wind,
-                              z0_verkaik,
-                              )
-except ImportError:
-    from _dispersion import (klug_manier_scheme_1992,
-                             klug_manier_scheme_2017,
-                             pasquill_taylor_scheme,
-                             stabilty_class,
-                             obukhov_length,
-                             vdi_3872_6_standard_wind,
-                             z0_verkaik,
-                             )
-
-try:
-    from . import _tools
-except ImportError:
-    import _tools
-
-try:
     from ._version import __version__, __title__
+    from . import _tools
+    from . import _datasets
+    from . import _dwd_observations
+    from . import _dispersion as dis
 except ImportError:
     from _version import __version__, __title__
+    import _tools
+    import _datasets
+    import _dwd_observations
+    import _dispersion as dis
+
 
 logging.basicConfig()
 logger = logging.getLogger()
@@ -77,13 +54,6 @@ OUTPUT_RAW = os.environ.get('OUTPUT_RAW', '')
 # possible values: all kms kmc pts pgc empty or non-empty string:
 CLASS_SCHEME = os.environ.get('CLASS_SCHEME', 'all')
 
-# remove observations before ...
-# (to avoid problems with odd observation timing in the very manual era)
-OLDEST = pd.to_datetime('1970-01-01', utc=True)
-# filename pattern for cached DWD observations
-OBSFILE_DWD = 'observations_hourly_%05i.csv'
-METAFILE_DWD = 'metadata_%05i.csv'
-
 # ----------------------------------------------------
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
@@ -92,53 +62,27 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     _check = m._utils._check
 
 
-# ----------------------------------------------------
+# -------------------------------------------------------------------------
 
-def provide_storage(storage_path: str = None) -> str:
-    """
-    Finds a working data storage directory and returns its path.
-    If `storage_path` is provided, only this path is checked
-    for existance.
 
-    :param storage_path: (optional) user selected path
-    :return: data storage directory
-    :rtype: str
+def find_weather_data():
     """
-    if storage_path is not None:
-        # path is prescribed
-        if not os.path.isdir(storage_path):
-            raise ValueError("weather storage not found at: %s" %
-                             storage_path)
-    else:
-        # path is not prescribed: search
-        for location in reversed(STORAGE_LOCATIONS):
-            # start from current dir, user dirs to system dirs
-            # so user can override system installation
-            directory = os.path.join(location, STORAGE_DIR)
-            if os.path.isdir(directory):
-                storage_path = directory
-                break
-    if storage_path is None:
-        # no location was found, we must create one:
-        logger.warning("no preexisting weather data storage found")
-        for location in STORAGE_LOCATIONS:
-            directory = os.path.join(location, STORAGE_DIR)
-            if os.access(directory, os.W_OK):
-                # exists and is writable, keep
-                storage_path = directory
-                break
-            try:
-                # does not exist: try to make it
-                os.makedirs(directory)
-                # if we are here, we succeeded making directory, keep
-                storage_path = directory
-                break
-            except OSError:
-                pass
-        if storage_path is None:
-            # we couldn't create any location WTF
-            raise OSError("Could not create weather storage dir")
-    return storage_path
+    Searches all known storage locations for the known weather datasets
+    and yields a list of the datasets available locally.
+
+    :return: dataset IDs of the locally available datasets
+    :rtype: list[str]
+    """
+    datasets = {}
+    for ds in _datasets.DATASETS:
+        # is ds a terrain dataset?
+        if ds.storage == 'weather':
+            # is it locally available (i.e. downloaded already?):
+            if ds.available:
+                datasets[ds.name] = ds.path
+    return datasets
+
+# -------------------------------------------------------------------------
 
 
 def provide_dwd_station(storage_path: str, force=False):
@@ -766,283 +710,6 @@ def get_CERRA_weather(lat, lon, year, storage_path='.') \
 # ----------------------------------------------------
 
 
-def download_DWD_weather(station, storage_path='.'):
-    """
-    Ensure that the DWD weather station data for station
-    number `station` is available at `storage_path`.
-    If not, data is downloaded and stored in the `storage_path`.
-
-    :param storage_path: data storage directory
-
-    """
-    http_addr = "https://opendata.dwd.de"
-    http_path = "climate_environment/CDC/observations_germany/climate/hourly"
-    # for each file to collect:
-    # 1. subdir where it resides: .../<subdir>/hourly/*.zip
-    # 2. ID of the zip archive:
-    #       stundenwerte_<ID>_<station>_<date-from>_<date-to>_hist.zip
-    # 3. ID of the data file inside the zip archive:
-    #       produkt_<ID>_stunde_<from>_<to>_<station>.txt
-    to_collect = [
-        ['air_temperature', 'TU', 'tu'],
-        # ['cloudiness', 'N', 'n'],
-        ['cloud_type', 'CS', 'cs'],
-        ['extreme_wind', 'FX', 'fx'],
-        ['precipitation', 'RR', 'rr'],
-        ['pressure', 'P0', 'p0'],
-        ['soil_temperature', 'EB', 'eb'],
-        ['visibility', 'VV', 'vv'],
-        ['wind', 'FF', 'ff'],
-    ]
-    logger.info('getting data from %s' % http_addr)
-    #
-    # create temp dir and change into it
-    cwd = os.getcwd()
-    tempdir = tempfile.mkdtemp()
-    os.chdir(tempdir)
-    #
-    # make empty result and loop files to collect
-    product_files = []
-    metadata_files = []
-    for (dnam, zid, tid) in to_collect:
-        #
-        # construct url of the data directory and get file list
-        list_link = "/".join([http_addr, http_path, dnam, 'historical'])
-        logger.debug('getting dirlist: %s' % list_link)
-        list_file = os.path.join(tempdir, "temp.html")
-        urlretrieve(list_link, list_file)
-        #
-        # find the filename of the archive we want
-        with open(list_file, 'r') as list_handle:
-            html = list_handle.read()
-            http_links = re.findall(r'href="(.*?)"', html)
-        pattern = 'stundenwerte_%s_%05i_[0-9_]*_hist.zip' % (zid, station)
-        logger.debug("looking for file: %s" % pattern)
-        for link in http_links:
-            if re.match(pattern, link):
-                break
-        else:
-            raise ValueError("Could not find matching archive file: " +
-                             pattern)
-        #
-        # construct url of the archive we want and get zip file
-        zip_link = "/".join([http_addr, http_path, dnam, 'historical', link])
-        logger.debug('getting archive: %s' % zip_link)
-        zip_file = os.path.join(tempdir, "temp.zip")
-        urlretrieve(zip_link, zip_file)
-        #
-        # find the name of the data file inside the zip archive
-        # and extract the product as well as the Metadata files
-        product = "produkt_%s_stunde_[0-9_]*%05i.txt" % (tid, station)
-        with zipfile.ZipFile(zip_file, 'r') as zip_ref:
-            namelist = zip_ref.namelist()
-            to_extract = []
-            for name in namelist:
-                if re.match(product, name):
-                    to_extract.append(name)
-                    product_files.append(name)
-                elif re.match('Metadaten_' +
-                              '(Geographie|Stationsname|Geraete)' +
-                              '_.*_%05d.txt' % station, name):
-                    to_extract.append(name)
-                    metadata_files.append(name)
-            zip_ref.extractall(members=to_extract, path=tempdir)
-    #
-    # parse data files and store data locally
-    dat = data_DWD_to_csv(product_files, tempdir)
-    outname = os.path.join(storage_path, OBSFILE_DWD % station)
-    logging.info('storing data locally in: %s' % outname)
-    dat.to_csv(outname, sep=',', na_rep='NA')
-    #
-    meta = meta_DWD_to_csv(metadata_files, station, tempdir)
-    outname = os.path.join(storage_path, METAFILE_DWD % station)
-    logging.info('storing metadata in   : %s' % outname)
-    meta.to_csv(outname, sep=',', na_rep='NA')
-    #
-    # clean up tempdir
-    os.chdir(cwd)
-    shutil.rmtree(tempdir)
-
-
-# -------------------------------------------------------------------------
-
-
-def data_DWD_to_csv(product_files: list, path_to_files: str) \
-        -> pd.DataFrame:
-    """
-    Build one single table of weather data from the individual
-    downloadad files
-    :param product_files: list of extracted "produkt" files
-    :param path_to_files: path where the product files are stored
-    :return: weather timeseries as dataframe. The columns are
-    named as they appear in the "produkt" files, except
-    "MESS_DATUM" and "STATIONS_ID". Instead, the index contains
-    the time of the measurement as `datetime64`.
-    :rtype: pandas.DataFrame
-
-    """
-    dat = None
-    for name in product_files:
-        # read it into DataFrame
-        logger.debug('extracting product: %s' % name)
-        prodata = pd.read_csv(os.path.join(path_to_files, name),
-                              sep=';', skipinitialspace=True,
-                              engine='python')
-        logger.debug('columns: ' + ';'.join(prodata.columns))
-        #
-        # convert the time to datetime64
-        if prodata['MESS_DATUM'].dtype in [np.dtype(str), object]:
-            prodata['time'] = pd.to_datetime(
-                prodata['MESS_DATUM'],
-                format="%Y%m%d%H", utc=True)
-        elif prodata['MESS_DATUM'].dtype == np.int64:
-            prodata['time'] = pd.to_datetime(
-                list(map(lambda s: '{:010d}'.format(s),
-                         prodata['MESS_DATUM'])),
-                format="%Y%m%d%H", utc=True)
-        else:
-            raise ValueError('unknown column dtype {:s}'.format(
-                str(prodata['MESS_DATUM'].dtype)))
-        #
-        # merge dataframes
-        prodata.set_index('time', inplace=True)
-        prodata.drop(['STATIONS_ID', 'MESS_DATUM', 'eor'],
-                     axis=1, inplace=True)
-        if dat is None:
-            dat = prodata
-        else:
-            cols_to_use = (list(prodata.columns.difference(dat.columns)))
-            dat = dat.merge(prodata[cols_to_use], on='time', how='outer')
-    #
-    logger.debug("setting blank values to nan")
-    #
-    for i, col in enumerate(dat.columns):
-        logging.debug('... column %s' % col)
-        if dat.iloc[:, i].dtypes in [np.int64, np.float64]:
-            dat.iloc[dat.iloc[:, i].values == -999, i] = np.nan
-        elif dat.iloc[:, i].dtypes == 'object':
-            dat.iloc[dat.iloc[:, i].values == '-999', i] = ''
-        else:
-            logging.debug('    ... skipped (%s)' %
-                          format(dat.iloc[:, i].dtypes))
-    #
-    logging.debug("removing impossible values")
-    #
-    # remove "-999" from cloud types:
-    for i in [1, 2, 3, 4]:
-        dat['V_S%i_CSA' % i] = \
-            dat['V_S%i_CSA' % i].str.replace('-999', '')
-
-    if dat.index[0] < OLDEST:
-        logging.info('remove values before ' + OLDEST.strftime('%Y-%m-%d'))
-        dat = dat[dat.index >= OLDEST]
-
-    return dat
-
-
-def meta_DWD_to_csv(metadata_files, station, path_to_files):
-    """
-    Build one single table of the metadata provided by the individual
-    metadata files contained in the downloadad zip archives
-    :param metadata_files: list of extracted "Metadaten" files
-    :param path_to_files: path where these files are stored
-    :return: metadata table as dataframe. The columns are
-    named as they appear in the "produkt" files, except
-    "MESS_DATUM" and "STATIONS_ID". Instead, the index contains
-    the time of the measurement as `datetime64`.
-    :rtype: pandas.DataFrame
-
-    """
-    #
-    # deduplicate list
-    files = list(set(metadata_files))
-    #
-    # loop files
-    meta = None
-    for file in files:
-        logging.debug('reading metadata file: %s' % file)
-
-        text_cache = ""
-        re_generated = re.compile("\s*(generated|generiert).*")
-        re_blankline = re.compile("^\s*$")
-        with open(os.path.join(path_to_files, file), 'r',
-                  encoding='iso-8859-1') as f:
-            for line in f.readlines():
-                if re.match(re_blankline, line):
-                    # stop reading at the first blank line
-                    # (that separate multiple databank output
-                    # blocks in these files)
-                    break
-                if re.match(re_generated, line):
-                    # stop reading at the "generated ..." line
-                    # (that concludes these files)
-                    break
-                text_cache += line
-
-        df = pd.read_csv(io.StringIO(text_cache),
-                         sep=';', skipinitialspace=True,
-                         engine='python', header=0,
-                         dtype=np.dtype(str))
-        del text_cache
-        df.columns = [x.lower() for x in df.columns]
-        logging.debug('... contains: ' + '|'.join(df.columns))
-        #
-        # filter bad lines
-        df = df[df['stations_id'] == str(station)]
-        #
-        # drop unneeded columns
-        if 'Geographie' in file:
-            suffix = ''
-            cols_to_drop = ['stations_id', 'stationsname', 'eor']
-        elif 'Geraete' in file:
-            suffix = file.split('_')[2].lower()
-            cols_to_drop = ['stations_id', 'stationsname',
-                            'geo. laenge [grad]', 'geo. breite [grad]',
-                            'stationshoehe [m]', 'eor']
-            cols_to_drop += list(df.filter(regex='unnamed'))
-        elif 'Stationsname' in file:
-            suffix = ''
-            cols_to_drop = ['stations_id', 'eor']
-        else:
-            raise ValueError('unknown metafile %s' % file)
-        df = df.drop(cols_to_drop, axis=1, errors='ignore')
-        # rename columns
-        cols = []
-        for c in df.columns:
-            if c in ['von_datum', 'bis_datum'] or suffix == '':
-                cols.append(c)
-            else:
-                cols.append('_'.join((suffix, c)))
-        df.columns = cols
-        #
-        logging.debug('merging metadata')
-        if meta is None:
-            meta = df
-        else:
-            # no duplicate columns (https://stackoverflow.com/a/19125531)
-            cols_to_use = (list(df.columns.difference(meta.columns))
-                           + ['von_datum', 'bis_datum'])
-            meta = meta.merge(df[cols_to_use],
-                              on=['von_datum', 'bis_datum'],
-                              how='outer',
-                              suffixes=('', ' (doppel)'))
-        logging.debug(meta.columns)
-    #
-    # convert dates
-    meta['time'] = pd.to_datetime(meta['von_datum'],
-                                  format="%Y%m%d", utc=True)
-    meta = meta.set_index('time')
-    #
-    logging.debug("fill blank metadata values")
-    meta = meta.ffill()
-    meta = meta.drop_duplicates()
-    #
-    return meta
-
-
-# -------------------------------------------------------------------------
-
-
 def get_DWD_weather(lat, lon, year, station=None, storage_path='.') \
         -> (pd.DataFrame, float):
     """
@@ -1080,10 +747,10 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.') \
     :rtype: (pd.DataFrame, float)
     """
     if station is None:
-        lat, lon, ele, nam, station = _dwd_stationinfo.dwd_stationinfo(
+        lat, lon, ele, nam, station = dwd_stationinfo(
             None, storage_path, lat, lon)
     else:
-        lat, lon, ele, nam = _dwd_stationinfo.dwd_stationinfo(
+        lat, lon, ele, nam = dwd_stationinfo(
             station, storage_path)
     obsfile = OBSFILE_DWD % station
     metafile = METAFILE_DWD % station
@@ -1127,7 +794,7 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.') \
     #  treat the metadata --------------------------------------------
     #
     # get wind sensor height from metadata
-    za = _dwd_stationinfo.dwd_get_meta_value(
+    za = dwd_get_meta_value(
         os.path.join(storage_path, metafile),
         data.index[1], data.index[-1],
         'windgeschwindigkeit_geberhoehe ueber grund [m]')
@@ -1141,8 +808,8 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.') \
                         'assuming 10m standard height')
         z_a = 10.
 
-    z0 = z0_verkaik(z_a, speed=data['F'],
-                    gust=data['FX_911'], dirct=data['D'])
+    z0 = dis.z0_verkaik(z_a, speed=data['F'],
+                                gust=data['FX_911'], dirct=data['D'])
     logging.info("roughness length: %5f" % z0)
 
     data = data.filter(['time',  # UTC
@@ -1191,7 +858,7 @@ def austal_weather(args):
     ele = None
     if args["dwd"] is not None:
         station = int(pd.to_numeric(args["dwd"]))
-        lat, lon, ele, nam = _dwd_stationinfo.dwd_stationinfo(
+        lat, lon, ele, nam = _dwd_observations.dwd_stationinfo(
             station, storage_path)
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
     # elif args["wmo"] is not None:
@@ -1242,9 +909,9 @@ def austal_weather(args):
 
     # 10-m wind speed for the correct roughness length
     logger.debug('v10')
-    obs['v10'] = vdi_3872_6_standard_wind(obs['ff'],
-                                          hap=10.0 + 7. * z0,
-                                          z0p=z0)
+    obs['v10'] = dis.vdi_3872_6_standard_wind(obs['ff'],
+                                                      hap=10.0 + 7. * z0,
+                                                      z0p=z0)
 
     # air density
     if all([x in obs.columns for x in ['sp', 't2m']]):
@@ -1272,7 +939,7 @@ def austal_weather(args):
         obs['ust'] = (
                 obs['ff'] * kappa / (np.log((10 + 7 * obs['fsr']) / obs['fsr']))
         )
-        obs['Lo'] = obukhov_length(
+        obs['Lo'] = dis.obukhov_length(
             ust=obs['ust'], rho=obs['rho'], Tv=obs['Tv'],
             H=obs['sshf'], E=obs['slhf'])
         if OUTPUT_RAW != '':
@@ -1285,7 +952,7 @@ def austal_weather(args):
     if all([x in obs.columns for x in ['v10', 'tcc', 'lmcc']]):
         logger.info('Method: kms')
         methods_available.append('kms')
-        obs['kms'] = klug_manier_scheme_2017(
+        obs['kms'] = dis.klug_manier_scheme_2017(
             obs.index, obs['v10'], obs['tcc'],
             lat, lon, ele, obs['lmcc']
         )
@@ -1294,7 +961,7 @@ def austal_weather(args):
     if all([x in obs.columns for x in ['v10', 'tcc', 'cty']]):
         logger.info('Method: kmo')
         methods_available.append('kmo')
-        obs['kmo'] = klug_manier_scheme_1992(
+        obs['kmo'] = dis.klug_manier_scheme_1992(
             obs.index, obs['v10'], obs['tcc'],
             lat, lon, cty=obs['cty'])
     #
@@ -1302,7 +969,7 @@ def austal_weather(args):
     if all([x in obs.columns for x in ['v10', 'tcc', 'cbh', 'cty']]):
         logger.info('Method: k2o')
         methods_available.append('k2o')
-        obs['k2o'] = klug_manier_scheme_2017(
+        obs['k2o'] = dis.klug_manier_scheme_2017(
             obs.index, obs['v10'], obs['tcc'],
             lat, lon, ele, cbh=obs['cbh'], cty=obs['cty'])
     #
@@ -1310,21 +977,21 @@ def austal_weather(args):
     if all([x in obs.columns for x in ['ff', 'tcc', 'cbh']]):
         logger.info('Method: pts')
         methods_available.append('pts')
-        obs['pts'] = pasquill_taylor_scheme(
+        obs['pts'] = dis.pasquill_taylor_scheme(
             obs.index, obs['ff'], obs['tcc'], lat, lon, obs['cbh'])
     #
     # kmc -----------------------------
     if all([x in obs.columns for x in ['fsr', 'Lo']]):
         logger.info('Method: kmc')
         methods_available.append('kmc')
-        obs['kmc'] = stabilty_class(
+        obs['kmc'] = dis.stabilty_class(
             'KM', obs.index, obs['fsr'], obs['Lo'].copy())
     #
     # pgc -----------------------------
     if all([x in obs.columns for x in ['fsr', 'Lo']]):
         logger.info('Method: pgc')
         methods_available.append('pgc')
-        pg = stabilty_class(
+        pg = dis.stabilty_class(
             'PG', obs.index, obs['fsr'], obs['Lo'])
         # convert to corresponding AK number (class F&G->1)
         obs['pgc'] = [max((1, 7 - x)) for x in pg]
@@ -1376,8 +1043,8 @@ def austal_weather(args):
                                   index=data.index)
                 ak = readmet.akterm.DataFile(data=df, z0=z0)
             outname = ('{:s}_{:s}_{:04d}_'.format(
-                _dwd_stationinfo.slugify(source),
-                _dwd_stationinfo.slugify(nam), year) +
+                austaltools._tools.slugify(source),
+                austaltools._tools.slugify(nam), year) +
                        x + '.akterm')
             logger.info('writing output file: %s' % outname)
             ak.write(outname)

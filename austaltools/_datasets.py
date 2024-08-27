@@ -25,7 +25,6 @@ datasets that serve as input for austaltools
       and en on `.tif`
 
 """
-import datetime as dt
 import glob
 import gzip
 import itertools
@@ -42,13 +41,14 @@ import time
 import zipfile
 from importlib import resources
 from pathlib import PurePath
-from xml.etree import ElementTree
+
 
 import numpy as np
 import pandas as pd
 import pip
 import requests
 from urllib3 import disable_warnings, exceptions
+
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from osgeo import gdal
@@ -70,14 +70,13 @@ except ImportError:
     import cdo
 
 try:
-    from . import _tools
-except ImportError:
-    import _tools
-
-try:
     from ._version import __version__, __title__
+    from . import _tools
+    from . import _dwd_observations
 except ImportError:
     from _version import __version__, __title__
+    import _tools
+    import _dwd_observations
 
 disable_warnings(exceptions.InsecureRequestWarning)
 logger = logging.getLogger()
@@ -85,18 +84,20 @@ logger = logging.getLogger()
 # -------------------------------------------------------------------------
 DEM_FMT = '%s.elevation.nc'  # % NAME
 DEM_CRS = "EPSG:5677"
-WEA_FMT = '%s_ak_eu_%04i.nc'
+WEA_FMT = '%s.ak-input.nc'
+
+
 DIST_AUX_FILES = resources.files(__title__ + '.data')
-TEMP = None
+TEMP = tempfile.gettempdir()
 MAX_RETRY = 3
 NODATA = 9.96920996838686905e+36
 
 with (DIST_AUX_FILES / 'dataset_definitions.json').open() as f:
     DATASET_DEFINITIONS = json.load(f)
 
-KNOWN_DEMS = [k for k, v in DATASET_DEFINITIONS.items()
-              if v['storage'] == _tools.STORAGE_TERRAIN]
-KNOWN_WEATHER = [k for k, v in DATASET_DEFINITIONS.items()
+SOURCES_TERRAIN = [k for k, v in DATASET_DEFINITIONS.items()
+                   if v['storage'] == _tools.STORAGE_TERRAIN]
+SOURCES_WEATHER = [k for k, v in DATASET_DEFINITIONS.items()
                  if v['storage'] == _tools.STORAGE_WAETHER]
 
 
@@ -119,8 +120,12 @@ class DataSet:
     Also the name of the storage (i.e. subdiretory of the storage location)
     the dataset is stored in.
     """
+    license = None
+    """source of the license of the dataset"""
     file_license = None
     """name of the file containing the license of the dataset"""
+    notice = None
+    """text of the notice to be shown"""
     file_notice = None
     """name of the file containing the notice to be shown
         if the dataset is used"""
@@ -131,7 +136,9 @@ class DataSet:
         can be downloaded. Currently supported: http(s):// and doi://
         (if such a location exists)"""
     years = []
-    """list of years covered by the dataset (if `storage` is 'weather'"""
+    """list of years covered by the dataset (if `storage` is 'weather')"""
+    position = None
+    """keyword how position is provided"""
     arguments = None
     """arguments to the assemble funtion that generates the dataset
         from the original source."""
@@ -224,10 +231,7 @@ class DataSet:
         if self.file_notice is None:
             self.file_notice = f"{self.name}.NOTICE.txt"
         if self.file_data is None:
-            if self.storage == 'terrain':
-                self.file_data = DEM_FMT % self.name
-            elif self.storage == 'weather':
-                self.file_data = WEA_FMT % (self.name, 0)
+            self.file_data = DEM_FMT % self.name
 
 
 # =========================================================================
@@ -372,44 +376,6 @@ def find_writeable_storage(locs: str = None,
 
 
 # -------------------------------------------------------------------------
-def download(url, file):
-    """
-    Downloads a file from a specified URL and saves it
-    to a given local file path.
-
-    :param url: The URL of the file to download.
-    :type url: str
-    :param file: The local path, including the filename,
-      where the downloaded file will be saved.
-    :type file: str
-    :returns: The name of the file saved locally.
-    :rtype: str
-    :raises Exception: An exception is raised if the download
-      fails (HTTP status code is not 200).
-
-    This function sends a GET request to the specified URL. If the request
-    is successful (HTTP status code 200),
-    it writes the content of the response to a file specified by
-    the 'file' parameter. If the request fails,
-    it raises an exception with information about the failure.
-
-    :example:
-
-        >>> try:
-        >>>     file_name = download('http://example.com/file.jpg', '/path/to/local/file.jpg')
-        >>>     print(f"Downloaded file saved as {file_name}")
-        >>> except Exception as e:
-        >>>     print(str(e))
-
-    """
-    with requests.get(url, allow_redirects=True) as req:
-        if req.status_code == 200:
-            with open(file, 'wb') as f:
-                f.write(req.content)
-        else:
-            raise Exception(
-                f"Download failed: status code {req.status_code}")
-    return os.path.basename(file)
 
 
 # -------------------------------------------------------------------------
@@ -469,215 +435,6 @@ def xyz2csv(inputfile, output, utm_remove_zone=False):
     of.to_csv(output, index=False, header=False)
 
     return True
-
-
-# -------------------------------------------------------------------------
-def xmlpath(xml, path):
-    """
-    Extracts text or attribute values from specified elements
-    within an XML string based on a given path.
-    The function implements only a small subset of the XPath syntax.
-
-
-    :param xml: The XML document as a str.
-    :param path: A string representing the hierarchical path to the
-      desired elements. This path may include element names,
-      indexes in square brackets for direct child selection,
-      and an optional attribute filter or attribute name
-      preceded by ``::`` for final value extraction.
-
-    Path Syntax
-
-    * ``'element'``: Selects all children named ``element``
-      from the current node.
-    * ``'element[index]'``: Selects the n-th ``element`` among its
-      siblings (0-based index).
-    * ``'element[@attribute="value"]'``: Selects all ``element`` nodes
-      where the attribute matches the specified value.
-    * ``'element::attribute'``: Retrieves the value of an attribute
-      named ``attribute`` from the selected elements.
-    * Any combination of the above, separated by '/' to navigate
-      through child elements.
-
-    :return: A list containing the extracted data from the XML, either
-      the text content of selected elements or the values of
-      specified attributes, depending on the input path.
-
-    :example:
-
-        >>> xml_string = '''<data>
-        ...                     <item id="1">Item 1</item>
-        ...                     <item id="2" extra="yes">Item 2</item>
-        ...                </data>'''
-        ...
-        >>> pathtotext = 'item'
-        >>> textresult = xmlpath(xmlstring, pathtotext)
-        ['Item 1', 'Item 2']
-        ...
-        >>> pathtoattribute = 'item::id'
-        >>> attributeresult = xmlpath(xmlstring, pathtoattribute)
-        ['1', '2']
-
-
-    :note:
-
-    - This function is designed to operate on well-formed XML strings.
-      Malformed XML might lead to unexpected results.
-    - The function uses Python's built-in XML handling capabilities and
-      regular expressions for parsing and navigating the XML.
-    - Namespace handling: If the XML contains namespaces, they are
-      automatically recognized and handled for tag matching.
-
-    :raises: The function itself does not explicitly raise exceptions,
-      but misuse (e.g., incorrect XML or path syntax) can
-      lead to exceptions thrown by the underlying XML or
-      regex processing libraries.
-
-    """
-
-    if '::' in path:
-        getpath, getatt = path.split("::")
-    else:
-        getpath = path
-        getatt = None
-    levels = getpath.split('/')
-    if levels[0] == '':
-        levels.pop(0)
-    root = ElementTree.fromstring(xml)
-    m = re.search('{.*}', root.tag)
-    if m:
-        ns = '%s' % m.group(0)
-    else:
-        ns = ''
-    nodes = [root]
-    for level in levels:
-        if "[" in level:
-            name = re.sub(r'\[.*]', '', level)
-            spec = re.sub(r'.*\[(.*)].*', r'\1', level)
-            try:
-                sel = int(spec)
-                enti = None
-            except ValueError:
-                if '=' in spec:
-                    enti, sel = [x.strip() for x in spec.split('=')]
-                else:
-                    enti = spec
-                    sel = None
-        else:
-            name = level
-            spec = enti = sel = None
-        tag = ''.join((ns, name))
-        #print(name, spec, enti, sel)
-        next_nodes = []
-        for node in nodes:
-            # iterate over children
-            tag_counter = {}
-            i = 0
-            for ele in node:
-                # count identical tags
-                if ele.tag in tag_counter:
-                    tag_counter[ele.tag] += 1
-                else:
-                    tag_counter[ele.tag] = 0
-                if not ele.tag == tag:
-                    continue
-                if sel is None and enti is None:
-                    next_nodes.append(ele)
-                elif sel == tag_counter[ele.tag]:
-                    next_nodes.append(ele)
-                elif enti is not None:
-                    if enti.startswith('@'):
-                        attr = enti.replace('@', '')
-                        if (attr in ele.attrib and
-                                bool(re.search(sel, ele.attrib[attr]))):
-                            next_nodes.append(ele)
-                    else:
-                        if len(node.findall(enti)) > 0:
-                            next_nodes.append(ele)
-        nodes = next_nodes
-    if getatt is None:
-        res = [x.text for x in nodes]
-    else:
-        res = [x.get(getatt, default='') for x in nodes]
-    return res
-
-
-# -------------------------------------------------------------------------
-def jsonpath(json_obj, path):
-    """
-    Extracts values from specified keys or indices within a
-    JSON object based on a given path.
-
-    :param json_obj: The JSON object (dict or list). This can be the
-      result of json.loads() if using a JSON string.
-    :param path: A string representing the hierarchical path to
-      the desired keys or indices. This path may include dictionary keys,
-      list indices, and an optional filtering condition for
-      dictionaries with specific key-value pairs.
-
-    Path Syntax
-
-    * 'key': Selects the value associated with 'key' in a dictionary.
-    * '[index]': Selects the n-th element in a list (0-based index).
-    * 'key=value': Selects dictionaries from a list of dictionaries
-      where 'key' matches 'value'.
-    * Any combination of the above, separated by '/' to navigate
-      through nested structures.
-    * an asterisk (`*`) may be specified instead of 'key' to match any key.
-
-    :return: A list containing the extracted values from the
-      JSON object based on the input path.
-
-    :example:
-
-    >>> json_obj = {
-    >>>   "items": [
-    >>>       {"id": 1, "name": "Item 1"},
-    >>>       {"id": 2, "name": "Item 2", "extra": "yes"}
-    >>>   ]
-    >>>  }
-    ...
-    >>> path_to_name = 'items/name'
-    >>> names = jsonpath(json_obj, path_to_name)
-    ['Item 1', 'Item 2']
-    ...
-    >>> path_to_extra = 'items/extra'
-    >>> extras = jsonpath(json_obj, path_to_extra)
-    ['yes']
-
-    :note:
-
-    - This function simplifies direct navigation and filtering in
-      JSON objects but does not offer the full querying capabilities
-      of more complex JSON querying libraries such as `jsonpath-rw`.
-
-    """
-
-    nodes = path.split('/')
-    if nodes[0] == '':
-        nodes.pop(0)
-    # Start with a list for uniform processing
-    obj = [json_obj]
-    for node in nodes:
-        children = []
-        for oj in obj:
-            if isinstance(oj, list):
-                if node.isdigit():
-                    # Indexing into a list
-                    children += [oj[int(node)]]
-                elif node == '*':
-                    children += [oj]
-                elif "=" in node:
-                    key, value = node.split("=")
-                    children += [o for o in oj if o.get(key) == value]
-                else:
-                    # Collecting items by key from each dictionary in list
-                    children += [o[node] for o in oj if node in o]
-            elif isinstance(oj, dict):
-                if node in oj or node == '*':
-                    children += [oj[node]]
-        obj = children
-    return obj
 
 
 # -------------------------------------------------------------------------
@@ -947,7 +704,7 @@ def _ass_expand_filelist_string(string, base_url, verify,
         logger.debug("downloading xml metadata: %s" % url)
         with requests.get(url, allow_redirects=True,
                           verify=verify) as rsp:
-            input_files = xmlpath(xml=rsp.content.decode(),
+            input_files = _tools.xmlpath(xml=rsp.content.decode(),
                                   path=xmlp)
     elif string.endswith(('json', 'geojson')):
         # json
@@ -956,7 +713,7 @@ def _ass_expand_filelist_string(string, base_url, verify,
         logger.debug("downloading json metadata: %s" % url)
         with requests.get(url, allow_redirects=True,
                           verify=verify) as rsp:
-            input_files = jsonpath(json_obj=rsp.json(),
+            input_files = _tools.jsonpath(json_obj=rsp.json(),
                                    path=jsonp)
     elif string.endswith(('html')):
         # html
@@ -978,12 +735,12 @@ def _ass_expand_filelist_string(string, base_url, verify,
     return input_files
 
 # -------------------------------------------------------------------------
-def _ass_clear_target(path, name, replace):
+def _ass_clear_target(target, replace):
     """
     assure that a datafile is not already present
 
-    :param path: path of the datafile
-    :type path: str
+    :param target: path of the datafile
+    :type target: str
     :param name: name of the datafile
     :type name: str
     :param replace: If True, the file is removed if it exists;
@@ -992,16 +749,16 @@ def _ass_clear_target(path, name, replace):
     :return: name and path of the datafile or None
     :rtype: str or None
     """
-    target = os.path.join(path, DEM_FMT % name)
     logger.debug(f'data file path: {target}')
+    res = True
     if os.path.exists(target):
         if not replace:
-            logger.info("dataset exists ... %s" % name)
-            return None
+            logger.info("dataset exists ... %s" % target)
+            res = False
         else:
-            logger.info("deleting existig : %s" % name)
+            logger.info("deleting existig : %s" % target)
             os.remove(target)
-    return target
+    return res
 
 
 # -------------------------------------------------------------------------
@@ -1180,7 +937,8 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    if (target := _ass_clear_target(path, name, replace)) is None:
+    target = os.path.join(path, DEM_FMT % name)
+    if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
 
@@ -1364,7 +1122,7 @@ def assemble_DGM_SH(path, name, replace, args: dict):
     of the German state Schlewig-Holstein (SH)
     It is designed to scrape their "Downloadclient" website.
 
-    :param path: Path and filename of the file to generate
+    :param path:  Path where to generate the file
     :type path: str
     :param name: name (code) of the dataset to assemble
     :type name: str
@@ -1377,7 +1135,8 @@ def assemble_DGM_SH(path, name, replace, args: dict):
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    if (target := _ass_clear_target(path, name, replace)) is None:
+    target = os.path.join(path, DEM_FMT % name)
+    if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
 
@@ -1411,7 +1170,7 @@ def assemble_DGM25_RP(path, name="DGM25-RP",
     .. deprecated:: 1.0
        use :py:func:`assemble_DGMxx` instead.
 
-    :param path: Path and filename of the file to generate
+    :param path: Path where to generate the file
     :type path: str
     :param name: name (code) of the dataset to assemble
     :type name: str
@@ -1424,13 +1183,14 @@ def assemble_DGM25_RP(path, name="DGM25-RP",
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    if (target := _ass_clear_target(path, name, replace)) is None:
+    target = os.path.join(path, DEM_FMT % name)
+    if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
 
     url = "https://vermkv.service24.rlp.de/opendat/dgm25/dgm25.zip"
     logger.debug("downloading ... %s" % url)
-    zip_file, _ = download(url, os.path.basename(url))
+    zip_file, _ = _tools.download(url, os.path.basename(url))
     logger.debug("extracting ... %s" % zip_file)
     shutil.unpack_archive(zip_file)
     for tile_xyz in glob.glob("*.xyz"):
@@ -1462,7 +1222,7 @@ def assemble_DGM_composit(path: str, name: str,
        If a composit includes other datasets, they must be assembled
        *before* calling this function.
 
-    :param path: Path and filename of the file to generate
+    :param path: Path where to generate the file
     :type path: str
     :param name: name (code) of the dataset to assemble
     :type name: str
@@ -1475,7 +1235,8 @@ def assemble_DGM_composit(path: str, name: str,
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    if (target := _ass_clear_target(path, name, replace)) is None:
+    target = os.path.join(path, DEM_FMT % name)
+    if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
 
@@ -1484,7 +1245,7 @@ def assemble_DGM_composit(path: str, name: str,
     members = []
     for x in args['filelist']:
         logger.debug("scanning input ... %s" % x)
-        if x in KNOWN_DEMS:
+        if x in SOURCES_TERRAIN:
             # expand dataset codes
             if not dataset_available(x):
                 logger.error("dataset not available %s" % x)
@@ -1556,7 +1317,7 @@ def assemble_GLO_30(path, name = "GLO_30",
         obtained at the Copernicus user's portal:
         <https://cdsportal.copernicus.eu/web/spdm/registeruser>
 
-    :param path: Path and filename of the file to generate
+    :param path:  Path where to generate the file
     :type path: str
     :param name: name (code) of the dataset to assemble
     :type name: str
@@ -1569,7 +1330,8 @@ def assemble_GLO_30(path, name = "GLO_30",
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    if (target := _ass_clear_target(path, name, replace)) is None:
+    target = os.path.join(path, DEM_FMT % name)
+    if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
 
@@ -1582,7 +1344,7 @@ def assemble_GLO_30(path, name = "GLO_30",
         for lon in range(5, 16):
             url = download_dir + file_fmt % (lat, lon)
             logger.debug("downloading ... %s" % url)
-            tar_file, _ = download(url, os.path.basename(url))
+            tar_file, _ = _tools.download(url, os.path.basename(url))
             name_root = tar_file.replace(".tar", "")
             with tarfile.open(tar_file) as tf:
                 to_extract = [x for x in tf.getmembers()
@@ -1613,7 +1375,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
         is downloaded as only this one covers the area where the
         target SRS is valid.
 
-    :param path: Path and filename of the file to generate
+    :param path:  Path where to generate the file
     :type path: str
     :param name: name (code) of the dataset to assemble
     :type name: str
@@ -1645,7 +1407,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
         logger.info("dataset exists ... %s" % name)
         return False
     logger.debug("downloading ... %s" % support_url)
-    support_file, _ = download(
+    support_file, _ = _tools.download(
         support_url, os.path.basename(support_url))
     with tarfile.open(support_file) as support_tar:
         # no get every tile we want
@@ -1657,7 +1419,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
             # now download the actual data file for the tile
             download_url = download_fmt % tile
             logger.debug("downloading ... %s" % download_url)
-            tile_file, _ = download(
+            tile_file, _ = _tools.download(
                 download_url, os.path.basename(download_url))
             # expand the terrain data holding file *.DEM
             # and convert it to a GeoTiff file
@@ -1727,13 +1489,12 @@ def provide_terrain(source: str, path: str = None,
         raise ValueError("method must be either 'download' or 'assemble'")
 
     # auxiliary files:
-    if 'licence' in DATASET_DEFINITIONS[source] and \
-            DATASET_DEFINITIONS[source]['license'] is not None:
+    if dataset.license is not None:
         lic_file = os.path.join(path, dataset.file_license)
-        lic_src, lic_id = DATASET_DEFINITIONS[source]['licence'].split(':')
+        lic_src, lic_id = dataset.license.split(':')
         if lic_src == 'spdx':
             lic_url = ("https://spdx.org/licenses/%s.json" %
-                       DATASET_DEFINITIONS[source]['licence'])
+                       lic_id)
             with requests.get(lic_url).json() as lic_json:
                 with open(lic_file, 'wb') as f:
                     f.write(lic_json['licenseText'])
@@ -1743,11 +1504,10 @@ def provide_terrain(source: str, path: str = None,
             else:
                 lic_aux = os.path.join(str(DIST_AUX_FILES), lic_id)
             shutil.copy(lic_aux, lic_file)
-    if 'notice' in DATASET_DEFINITIONS[source] and \
-            DATASET_DEFINITIONS[source]['notice'] is not None:
+    if dataset.notice is not None:
         not_file = os.path.join(path, dataset.file_license)
         with open(not_file, 'w') as f:
-            f.write(DATASET_DEFINITIONS[source]['notice'])
+            f.write(dataset.notice)
     return
 
 
@@ -1771,7 +1531,7 @@ def show_notice(storage_path, source):
 
 
 # -------------------------------------------------------------------------
-def _ass_era5_getyear(opts):
+def _ass_era5_getyear(year):
     """
     Downloads ERA5 reanalysis data for a specific year and
     saves it as a NetCDF file.
@@ -1808,10 +1568,7 @@ def _ass_era5_getyear(opts):
       must be configured as per the `cdsapi` package documentation.
     """
 
-    yy, path = opts
-    year = '{:04d}'.format(yy)
-    ncname = 'era5_ak_eu_' + year + '.nc'
-    target = os.path.join(path, ncname)
+    ncname = 'era5_ak_eu_{:04d}.nc'.format(int(year))
     c = cdsapi.Client()
     c.retrieve(
         'reanalysis-era5-single-levels',
@@ -1863,11 +1620,13 @@ def _ass_era5_getyear(opts):
             ],
             'format': 'netcdf',
         },
-        target)
+        ncname)
+    return ncname
 
 
 # -------------------------------------------------------------------------
-def assemble_ERA5(path: str, years: list):
+def assemble_ERA5(path: str, name="ERA5", years: list =[],
+                  replace : bool = False, args : dict ={}):
     """
     Downloads and assembles ERA5 reanalysis data for a list of specified
     years, saving the data to a designated path.
@@ -1883,10 +1642,18 @@ def assemble_ERA5(path: str, years: list):
     :param path: The file system path where the downloaded NetCDF files
       will be saved.
     :type path: str
+    :param name: name (code) of the dataset to assemble
+    :type name: str
     :param years: A list of years for which ERA5 data should be downloaded.
       Each year should be an integer within the
       valid range (1940 to the current year).
     :type years: list
+    :param replace: If True, an existing file is overwritten.
+        If False, an error is raises if the file already exists.
+    :type replace: bool
+    :param args: Optionally accepted for compatiblity with the
+        general asseble funtion call. Is not evaluated.
+    :type args: dict
 
     :raises ValueError: If any year in the `years` list is outside the
       allowable range of 1940 to the current year.
@@ -1895,7 +1662,7 @@ def assemble_ERA5(path: str, years: list):
 
         >>> # To download ERA5 data for the years 2018 to 2020
         >>> # and save to '/data/ERA5'
-        >>> assemble_ERA5('/data/ERA5', [2018, 2019, 2020])
+        >>> assemble_ERA5('/data/ERA5', years=[2018, 2019])
 
     :note:
 
@@ -1912,14 +1679,27 @@ def assemble_ERA5(path: str, years: list):
 
     # create option tuples
     combi = []
-    for y in years:
-        if not 1940 <= y <= dt.datetime.now().year:
-            raise ValueError(f"year is out of range (1940-today): {y}")
-        combi.append((y, path))
+    for year in years:
+        yn = name_yearly(name, year)
+        if yn not in [x.name for x in DATASETS]:
+            raise ValueError(f"year is out of range: {year}")
+        if not replace:
+            if dataset_get(yn).available:
+                logger.info(f"skipping available year: {yn}")
+                continue
+        combi.append(year)
     # get data in parallel directly to storage
-    with mp.Pool(10) as pool:
-        pool.map(_ass_era5_getyear, combi)
-
+    with mp.Pool(PROCS) as pool:
+        for dld in pool.map(_ass_era5_getyear, combi):
+            year, ncname = dld
+            yn = name_yearly(name, year)
+            target = os.path.join(path, WEA_FMT % yn)
+            # gently move the old file out of way
+            if not _ass_clear_target(target, replace):
+                logger.info("skipping because dataset exists: %s" % name)
+                os.remove(ncname)
+                continue
+            shutil.move(ncname, target)
 
 # -------------------------------------------------------------------------
 def _cerraname(y, lt=None):
@@ -1989,6 +1769,8 @@ def _ass_cerra_getyear(opts):
       `.grib` or `.nc` is appended for output files.
 
     """
+    logger.debug("start job %s" % str(opts))
+    logger.debug(str(opts))
     y, lt = opts
     gribname = _cerraname(y, lt) + '.grib'
     c = cdsapi.Client()
@@ -2044,14 +1826,25 @@ def _ass_cerra_getyear(opts):
         )
         c.retrieve(*opts)
         ncname = _cerraname(y, lt) + '.nc'
-        print("cdo processing: " + ncname)
-        cdo.selindexbox('489,649,479,659', options='-f nc',
+        logger.debug("cdo  subsetting: " + ncname)
+        print(os.getcwd())
+        oper = cdo.Cdo(os.getcwd())
+        print(" ".join([str(x) for x in
+                       ['489,649,479,659', '-f nc',
+                        gribname, ncname]]
+        ))
+        oper.selindexbox('489,649,479,659', options='-f nc',
                         input=gribname, output=ncname)
+        print('piep')
+        del oper
+        logger.debug("done subsetting: " + ncname)
         os.remove(gribname)
+    logger.debug("done job %s" % str(opts))
 
 
 # -------------------------------------------------------------------------
-def assemble_CERRA(path: str, years: list):
+def assemble_CERRA(path: str, name="CERRA", years: list = [],
+                   replace : bool = False, args : dict ={}):
     """
     Downloads, extracts, and merges CERRA dataset forecasts for specified
     years into single NetCDF files per year.
@@ -2065,13 +1858,21 @@ def assemble_CERRA(path: str, years: list):
     manipulation and assumes a temporary directory is defined for
     intermediate data storage.
 
-    :param path: The directory path where the final merged NetCDF files
+    :param path: The path where the final merged NetCDF files
       will be stored.
     :type path: str
+    :param name: name (code) of the dataset to assemble
+    :type name: str
     :param years: A list of years (integer) for which CERRA data should
       be downloaded and processed. The years should fall
       within the range of 1940 to the current year.
     :type years: list
+    :param replace: If True, an existing file is overwritten.
+        If False, an error is raises if the file already exists.
+    :type replace: bool
+    :param args: Optionally accepted for compatiblity with the
+        general asseble funtion call. Is not evaluated.
+    :type args: dict
 
     :raises ValueError: If any of the years specified is outside the
       valid range (1940 to the current year).
@@ -2079,7 +1880,7 @@ def assemble_CERRA(path: str, years: list):
     :example:
 
         >>> # To process CERRA data for the years 2015 to 2017
-        >>> assemble_CERRA('/path/to/final/storage', [2015, 2016, 2017])
+        >>> assemble_CERRA('/path/to/final/storage', years=[2015, 2016])
 
     :note:
 
@@ -2097,29 +1898,47 @@ def assemble_CERRA(path: str, years: list):
 
     """
     temp_path = TEMP
+    logger.debug(f"looking for cdo ...{temp_path}")
     data = cdo.Cdo(tempdir=temp_path)
-    logger.info("python-cdo version: %s" % data.__version__())
-    logger.info("cdo        version: %s" % data.version())
+    logger.debug("python-cdo version: %s" % data.__version__())
+    logger.debug("cdo        version: %s" % data.version())
     data.debug = True
     data.cleanTempDir()
 
     # get sets of bunches to retrieve
     combi = []
-    for y in years:
-        if not 1940 <= y <= dt.datetime.now().year:
-            raise ValueError(f"year is out of range (1941-2019): {y}")
+    for year in years:
+        yn = name_yearly(name, year)
+        if yn not in [x.name for x in DATASETS]:
+            raise ValueError(f"year is out of range: {year}")
+        if not replace:
+            if dataset_get(yn).available:
+                logger.info(f"skipping available year: {yn}")
+                continue
         for lt in range(1, 4):
-            combi.append((y, lt))
+            combi.append((year, lt))
+    logger.debug("forking parallel jobs: "+str(combi))
 
+
+    # FIMXE
+    procs = 1
     # get data and extract region
-    with mp.Pool(10) as pool:
-        p = pool.map(_ass_cerra_getyear, combi)
+    with mp.Pool(procs) as pool:
+        _ = pool.map(_ass_cerra_getyear, combi)
 
+    logger.debug("finished parallel jobs")
     # combine forecasts
-    for yr in set([x for x, _ in combi]):
-        lts = set([y for x, y in combi if x == yr])
-        infiles = [_cerraname(yr, lt) + '.nc' for lt in lts]
-        target = os.path.join(path, _cerraname(yr, None) + '.nc')
+    for year in set([x for x, _ in combi]):
+        logger.debug(f"processing year: {year}")
+        lts = set([y for x, y in combi if x == year])
+        infiles = [_cerraname(year, lt) + '.nc' for lt in lts]
+        yn = name_yearly(name, year)
+        target = os.path.join(path, WEA_FMT % yn)
+        # gently move the old file out of way
+        if not _ass_clear_target(target, replace):
+            logger.info("skipping because dataset exists: %s" % name)
+            continue
+        # build new file
         data.mergetime(
             input=" ".join([
                 data.setgridtype('curvilinear', input=x)
@@ -2130,11 +1949,67 @@ def assemble_CERRA(path: str, years: list):
         )
         for x in infiles:
             os.remove(x)
+        logger.debug(f"finished with: {year}")
+
+
+# -------------------------------------------------------------------------
+def assemble_DWD(path: str, name="DWD", years: list = None,
+                   replace : bool = False, args : dict ={}):
+    """
+    Downloads, extracts, and merges DWD dataset observations for specified
+    years into single NetCDF files per year.
+
+    :param path: The path where the final merged NetCDF files
+      will be stored.
+    :type path: str
+    :param name: name (code) of the dataset to assemble
+    :type name: str
+    :param years: A list of years (integer) for which DWD data should
+      be downloaded and processed.
+    :type years: list
+    :param replace: If True, an existing file is overwritten.
+        If False, an error is raises if the file already exists.
+    :type replace: bool
+    :param args: Optionally accepted for compatiblity with the
+        general asseble funtion call. Is not evaluated.
+    :type args: dict
+
+    :raises ValueError: If any of the years specified is outside the
+      valid range (1940 to the current year).
+
+    - This function assumes that a global `TEMP` variable is defined and
+      points to a valid temporary directory for intermediate files.
+
+    """
+    if years is None:
+        if 'years' in args:
+            years = args['years']
+        else:
+            raise ValueError(f"years is required for DWD dataset")
+    # get list of stations
+    stations = _dwd_observations.dwd_fetch_stationlist(years)
+
+    all_stations = list(set([x for y in stations.values() for x in y]))
+    # download all stations
+    dat_files = {}
+    meta_files = {}
+    logger.info("fetching data")
+    for station in _tools.progress(all_stations):
+        dat_files[station], meta_files[station] = \
+            _dwd_observations.dwd_fetch_station(station)
+
+    # create dataset file
+    logger.info("processing data")
+    for year in years:
+        datafile = WEA_FMT % name_yearly(name, year)
+        _dwd_observations.build_dataset_year(
+            year, dat_files, meta_files, datafile, replace)
 
 
 # -------------------------------------------------------------------------
 def provide_weather(source: str, path: str = None,
-                    years: list = None, method: str = 'download'):
+                    years: list = None,
+                    force: bool = False, method: str = 'download'):
     """
     Manages the downloading and organizing of weather data from
     specified sources for given years into a target directory.
@@ -2158,6 +2033,9 @@ def provide_weather(source: str, path: str = None,
       data fetching is performed, which may depend on the
       implementation details of the dataset handling functions.
     :type years: list, optional
+    :param force: Wheter to overwrite a dataset that is already avialable.
+      Defaults to False.
+    :type force: bool, options
     :param method: The method to use for obtaining the data.
       Currently, only "download" is implemented, but the parameter
       is designed to accommodate future methods like "cache" or "stream".
@@ -2191,16 +2069,20 @@ def provide_weather(source: str, path: str = None,
     # param method is implemented for future use
     if path is None:
         path = find_writeable_storage(path, _tools.STORAGE_TERRAIN)
+    dataset = dataset_get(source)
     logger.info("downloading weather source %s" % source)
     success = True
     pwd = os.getcwd()
-    with tempfile.TemporaryDirectory() as temp_dir:
+    with tempfile.TemporaryDirectory(dir=TEMP) as temp_dir:
         os.chdir(temp_dir)
         try:
             if source == "ERA5":
-                assemble_ERA5(path, years)
+                assemble_ERA5(path, years=years)
             elif source == "CERRA":
-                assemble_CERRA(path, years)
+                assemble_CERRA(path, years=years, replace=force)
+            elif source == "DWD":
+                assemble_DWD(path, years=years, replace=force,
+                             args=dataset.arguments)
             else:
                 logger.error("unknown dataset to download %s" % source)
                 success = False
@@ -2213,8 +2095,32 @@ def provide_weather(source: str, path: str = None,
 
 
 # -------------------------------------------------------------------------
+def name_yearly(name, year):
+    return '%s-%04i' % (name, year)
+
+# -------------------------------------------------------------------------
+def expand_datasets(defs):
+    datasets = []
+    for k,v in defs.items():
+        if "split" in v:
+            if v["split"] == "years":
+                years_available = _tools.expand_sequence(
+                    v["years_available"])
+                for ya in years_available:
+                    name = name_yearly(k, ya)
+                    vy = v.copy()
+                    if 'uri' in v and isinstance(v['uri'], dict):
+                        vy['uri'] = v['uri'][str(ya)]
+                    datasets.append(DataSet(name=name, **vy))
+            else:
+                raise ValueError(f"unkown split type {v['split']}")
+        else:
+            datasets.append(DataSet(name=k, **v))
+    return datasets
+
+# -------------------------------------------------------------------------
 # initialize
-DATASETS = [DataSet(name=k, **v) for k, v in DATASET_DEFINITIONS.items()]
+DATASETS = expand_datasets(DATASET_DEFINITIONS)
 """
 All known datasets as :py:class:`DataSet` instances.
 

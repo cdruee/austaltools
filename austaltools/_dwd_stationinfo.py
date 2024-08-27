@@ -13,6 +13,8 @@ import unicodedata
 
 import pandas as pd
 
+import austaltools._tools
+
 try:
     from . import _tools
 except ImportError:
@@ -265,6 +267,6 @@ if __name__ == '__main__':
         path = args.path
     out = dwd_stationinfo(station, path=_PATH)
     if args.slugify:
-        print(slugify(out[3]))
+        print(_tools.slugify(out[3]))
     else:
         print(*out)

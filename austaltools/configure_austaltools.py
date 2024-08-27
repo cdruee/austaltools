@@ -30,7 +30,7 @@ def list_datasets(only='all', state='known', long=False):
         for d in DS.DATASETS:
             if (only in [d.storage, 'all'] and
                     (state == 'known' or d.available)):
-                if d.doi is not None:
+                if d.uri is not None:
                     dl_str = ' Yes  '
                 else:
                     dl_str = ' No   '
@@ -60,7 +60,7 @@ def cli_parser():
     :rtype: argparse.ArgumentParser
     """
 
-    default_dem = DS.KNOWN_DEMS[0]
+    default_dem = DS.SOURCES_TERRAIN[0]
 
     parser = argparse.ArgumentParser(
         description="Prepare modify datasets used by austaltools",
@@ -113,11 +113,11 @@ def cli_parser():
     sub_down.add_argument('-s', '--source',
                           metavar="CODE",
                           nargs=None,
-                          choices=DS.KNOWN_DEMS + DS.KNOWN_WEATHER,
+                          choices=DS.SOURCES_TERRAIN + DS.SOURCES_WEATHER,
                           default=default_dem,
                           help='code for the source digital elevation ' +
                                'model (DEM). Known DEMs are: ' +
-                               ' '.join(DS.KNOWN_DEMS) + ' ' +
+                               ' '.join(DS.SOURCES_TERRAIN) + ' ' +
                                'Defaults to ' + default_dem)
     sub_down.add_argument('-y', '--years',
                           metavar="YEAR",
@@ -152,11 +152,11 @@ def cli_parser():
     sub_assm.add_argument('-s', '--source',
                           metavar="CODE",
                           nargs=None,
-                          choices=DS.KNOWN_DEMS + DS.KNOWN_WEATHER,
+                          choices=DS.SOURCES_TERRAIN + DS.SOURCES_WEATHER,
                           default=default_dem,
                           help='code for the source digital elevation ' +
                                'model (DEM). Known DEMs are: ' +
-                               ' '.join(DS.KNOWN_DEMS) + ' ' +
+                               ' '.join(DS.SOURCES_TERRAIN) + ' ' +
                                'Defaults to ' + default_dem)
     sub_assm.add_argument('-y', '--years',
                           metavar="YEAR",
@@ -233,7 +233,7 @@ def main():
         list_datasets(args['only'], args['state'], args['long'])
 
     elif args['action'] in ['download', 'assemble']:
-        if args['source'] in DS.KNOWN_DEMS:
+        if args['source'] in DS.SOURCES_TERRAIN:
             if DS.dataset_available(args['source']) and not args['force']:
                 sys.tracebacklimit = 0
                 raise ValueError(f"dataset exists: {args['source']} ")
@@ -241,26 +241,24 @@ def main():
                                path=args['path'],
                                force=args['force'],
                                method=args['action'])
-        elif args['source'] in DS.KNOWN_WEATHER:
+        elif args['source'] in DS.SOURCES_WEATHER:
             if 'years' not in args:
                 sys.tracebacklimit = 0
                 raise ValueError('-y required with dataset: %s '
                                  % args['source'])
             else:
                 try:
-                    year_list = [int(args['years'])]
+                    year_list = _tools.expand_sequence(args['years'])
                 except ValueError:
-                    if '-' in args['years']:
-                        y1, y2 = args['years'].split('-')
-                        year_list = list(range(int(y1), int(y2) + 1))
-                    else:
-                        raise ValueError("cannot argument to -y: %s" %
+                    raise ValueError("cannot argument to -y: %s" %
                                          args["years"])
                 logger.debug('years parsed into int: %s',
                              year_list)
-            if DS.dataset_available(args['source']) and not args['force']:
-                sys.tracebacklimit = 0
-                raise ValueError(f"dataset exists: {args['source']} ")
+            for yr in year_list:
+                yn = DS.name_yearly(args['source'], yr)
+                if DS.dataset_available(yn) and not args['force']:
+                    sys.tracebacklimit = 0
+                    raise ValueError(f"dataset exists: {yn} ")
             DS.provide_weather(args['source'],
                                path=args['path'],
                                years=year_list,

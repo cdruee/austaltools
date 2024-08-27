@@ -7,7 +7,7 @@ Copy the output of this as two elemnts into a list
 under 'values'.
 """
 import requests
-from austaltools._datasets import jsonpath
+from austaltools._tools import jsonpath
 
 host = 'https://gds.hessen.de'
 nav_uri = 'INTERSHOP/rest/WFS/HLBG-Geodaten-Site/-/downloadcenter?path=3D-Daten/Digitales%20Gel%C3%A4ndemodell%20(DGM1)'

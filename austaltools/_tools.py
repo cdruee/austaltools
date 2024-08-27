@@ -4,6 +4,10 @@ import re
 import shlex
 import logging
 import sys
+import unicodedata
+from xml.etree import ElementTree
+
+import requests
 
 if os.getenv('BUILDING_SPHINX', 'false') == 'false':
     import osgeo.osr as osr
@@ -877,3 +881,269 @@ def common_plot(args: dict,
             outname = outname + '.png'
         logger.info('writing plot: %s' % outname)
         plt.savefig(outname, dpi=180)
+
+
+def slugify(value, allow_unicode=False):
+    """
+    Taken from
+    https://github.com/django/django/blob/master/django/utils/text.py
+    Convert to ASCII if 'allow_unicode' is False. Convert spaces or
+    repeated dashes to single dashes. Remove characters that aren't
+    alphanumerics, underscores, or hyphens. Convert to lowercase.
+    Also strip leading and trailing whitespace, dashes, and underscores.
+    """
+    value = str(value)
+    if allow_unicode:
+        value = unicodedata.normalize('NFKC', value)
+    else:
+        value = unicodedata.normalize('NFKD', value).encode(
+            'ascii', 'ignore').decode('ascii')
+    value = re.sub(r'[^\w\s-]', '', value.lower())
+    return re.sub(r'[-\s]+', '-', value).strip('-_')
+
+
+def download(url, file):
+    """
+    Downloads a file from a specified URL and saves it
+    to a given local file path.
+
+    :param url: The URL of the file to download.
+    :type url: str
+    :param file: The local path, including the filename,
+      where the downloaded file will be saved.
+    :type file: str
+    :returns: The name of the file saved locally.
+    :rtype: str
+    :raises Exception: An exception is raised if the download
+      fails (HTTP status code is not 200).
+
+    This function sends a GET request to the specified URL. If the request
+    is successful (HTTP status code 200),
+    it writes the content of the response to a file specified by
+    the 'file' parameter. If the request fails,
+    it raises an exception with information about the failure.
+
+    :example:
+
+        >>> try:
+        >>>     file_name = download('http://example.com/file.jpg', '/path/to/local/file.jpg')
+        >>>     print(f"Downloaded file saved as {file_name}")
+        >>> except Exception as e:
+        >>>     print(str(e))
+
+    """
+    with requests.get(url, allow_redirects=True) as req:
+        if req.status_code == 200:
+            with open(file, 'wb') as f:
+                f.write(req.content)
+        else:
+            raise Exception(
+                f"Download failed: status code {req.status_code}")
+    return os.path.basename(file)
+
+
+def xmlpath(xml, path):
+    """
+    Extracts text or attribute values from specified elements
+    within an XML string based on a given path.
+    The function implements only a small subset of the XPath syntax.
+
+
+    :param xml: The XML document as a str.
+    :param path: A string representing the hierarchical path to the
+      desired elements. This path may include element names,
+      indexes in square brackets for direct child selection,
+      and an optional attribute filter or attribute name
+      preceded by ``::`` for final value extraction.
+
+    Path Syntax
+
+    * ``'element'``: Selects all children named ``element``
+      from the current node.
+    * ``'element[index]'``: Selects the n-th ``element`` among its
+      siblings (0-based index).
+    * ``'element[@attribute="value"]'``: Selects all ``element`` nodes
+      where the attribute matches the specified value.
+    * ``'element::attribute'``: Retrieves the value of an attribute
+      named ``attribute`` from the selected elements.
+    * Any combination of the above, separated by '/' to navigate
+      through child elements.
+
+    :return: A list containing the extracted data from the XML, either
+      the text content of selected elements or the values of
+      specified attributes, depending on the input path.
+
+    :example:
+
+        >>> xml_string = '''<data>
+        ...                     <item id="1">Item 1</item>
+        ...                     <item id="2" extra="yes">Item 2</item>
+        ...                </data>'''
+        ...
+        >>> pathtotext = 'item'
+        >>> textresult = xmlpath(xmlstring, pathtotext)
+        ['Item 1', 'Item 2']
+        ...
+        >>> pathtoattribute = 'item::id'
+        >>> attributeresult = xmlpath(xmlstring, pathtoattribute)
+        ['1', '2']
+
+
+    :note:
+
+    - This function is designed to operate on well-formed XML strings.
+      Malformed XML might lead to unexpected results.
+    - The function uses Python's built-in XML handling capabilities and
+      regular expressions for parsing and navigating the XML.
+    - Namespace handling: If the XML contains namespaces, they are
+      automatically recognized and handled for tag matching.
+
+    :raises: The function itself does not explicitly raise exceptions,
+      but misuse (e.g., incorrect XML or path syntax) can
+      lead to exceptions thrown by the underlying XML or
+      regex processing libraries.
+
+    """
+
+    if '::' in path:
+        getpath, getatt = path.split("::")
+    else:
+        getpath = path
+        getatt = None
+    levels = getpath.split('/')
+    if levels[0] == '':
+        levels.pop(0)
+    root = ElementTree.fromstring(xml)
+    m = re.search('{.*}', root.tag)
+    if m:
+        ns = '%s' % m.group(0)
+    else:
+        ns = ''
+    nodes = [root]
+    for level in levels:
+        if "[" in level:
+            name = re.sub(r'\[.*]', '', level)
+            spec = re.sub(r'.*\[(.*)].*', r'\1', level)
+            try:
+                sel = int(spec)
+                enti = None
+            except ValueError:
+                if '=' in spec:
+                    enti, sel = [x.strip() for x in spec.split('=')]
+                else:
+                    enti = spec
+                    sel = None
+        else:
+            name = level
+            spec = enti = sel = None
+        tag = ''.join((ns, name))
+        #print(name, spec, enti, sel)
+        next_nodes = []
+        for node in nodes:
+            # iterate over children
+            tag_counter = {}
+            i = 0
+            for ele in node:
+                # count identical tags
+                if ele.tag in tag_counter:
+                    tag_counter[ele.tag] += 1
+                else:
+                    tag_counter[ele.tag] = 0
+                if not ele.tag == tag:
+                    continue
+                if sel is None and enti is None:
+                    next_nodes.append(ele)
+                elif sel == tag_counter[ele.tag]:
+                    next_nodes.append(ele)
+                elif enti is not None:
+                    if enti.startswith('@'):
+                        attr = enti.replace('@', '')
+                        if (attr in ele.attrib and
+                                bool(re.search(sel, ele.attrib[attr]))):
+                            next_nodes.append(ele)
+                    else:
+                        if len(node.findall(enti)) > 0:
+                            next_nodes.append(ele)
+        nodes = next_nodes
+    if getatt is None:
+        res = [x.text for x in nodes]
+    else:
+        res = [x.get(getatt, default='') for x in nodes]
+    return res
+
+
+def jsonpath(json_obj, path):
+    """
+    Extracts values from specified keys or indices within a
+    JSON object based on a given path.
+
+    :param json_obj: The JSON object (dict or list). This can be the
+      result of json.loads() if using a JSON string.
+    :param path: A string representing the hierarchical path to
+      the desired keys or indices. This path may include dictionary keys,
+      list indices, and an optional filtering condition for
+      dictionaries with specific key-value pairs.
+
+    Path Syntax
+
+    * 'key': Selects the value associated with 'key' in a dictionary.
+    * '[index]': Selects the n-th element in a list (0-based index).
+    * 'key=value': Selects dictionaries from a list of dictionaries
+      where 'key' matches 'value'.
+    * Any combination of the above, separated by '/' to navigate
+      through nested structures.
+    * an asterisk (`*`) may be specified instead of 'key' to match any key.
+
+    :return: A list containing the extracted values from the
+      JSON object based on the input path.
+
+    :example:
+
+    >>> json_obj = {
+    >>>   "items": [
+    >>>       {"id": 1, "name": "Item 1"},
+    >>>       {"id": 2, "name": "Item 2", "extra": "yes"}
+    >>>   ]
+    >>>  }
+    ...
+    >>> path_to_name = 'items/name'
+    >>> names = jsonpath(json_obj, path_to_name)
+    ['Item 1', 'Item 2']
+    ...
+    >>> path_to_extra = 'items/extra'
+    >>> extras = jsonpath(json_obj, path_to_extra)
+    ['yes']
+
+    :note:
+
+    - This function simplifies direct navigation and filtering in
+      JSON objects but does not offer the full querying capabilities
+      of more complex JSON querying libraries such as `jsonpath-rw`.
+
+    """
+
+    nodes = path.split('/')
+    if nodes[0] == '':
+        nodes.pop(0)
+    # Start with a list for uniform processing
+    obj = [json_obj]
+    for node in nodes:
+        children = []
+        for oj in obj:
+            if isinstance(oj, list):
+                if node.isdigit():
+                    # Indexing into a list
+                    children += [oj[int(node)]]
+                elif node == '*':
+                    children += [oj]
+                elif "=" in node:
+                    key, value = node.split("=")
+                    children += [o for o in oj if o.get(key) == value]
+                else:
+                    # Collecting items by key from each dictionary in list
+                    children += [o[node] for o in oj if node in o]
+            elif isinstance(oj, dict):
+                if node in oj or node == '*':
+                    children += [oj[node]]
+        obj = children
+    return obj
