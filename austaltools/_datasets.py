@@ -34,6 +34,7 @@ import os
 import random
 import re
 import shutil
+import sqlite3
 import sys
 import tarfile
 import tempfile
@@ -85,6 +86,7 @@ logger = logging.getLogger()
 DEM_FMT = '%s.elevation.nc'  # % NAME
 DEM_CRS = "EPSG:5677"
 WEA_FMT = '%s.ak-input.nc'
+OBS_FMT = '%s.obs.zip'
 
 
 DIST_AUX_FILES = resources.files(__title__ + '.data')
@@ -1981,30 +1983,39 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
       points to a valid temporary directory for intermediate files.
 
     """
+    # check years
     if years is None:
         if 'years' in args:
             years = args['years']
         else:
             raise ValueError(f"years is required for DWD dataset")
+    # check database
+    target = os.path.join(path, OBS_FMT % name)
+    if not _ass_clear_target(target, replace):
+        logger.info("skipping because dataset exists: %s" % name)
+        return False
     # get list of stations
+    logger.info("fetching stationlists")
     stations = _dwd_observations.dwd_fetch_stationlist(years)
+    station_numbers = stations.keys()
 
-    all_stations = list(set([x for y in stations.values() for x in y]))
-    # download all stations
-    dat_files = {}
-    meta_files = {}
+    # download and process all stations
+    #zip = zipfile.ZipFile(target)
+    logger.info("writing stationlist")
+    sf = pd.DataFrame.from_dict(stations, orient='index')
+    with zipfile.ZipFile(target, mode='a') as zf:
+        sf.to_csv(path_or_buf=zf.open('stationlist.csv',
+                                          mode='w'))
+
     logger.info("fetching data")
-    for station in _tools.progress(all_stations):
-        dat_files[station], meta_files[station] = \
-            _dwd_observations.dwd_fetch_station(station)
+    for station in _tools.progress(station_numbers):
+        dat_in, meta_in =_dwd_observations.dwd_fetch_station(station,
+                                                             store=False)
+        df = _dwd_observations.build_table(dat_in, meta_in, years)
 
-    # create dataset file
-    logger.info("processing data")
-    for year in years:
-        datafile = WEA_FMT % name_yearly(name, year)
-        _dwd_observations.build_dataset_year(
-            year, dat_files, meta_files, datafile, replace)
-
+        with zipfile.ZipFile(target,mode='a') as zf:
+            df.to_csv(path_or_buf=zf.open("%05i.csv" % station,
+                                          mode='w'))
 
 # -------------------------------------------------------------------------
 def provide_weather(source: str, path: str = None,
@@ -2068,27 +2079,28 @@ def provide_weather(source: str, path: str = None,
 
     # param method is implemented for future use
     if path is None:
-        path = find_writeable_storage(path, _tools.STORAGE_TERRAIN)
+        path = find_writeable_storage(path, _tools.STORAGE_WAETHER)
     dataset = dataset_get(source)
     logger.info("downloading weather source %s" % source)
     success = True
     pwd = os.getcwd()
     with tempfile.TemporaryDirectory(dir=TEMP) as temp_dir:
         os.chdir(temp_dir)
-        try:
-            if source == "ERA5":
-                assemble_ERA5(path, years=years)
-            elif source == "CERRA":
-                assemble_CERRA(path, years=years, replace=force)
-            elif source == "DWD":
-                assemble_DWD(path, years=years, replace=force,
-                             args=dataset.arguments)
-            else:
-                logger.error("unknown dataset to download %s" % source)
-                success = False
-        except Exception as e:
-            logger.error(str(e))
+#        try:
+        success = True
+        if source == "ERA5":
+            assemble_ERA5(path, years=years)
+        elif source == "CERRA":
+            assemble_CERRA(path, years=years, replace=force)
+        elif source == "DWD":
+            assemble_DWD(path, years=years, replace=force,
+                         args=dataset.arguments)
+        else:
+            logger.error("unknown dataset to download %s" % source)
             success = False
+        # except Exception as e:
+        #     logger.error(str(e))
+        #     success = False
     # return before clean up
     os.chdir(pwd)
     return success

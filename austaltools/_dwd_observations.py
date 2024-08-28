@@ -18,6 +18,7 @@ import netCDF4
 import requests
 import numpy as np
 import pandas as pd
+from osgeo_utils.samples.gdal_ls import istgz
 
 try:
     from . import _tools
@@ -68,7 +69,7 @@ def dwd_fetch_file(group: str, station: (int, str),
     if not era:
         era = 'historical'
 
-    for (name, gtl, _) in TO_COLLECT:
+    for (name, gtl, abbr) in TO_COLLECT:
         if group == gtl:
             groupname = name
             break
@@ -81,7 +82,11 @@ def dwd_fetch_file(group: str, station: (int, str),
         fname = "%s_Stundenwerte_Beschreibung_Stationen.txt" % group
     else:
         stnr = int(station)
-        fname = dwd_fetch_dirlist(baseurl, "stundenwerte_%s_%05i_0003_.*\.zip")
+        flist = dwd_fetch_dirlist(
+            baseurl, "stundenwerte_%s_%05i_.*\.zip" % (gtl, stnr))
+        if len(flist) != 1:
+            logger.warning('filename on server not unique: %s' % str(flist))
+        fname = sorted(flist)[-1]
 
     local_name = os.path.join(local_path, fname)
     url = "/".join((baseurl, fname))
@@ -91,7 +96,9 @@ def dwd_fetch_file(group: str, station: (int, str),
 
 # -------------------------------------------------------------------------
 
-def dwd_fetch_stationlist(year, fullyear=True):
+def dwd_fetch_stationlist(years, fullyear=True):
+    if not isinstance(years, list):
+        years = [years]
     stations={}
     for (groupname, gtl, groupabbr) in TO_COLLECT:
         listfile = dwd_fetch_file(gtl, 'stations')
@@ -139,16 +146,16 @@ def dwd_fetch_stationlist(year, fullyear=True):
                 [s_nam == v[sid]['name'] for k, v in stations.items()]):
             logger.warning(f'multiple name for station {sid}')
 
-        if not year:
+        if not years:
             start_limit = s_start - pd.Timedelta(1, "year")
             end_limit = s_end + pd.Timedelta(1, "year")
         else:
             if fullyear:
-                start_limit = pd.Timestamp(year, 1, 1, 0, 0, 0)
-                end_limit = pd.Timestamp(year, 12, 31, 23, 59,59)
+                start_limit = pd.Timestamp(years[0], 1, 1, 0, 0, 0)
+                end_limit = pd.Timestamp(years[-1], 12, 31, 23, 59, 59)
             else:
-                start_limit = pd.Timestamp(year, 1, 1, 0, 0, 0)
-                end_limit = pd.Timestamp(year, 12, 31, 23, 59, 59)
+                start_limit = pd.Timestamp(years[0], 1, 1, 0, 0, 0)
+                end_limit = pd.Timestamp(years[-1], 12, 31, 23, 59, 59)
 
         # if time overlaps window:
         if s_start <= start_limit and s_end >= end_limit:
@@ -164,7 +171,7 @@ def dwd_fetch_stationlist(year, fullyear=True):
 
 # -------------------------------------------------------------------------
 
-def dwd_fetch_station(station, storage_path='.'):
+def dwd_fetch_station(station, store=True):
     """
     Ensure that the DWD weather station data for station
     number `station` is available at `storage_path`.
@@ -180,7 +187,7 @@ def dwd_fetch_station(station, storage_path='.'):
     # 3. ID of the data file inside the zip archive:
     #       produkt_<ID>_stunde_<from>_<to>_<station>.txt
     # create temp dir and change into it
-    os.chdir(_PATH)
+    cwd = os.getcwd()
     tempdir = "%05i" % station
     os.mkdir(tempdir)
     os.chdir(tempdir)
@@ -210,93 +217,79 @@ def dwd_fetch_station(station, storage_path='.'):
                     metadata_files.append(name)
             zip_ref.extractall(members=to_extract, path=".")
     #
-    os.chdir(_PATH)
+    os.chdir(cwd)
     # parse data files and store data locally
-    dat = dwd_data_from_download(product_files, tempdir)
-    dat_file = os.path.join(_PATH, OBSFILE_DWD % station)
-    logging.debug('storing data locally in: %s' % dat_file)
-    dat.to_csv(dat_file, sep=',', na_rep='NA')
-    #
-    meta = dwd_meta_from_download(metadata_files, station, tempdir)
-    meta_file = os.path.join(_PATH, METAFILE_DWD % station)
-    logging.debug('storing metadata in   : %s' % meta_file)
-    meta.to_csv(meta_file, sep=',', na_rep='NA')
+    dat_df_in = dwd_data_from_download(product_files, tempdir)
+    if store:
+        dat_file = os.path.join(_PATH, OBSFILE_DWD % station)
+        logging.debug('storing data locally in: %s' % dat_file)
+        dat_df_in.to_csv(dat_file, sep=',', na_rep='NA')
+
+    meta_df_in = dwd_meta_from_download(metadata_files, station, tempdir)
+    if store:
+        meta_file = os.path.join(_PATH, METAFILE_DWD % station)
+        logging.debug('storing metadata in   : %s' % meta_file)
+        meta_df_in.to_csv(meta_file, sep=',', na_rep='NA')
     #
     # clean up tempdir
     shutil.rmtree(tempdir)
-    return dat_file, meta_file
+    if store:
+        return dat_file, meta_file
+    else:
+        return dat_df_in, meta_df_in
+
+    main_frame = build_table(dat_df_in, meta_df_in, years)
+    # return main frame
 
 # -------------------------------------------------------------------------
-def build_dataset_year(datafile, stations, year=None,
-                       replace=False, path=_PATH):
+def build_table(dat_df_in, meta_df_in, years):
 
-    if os.path.exists(datafile):
-        if replace:
-            os.remove(datafile)
-        else:
-            raise IOError(f'file {datafile} already exists')
+    if not years == [x for x in range(min(years), max(years) + 1)]:
+        raise ValueError('years not contiguous')
 
-    dim_time = pd.date_range(start=pd.Timestamp(year, 1, 1, 0, 0, 0),
-                             end=pd.Timestamp(year, 12, 31, 23, 59, 59),
-                             freq='h')
+    hr_idx = pd.date_range(start=pd.Timestamp(years[0], 1, 1, 0, 0, 0),
+                           end=pd.Timestamp(years[-1], 12, 31, 23, 59, 59),
+                           freq='h', tz='UTC')
     # collect all columns
-    dat_cols=[]
-    meta_cols=[]
-    for station in stations:
-        with  pd.read_csv(OBSFILE_DWD % station) as df:
-            dat_cols = list({*dat_cols, *df.columns})
-        with  pd.read_csv(METAFILE_DWD % station) as df:
-            meta_cols = list({*dat_cols, *df.columns})
+    dat_cols = dat_df_in.columns
+    meta_cols = meta_df_in.columns
 
-    # collect data
-    main_index = pd.MultiIndex.from_product([dim_time, stations])
+    dat_frame = pd.DataFrame(np.nan, index=hr_idx, columns=dat_cols)
+    for c in dat_df_in.columns:
+        dat_frame[c] = dat_df_in[c].reindex(hr_idx)
+        #dat_frame[c] = dat_frame[c].astype(dat_df_in[c].dtype)
+        #for i in dat_df_in.index:
+        #    dat_frame.loc[i, c] = dat_df_in.loc[i, c]
 
-    with pd.HDFStore(datafile, mode='w', complib='zlib') as store:
-        for station in _tools.progress(stations):
-            dat_frame = pd.DataFrame(np.nan,
-                                     index=main_index, columns=dat_cols)
-            with  pd.read_csv(OBSFILE_DWD % station) as df:
-                for c in df.columns:
-                    for i in df.index:
-                        im = (i, station)
-                        dat_frame.loc[im, c] = df.loc[i, c]
+    meta_frame = pd.DataFrame(np.nan,
+                              index=hr_idx, columns=meta_cols)
+    meta_df_in.fillna(method='ffill', inplace=True)
+    #meta_df_in = meta_df_in[meta_df_in.index.isin(hr_idx)]
+    for c in meta_df_in.columns:
+        meta_frame[c] = meta_df_in[c].reindex(hr_idx)
+    meta_frame.fillna(method='ffill', inplace=True)
+        # meta_frame[c] = meta_frame[c].astype(meta_df_in[c].dtype)
+        # for i in meta_df_in.index:
+        #     dat_frame.loc[i, c] = meta_df_in.loc[i, c]
 
-            meta_frame = pd.DataFrame(np.nan,
-                                      index=main_index, columns=meta_cols)
-            with  pd.read_csv(METAFILE_DWD % station) as df:
-                tf = pd.DataFrame(np.nan, index=dim_time, columns=[]
-                                        ).join(df, how='outer')
-                tf.fillna(method='ffill', inplace=True)
-                tf = tf[tf.index.isin(dim_time)]
-                for c in tf.columns:
-                    for i in tf.index:
-                        im = (i, station)
-                        dat_frame.loc[im, c] = tf.loc[i, c]
+    main_frame = dat_frame.join(meta_frame, how='outer')
 
-            main_frame = dat_frame.join(meta_frame, how='outer')
-
-            station_id = "%05i" % station
-            main_frame.to_hdf(store, key=station_id)
-    main_frame.to_netcdf(path=datafile)
+    return main_frame
 
 
 
 # -------------------------------------------------------------------------
 
-def dwd_metadata(station, time1, time2, param, path=_PATH):
+def dwd_metadata(meta_frame, time1, time2, param):
     time1 = pd.to_datetime(time1, utc=True)
     time2 = pd.to_datetime(time2, utc=True)
     if time2 < time1:
-        raise ValueError('time2 mut be equal or after time1')
-    stninfo = os.path.join(path, METAFILE_DWD % station)
-    logger.debug("read station info from: %s" % stninfo)
-    md = pd.read_csv(stninfo, header=0)
-    md.index = pd.to_datetime(md['time'])
-    if param not in md.columns:
+        raise ValueError('time2 must be equal or after time1')
+    if param not in meta_frame.columns:
         raise ValueError('parameter not found: %s' % param)
     # get all info in time range:
     value = pd.Series()
-    for i, v in md[param].items():
+    for i, v in meta_frame[param].items():
         if i < time1:
             value[time1] = v
         elif time1 <= i < time2:
@@ -648,7 +641,7 @@ def dwd_meta_from_download(metadata_files, station, path_to_files):
     meta = meta.set_index('time')
     #
     logging.debug("fill blank metadata values")
-    meta = meta.ffill()
+    #meta = meta.ffill()
     meta = meta.drop_duplicates()
     #
     return meta

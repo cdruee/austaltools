@@ -7,6 +7,7 @@ import logging
 import os
 import sys
 
+
 try:
     from . import _tools
     from . import _datasets as DS
@@ -254,23 +255,31 @@ def main():
                                          args["years"])
                 logger.debug('years parsed into int: %s',
                              year_list)
-            for yr in year_list:
-                yn = DS.name_yearly(args['source'], yr)
-                if DS.dataset_available(yn) and not args['force']:
+            try:
+                avl = [DS.dataset_available(args['source'])]
+                if avl and not args['force']:
                     sys.tracebacklimit = 0
-                    raise ValueError(f"dataset exists: {yn} ")
+                    raise ValueError(f"dataset exists: {args['source']} ")
+            except ValueError:
+                for yr in year_list:
+                    yn = DS.name_yearly(args['source'], yr)
+                    avl = DS.dataset_available(yn)
+                    if avl and not args['force']:
+                        sys.tracebacklimit = 0
+                        raise ValueError(f"dataset exists: {yn} ")
             DS.provide_weather(args['source'],
                                path=args['path'],
                                years=year_list,
                                method=args['action'],
+                               force=args['force']
                                )
         else:
             raise ValueError("Source not recognized: %s "
                              % args['source'])
+
     else:
         raise ValueError("Action not recognized: %s "
                          % args['source'])
-
 
 # -------------------------------------------------------------------------
 # initialize and call main routine
