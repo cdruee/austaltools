@@ -84,23 +84,33 @@ logger = logging.getLogger()
 
 # -------------------------------------------------------------------------
 DEM_FMT = '%s.elevation.nc'  # % NAME
+""" terrain database file name template"""
 DEM_CRS = "EPSG:5677"
+""" terrain data projection (GAUSS-KRÜGER zone 3)"""
 WEA_FMT = '%s.ak-input.nc'
+""" weather model database file name template"""
 OBS_FMT = '%s.obs.zip'
-
-
+""" weather observation database file name template"""
+CDSAPI_LIMIT_PARALLEL = 2
+""" Copernicus per-user limit for parallel queries """
 DIST_AUX_FILES = resources.files(__title__ + '.data')
+""" path to the auxiliary data files distributes alongside the coee """
 TEMP = tempfile.gettempdir()
+""" default path for temp files/dierctories """
 MAX_RETRY = 3
+""" number of tries made to download a ceratin file """
 NODATA = 9.96920996838686905e+36
+""" terrain data `noddata` value """
 
 with (DIST_AUX_FILES / 'dataset_definitions.json').open() as f:
     DATASET_DEFINITIONS = json.load(f)
 
 SOURCES_TERRAIN = [k for k, v in DATASET_DEFINITIONS.items()
                    if v['storage'] == _tools.STORAGE_TERRAIN]
+""" list of known terrain data sources """
 SOURCES_WEATHER = [k for k, v in DATASET_DEFINITIONS.items()
                  if v['storage'] == _tools.STORAGE_WAETHER]
+""" list of known weather data sources """
 
 
 # =========================================================================
@@ -1922,10 +1932,8 @@ def assemble_CERRA(path: str, name="CERRA", years: list = [],
     logger.debug("forking parallel jobs: "+str(combi))
 
 
-    # FIMXE
-    procs = 1
     # get data and extract region
-    with mp.Pool(procs) as pool:
+    with mp.Pool(CDSAPI_LIMIT_PARALLEL) as pool:
         _ = pool.map(_ass_cerra_getyear, combi)
 
     logger.debug("finished parallel jobs")
@@ -2003,7 +2011,9 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
     #zip = zipfile.ZipFile(target)
     logger.info("writing stationlist")
     sf = pd.DataFrame.from_dict(stations, orient='index')
-    with zipfile.ZipFile(target, mode='a') as zf:
+    with zipfile.ZipFile(target,
+                         mode='a',
+                         compression=zipfile.ZIP_DEFLATED) as zf:
         sf.to_csv(path_or_buf=zf.open('stationlist.csv',
                                           mode='w'))
 
@@ -2013,7 +2023,9 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
                                                              store=False)
         df = _dwd_observations.build_table(dat_in, meta_in, years)
 
-        with zipfile.ZipFile(target,mode='a') as zf:
+        with zipfile.ZipFile(target,
+                             mode='a',
+                             compression=zipfile.ZIP_DEFLATED) as zf:
             df.to_csv(path_or_buf=zf.open("%05i.csv" % station,
                                           mode='w'))
 
@@ -2080,7 +2092,7 @@ def provide_weather(source: str, path: str = None,
     # param method is implemented for future use
     if path is None:
         path = find_writeable_storage(path, _tools.STORAGE_WAETHER)
-    dataset = dataset_get(source)
+    #dataset = dataset_get(source)
     logger.info("downloading weather source %s" % source)
     success = True
     pwd = os.getcwd()
@@ -2093,6 +2105,7 @@ def provide_weather(source: str, path: str = None,
         elif source == "CERRA":
             assemble_CERRA(path, years=years, replace=force)
         elif source == "DWD":
+            dataset = dataset_get(source)
             assemble_DWD(path, years=years, replace=force,
                          args=dataset.arguments)
         else:
@@ -2111,10 +2124,10 @@ def name_yearly(name, year):
     return '%s-%04i' % (name, year)
 
 # -------------------------------------------------------------------------
-def expand_datasets(defs):
+def expand_datasets(defs: dict):
     datasets = []
     for k,v in defs.items():
-        if "split" in v:
+        if "split" in v.keys():
             if v["split"] == "years":
                 years_available = _tools.expand_sequence(
                     v["years_available"])

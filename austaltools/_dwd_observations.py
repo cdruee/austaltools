@@ -238,8 +238,8 @@ def dwd_fetch_station(station, store=True):
     else:
         return dat_df_in, meta_df_in
 
-    main_frame = build_table(dat_df_in, meta_df_in, years)
-    # return main frame
+    #main_frame = build_table(dat_df_in, meta_df_in, years)
+    #return main frame
 
 # -------------------------------------------------------------------------
 def build_table(dat_df_in, meta_df_in, years):
@@ -537,8 +537,11 @@ def dwd_data_from_download(product_files: list, path_to_files: str) \
     #
     # remove "-999" from cloud types:
     for i in [1, 2, 3, 4]:
-        dat['V_S%i_CSA' % i] = \
-            dat['V_S%i_CSA' % i].str.replace('-999', '')
+        dat['V_S%i_CSA' % i] = dat['V_S%i_CSA' % i].map(
+            (lambda x: x.replace('-999', '')
+            if isinstance(x, str) else x)
+        )
+
 
     if dat.index[0] < OLDEST:
         logging.info('remove values before ' + OLDEST.strftime('%Y-%m-%d'))
@@ -622,26 +625,42 @@ def dwd_meta_from_download(metadata_files, station, path_to_files):
                 cols.append('_'.join((suffix, c)))
         df.columns = cols
         #
+        # convert dates
+        df1 = df.copy()
+        df1['time'] = pd.to_datetime(df1['von_datum'],
+                                    format="%Y%m%d", utc=True)
+        df1 = df1.set_index('time')
+        df1.drop(['von_datum', 'bis_datum'], axis=1, inplace=True)
+        df2 = df.copy()
+        df2['time'] = (pd.to_datetime(df2['bis_datum'],
+                                     format="%Y%m%d", utc=True)
+                       + pd.Timedelta('23h'))
+
+        df2 = df2.set_index('time')
+        df2.drop(['von_datum', 'bis_datum'], axis=1, inplace=True)
+
+        del df
+        df = pd.concat((df1, df2))
+        #
+        logging.debug("fill blank metadata values")
+        df = df.fillna(method='ffill')
+        #
         logging.debug('merging metadata')
         if meta is None:
             meta = df
         else:
             # no duplicate columns (https://stackoverflow.com/a/19125531)
-            cols_to_use = (list(df.columns.difference(meta.columns))
-                           + ['von_datum', 'bis_datum'])
-            meta = meta.merge(df[cols_to_use],
-                              on=['von_datum', 'bis_datum'],
-                              how='outer',
-                              suffixes=('', ' (doppel)'))
+            cols_to_use = list(df.columns.difference(meta.columns))
+            meta = meta.join(df[cols_to_use],
+                             how='outer',
+                             lsuffix=' ',
+                             rsuffix=' (doppel)'
+                             )
         logging.debug(meta.columns)
-    #
-    # convert dates
-    meta['time'] = pd.to_datetime(meta['von_datum'],
-                                  format="%Y%m%d", utc=True)
-    meta = meta.set_index('time')
-    #
-    logging.debug("fill blank metadata values")
-    #meta = meta.ffill()
+
+    meta = meta.fillna(method='ffill')
+    # remove duplicates
     meta = meta.drop_duplicates()
+    meta = meta[~meta.index.duplicated(keep='last')]
     #
     return meta
