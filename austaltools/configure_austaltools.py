@@ -25,9 +25,9 @@ logger = logging.getLogger()
 
 def list_datasets(only='all', state='known', long=False):
     if long:
-        lfmt = "| %-9s | %6s | %6s | %s"
-        print(lfmt % (' Dataset ', 'online', 'avail.', 'path'))
-        print(lfmt % ('---------', '------', '------', '-------------'))
+        lfmt = "| %-10s | %6s | %6s | %s"
+        print(lfmt % (' Dataset  ', 'online', 'avail.', 'path'))
+        print(lfmt % ('----------', '------', '------', '-------------'))
         for d in DS.DATASETS:
             if (only in [d.storage, 'all'] and
                     (state == 'known' or d.available)):
@@ -78,7 +78,10 @@ def cli_parser():
                                        metavar='COMMAND',
                                        required=True
                                        )
-    sub_list = subparsers.add_parser('list')
+    sub_list = subparsers.add_parser('list',
+                                     help='list known datasets '
+                                          'and show availability and '
+                                          'storage locations')
     sub_only_grp = sub_list.add_mutually_exclusive_group()
     sub_only_grp.add_argument('-w', '--weather',
                               dest='only',
@@ -110,7 +113,10 @@ def cli_parser():
                           action='store_true',
                           help='show verbose list instead of just codes')
 
-    sub_down = subparsers.add_parser('download')
+    sub_down = subparsers.add_parser('download',
+                                     help='download pre-assembled dataset '
+                                          'from a location configured '
+                                          'for the dataset.')
     sub_down.add_argument('-s', '--source',
                           metavar="CODE",
                           nargs=None,
@@ -148,7 +154,7 @@ def cli_parser():
                                      'data source. \n' +
                                      'WARNING: This may take a ' +
                                      'LONG time and may require excessive ' +
-                                     'memory and disk space!'
+                                     'memory and disk space.'
                                      )
     sub_assm.add_argument('-s', '--source',
                           metavar="CODE",

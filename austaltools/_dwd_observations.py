@@ -280,39 +280,39 @@ def build_table(dat_df_in, meta_df_in, years):
 
 # -------------------------------------------------------------------------
 
-def dwd_metadata(meta_frame, time1, time2, param):
-    time1 = pd.to_datetime(time1, utc=True)
-    time2 = pd.to_datetime(time2, utc=True)
-    if time2 < time1:
-        raise ValueError('time2 must be equal or after time1')
-    if param not in meta_frame.columns:
-        raise ValueError('parameter not found: %s' % param)
-    # get all info in time range:
-    value = pd.Series()
-    for i, v in meta_frame[param].items():
-        if i < time1:
-            value[time1] = v
-        elif time1 <= i < time2:
-            value[i] = v
-        else:
-            value[time2] = v
-            break
-    # reduce lines giving no new info:
-    new = []
-    old = None
-    for i, v in value.items():
-        if len(new) == 0:
-            new.append(True)
-            old = v
-        else:
-            if v == old:
-                new.append(False)
-            else:
-                new.append(True)
-                old = v
-    new[-1] = True
-    value = value[new]
-    return value
+# def dwd_metadata(meta_frame, time1, time2, param):
+    # time1 = pd.to_datetime(time1, utc=True)
+    # time2 = pd.to_datetime(time2, utc=True)
+    # if time2 < time1:
+    #     raise ValueError('time2 must be equal or after time1')
+    # if param not in meta_frame.columns:
+    #     raise ValueError('parameter not found: %s' % param)
+    # # get all info in time range:
+    # value = pd.Series()
+    # for i, v in meta_frame[param].items():
+    #     if i < time1:
+    #         value[time1] = v
+    #     elif time1 <= i < time2:
+    #         value[i] = v
+    #     else:
+    #         value[time2] = v
+    #         break
+    # # reduce lines giving no new info:
+    # new = []
+    # old = None
+    # for i, v in value.items():
+    #     if len(new) == 0:
+    #         new.append(True)
+    #         old = v
+    #     else:
+    #         if v == old:
+    #             new.append(False)
+    #         else:
+    #             new.append(True)
+    #             old = v
+    # new[-1] = True
+    # value = value[new]
+    # return value
 
 # -------------------------------------------------------------------------
 
@@ -425,53 +425,55 @@ def dwd_get_meta_value(metadata, time_begin, time_end, par_name):
 #         return lat, lon, ele, nam
 
 # -------------------------------------------------------------------------
-
-def dwd_stationinfo(station, path=_PATH, pos_lat=None, pos_lon=None):
-    if station is not None:
-        sstr = '{:05d}'.format(station)
-        if pos_lat is not None and pos_lon is not None:
-            raise ValueError('lat and lon must be None ' +
-                             'unless station is None')
-    else:
-        sstr = None
-    stninfo = os.path.join(path, 'TU_Stundenwerte_Beschreibung_Stationen.txt')
-    logger.debug("read station info from: %s" % stninfo)
-    min_sdist = 9999999.
-    sid = None
-    with (open(stninfo, 'r') as f):
-        # skip header
-        f.readline()
-        f.readline()
-        for line in f.readlines():
-            s_id = line[0:5]
-            s_ele = float(line[31:40])
-            s_lat = float(line[41:50])
-            s_lon = float(line[51:60])
-            s_nam = (line[61:102]).strip()
-            if sstr is not None:
-                if  line[0:5] == sstr:
-                    ele = s_ele
-                    lat = s_lat
-                    lon = s_lon
-                    nam = s_nam
-                    sid = station
-                    break
-            else:
-                sdist = _tools.spheric_distance(s_lat, s_lon, pos_lat, pos_lon)
-                if sdist < min_sdist:
-                    sid = s_id
-                    ele = s_ele
-                    lat = s_lat
-                    lon = s_lon
-                    nam = s_nam
-                    min_sdist = sdist
-    if sid is None:
-        raise ValueError('station not found: %s' % station)
-    logger.debug("station name: %s" % nam)
-    if station is None:
-        return lat, lon, ele, nam, int(sid)
-    else:
-        return lat, lon, ele, nam
+#
+#
+# def dwd_stationinfo(station, path=_PATH, pos_lat=None, pos_lon=None):
+#     if station is not None:
+#         sstr = '{:05d}'.format(station)
+#         if pos_lat is not None and pos_lon is not None:
+#             raise ValueError('lat and lon must be None ' +
+#                              'unless station is None')
+#     else:
+#         sstr = None
+#     stninfo = os.path.join(path, 'TU_Stundenwerte_Beschreibung_Stationen.txt')
+#     logger.debug("read station info from: %s" % stninfo)
+#     min_sdist = 9999999.
+#     sid = None
+#     with (open(stninfo, 'r') as f):
+#         # skip header
+#         f.readline()
+#         f.readline()
+#         for line in f.readlines():
+#             s_id = line[0:5]
+#             s_ele = float(line[31:40])
+#             s_lat = float(line[41:50])
+#             s_lon = float(line[51:60])
+#             s_nam = (line[61:102]).strip()
+#             if sstr is not None:
+#                 if  line[0:5] == sstr:
+#                     ele = s_ele
+#                     lat = s_lat
+#                     lon = s_lon
+#                     nam = s_nam
+#                     sid = station
+#                     break
+#             else:
+#                 sdist = _tools.spheric_distance(s_lat, s_lon, pos_lat, pos_lon)
+#                 if sdist < min_sdist:
+#                     sid = s_id
+#                     ele = s_ele
+#                     lat = s_lat
+#                     lon = s_lon
+#                     nam = s_nam
+#                     min_sdist = sdist
+#     if sid is None:
+#         raise ValueError('station not found: %s' % station)
+#     logger.debug("station name: %s" % nam)
+#     if station is None:
+#         return lat, lon, ele, nam, int(sid)
+#     else:
+#         return lat, lon, ele, nam
+#
 
 
 def dwd_data_from_download(product_files: list, path_to_files: str) \

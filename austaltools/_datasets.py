@@ -243,7 +243,16 @@ class DataSet:
         if self.file_notice is None:
             self.file_notice = f"{self.name}.NOTICE.txt"
         if self.file_data is None:
-            self.file_data = DEM_FMT % self.name
+            if self.storage == 'terrain':
+                self.file_data = DEM_FMT % self.name
+            elif self.storage == 'weather':
+                pos = kwargs.get('position', None)
+                if pos == 'station':
+                    self.file_data = OBS_FMT % self.name
+                elif pos in ['grid', None]:
+                    self.file_data = WEA_FMT % self.name
+                else:
+                    raise ValueError(f"unkown position: {pos}")
 
 
 # =========================================================================
@@ -318,7 +327,7 @@ def dataset_available(name):
 
 
 # -------------------------------------------------------------------------
-def dataset_scan(locs:list=None):
+def dataset_scan(locs : list = None):
     """
     Scan for datasets available on the system.
     Set the :py:attr:`DataSet.available` attribute

@@ -516,26 +516,28 @@ def vdi_3872_6_sun_rise_set(time, lat, lon):
     # check types
     if _isscalar(time):
         scalar = True
-        dt = pd.DatetimeIndex([pd.to_datetime(time)])
+        idx = [pd.to_datetime(time)]
     else:
-        dt = pd.DatetimeIndex(time)
+        idx = time
         scalar = False
     if not ((_isscalar(lat) and _isscalar(lon)) or
             (np.shape(time) == np.shape(lat) == np.shape(lon))):
         raise ValueError('lat, lon must be scalars or same shape as time')
     # check / adjust timezone
     # Etc/GMT-1 (fixed-offset timezone) equals CET without DST applied
-    if dt.tz is None:
-        dt = dt.tz_localize('Etc/GMT-1')
-    cet = dt.tz_convert('Etc/GMT-1')
+    if idx.tz is None:
+        idx_loc = idx.tz_localize('Etc/GMT-1')
+    else:
+        idx_loc = idx
+    cet = idx_loc.tz_convert('Etc/GMT-1')
     if np.min(lon) < -9.5 or np.max(lon) > 32.:
         raise ValueError('VDI 3782 Part 6, Annex A defined for CET, only')
     # get day of year in CET
-    j = pd.Series(pd.to_datetime(cet).dayofyear, index=dt)  # days
+    jul = pd.Series(pd.to_datetime(cet).dayofyear, index=idx)  # days
     # latitude in radians
     phi_rad = np.deg2rad(lat)  # rad
     # equation (A3)
-    x = 0.9856 * j - 2.72  # deg
+    x = 0.9856 * jul - 2.72  # deg
     # abbreviation
     sin_x = np.sin(np.deg2rad(x))  # 1
     # equation (A2)
@@ -554,8 +556,8 @@ def vdi_3872_6_sun_rise_set(time, lat, lon):
     s_dn = 12. + omega_0 + Z_v - Z
 
     # convert CET to tz given
-    tzoff = (pd.Series([x.tzinfo.utcoffset(x).seconds / 3600. for x in dt],
-                       index=dt) -
+    tzoff = (pd.Series([x.tzinfo.utcoffset(x).seconds / 3600. for x in idx_loc],
+                       index=idx) -
              pd.Timestamp.now(tz='CET').utcoffset().seconds / 3600.)
     s_up = s_up + tzoff
     s_dn = s_dn + tzoff

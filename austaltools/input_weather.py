@@ -10,8 +10,7 @@ import itertools
 import logging
 import os
 import sys
-from urllib.request import urlretrieve
-
+import zipfile
 import numpy as np
 import pandas as pd
 
@@ -61,53 +60,8 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     gn = m.constants.gn
     _check = m._utils._check
 
-
-# -------------------------------------------------------------------------
-
-
-def find_weather_data():
-    """
-    Searches all known storage locations for the known weather datasets
-    and yields a list of the datasets available locally.
-
-    :return: dataset IDs of the locally available datasets
-    :rtype: list[str]
-    """
-    datasets = {}
-    for ds in _datasets.DATASETS:
-        # is ds a terrain dataset?
-        if ds.storage == 'weather':
-            # is it locally available (i.e. downloaded already?):
-            if ds.available:
-                datasets[ds.name] = ds.path
-    return datasets
-
-# -------------------------------------------------------------------------
-
-
-def provide_dwd_station(storage_path: str, force=False):
-    """
-    Ensure that the DWD weather station list is available
-    at `storage_path`.
-    If not, it is downloaded and stored in the `storage_path`.
-
-    :param storage_path: data storage directory
-    :param force: (optional) If True, data is downloaded even
-        if it already exists. Defaults to False.
-
-    """
-    server = "https://opendata.dwd.de"
-    path_aux = "climate_environment/CDC/help"
-    files_aux = ["FF_Stundenwerte_Beschreibung_Stationen.txt"]
-
-    for aux in files_aux:
-        if (not os.path.exists(os.path.join(storage_path, aux))
-                or force is True):
-            urlretrieve("/".join([server, path_aux, aux]),
-                        os.path.join(storage_path, aux))
-
-
 # ----------------------------------------------------
+
 def h_eff(has: float, z0s: float) -> list:
     """
     Calculate the effective anemometer heights of an anemometer
@@ -130,8 +84,8 @@ def h_eff(has: float, z0s: float) -> list:
         d0 = m.wind.DISPLACEMENT_FACTOR * z0
         ha.append(d0 + z0 * ((href - d0) / z0) ** ps)
     return ha
-# ----------------------------------------------------
 
+# ----------------------------------------------------
 
 def area_of_triangle(abc: list[tuple[float, float]]) -> float:
     """
@@ -146,8 +100,8 @@ def area_of_triangle(abc: list[tuple[float, float]]) -> float:
     area = 0.5 *(-b[1]*c[0] + a[1]*(-b[0] + c[0]) +
                  a[0]*(b[1] - c[1]) + b[0]*c[1])
     return area
-# ----------------------------------------------------
 
+# ----------------------------------------------------
 
 def point_in_triangle(p: tuple[float, float],
                           abc: list[tuple[float, float]]) -> bool:
@@ -175,8 +129,8 @@ def point_in_triangle(p: tuple[float, float],
         / (2 * area)
     res = s > 0. and t > 0. and 1 - s - t > 0.
     return res
-# ----------------------------------------------------
 
+# ----------------------------------------------------
 
 def grid_surrounding_nodes(lat: float, lon: float, dims: dict) \
         -> list[tuple[float]]:
@@ -240,8 +194,8 @@ def grid_surrounding_nodes(lat: float, lon: float, dims: dict) \
         logger.debug('min_triangle: %s %s' % (str(min_triangle),str(min_dist_sum)))
 
     return min_triangle
-# ----------------------------------------------------
 
+# ----------------------------------------------------
 
 def grid_calulate_weights(pos: list) -> list[float]:
     logging.info('interpolation variant: %s' % INTER_VARIANT)
@@ -263,8 +217,8 @@ def grid_calulate_weights(pos: list) -> list[float]:
                          INTER_VARIANT)
     logger.debug('w: %s' % w)
     return w
-# ----------------------------------------------------
 
+# ----------------------------------------------------
 
 def read_era5_nc(ncfile, lat, lon):
     """
@@ -409,7 +363,7 @@ def read_era5_nc(ncfile, lat, lon):
 
 
 # ----------------------------------------------------
-def get_ERA5_weather(lat, lon, year, storage_path='.') \
+def get_era5_weather(lat, lon, year, datafile=None) \
         -> (pd.DataFrame, float):
     """
     Get weather timeseries for the provided position
@@ -443,10 +397,14 @@ def get_ERA5_weather(lat, lon, year, storage_path='.') \
 
     :rtype: (pd.DataFrame, float)
     """
-    ncfile = os.path.join(storage_path, 'era5_ak_eu_%04i.nc' % year)
-    logging.info('reading data from; %s' % ncfile)
+    ds = _datasets.dataset_get(
+        _datasets.name_yearly("ERA5", year)
+    )
+    if datafile is None:
+        datafile = os.path.join(ds.path, ds.file_data)
+    logging.info('reading data from; %s' % datafile)
 
-    v = read_era5_nc(ncfile, lat, lon)
+    v = read_era5_nc(datafile, lat, lon)
     v.index = v['time']
     v.sort_index(inplace=True)
 
@@ -645,7 +603,7 @@ def read_cerra_nc(ncfile, lat, lon):
 # ----------------------------------------------------
 
 
-def get_CERRA_weather(lat, lon, year, storage_path='.') \
+def get_cerra_weather(lat, lon, year, datafile=None) \
         -> (pd.DataFrame, float):
     """
     Get weather timeseries for the provided position
@@ -679,10 +637,14 @@ def get_CERRA_weather(lat, lon, year, storage_path='.') \
 
     :rtype: (pd.DataFrame, float)
     """
-    ncfile = os.path.join(storage_path, 'cerra_ak_eu_%04i.nc' % year)
-    logging.info('reading data from; %s' % ncfile)
+    ds = _datasets.dataset_get(
+        _datasets.name_yearly("CERRA", year)
+    )
+    if datafile is None:
+        datafile = os.path.join(ds.path, ds.file_data)
+    logging.info('reading data from; %s' % datafile)
 
-    v = read_cerra_nc(ncfile, lat, lon)
+    v = read_cerra_nc(datafile, lat, lon)
     v.index = v['time']
     v.sort_index(inplace=True)
 
@@ -707,10 +669,49 @@ def get_CERRA_weather(lat, lon, year, storage_path='.') \
                     'tp'  # mm
                     ])
     return res, z0
+
 # ----------------------------------------------------
 
+def read_dwd_stationinfo(station, pos_lat=None, pos_lon=None,
+                         datafile=None):
+    if station is not None:
+        if pos_lat is not None and pos_lon is not None:
+            raise ValueError('lat and lon must be None ' +
+                             'unless station is None')
+    else:
+        sstr = None
+    ds = _datasets.dataset_get("DWD")
+    if datafile is None:
+        datafile = os.path.join(ds.path, ds.file_data)
+    logging.info('reading data from; %s' % datafile)
+    with zipfile.ZipFile(datafile,
+                         mode='r') as zf:
+        sf = pd.read_csv(filepath_or_buffer=zf.open(
+            'stationlist.csv', mode='r'))
 
-def get_DWD_weather(lat, lon, year, station=None, storage_path='.') \
+    srow = None
+    if station is not None:
+        srow = sf.index[sf.index == station]
+    else:
+        sf['sdist'] = _tools.spheric_distance(
+            sf['latitude'], sf['longitude'], pos_lat, pos_lon)
+        srow = sf['sdist'].argmin()
+
+    if srow is None:
+        raise ValueError('station not found: %s' % station)
+    lat = sf['latitude'][srow]
+    lon = sf['longitude'][srow]
+    ele = sf['elevation'][srow]
+    nam = sf['name'][srow]
+    logger.debug("station name: %s" % nam)
+    if station is None:
+        return lat, lon, ele, nam, int(srow)
+    else:
+        return lat, lon, ele, nam
+
+# ----------------------------------------------------
+
+def get_dwd_weather(lat, lon, year, station=None, datafile=None) \
         -> (pd.DataFrame, float):
     """
     Get weather timeseries for the provided position
@@ -746,60 +747,51 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.') \
 
     :rtype: (pd.DataFrame, float)
     """
+    ds = _datasets.dataset_get("DWD")
+    if datafile is None:
+        datafile = os.path.join(ds.path, ds.file_data)
+    logging.info('reading data from; %s' % datafile)
     if station is None:
-        lat, lon, ele, nam, station = dwd_stationinfo(
-            None, storage_path, lat, lon)
+        lat, lon, ele, nam, station = read_dwd_stationinfo(
+            station=None, pos_lat=lat, pos_lon=lon, datafile=datafile)
+        logger.info(f"selected nearest station {nam}")
     else:
-        lat, lon, ele, nam = dwd_stationinfo(
-            station, storage_path)
-    obsfile = OBSFILE_DWD % station
-    metafile = METAFILE_DWD % station
-    if not (os.path.exists(os.path.join(storage_path, obsfile)) and
-            os.path.exists(os.path.join(storage_path, metafile))):
-        logger.info('data from station %05i not in storage' % station)
-        try:
-            download_DWD_weather(station, storage_path)
-        except Exception as e:
-            sys.tracebacklimit=0
-            raise LookupError('downloading data from ' +
-                          'station %05i ' % station +
-                          'failed'
-                          )
-    else:
-        logger.info('data from station %05i found in storage' % station)
-    data = pd.read_csv(os.path.join(storage_path, obsfile),
-                       index_col='time', parse_dates=True,
-                       sep=',', na_values='NA',
-                       engine='python')
+        lat, lon, ele, nam = read_dwd_stationinfo(
+            station, datafile=datafile)
+    with zipfile.ZipFile(datafile,
+                         mode='r') as zf:
+        df = pd.read_csv(filepath_or_buffer=zf.open(
+            '%05i.csv' % station, mode='r'),
+            index_col='time', parse_dates=True,
+            engine='python')
     logger.debug('done reading')
     #
     #  treat the data ------------------------------------------------
     #
     # select data from year
-    data = data[data.index.year == year]
+    df = df[df.index.year == year]
     #
     # rename / convert units
+    data = pd.DataFrame(index=df.index)
     # wind direction 990 means "undetermined"/"umlaufender Wind"
-    data['dd'] = data['D'].mask(data['D'] == 990., np.nan)  # deg
-    data['ff'] = data['F']  # m/s
-    data['sp'] = data['P0'] * 100.  # hPa -> Pa
-    data['t2m'] = data['TT_TU']  # °C
-    data['r2m'] = data['RF_TU'] / 100.  # % -> 1
-    data['tcc'] = data['V_N'] / 8.  # octa -> 1
-    data['cbh'] = data['V_S1_HHS']  # m
+    data['dd'] = df['D'].df(data['D'] == 990., np.nan)  # deg
+    data['ff'] = df['F']  # m/s
+    data['sp'] = df['P0'] * 100.  # hPa -> Pa
+    data['t2m'] = df['TT_TU']  # °C
+    data['r2m'] = df['RF_TU'] / 100.  # % -> 1
+    data['tcc'] = df['V_N'] / 8.  # octa -> 1
+    data['cbh'] = df['V_S1_HHS']  # m
     data['cty'] = ['//' if (pd.isna(x) or x == '-1') else x
-                   for x in data['V_S1_CSA']]  # SNYOP key
-    data['tp'] = data['R1']  # mm
+                   for x in df['V_S1_CSA']]  # SNYOP key
+    data['tp'] = df['R1']  # mm
     #
     #  treat the metadata --------------------------------------------
     #
     # get wind sensor height from metadata
-    za = dwd_get_meta_value(
-        os.path.join(storage_path, metafile),
-        data.index[1], data.index[-1],
-        'windgeschwindigkeit_geberhoehe ueber grund [m]')
+    za = df['windgeschwindigkeit_geberhoehe ueber grund [m]']
+    za_values = set(list(za))
     # if sensor height changed that year:
-    if len(za) > 2:
+    if len(za_values) > 1:
         raise ValueError('change in anemometer setup in year: %d' % year)
     elif pd.notna(za.values[0]):
         z_a = za.values[0]
@@ -808,8 +800,8 @@ def get_DWD_weather(lat, lon, year, station=None, storage_path='.') \
                         'assuming 10m standard height')
         z_a = 10.
 
-    z0 = dis.z0_verkaik(z_a, speed=data['F'],
-                                gust=data['FX_911'], dirct=data['D'])
+    z0 = dis.z0_verkaik(z_a, speed=df['F'],
+                                gust=df['FX_911'], dirct=df['D'])
     logging.info("roughness length: %5f" % z0)
 
     data = data.filter(['time',  # UTC
@@ -852,14 +844,13 @@ def austal_weather(args):
     """
     logger.debug("args: %s" % format(args))
 
-    storage_path = provide_storage()
-    logger.debug("STORAGE_PATH: %s" % storage_path)
-
+    station = None
     ele = None
     if args["dwd"] is not None:
+        storage_dwd = _datasets.dataset_get("DWD").path
         station = int(pd.to_numeric(args["dwd"]))
-        lat, lon, ele, nam = _dwd_observations.dwd_stationinfo(
-            station, storage_path)
+        lat, lon, ele, nam = read_dwd_stationinfo(
+            station, path=storage_dwd)
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
     # elif args["wmo"] is not None:
     #     lat, lon, ele, nam = wmo_stationinfo(args["wmo"], path=path)
@@ -892,11 +883,15 @@ def austal_weather(args):
 
     source = args['source']
     if source == "ERA5":
-        obs, z0 = get_ERA5_weather(lat, lon, year, storage_path)
+        obs, z0 = get_era5_weather(lat, lon, year)
     elif source == "CERRA":
-        obs, z0 = get_CERRA_weather(lat, lon, year, storage_path)
+        obs, z0 = get_cerra_weather(lat, lon, year)
     elif source == "DWD":
-        obs, z0 = get_DWD_weather(lat, lon, year, station, storage_path)
+        if not _datasets.dataset_get(source).available:
+            sys.tracebacklimit = 0
+            raise ValueError(f"source {source} not available")
+        path = _datasets.dataset_get(source).path
+        obs, z0 = get_dwd_weather(lat, lon, year, station, path)
     else:
         raise ValueError("unknown source: %s" % source)
 
