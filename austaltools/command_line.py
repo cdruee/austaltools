@@ -41,6 +41,48 @@ class UsageError(Exception):
     pass
 
 # ----------------------------------------------------
+def add_location_opts(pars, stations=False):
+    loc_opt = pars.add_mutually_exclusive_group(required=True)
+    loc_opt.add_argument('-L', '--ll',
+                         metavar=("LAT", "LON"),
+                         dest="ll",
+                         nargs=2,
+                         default=None,
+                         help='Center position given as Latitude and ' +
+                              'Longitude, respectively. ' +
+                              'This is the default.')
+    loc_opt.add_argument('-G', '--gk',
+                         metavar=("X", "Y"),
+                         dest="gk",
+                         nargs=2,
+                         default=None,
+                         help='Center position given in Gauß-Krüger zone 3' +
+                              'coordinates: X = `Rechtswert`, ' +
+                              'Y = `Hochwert`. ')
+    loc_opt.add_argument('-U', '--utm',
+                         metavar=("X", "Y"),
+                         dest="ut",
+                         nargs=2,
+                         default=None,
+                         help='Center position given in UTM Zone 32N' +
+                              'coordinates: X = `easting`, ' +
+                              'Y = `northing`.')
+    if stations:
+        loc_opt.add_argument('-D', '--dwd',
+                             metavar="NUMBER",
+                             dest="dwd",
+                             help='Weather station position with ' +
+                                  'German weather service (DWD) ID `NUMBER`')
+        loc_opt.add_argument('-W', '--wmo',
+                             metavar="NUMBER",
+                             dest="wmo",
+                             help='Postion of weather station with ' +
+                                  'World Meteorological Organization (WMO)' +
+                                  'station ID `NUMBER`')
+
+    return pars
+
+# ----------------------------------------------------
 
 
 def cli_parser():
@@ -270,31 +312,8 @@ def cli_parser():
     pars_ter.add_argument(dest="output", metavar="NAME",
                           help="file name to store data in.",
                           )
-    ter_pos = pars_ter.add_mutually_exclusive_group(required=True)
-    ter_pos.add_argument('-L', '--ll',
-                         metavar=("LAT", "LON"),
-                         dest="ll",
-                         nargs=2,
-                         default=None,
-                         help='Center position given as Latitude and ' +
-                              'Longitude, respectively. ' +
-                              'This is the default.')
-    ter_pos.add_argument('-G', '--gk',
-                         metavar=("X", "Y"),
-                         dest="gk",
-                         nargs=2,
-                         default=None,
-                         help='Center position given in Gauß-Krüger zone 3' +
-                              'coordinates: X = `Rechtswert`, ' +
-                              'Y = `Hochwert`. ')
-    ter_pos.add_argument('-U', '--utm',
-                         metavar=("X", "Y"),
-                         dest="ut",
-                         nargs=2,
-                         default=None,
-                         help='Center position given in UTM Zone 32N' +
-                              'coordinates: X = `easting`, ' +
-                              'Y = `northing`.')
+
+    pars_ter = add_location_opts(pars=pars_ter)
 
     pars_ter.add_argument('-s', '--source',
                           metavar="CODE",
@@ -315,55 +334,30 @@ def cli_parser():
 
     # ----------------------------------------------------
 
+    pars_transl = subparsers.add_parser(
+        name='translate',
+        help='translate coordinates into other projections')
+    pars_transl = add_location_opts(pars_transl, stations=True)
+    pars_transl.add_argument('-a',
+                          action='store_true',
+                          help=('automatically select Gauss-Krüger'
+                                'zone instead of assuming zone 3'))
+
+    # ----------------------------------------------------
+
     default_year = 2020
     #
     # command line args
     #
     pars_wea = subparsers.add_parser(
         name='weather',
-        help='Extract amospheric time series for AUSTAL ' +
+        help='Extract atmospheric time series for AUSTAL ' +
              'from various sources'
     )
     pars_wea.add_argument(dest="output", metavar="NAME", nargs='?',
                           help="file name to store data in."
                           )
-    wea_pos = pars_wea.add_mutually_exclusive_group(required=True)
-    wea_pos.add_argument('-L', '--ll',
-                         metavar=("LAT", "LON"),
-                         dest="ll",
-                         nargs=2,
-                         default=None,
-                         help='Center position given as Latitude and ' +
-                              'Longitude, respectively. ' +
-                              'This is the default.')
-    wea_pos.add_argument('-G', '--gk',
-                         metavar=("X", "Y"),
-                         dest="gk",
-                         nargs=2,
-                         default=None,
-                         help='Center position given in Gauß-Krüger ' +
-                              'zone 3 coordinates: ' +
-                              'X = `Rechtswert`, ' +
-                              'Y = `Hochwert`. ')
-    wea_pos.add_argument('-U', '--utm',
-                         metavar=("X", "Y"),
-                         dest="ut",
-                         nargs=2,
-                         default=None,
-                         help='Center position given in UTM coordinates: ' +
-                              'X = `easting`, ' +
-                              'Y = `northing`.')
-    wea_pos.add_argument('-D', '--dwd',
-                         metavar="NUMBER",
-                         dest="dwd",
-                         help='Weather station position with ' +
-                              'German weather service (DWD) ID `NUMBER`')
-    wea_pos.add_argument('-W', '--wmo',
-                         metavar="NUMBER",
-                         dest="wmo",
-                         help='Postion of weather station with ' +
-                              'World Meteorological Organization (WMO)' +
-                              'station ID `NUMBER`')
+    pars_wea = add_location_opts(pars_wea, stations=True)
     pars_wea.add_argument('-s', '--source',
                         metavar="CODE",
                         nargs=None,
@@ -446,14 +440,17 @@ def main():
             eap.main(args)
         elif args['command'] in ['fill-timeseries', 'ft']:
             fill_timeseries.main(args)
-        elif args['command'] == 'terrain':
-            input_terrain.main(args)
-        elif args['command'] == 'weather':
-            input_weather.main(args)
         elif args['command'] == 'plot':
             plot.main(args)
         elif args['command'] == 'steepness':
             steepness.main(args)
+        elif args['command'] == 'terrain':
+            input_terrain.main(args)
+        elif args['command'] == 'translate':
+            print("not yet implemented")
+            pass
+        elif args['command'] == 'weather':
+            input_weather.main(args)
         #else:
          #   raise ValueError('unknown command: %s' % args['command'])
     except UsageError as e:
