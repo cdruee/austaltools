@@ -5,6 +5,8 @@ import logging
 import os
 import sys
 
+from austaltools.input_terrain import AVAILABLE_DEMS
+
 try:
     from . import _tools
     from ._version import __version__, __title__
@@ -255,7 +257,10 @@ def cli_parser():
 
     # ----------------------------------------------------
 
-    default_dem = list(input_terrain.AVAILABLE_DEMS)[0]
+    if len(AVAILABLE_DEMS) > 0:
+        default_dem = list(input_terrain.AVAILABLE_DEMS)[0]
+    else:
+        default_dem = None
     default_extent = 6.
 
     pars_ter = subparsers.add_parser(
@@ -299,7 +304,7 @@ def cli_parser():
                           help='code for the source digital elevation ' +
                                'model (DEM). Known DEMs are: ' +
                                ' '.join(input_terrain.AVAILABLE_DEMS) +
-                               ' Defaults to ' + default_dem)
+                               ' Defaults to ' + str(default_dem))
     pars_ter.add_argument('-e', '--extent',
                           metavar="KM",
                           nargs=None,
