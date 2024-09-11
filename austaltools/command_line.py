@@ -5,6 +5,8 @@ import logging
 import os
 import sys
 
+from mpl_toolkits.mplot3d.proj3d import transform
+
 from austaltools.input_terrain import AVAILABLE_DEMS
 
 try:
@@ -16,8 +18,9 @@ try:
     from . import fill_timeseries
     from . import input_terrain
     from . import input_weather
-    from . import steepness, eap
-    from . import plot    
+    from . import steepness
+    from . import transform
+    from . import plot
 except ImportError:
     import _tools
     from _version import __version__, __title__
@@ -27,8 +30,9 @@ except ImportError:
     import fill_timeseries
     import input_terrain
     import input_weather
-    import steepness, eap
-    import plot    
+    import steepness
+    import transform
+    import plot
 # ----------------------------------------------------
 
 logging.basicConfig()
@@ -41,8 +45,10 @@ class UsageError(Exception):
     pass
 
 # ----------------------------------------------------
-def add_location_opts(pars, stations=False):
-    loc_opt = pars.add_mutually_exclusive_group(required=True)
+def add_location_opts(pars,
+                      stations=False,
+                      required=True):
+    loc_opt = pars.add_mutually_exclusive_group(required=required)
     loc_opt.add_argument('-L', '--ll',
                          metavar=("LAT", "LON"),
                          dest="ll",
@@ -334,14 +340,21 @@ def cli_parser():
 
     # ----------------------------------------------------
 
-    pars_transl = subparsers.add_parser(
-        name='translate',
-        help='translate coordinates into other projections')
-    pars_transl = add_location_opts(pars_transl, stations=True)
-    pars_transl.add_argument('-a',
-                          action='store_true',
-                          help=('automatically select Gauss-Krüger'
-                                'zone instead of assuming zone 3'))
+    pars_transf = subparsers.add_parser(
+        name='transform',
+        help='transfrom coordinates into other projections')
+    pars_transf = add_location_opts(pars_transf, stations=True,
+                                    required=False)
+    pars_transf.add_argument('-M', '--model',
+                         metavar=("x", "y"),
+                         dest="xy",
+                         nargs=2,
+                         default=None,
+                         help='Transform position given in model '
+                              'coordinats x and y (relative '
+                              'to the model origin) into '
+                              'geographic coordinates.')
+
 
     # ----------------------------------------------------
 
@@ -446,9 +459,8 @@ def main():
             steepness.main(args)
         elif args['command'] == 'terrain':
             input_terrain.main(args)
-        elif args['command'] == 'translate':
-            print("not yet implemented")
-            pass
+        elif args['command'] == 'transform':
+            transform.main(args)
         elif args['command'] == 'weather':
             input_weather.main(args)
         #else:

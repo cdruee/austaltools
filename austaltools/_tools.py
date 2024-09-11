@@ -335,6 +335,7 @@ def progress(itr=None, desc="", *args, **kwargs):
     else:
         return itr
 
+# -------------------------------------------------------------------------
 
 def gk2ll(rechts: float, hoch: float) -> (float, float, float):
     """
@@ -351,8 +352,8 @@ def gk2ll(rechts: float, hoch: float) -> (float, float, float):
     """
     transform = osr.CoordinateTransformation(GK, LL)
     return transform.TransformPoint(rechts, hoch)
-# -------------------------------------------------------------------------
 
+# -------------------------------------------------------------------------
 
 def ll2gk(lat: float, lon: float) -> (float, float):
     """
@@ -371,11 +372,47 @@ def ll2gk(lat: float, lon: float) -> (float, float):
     transform = osr.CoordinateTransformation(LL, GK)
     return transform.TransformPoint(lat, lon)
 
+# -------------------------------------------------------------------------
+
+def ut2ll(east: float, north:float) -> (float, float, float):
+    """
+    Converts UTM east/north coordinates
+    (ETRS89 / UTM zone 32N, https://epsg.io/25832)
+    into Latitude/longitude  (WGS84, https://epsg.io/4326) position.
+
+    :param east: eastward UTM coordinate in m
+    :type: float
+    :param north: northward UTM coordinate in m
+    :type: float
+    :return: latitude in degrees, longitude in degrees, altitude in meters
+    :rtype: float, float, float
+    """
+    transform = osr.CoordinateTransformation(GK, LL)
+    return transform.TransformPoint(east, north)
+
+# -------------------------------------------------------------------------
+
+def ll2ut(lat: float, lon: float) -> (float, float):
+    """
+    Converts Latitude/longitude  (WGS84, https://epsg.io/4326) position
+    into UTM east/north coordinates
+    (ETRS89 / UTM zone 32N, https://epsg.io/25832)
+
+    :param lat: latitude in degrees
+    :type: float
+    :param lon: longitude in degrees
+    :type: float
+    :return: "easting" (eastward coordinate) in m,
+        "northing" (northward coordinate) in m
+    :rtype: float, float
+    """
+    transform = osr.CoordinateTransformation(LL, UT)
+    return transform.TransformPoint(lat, lon)
+
 
 # ----------------------------------------------------
 
-
-def ut2gk(east, north):
+def ut2gk(east: float, north:float) -> (float, float):
     """
     Converts UTM east/north coordinates
     (ETRS89 / UTM zone 32N, https://epsg.io/25832)
@@ -394,6 +431,24 @@ def ut2gk(east, north):
     transform = osr.CoordinateTransformation(UT, GK)
     return transform.TransformPoint(east, north)
 
+# -------------------------------------------------------------------------
+def gk2ut(recht: float, hoch: float) -> (float, float):
+    """
+    Converts Gauss-Krüger rechts/hoch (east/north) coordinates
+    (DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677)
+    into UTM east/north coordinates
+    (ETRS89 / UTM zone 32N, https://epsg.io/25832).
+
+    :param rechts: "Rechtswert" (eastward coordinate) in m
+    :type: float
+    :param hoch: "Hochwert" (northward coordinate) in m
+    :type: float
+    :return: "easting" (eastward coordinate) in m,
+        "northing" (northward coordinate) in m
+    :rtype: float, float
+    """
+    transform = osr.CoordinateTransformation(GK, UT)
+    return transform.TransformPoint(recht, hoch)
 
 # -------------------------------------------------------------------------
 
@@ -462,7 +517,7 @@ def find_austxt(wdir='.'):
     return ausname
 
 
-def get_austxt(path="austal.txt"):
+def get_austxt(path=None):
     """
     Get AUSTAL configuration fron the file 'austal.txt' as dictionary
 
@@ -471,9 +526,14 @@ def get_austxt(path="austal.txt"):
     :return: configuration
     :rtype: dict
     """
+    if path is None:
+        path = "austal.txt"
     logger.info('reading: %s' % path)
     # return config as dict
     conf = {}
+    if not os.path.exists(path):
+        sys.tracebacklimit = 0
+        raise FileNotFoundError('austal.txt not found')
     with open(path, 'r') as file:
         for line in file:
             # remove comments in each line

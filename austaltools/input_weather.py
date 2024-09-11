@@ -848,9 +848,13 @@ def austal_weather(args):
     ele = None
     if args["dwd"] is not None:
         storage_dwd = _datasets.dataset_get("DWD").path
+        if storage_dwd is None:
+            sys.tracebacklimit = 0
+            raise ValueError("Dataset DWD is not available, "
+                       "download or assemble it.")
         station = int(pd.to_numeric(args["dwd"]))
         lat, lon, ele, nam = read_dwd_stationinfo(
-            station, path=storage_dwd)
+            station, datafile=storage_dwd)
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
     # elif args["wmo"] is not None:
     #     lat, lon, ele, nam = wmo_stationinfo(args["wmo"], path=path)
