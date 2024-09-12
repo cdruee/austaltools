@@ -49,14 +49,13 @@ Licenses
 This package is licensed under the EUROPEAN UNION PUBLIC LICENCE v. 1.2.
 See ``LICENSE`` for the license text or navigate to https://eupl.eu/1.2/en/
 
-The topography data files in the folder ``data`` are licensed under
+Some auxiliary files in the folder ``data`` are licensed under
 various other licenses:
 
-| code           | license |
-|----------------|---------|
-| GLO&#8209;30   | Licence for Copernicus DEM instance COP-DEM-GLO-30-F Global 30m Full, Free & Open |
-| GTOPO30        | Creative Commons Attribution 4.0 International License.
-| DGM25&#8209;RP | Datenlizenz Deutschland – Namensnennung – Version 2.0 |
+| file                 | provider                                                                        | license               |
+|----------------------|---------------------------------------------------------------------------------|-----------------------|
+| DGM10-HE.LICENSE.txt | Hessian state law (https://www.rv.hessenrecht.hessen.de/perma?a=VermGeoInfG_HE) | none (PD)             |
+| ha_messnetz.xls      | Deutscher Wetterdienst (DWD)                                                    | CC BY 4.0             |
 
 
 <!-- note to self: &#8209; = non-breaking hyphen -->

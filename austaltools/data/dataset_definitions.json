@@ -352,7 +352,7 @@
     "storage": "terrain",
     "assemble": "assemble_GLO_30",
     "license": "file:",
-    "notice": "(C) DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved.\nEU users who use the Copernicus DEM in their research are requested to use the following DOI when citing the data source in their publications: https://doi.org/10.5270/ESA-c5d3d65"
+    "notice": "produced using Copernicus WorldDEM-30 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved",
   },
   "GTOPO30": {
     "storage": "terrain",
