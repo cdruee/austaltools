@@ -5,20 +5,16 @@ Created on Thu Feb  3 19:20:42 2022
 
 @author: clemens
 """
-import argparse
 import io
 import logging
 import os
 import re
 import shutil
-import tempfile
 import zipfile
 
-import netCDF4
 import requests
 import numpy as np
 import pandas as pd
-from osgeo_utils.samples.gdal_ls import istgz
 
 try:
     from . import _tools
@@ -28,12 +24,15 @@ except ImportError:
 logger = logging.getLogger()
 
 _PATH = "."
-# remove observations before ...
-# (to avoid problems with odd observation timing in the very manual era)
+"""operate in current working die by default"""
 OLDEST = pd.to_datetime('1970-01-01', utc=True)
-# filename pattern for cached DWD observations
+""" remove observations before ...
+to avoid problems with odd observation timing in the very manual era) """
 OBSFILE_DWD = 'observations_hourly_%05i.csv'
+"""filename pattern for cached DWD observations"""
 METAFILE_DWD = 'metadata_%05i.csv'
+"""filename pattern for cached DWD metadata"""
+
 #
 TO_COLLECT = [
     ['air_temperature', 'TU', 'tu'],
@@ -46,10 +45,21 @@ TO_COLLECT = [
     ['visibility', 'VV', 'vv'],
     ['wind', 'FF', 'ff'],
 ]
+"""parameter groups to collect from opendata file tree"""
 
 # -------------------------------------------------------------------------
 
-def dwd_fetch_dirlist(url, pattern='.*'):
+def fetch_dirlist(url, pattern='.*'):
+    """
+    get directory listing from (opendata) server
+
+    :param url: directory URL
+    :type url: str
+    :param pattern: filter directory entries by this regex pattern
+    :type pattern: str
+    :return: fle names
+    :rtype: list
+    """
     with requests.get(url, allow_redirects=True) as rsp:
         text = rsp.content.decode()
         links = [x for x in re.findall(r'href="(.+?)"', text)]
@@ -58,9 +68,22 @@ def dwd_fetch_dirlist(url, pattern='.*'):
 
 # -------------------------------------------------------------------------
 
-def dwd_fetch_file(group: str, station: (int, str),
-                   era=None, local_path='.'):
+def fetch_file(group: str, station: (int, str),
+               era=None, local_path='.'):
+    """
+    download observation file from (opendata) server
 
+    :param group: name of parameter group, for example ``ff``
+    :type group: str
+    :param station: DWD station number
+    :type station: (int, str)
+    :param era: ``current`` or ``historical``
+    :type era: str
+    :param local_path: where to store the downloaded file
+    :type local_path: str
+    :return: name of the downloaded file
+    :rtype: str
+    """
     http_addr = 'https://opendata.dwd.de'
     http_path = ('climate_environment/CDC/observations_germany'
                  '/climate/hourly')
@@ -82,7 +105,7 @@ def dwd_fetch_file(group: str, station: (int, str),
         fname = "%s_Stundenwerte_Beschreibung_Stationen.txt" % group
     else:
         stnr = int(station)
-        flist = dwd_fetch_dirlist(
+        flist = fetch_dirlist(
             baseurl, "stundenwerte_%s_%05i_.*\.zip" % (gtl, stnr))
         if len(flist) != 1:
             logger.warning('filename on server not unique: %s' % str(flist))
@@ -96,12 +119,24 @@ def dwd_fetch_file(group: str, station: (int, str),
 
 # -------------------------------------------------------------------------
 
-def dwd_fetch_stationlist(years, fullyear=True):
+def fetch_stationlist(years, fullyear=True):
+    """
+    compile the station list from (opendata) server
+
+    :param years: list of years for wich the station should habe reported data
+      must be continuous and ascending order
+    :type years: list
+    :param fullyear: If True, stations are olny listed, if they have reported data
+      for the full period. If False, stations that have strated operation
+      in the first or ceised operation in the last year are also listed.
+    :return: list of stations
+    :rtype: list[dict]
+    """
     if not isinstance(years, list):
         years = [years]
     stations={}
     for (groupname, gtl, groupabbr) in TO_COLLECT:
-        listfile = dwd_fetch_file(gtl, 'stations')
+        listfile = fetch_file(gtl, 'stations')
         stations[gtl]={}
         with open(listfile, 'r', encoding="latin-1") as f:
             # skip header
@@ -171,7 +206,7 @@ def dwd_fetch_stationlist(years, fullyear=True):
 
 # -------------------------------------------------------------------------
 
-def dwd_fetch_station(station, store=True):
+def fetch_station(station, store=True):
     """
     Ensure that the DWD weather station data for station
     number `station` is available at `storage_path`.
@@ -198,7 +233,7 @@ def dwd_fetch_station(station, store=True):
     for (gname, gtl, gabbrev) in TO_COLLECT:
         #
         # construct url of the data directory and get file list
-        zip_file = dwd_fetch_file(gtl, station)
+        zip_file = fetch_file(gtl, station)
         #
         # find the name of the data file inside the zip archive
         # and extract the product as well as the Metadata files
@@ -219,13 +254,13 @@ def dwd_fetch_station(station, store=True):
     #
     os.chdir(cwd)
     # parse data files and store data locally
-    dat_df_in = dwd_data_from_download(product_files, tempdir)
+    dat_df_in = data_from_download(product_files, tempdir)
     if store:
         dat_file = os.path.join(_PATH, OBSFILE_DWD % station)
         logging.debug('storing data locally in: %s' % dat_file)
         dat_df_in.to_csv(dat_file, sep=',', na_rep='NA')
 
-    meta_df_in = dwd_meta_from_download(metadata_files, station, tempdir)
+    meta_df_in = meta_from_download(metadata_files, station, tempdir)
     if store:
         meta_file = os.path.join(_PATH, METAFILE_DWD % station)
         logging.debug('storing metadata in   : %s' % meta_file)
@@ -276,50 +311,13 @@ def build_table(dat_df_in, meta_df_in, years):
 
     return main_frame
 
-
-
 # -------------------------------------------------------------------------
 
-# def dwd_metadata(meta_frame, time1, time2, param):
-    # time1 = pd.to_datetime(time1, utc=True)
-    # time2 = pd.to_datetime(time2, utc=True)
-    # if time2 < time1:
-    #     raise ValueError('time2 must be equal or after time1')
-    # if param not in meta_frame.columns:
-    #     raise ValueError('parameter not found: %s' % param)
-    # # get all info in time range:
-    # value = pd.Series()
-    # for i, v in meta_frame[param].items():
-    #     if i < time1:
-    #         value[time1] = v
-    #     elif time1 <= i < time2:
-    #         value[i] = v
-    #     else:
-    #         value[time2] = v
-    #         break
-    # # reduce lines giving no new info:
-    # new = []
-    # old = None
-    # for i, v in value.items():
-    #     if len(new) == 0:
-    #         new.append(True)
-    #         old = v
-    #     else:
-    #         if v == old:
-    #             new.append(False)
-    #         else:
-    #             new.append(True)
-    #             old = v
-    # new[-1] = True
-    # value = value[new]
-    # return value
-
-# -------------------------------------------------------------------------
-
-def dwd_get_meta_value(metadata, time_begin, time_end, par_name):
+def get_meta_value(metadata, time_begin, time_end, par_name):
     """
     get station metadata value for parameter `par_name` valid for
     the time period info from `time_begin` to `time_end`
+
     :param metadata: filename or pandas dataframe
     :param time_begin: start time as string of datetime-like
     :param time_end: end time as string of datetime-like
@@ -377,118 +375,19 @@ def dwd_get_meta_value(metadata, time_begin, time_end, par_name):
 
 # -------------------------------------------------------------------------
 
-# def dwd_stationlist(group, year=None):
-#     if station is not None:
-#         sstr = '{:05d}'.format(station)
-#         if pos_lat is not None and pos_lon is not None:
-#             raise ValueError('lat and lon must be None ' +
-#                              'unless station is None')
-#     else:
-#         sstr = None
-#     stninfo = os.path.join(path, 'TU_Stundenwerte_Beschreibung_Stationen.txt')
-#     logger.debug("read station info from: %s" % stninfo)
-#     min_sdist = 9999999.
-#     sid = None
-#     with (open(stninfo, 'r') as f):
-#         # skip header
-#         f.readline()
-#         f.readline()
-#         for line in f.readlines():
-#             s_id = line[0:5]
-#             s_ele = float(line[31:40])
-#             s_lat = float(line[41:50])
-#             s_lon = float(line[51:60])
-#             s_nam = (line[61:102]).strip()
-#             if sstr is not None:
-#                 if  line[0:5] == sstr:
-#                     ele = s_ele
-#                     lat = s_lat
-#                     lon = s_lon
-#                     nam = s_nam
-#                     sid = station
-#                     break
-#             else:
-#                 sdist = _tools.spheric_distance(s_lat, s_lon, pos_lat, pos_lon)
-#                 if sdist < min_sdist:
-#                     sid = s_id
-#                     ele = s_ele
-#                     lat = s_lat
-#                     lon = s_lon
-#                     nam = s_nam
-#                     min_sdist = sdist
-#     if sid is None:
-#         raise ValueError('station not found: %s' % station)
-#     logger.debug("station name: %s" % nam)
-#     if station is None:
-#         return lat, lon, ele, nam, int(sid)
-#     else:
-#         return lat, lon, ele, nam
-
-# -------------------------------------------------------------------------
-#
-#
-# def dwd_stationinfo(station, path=_PATH, pos_lat=None, pos_lon=None):
-#     if station is not None:
-#         sstr = '{:05d}'.format(station)
-#         if pos_lat is not None and pos_lon is not None:
-#             raise ValueError('lat and lon must be None ' +
-#                              'unless station is None')
-#     else:
-#         sstr = None
-#     stninfo = os.path.join(path, 'TU_Stundenwerte_Beschreibung_Stationen.txt')
-#     logger.debug("read station info from: %s" % stninfo)
-#     min_sdist = 9999999.
-#     sid = None
-#     with (open(stninfo, 'r') as f):
-#         # skip header
-#         f.readline()
-#         f.readline()
-#         for line in f.readlines():
-#             s_id = line[0:5]
-#             s_ele = float(line[31:40])
-#             s_lat = float(line[41:50])
-#             s_lon = float(line[51:60])
-#             s_nam = (line[61:102]).strip()
-#             if sstr is not None:
-#                 if  line[0:5] == sstr:
-#                     ele = s_ele
-#                     lat = s_lat
-#                     lon = s_lon
-#                     nam = s_nam
-#                     sid = station
-#                     break
-#             else:
-#                 sdist = _tools.spheric_distance(s_lat, s_lon, pos_lat, pos_lon)
-#                 if sdist < min_sdist:
-#                     sid = s_id
-#                     ele = s_ele
-#                     lat = s_lat
-#                     lon = s_lon
-#                     nam = s_nam
-#                     min_sdist = sdist
-#     if sid is None:
-#         raise ValueError('station not found: %s' % station)
-#     logger.debug("station name: %s" % nam)
-#     if station is None:
-#         return lat, lon, ele, nam, int(sid)
-#     else:
-#         return lat, lon, ele, nam
-#
-
-
-def dwd_data_from_download(product_files: list, path_to_files: str) \
+def data_from_download(product_files: list, path_to_files: str) \
         -> pd.DataFrame:
     """
     Build one single table of weather data from the individual
     downloadad files
+
     :param product_files: list of extracted "produkt" files
     :param path_to_files: path where the product files are stored
     :return: weather timeseries as dataframe. The columns are
-    named as they appear in the "produkt" files, except
-    "MESS_DATUM" and "STATIONS_ID". Instead, the index contains
-    the time of the measurement as `datetime64`.
+      named as they appear in the "produkt" files, except
+      "MESS_DATUM" and "STATIONS_ID". Instead, the index contains
+      the time of the measurement as `datetime64`.
     :rtype: pandas.DataFrame
-
     """
     dat = None
     for name in product_files:
@@ -551,19 +450,20 @@ def dwd_data_from_download(product_files: list, path_to_files: str) \
 
     return dat
 
+# -------------------------------------------------------------------------
 
-def dwd_meta_from_download(metadata_files, station, path_to_files):
+def meta_from_download(metadata_files, station, path_to_files):
     """
     Build one single table of the metadata provided by the individual
     metadata files contained in the downloadad zip archives
+
     :param metadata_files: list of extracted "Metadaten" files
     :param path_to_files: path where these files are stored
     :return: metadata table as dataframe. The columns are
-    named as they appear in the "produkt" files, except
-    "MESS_DATUM" and "STATIONS_ID". Instead, the index contains
-    the time of the measurement as `datetime64`.
+      named as they appear in the "produkt" files, except
+      "MESS_DATUM" and "STATIONS_ID". Instead, the index contains
+      the time of the measurement as `datetime64`.
     :rtype: pandas.DataFrame
-
     """
     #
     # deduplicate list

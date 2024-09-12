@@ -25,13 +25,13 @@ try:
     from ._version import __version__, __title__
     from . import _tools
     from . import _datasets
-    from . import _dwd_observations
+    from . import _fetch_dwd_obs
     from . import _dispersion as dis
 except ImportError:
     from _version import __version__, __title__
     import _tools
     import _datasets
-    import _dwd_observations
+    import _fetch_dwd_obs
     import _dispersion as dis
 
 

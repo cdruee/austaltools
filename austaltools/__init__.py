@@ -4,7 +4,7 @@ from ._version import __license__, __copyright__
 
 from . import _tools
 from . import _corine
-from . import _dwd_observations
+from . import _fetch_dwd_obs
 
 from . import buildings_geojson
 from . import eap

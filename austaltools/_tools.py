@@ -3,6 +3,7 @@ import os
 import re
 import shlex
 import logging
+import tempfile
 import sys
 import unicodedata
 from xml.etree import ElementTree
@@ -53,6 +54,8 @@ DEFAULT_WORKING_DIR = "."
 """
 Default location for input and output
 """
+MAX_RETRY = 3
+""" number of tries made to download a ceratin file """
 STORAGE_LOCATIONS = ["/opt/%s" % __title__,
                      os.path.expanduser("~/.local/share/%s" % __title__),
                      os.path.expanduser("~/.%s" % __title__),
@@ -73,7 +76,17 @@ STORAGES = [STORAGE_TERRAIN, STORAGE_WAETHER]
 """
 storage directories that hold data inside the storage locations
 """
+TEMP = tempfile.gettempdir()
+""" default path for temp files/dierctories """
 
+DEM_FMT = '%s.elevation.nc'  # % NAME
+""" terrain database file name template"""
+DEM_CRS = "EPSG:5677"
+""" terrain data projection (GAUSS-KRÜGER zone 3)"""
+WEA_FMT = '%s.ak-input.nc'
+""" weather model database file name template"""
+OBS_FMT = '%s.obs.zip'
+""" weather observation database file name template"""
 
 # -------------------------------------------------------------------------
 
@@ -829,7 +842,7 @@ def common_plot(args: dict,
                          shading="nearest",
                          cmap=cmap,
                          norm=matplotlib.colors.PowerNorm(.66)
-        )
+                         )
         plt.colorbar(img, label=unit, extend='both', boundaries=levels)
     else:
         raise ValueError('argument display missing or invalid')
@@ -1207,3 +1220,5 @@ def jsonpath(json_obj, path):
                     children += [oj[node]]
         obj = children
     return obj
+
+

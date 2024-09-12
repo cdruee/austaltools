@@ -21,9 +21,14 @@ _datasets
 .. automodule:: austaltools._datasets
    :members:
 
-_dwd_stationinfo
+_fetch_dgm_od
 ^^^^^^^^^^^^^^^^
-.. automodule:: austaltools._dwd_stationinfo
+.. automodule:: austaltools._fetch_dgm_od
+   :members:
+
+_fetch_dwd_obs
+^^^^^^^^^^^^^^^^
+.. automodule:: austaltools._fetch_dwd_obs
    :members:
 
 _tools

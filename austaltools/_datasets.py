@@ -34,27 +34,20 @@ import os
 import random
 import re
 import shutil
-import sqlite3
 import sys
 import tarfile
 import tempfile
-import time
 import zipfile
 from importlib import resources
-from pathlib import PurePath
 
 
-import numpy as np
 import pandas as pd
 import pip
 import requests
 from urllib3 import disable_warnings, exceptions
 
-
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from osgeo import gdal
-    from osgeo import osr
-    from osgeo_utils import gdal_merge
     import multiprocessing as mp
     import cdo
 
@@ -73,34 +66,22 @@ except ImportError:
 try:
     from ._version import __version__, __title__
     from . import _tools
-    from . import _dwd_observations
+    from . import _fetch_dwd_obs
+    from . import _fetch_dgm_od
 except ImportError:
     from _version import __version__, __title__
     import _tools
-    import _dwd_observations
+    import _fetch_dwd_obs
+    import _fetch_dgm_od
 
 disable_warnings(exceptions.InsecureRequestWarning)
 logger = logging.getLogger()
 
 # -------------------------------------------------------------------------
-DEM_FMT = '%s.elevation.nc'  # % NAME
-""" terrain database file name template"""
-DEM_CRS = "EPSG:5677"
-""" terrain data projection (GAUSS-KRÜGER zone 3)"""
-WEA_FMT = '%s.ak-input.nc'
-""" weather model database file name template"""
-OBS_FMT = '%s.obs.zip'
-""" weather observation database file name template"""
 CDSAPI_LIMIT_PARALLEL = 2
 """ Copernicus per-user limit for parallel queries """
 DIST_AUX_FILES = resources.files(__title__ + '.data')
-""" path to the auxiliary data files distributes alongside the coee """
-TEMP = tempfile.gettempdir()
-""" default path for temp files/dierctories """
-MAX_RETRY = 3
-""" number of tries made to download a ceratin file """
-NODATA = 9.96920996838686905e+36
-""" terrain data `noddata` value """
+""" path to the auxiliary data files distributes alongside the code """
 
 with (DIST_AUX_FILES / 'dataset_definitions.json').open() as f:
     DATASET_DEFINITIONS = json.load(f)
@@ -118,8 +99,8 @@ SOURCES_WEATHER = [k for k, v in DATASET_DEFINITIONS.items()
 
 class DataSet:
     """
-    Class that describes and handles a dataset
-    """
+        Class that describes and handles a dataset
+        """
     name = str()
     """ID of the dataset (short uppercase code)"""
     available = False
@@ -205,7 +186,7 @@ class DataSet:
             doi = re.sub('^doi[:/]*', '', uri)
             doi_url = f"https://doi.org/{doi}"
             logger.debug(f"resolving {doi_url}")
-            for i in range(MAX_RETRY):
+            for i in range(_tools.MAX_RETRY):
                 try:
                     with requests.head(doi_url) as resolver:
                         redirect = resolver.url
@@ -244,13 +225,13 @@ class DataSet:
             self.file_notice = f"{self.name}.NOTICE.txt"
         if self.file_data is None:
             if self.storage == 'terrain':
-                self.file_data = DEM_FMT % self.name
+                self.file_data = _tools.DEM_FMT % self.name
             elif self.storage == 'weather':
                 pos = kwargs.get('position', None)
                 if pos == 'station':
-                    self.file_data = OBS_FMT % self.name
+                    self.file_data = _tools.OBS_FMT % self.name
                 elif pos in ['grid', None]:
-                    self.file_data = WEA_FMT % self.name
+                    self.file_data = _tools.WEA_FMT % self.name
                 else:
                     raise ValueError(f"unkown position: {pos}")
 
@@ -398,372 +379,12 @@ def find_writeable_storage(locs: str = None,
 
 # -------------------------------------------------------------------------
 
-
-# -------------------------------------------------------------------------
-def xyz2csv(inputfile, output, utm_remove_zone=False):
-    """
-    Clean the xyz flies downloaded in a way that gdal accepts them as csv
-
-    :param inputfile: input file
-    :type inputfile: str
-    :param output: output file
-    :type output: str
-    :param utm_remove_zone: Some providers prefix UTM easting with the
-      zone numer, which results in easting values exceeding 1000km.
-      Remove the leading digits to keep easting in the allowed range
-      0m < easting < 1000000 m. defaults to False.
-    :type utm_remove_zone: bool
-    :return: True if successful, False otherwise
-    :rtype: bool
-    """
-    # test if file has a header line
-    with open(inputfile, 'r') as fd:
-        line1 = fd.readline()
-    if bool(re.search('[a-zA-Z]', line1)) > 0:
-        header = 0
-    else:
-        header = None
-    df = pd.read_csv(inputfile,
-                     sep=r'\s+', header=header, names=['x', 'y', 'z'])
-    if len(df.index) < 4:
-        # skip empty files
-        return False
-
-    if utm_remove_zone:
-        df['x'] = np.sign(df['x']) * (np.abs(df['x']) % 1000000)
-    # get full grid axes
-    try:
-        x_res = np.mean(np.diff(sorted(set(df['x']))))
-        x_vals = set(
-            np.arange(df['x'].min(), df['x'].max() + x_res, x_res))
-        y_res = np.mean(np.diff(sorted(set(df['y']))))
-        y_vals = set(
-            np.arange(df['y'].min(), df['y'].max() + y_res, y_res))
-    except ValueError:
-        # skip all-NaN files etc.
-        return False
-    # create full dataframe
-    ff = pd.DataFrame.from_records(itertools.product(x_vals, y_vals),
-                                   columns=['x', 'y'])
-    of = pd.merge(ff, df, how='left', left_on=['x', 'y'],
-                  right_on=['x', 'y'])
-    del [ff, df]
-    of = of.replace(np.nan, -9999.)
-
-    # sort it so gdal doesnt complain
-    of = of.sort_values(['y', 'x'])
-
-    of.to_csv(output, index=False, header=False)
-
-    return True
-
-
-# -------------------------------------------------------------------------
-def get_dataset_crs(filename):
-    """
-    Query the projection of a geo data file
-    :param filename: name of the file (optionally with leading path)
-    :type filename: str
-    :return: Projection of the geo data file ind the form "EPSG:xxxx"
-    :rtype: str
-    """
-    # with ... does not work with gda.Open()
-    ds = gdal.Open(filename, gdal.GA_ReadOnly)
-    prj = ds.GetProjection()
-    # make sure file is closed
-    del ds
-    srs = osr.SpatialReference(wkt=prj)
-    jsrs = srs.ExportToPROJJSON()
-    srsid = json.loads(jsrs)['id']
-    epsg = '%s:%i:' % (srsid['authority'], srsid['code'])
-    return epsg
-
-# -------------------------------------------------------------------------
-def get_dataset_driver(filename):
-    """
-    Query the driver (i.e. fiel format) of a geo data file
-    :param filename: name of the file (optionally with leading path)
-    :type filename: str
-    :return: Projection of the geo data file ind the form "EPSG:xxxx"
-    :rtype: str
-    """
-    # with ... does not work with gda.Open()
-    ds = gdal.Open(filename, gdal.GA_ReadOnly)
-    drv = ds.GetDriver().ShortName
-    # make sure file is closed
-    del ds
-    return drv
-
-# -------------------------------------------------------------------------
-def get_dataset_nodata(filename):
-    """
-    Query the NODATA value of a geo data file
-    :param filename: name of the file (optionally with leading path)
-    :type filename: str
-    :return: nodata value
-    :rtype: float
-    """
-    # with ... does not work with gda.Open()
-    ds = gdal.Open(filename, gdal.GA_ReadOnly)
-    rc = ds.RasterCount
-    if rc != 1:
-        logger.warning(f'multiple Bands, returning Band1 of: {filename}')
-    nodata = ds.GetRasterBand(1).GetNoDataValue()
-    # make sure file is closed
-    del ds
-    return nodata
-
-# -------------------------------------------------------------------------
-def _ass_xyz2tif(inputfile, srcsrs, utm_remove_zone):
-    """
-    convert xyz file (via csv) to GeoTiff
-
-    :param inputfile: input file
-    :type inputfile: str
-    :param srcsrs: SRS of the input file (as "EPSG:xxxxx")
-    :type srcsrs: str
-    :param utm_remove_zone: Some providers prefix UTM easting with the
-      zone numer, which results in easting values exceeding 1000km.
-      Remove the leading digits to keep easting in the allowed range
-      0m < easting < 1000000 m. defaults to False.
-    :type utm_remove_zone: bool
-    :return: output file name (GeoTiff)
-    :rtype: str
-    """
-    if os.stat(inputfile).st_size == 0:
-        logger.debug(f"skipping empty  ... {inputfile}")
-        os.remove(inputfile)
-        return None
-    tf1 = re.sub(r'\.xyz$', '.tif', inputfile)
-    logger.debug(f"converting tile ... {inputfile} -> {tf1}")
-    # returns a tuple containing file handle and the abs pathname!
-    csvhdl, csvfile = tempfile.mkstemp(
-        prefix='dgm', suffix='.csv', dir=TEMP)
-    got_csv = xyz2csv(inputfile, csvfile,
-                      utm_remove_zone=utm_remove_zone)
-    os.remove(inputfile)
-    if not got_csv:
-        logger.warning(f"did not convert ... {inputfile}")
-        os.close(csvhdl)
-        os.remove(csvfile)
-        return None
-    gdal.Translate(destName=tf1,
-                   srcDS=csvfile,
-                   outputSRS=srcsrs,
-                   noData=-9999,
-                   )
-    os.close(csvhdl)
-    os.remove(csvfile)
-    return tf1
-
-
-# -------------------------------------------------------------------------
-def _ass_reduce_tile(tf1, out_res, overwrite=True):
-    """
-    Resamples a tile (or any file that can be autodetected by gdal)
-    to a differen (only lower makse sense) resolution and saves ist as
-    GeoTiff
-
-    :param tf1: name (and optionally path) of the input file
-    :type tf1: str
-    :param out_res: output resolution (i.e. pixel width) in km
-    :type out_res: float
-    :param overwrite: overwrite existing output file
-    :type overwrite: bool
-    :return: name (and path if supplied in `tf1`) of the output file
-    or empty stringif no file is written
-    :rtype: str
-    """
-    tfxx = os.path.splitext(tf1)[0] + ".reduced.tif"
-    if os.path.exists(tfxx) and not overwrite:
-        # reduced file exist and shall be kept
-        return ''
-    logger.debug(f"resampling tile ... {tf1} -> {tfxx}")
-    try:
-        gdal.Warp(destNameOrDestDS=tfxx,
-                  xRes=out_res,
-                  yRes=out_res,
-                  srcDSOrSrcDSTab=tf1,
-                  format="GTiff")
-    except Exception as e:
-        logger.error(str(e))
-    os.remove(tf1)
-    return tfxx
-
-
-# -------------------------------------------------------------------------
-def _ass_unpack(dl_file, unpack):
-    """
-    Unpack files from an archive
-
-    :param dl_file: filename, otionally incl. path, of the archive (downloadad file)
-    :type dl_file: str
-    :param unpack: string describing what to unpack
-    :type unpack: str
-    :return: names of the files extracted
-    :rtype: list[str]
-    :raises ValeError: if `unpack` string is invalid
-    """
-    inputfiles = []
-    if unpack in [None, '', 'tif', 'false']:
-        inputfiles = [dl_file]
-    elif unpack.startswith(('zip', 'unzip')):
-        try:
-            with zipfile.ZipFile(dl_file, 'r') as zf:
-                pattern = re.sub('^(un|)zip://', '', unpack)
-                unpack_files = [x for x in zf.namelist()
-                                if PurePath(x).match(pattern)]
-                inputfiles = []
-                for un in unpack_files:
-                    if not os.path.exists(os.path.basename(un)):
-                        # in case of overlapping archives
-                        # do not overwrite existing files
-                        # leave the processing to the other thread
-                        with zf.open(un) as fz:
-                            with open(os.path.basename(un), 'wb') as fu:
-                                fu.write(fz.read())
-                        inputfiles.append(os.path.basename(un))
-        except Exception as e:
-            raise IOError(f'zip file error processing {dl_file}')
-    else:
-        raise IOError(f"dont know how to handle download: {dl_file}")
-
-    if len(inputfiles) == 0:
-        logger.warning(f"no data unpacked from {dl_file}")
-    return inputfiles
-
-
-# -------------------------------------------------------------------------
-def _ass_merge_tiles(target, tile_files):
-    """
-    merge the GeoTiff Files from all tiles into one file
-
-    :param target: name, optionally including path) of the file to generate
-    :type target:  str
-    :param tile_files: Input files to merge
-    :type tile_files: list[str]
-    :raises Exception: if gdal_merge aborts with error
-
-    """
-    if os.path.exists(target):
-        logger.info("removing old source file")
-        os.remove(target)
-    logger.debug("merging tiles ...")
-    # handling of nodata: see https://gis.stackexchange.com/a/304202
-    in_nodata = get_dataset_nodata(tile_files[0])
-    if in_nodata is None:
-        n_option = []
-    else:
-        n_option = ['-n', str(in_nodata)]
-    tile_drvs = [get_dataset_driver(x) for x in tile_files]
-    drivers = sorted(set(tile_drvs), key = lambda x: tile_drvs.count(x))
-    if len(drivers) > 1:
-        logger.warning("merging mixed-format tiles")
-    driver = drivers.pop()
-    if driver == "GTiff":
-        merged_file = 'merged.tif'
-        co_opts = [
-            "-co", "compress=lzw",
-            "-co", "bigtiff=yes",
-        ]
-    elif driver == "netCDF":
-        merged_file = 'merged.nc'
-        co_opts = [
-            "-co", "FORMAT=NC4C",
-            "-co", "COMPRESS=DEFLATE",
-            "-co", "ZLEVEL=9"
-        ]
-    else:
-        raise ValueError(f"unsopported driver {driver}")
-    gdal_merge_options = ["",
-                     "-init", str(NODATA),
-                     "-a_nodata", str(NODATA)
-                     ] + n_option + co_opts + [
-                     "-o", merged_file,
-                     ] + tile_files
-    gdal_merge.main(gdal_merge_options)
-    s_srs = get_dataset_crs(merged_file)
-    if DEM_FMT.endswith('.tif'):
-        if s_srs == DEM_CRS:
-            # we already have the wanted product
-            shutil.move(merged_file, target)
-        else:
-            logger.debug(f"reprojecting to target projection {DEM_CRS}")
-            gdal.Warp(destNameOrDestDS=target,
-                      dstSRS=DEM_CRS,
-                      srcDSOrSrcDSTab=merged_file,
-                      format="GTiff",
-                      creationOptions=["BIGTIFF=YES"]
-                      )
-    elif DEM_FMT.endswith('.nc'):
-        logger.debug(f"converting and reprojecting to {DEM_CRS}")
-        gdal.Warp(srcDSOrSrcDSTab=merged_file,
-                  destNameOrDestDS=target,
-                  dstSRS=DEM_CRS,
-                  format="netCDF",
-                  creationOptions=[
-                      "FORMAT=NC4C",
-                      "COMPRESS=DEFLATE",
-                      "ZLEVEL=9"]
-                  )
-    else:
-        raise Exception(f'cannot handle DEM_FMT: {DEM_FMT}')
-    logger.debug(f"... written {target}")
-
-
-# -------------------------------------------------------------------------
-
-def _ass_expand_filelist_string(string, base_url, verify,
-                                xmlp, jsonp, linkp):
-
-    list_name = re.sub(r'::.*$', '', string)
-    url = '/'.join((base_url, list_name))
-    if string.endswith(('xml', 'meta4')):
-        # xml
-        if xmlp in ["",None]:
-            ValueError("xmlpath needed but not defined")
-        logger.debug("downloading xml metadata: %s" % url)
-        with requests.get(url, allow_redirects=True,
-                          verify=verify) as rsp:
-            input_files = _tools.xmlpath(xml=rsp.content.decode(),
-                                  path=xmlp)
-    elif string.endswith(('json', 'geojson')):
-        # json
-        if jsonp in ["",None]:
-            ValueError("jsonpath needed but not defined")
-        logger.debug("downloading json metadata: %s" % url)
-        with requests.get(url, allow_redirects=True,
-                          verify=verify) as rsp:
-            input_files = _tools.jsonpath(json_obj=rsp.json(),
-                                   path=jsonp)
-    elif string.endswith(('html')):
-        # html
-        if linkp in ["",None]:
-            ValueError("links pattern needed but not defined")
-        logger.debug("downloading html metadata: %s" % url)
-        with requests.get(url, allow_redirects=True,
-                          verify=verify) as rsp:
-            text = rsp.content.decode()
-            links = [x for x in re.findall(r'href="(.+?)"', text)]
-            input_files = [x for x in links if bool(re.match(linkp, x))]
-            method = 'http'
-    elif '::' in string:
-        # type specified but not known
-        raise ValueError(f'unknown filelist type in: {string}')
-    else:
-        # no expansion
-        input_files = [string]
-    return input_files
-
-# -------------------------------------------------------------------------
 def _ass_clear_target(target, replace):
     """
     assure that a datafile is not already present
 
     :param target: path of the datafile
     :type target: str
-    :param name: name of the datafile
-    :type name: str
     :param replace: If True, the file is removed if it exists;
       if False, None is returned
     :type replace: bool
@@ -780,124 +401,6 @@ def _ass_clear_target(target, replace):
             logger.info("deleting existig : %s" % target)
             os.remove(target)
     return res
-
-
-# -------------------------------------------------------------------------
-def _ass_process_input(args):
-    """
-    Worker funtion to process a downloaded file into one or more
-    data (tile) file(s) of the desired resolution and projection
-
-    :param args: tuple containg the arguments
-      - inp: location of the input file. Either file and path or URL
-      - base_url: base url to prepend to inp, omitted if inp is a URL
-      - verify: enable (True) or disable (False) server certificate check
-      - provider: dict containing the processing arguments
-        - provider['localstore']: (str, optional)
-          path where local copies of the download files are stored.
-          Files that exist in this directory are copied from there and not downloaded.
-          Successfully downloaded files are copied to this location.
-        - provider['missing']: (str, optional)
-          if 'ok', 'ignore', an empty list is returned,
-          if the URL download fails with error 404 (not found)
-        - provider["unpack"]: (str, optional)
-          the description, what to unpack.
-        - provider["CRS"]: (str, optional)
-          the referecnce system of the input data (in the form "EPSG:xxxx")
-        - provider["utm_remove_zone"]: (str, optional)
-          If 'True', 'true', 'yes', True is passed
-          to :py:func:`_ass_reduce`
-    :type args: tuple[str, str, bool, dict]
-    :return: list of the generated files
-    :rtype: list[str]
-    """
-    inp, base_url, verify, provider = args
-    unpack = provider.get('unpack', None)
-    localstore = provider.get('localstore', None)
-    out_res = provider.get('resolution', 25)
-    srcsrs = provider.get('CRS', None)
-    if provider.get('utm_remove_zone', 'true') in ['True', 'true', 'yes']:
-        utm_remove_zone = True
-    else:
-        utm_remove_zone = False
-    dl_file = os.path.basename(inp)
-
-    url = None
-    if localstore is not None:
-        # 1st priority: get a locally stored file
-        localfile = os.path.join(localstore, dl_file)
-        if os.path.exists(localfile):
-            url = 'file://' + os.path.abspath(localfile)
-    if url is None:
-        # 2nd priority: download the file
-        if re.match('^http[s]*://', inp):
-            url = inp
-        else:
-            url = f"{base_url}/{inp}"
-
-    failure_ok = False
-    if re.match('^http[s]*://', url):
-        logger.debug(f"downloading ... {url}")
-        for i in range(MAX_RETRY):
-            with requests.get(url, verify=verify, stream=True) as req:
-                if req.status_code == requests.codes.ok:
-                    with open(dl_file, 'wb') as f:
-                        for chunk in req.iter_content(chunk_size=4096):
-                            if chunk:
-                                f.write(chunk)
-                elif req.status_code == 404:
-                    missing = provider.get('missing', None)
-                    if missing in ['ok', 'ignore']:
-                        failure_ok = True
-                        logger.info(f"ignoring failed download: {url}")
-                        # break retry loop
-                        break
-                    elif missing == 'wait':
-                        logger.info(f"wait after failed download: {url}")
-                        time.sleep(30)
-                        # netx try
-                        continue
-                try:
-                    inputfiles = _ass_unpack(dl_file, unpack)
-                    if localstore is not None:
-                        shutil.move(dl_file, localstore)
-                    # no retry if unpack successful
-                    break
-                except IOError as e:
-                    logger.error(f"retry download after error "
-                                 f"unpacking {dl_file}")
-        else:
-            raise Exception(f"failed to download: {url}")
-    elif re.match('^file://', url):
-        logger.debug(f"copying file... {url}")
-        url = re.sub('^file:/+', '/', url)
-        try:
-            shutil.copy(url, dl_file)
-        except IOError:
-            if ('missing' in provider and
-                    provider['missing'] in ['ok', 'ignore']):
-                logger.info(f"ignoring missing file: {url}")
-                failure_ok = True
-        inputfiles = _ass_unpack(dl_file, unpack)
-
-    tile_files = []
-    if not failure_ok:
-        for inputfile in inputfiles:
-            if inputfile.endswith('tif'):
-                tf1 = inputfile
-            elif inputfile.endswith('xyz'):
-                tf1 = _ass_xyz2tif(inputfile, srcsrs, utm_remove_zone)
-            else:
-                raise Exception(f'cannot handle {inputfile}')
-            if tf1 is not None:
-                tfxx = _ass_reduce_tile(tf1, out_res, overwrite=False)
-                if tfxx != "":
-                    tile_files.append(tfxx)
-
-    if os.path.exists(dl_file):
-        os.remove(dl_file)
-    return tile_files
-
 
 # -------------------------------------------------------------------------
 def assemble_DGMxx(path: str, name: str, replace: bool,
@@ -953,12 +456,12 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
           the referecnce system of the input data (in the form "EPSG:xxxx")
         - provider["utm_remove_zone"]: (str, optional)
           If 'True', 'true', 'yes', True is passed
-          to :py:func:`_ass_reduce`
+          to :py:func:`_fetch_dgm_opendata._ass_reduce_tile`
     :type args: dict
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, DEM_FMT % name)
+    target = os.path.join(path, _tools.DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -986,7 +489,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
             filelist = [filelist]
     input_files = []
     for string in filelist:
-        x = _ass_expand_filelist_string(
+        x = _fetch_dgm_opendata.expand_filelist_string(
             string, base_url, verify,
             args.get('xmlpath', None),
             args.get('jsonpath', None),
@@ -1008,7 +511,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         i = 0
         with mp.Pool(pp) as pool:
             for tfs in _tools.progress(pool.imap_unordered(
-                    _ass_process_input, thread_args),
+                    _fetch_dgm_opendata.process_input, thread_args),
                     total=len(thread_args)):
                 i = i + 1
                 logger.debug("file %5d / %5d" % (i, len(thread_args)))
@@ -1017,124 +520,13 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         raise ValueError(f'method {method} not implemented')
 
     # merge the GeoTiff Files from all tiles into one file
-    _ass_merge_tiles(target, tile_files)
+    _fetch_dgm_opendata.merge_tiles(target, tile_files)
     logger.info(f"data file written: {target}")
 
     return True
 
 
 # -------------------------------------------------------------------------
-def _ass_sh_getfid(args):
-    """
-    get individual file for DGM1-SH
-
-    :param args: download number, total no of downloads, file-id, args
-    :type args: tupe[int, int, int, dict]
-    :return: names of extracted files
-    :rtype: list[str]
-    """
-    i, ni, fid, provider = args
-    baseurl = ('https://geodaten.schleswig-holstein.de/'
-               'gaialight-sh/_apps/dladownload')
-
-    localstore = provider.get('localstore', '.')
-    localname = os.path.join(localstore, "id-%06d.zip" % fid)
-
-    if os.path.exists(localname):
-        shutil.copy(localname, '.')
-        logger.debug('locally avalable fid: %s' % fid)
-        dl_file = os.path.basename(localname)
-    else:
-        for ntry in range(MAX_RETRY):
-            try:
-                session = requests.Session()
-                _ = session.get(baseurl + 'dl-dgm1.html',
-                                verify=False)
-                request = session.get(baseurl + '/_ajax/details.php?' +
-                                      f'type=dgm1&id={str(fid)}')
-                response = request.json()
-                if 'object' not in response:
-                    print(f"problem with fid {fid}: {str(response)}")
-                    return
-
-                tilename = response['object']['kachelname']
-                filename = tilename + '.xyz'
-
-                if os.path.exists(filename):
-                    logger.debug(
-                        "-- %5d/%5d -- exists   %s " % (i, ni, tilename))
-                    return
-                else:
-                    logger.debug(
-                        "-- %5d/%5d -- download %s " % (i, ni, tilename))
-
-                timestr = time.strftime('%s', time.gmtime())
-                start = session.get(
-                    baseurl + '/multi.php?' +
-                    f'url={filename}&buttonClass=file1&id={str(fid)}&'
-                    f'type=dgm1&action=start&_={timestr}',
-                    verify=False)
-                response = start.json()
-                if response['success']:
-                    job_id = response['id']
-                else:
-                    if response['message'] == ('1 Datei konnte nicht '
-                                               'gefunden werden'):
-                        logger.debug("                  file not found")
-                        return
-                    else:
-                        raise Exception(response['message'])
-                running = True
-                downloadurl = None
-                while running:
-                    request = session.get(
-                        baseurl + f'/multi.php?action=status&job={job_id}',
-                        verify=False)
-                    response = request.json()
-                    logger.debug(response)
-                    if response.get('status', '') in ['wait', 'work']:
-                        # wait
-                        time.sleep(2)
-                    elif response.get('msg', '') == 'Interner Fehler':
-                        # next ty
-                        continue
-                    else:
-                        # proceed to download
-                        downloadurl = response['downloadUrl']
-                        break
-                request = session.get(downloadurl, verify=False)
-                dl_file = tilename + '.zip'
-                with open(dl_file, 'wb') as fn:
-                    fn.write(request.content)
-                break
-            except (requests.exceptions.ConnectionError,
-                    exceptions.ProtocolError) as e:
-                logger.error("exception downloading %s; %s" % (fid, e))
-
-            ntry = ntry + 1
-        else:
-            raise IOError("downloading failed %s times: fid %s" %
-                          (MAX_RETRY, fid))
-
-        if localstore is not None:
-            shutil.copy(dl_file, localname)
-
-    unpack = provider.get('unpack', None)
-    out_res = provider.get('resolution', 25)
-    inputfiles = _ass_unpack(dl_file, unpack)
-    srcsrs = provider['CRS']
-    utm_remove_zone = provider.get('UTM_ZONE', False)
-    tilefiles = []
-    for tile_xyz in inputfiles:
-        logger.debug("converting tile ... %s" % tile_xyz)
-        tf1 = _ass_xyz2tif(tile_xyz, srcsrs, utm_remove_zone)
-        if tf1 is not None:
-            tfxx = _ass_reduce_tile(tf1, out_res)
-            if tfxx != "":
-                tilefiles.append(tfxx)
-
-    if os.path.exists(dl_file): os.remove(dl_file)
-    return tilefiles
 
 
 def assemble_DGM_SH(path, name, replace, args: dict):
@@ -1156,7 +548,7 @@ def assemble_DGM_SH(path, name, replace, args: dict):
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, DEM_FMT % name)
+    target = os.path.join(path, _tools.DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -1169,12 +561,12 @@ def assemble_DGM_SH(path, name, replace, args: dict):
     tile_files = []
     with mp.Pool(PROCS) as pool:
         for tf in _tools.progress(
-                pool.imap_unordered(_ass_sh_getfid, args),
+                pool.imap_unordered(dgm1_sh_getfid, args),
                 total=len(args)
         ):
             tile_files += tf
 
-    _ass_merge_tiles(target, tile_files)
+    _fetch_dgm_opendata.merge_tiles(target, tile_files)
 
     return True
 
@@ -1204,7 +596,7 @@ def assemble_DGM25_RP(path, name="DGM25-RP",
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, DEM_FMT % name)
+    target = os.path.join(path, _tools.DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -1227,7 +619,7 @@ def assemble_DGM25_RP(path, name="DGM25-RP",
             logger.error(str(e))
     # merge the GeoTiff Files from all tiles into one file
     tile_files = glob.glob("DGM25_*.tif")
-    _ass_merge_tiles(target, tile_files)
+    _fetch_dgm_opendata.merge_tiles(target, tile_files)
 
     return True
 
@@ -1256,7 +648,7 @@ def assemble_DGM_composit(path: str, name: str,
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, DEM_FMT % name)
+    target = os.path.join(path, _tools.DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -1299,18 +691,18 @@ def assemble_DGM_composit(path: str, name: str,
         res_opts = {}
 
     # tip from https://gis.stackexchange.com/a/385864
-    with (tempfile.TemporaryDirectory(dir=TEMP) as tmp):
+    with (tempfile.TemporaryDirectory(dir=_tools.TEMP) as tmp):
         logger.debug("build virtual dataset")
         gdal.BuildVRT(os.path.join(tmp, vrt_name), members)
         logger.debug("writing data file %s" % target)
-        if DEM_FMT.endswith('.tif'):
+        if _tools.DEM_FMT.endswith('.tif'):
             gdal.Translate(destName=target,
                            srcDS=os.path.join(tmp, vrt_name),
                            format="GTiff",
                            creationOptions=["BIGTIFF=YES"],
                            **res_opts
                            )
-        elif DEM_FMT.endswith('.nc'):
+        elif _tools.DEM_FMT.endswith('.nc'):
             gdal.Translate(destName=target,
                            srcDS=os.path.join(tmp, vrt_name),
                            format="netCDF",
@@ -1321,7 +713,7 @@ def assemble_DGM_composit(path: str, name: str,
                            **res_opts
                            )
         else:
-            raise Exception(f'cannot handle DEM_FMT: {DEM_FMT}')
+            raise Exception(f'cannot handle _tools.DEM_FMT: {_tools.DEM_FMT}')
     return True
 
 
@@ -1351,7 +743,7 @@ def assemble_GLO_30(path, name = "GLO_30",
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, DEM_FMT % name)
+    target = os.path.join(path, _tools.DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -1377,9 +769,9 @@ def assemble_GLO_30(path, name = "GLO_30",
                     # now extract tar member to current dir
                     tf.extract(x, '.')
     # merge the GeoTiff Files from all tiles into one file
-    target = os.path.join(path, DEM_FMT % "GLO-30")
+    target = os.path.join(path, _tools.DEM_FMT % "GLO-30")
     tile_files = glob.glob("Copernicus_*.tif")
-    _ass_merge_tiles(target, tile_files)
+    _fetch_dgm_opendata.merge_tiles(target, tile_files)
 
     return
 
@@ -1422,7 +814,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
     # "E120S60 ".split()
     # get the single archive that holds the supportive
     # files for all tiles
-    target = os.path.join(path, DEM_FMT % "GTOPO30")
+    target = os.path.join(path, _tools.DEM_FMT % "GTOPO30")
     logger.debug(f'data file path: {target}')
     if os.path.exists(target) and not replace:
         logger.info("dataset exists ... %s" % name)
@@ -1456,7 +848,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
                       format="GTiff")
     # merge the GeoTiff Files from all tiles into one file
     tile_files = glob.glob("*.tif")
-    _ass_merge_tiles(target, tile_files)
+    _fetch_dgm_opendata.merge_tiles(target, tile_files)
 
     return
 
@@ -1481,10 +873,11 @@ def provide_terrain(source: str, path: str = None,
     :type force: bool, options
     :param method: The method how to get the dataset.
       Defaults to `'download'`.
-        :`'download'`: the ready-assembled dataset ist downloadad
-          form a location specified in the dataset definition.
-        :`'assemble'`: the dataset is created from data that are acquired
-          (if possible) from an original supplier.
+
+      :`'download'`: the ready-assembled dataset ist downloadad
+        form a location specified in the dataset definition.
+      :`'assemble'`: the dataset is created from data that are acquired
+        (if possible) from an original supplier.
     :type method: str
 
     :raises ValueError: if `method` is not one of the allowed values.
@@ -1500,7 +893,7 @@ def provide_terrain(source: str, path: str = None,
     elif method == 'assemble':
         # change to temp directory
         pwd = os.getcwd()
-        with tempfile.TemporaryDirectory(dir=TEMP) as temp_dir:
+        with tempfile.TemporaryDirectory(dir=_tools.TEMP) as temp_dir:
             os.chdir(temp_dir)
             logger.debug('calling %s' % str(dataset.assemble))
             dataset.assemble(path, source, force, dataset.arguments)
@@ -1577,8 +970,8 @@ def _ass_era5_getyear(year):
 
     :example:
         >>> # To download ERA5 data for the year 2020 and
-        >>> save it to the specified directory
-        >>> era5_getyear((2020, '/path/to/directory'))
+        >>> # save it to the specified directory
+        >>> _ass_era5_getyear((2020, '/path/to/directory'))
 
     :note:
     - The function crafts a filename based on the year, prefixing it
@@ -1714,7 +1107,7 @@ def assemble_ERA5(path: str, name="ERA5", years: list =[],
         for dld in pool.map(_ass_era5_getyear, combi):
             year, ncname = dld
             yn = name_yearly(name, year)
-            target = os.path.join(path, WEA_FMT % yn)
+            target = os.path.join(path, _tools.WEA_FMT % yn)
             # gently move the old file out of way
             if not _ass_clear_target(target, replace):
                 logger.info("skipping because dataset exists: %s" % name)
@@ -1914,11 +1307,11 @@ def assemble_CERRA(path: str, name="CERRA", years: list = [],
       the function call.
     - After processing, intermediate data files are removed to free
       up space.
-    - This function assumes that a global `TEMP` variable is defined and
+    - This function assumes that a global `_tools.TEMP` variable is defined and
       points to a valid temporary directory for intermediate files.
 
     """
-    temp_path = TEMP
+    temp_path = _tools.TEMP
     logger.debug(f"looking for cdo ...{temp_path}")
     data = cdo.Cdo(tempdir=temp_path)
     logger.debug("python-cdo version: %s" % data.__version__())
@@ -1952,7 +1345,7 @@ def assemble_CERRA(path: str, name="CERRA", years: list = [],
         lts = set([y for x, y in combi if x == year])
         infiles = [_cerraname(year, lt) + '.nc' for lt in lts]
         yn = name_yearly(name, year)
-        target = os.path.join(path, WEA_FMT % yn)
+        target = os.path.join(path, _tools.WEA_FMT % yn)
         # gently move the old file out of way
         if not _ass_clear_target(target, replace):
             logger.info("skipping because dataset exists: %s" % name)
@@ -1996,7 +1389,7 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
     :raises ValueError: If any of the years specified is outside the
       valid range (1940 to the current year).
 
-    - This function assumes that a global `TEMP` variable is defined and
+    - This function assumes that a global `_tools.TEMP` variable is defined and
       points to a valid temporary directory for intermediate files.
 
     """
@@ -2007,13 +1400,13 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
         else:
             raise ValueError(f"years is required for DWD dataset")
     # check database
-    target = os.path.join(path, OBS_FMT % name)
+    target = os.path.join(path, _tools.OBS_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
     # get list of stations
     logger.info("fetching stationlists")
-    stations = _dwd_observations.dwd_fetch_stationlist(years)
+    stations = _fetch_dwd_obs.fetch_stationlist(years)
     station_numbers = stations.keys()
 
     # download and process all stations
@@ -2028,9 +1421,9 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
 
     logger.info("fetching data")
     for station in _tools.progress(station_numbers):
-        dat_in, meta_in =_dwd_observations.dwd_fetch_station(station,
-                                                             store=False)
-        df = _dwd_observations.build_table(dat_in, meta_in, years)
+        dat_in, meta_in =_fetch_dwd_obs.fetch_station(station,
+                                                      store=False)
+        df = _fetch_dwd_obs.build_table(dat_in, meta_in, years)
 
         with zipfile.ZipFile(target,
                              mode='a',
@@ -2105,7 +1498,7 @@ def provide_weather(source: str, path: str = None,
     logger.info("downloading weather source %s" % source)
     success = True
     pwd = os.getcwd()
-    with tempfile.TemporaryDirectory(dir=TEMP) as temp_dir:
+    with tempfile.TemporaryDirectory(dir=_tools.TEMP) as temp_dir:
         os.chdir(temp_dir)
 #        try:
         success = True
@@ -2166,3 +1559,4 @@ Number of parallel processes to run downlading data or
 `None`. If `None` the number of processor cores in the system is used.
 """
 dataset_scan()
+
