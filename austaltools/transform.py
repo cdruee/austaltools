@@ -18,10 +18,12 @@ try:
     from . import _tools
     from . import _datasets
     from . import input_weather
+    from . import wmo_metadata
 except ImportError:
     import _tools
     import _datasets
     import input_weather
+    import wmo_metadata
 
 try:
     from ._version import __version__
@@ -160,10 +162,10 @@ def main(args):
             station, datafile=storage_dwd)
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
         east, north, _ = _tools.ll2ut(lat, lon)
-    # elif args["wmo"] is not None:
-    #     lat, lon, ele, nam = wmo_stationinfo(args["wmo"], path=path)
-    #     rechts, hoch, _ = _tools.ll2gk(lat, lon)
-    #     east, north, _ = _tools.ll2ut(lat, lon)
+    elif args["wmo"] is not None:
+        lat, lon, ele, nam = wmo_metadata.wmo_stationinfo(args["wmo"])
+        rechts, hoch, _ = _tools.ll2gk(lat, lon)
+        east, north, _ = _tools.ll2ut(lat, lon)
     elif args["gk"] is not None:
         rechts, hoch = [float(x) for x in args['gk']]
         lat, lon, _ = _tools.gk2ll(rechts, hoch)

@@ -6,6 +6,7 @@ import logging
 import tempfile
 import sys
 import unicodedata
+from importlib import resources
 from xml.etree import ElementTree
 
 import requests
@@ -50,6 +51,8 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 # -------------------------------------------------------------------------
 
+DIST_AUX_FILES = resources.files(__title__ + '.data')
+""" path to the auxiliary data files distributes alongside the code """
 DEFAULT_WORKING_DIR = "."
 """
 Default location for input and output

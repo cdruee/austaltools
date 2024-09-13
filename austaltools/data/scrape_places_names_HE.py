@@ -3,8 +3,9 @@
 Helper script to retrieve names of counties (Kreise)
 and places (Gemeinden) needed to construct the download
 filelist using the "generate" option.
-Copy the output of this as two elemnts into a list
-under 'values'.
+Copy the output of this script as list into
+datasets_definitons.jsun under key:
+'DGM10-HE' >> 'arguments' >> 'values'.
 """
 import requests
 from austaltools._tools import jsonpath
@@ -37,7 +38,7 @@ for i,x in enumerate(downloads):
         gemeinden.append(gemeinde)
 
 print(str(kreise))
-print(str(gemeinden))
+#print(str(gemeinden))
 
 
 

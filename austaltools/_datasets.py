@@ -38,7 +38,6 @@ import sys
 import tarfile
 import tempfile
 import zipfile
-from importlib import resources
 
 
 import pandas as pd
@@ -80,10 +79,8 @@ logger = logging.getLogger()
 # -------------------------------------------------------------------------
 CDSAPI_LIMIT_PARALLEL = 2
 """ Copernicus per-user limit for parallel queries """
-DIST_AUX_FILES = resources.files(__title__ + '.data')
-""" path to the auxiliary data files distributes alongside the code """
 
-with (DIST_AUX_FILES / 'dataset_definitions.json').open() as f:
+with (_tools.DIST_AUX_FILES / 'dataset_definitions.json').open() as f:
     DATASET_DEFINITIONS = json.load(f)
 
 SOURCES_TERRAIN = [k for k, v in DATASET_DEFINITIONS.items()

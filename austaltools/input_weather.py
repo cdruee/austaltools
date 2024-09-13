@@ -27,12 +27,14 @@ try:
     from . import _datasets
     from . import _fetch_dwd_obs
     from . import _dispersion as dis
+    from . import wmo_metadata
 except ImportError:
     from _version import __version__, __title__
     import _tools
     import _datasets
     import _fetch_dwd_obs
     import _dispersion as dis
+    import wmo_metadata
 
 
 logging.basicConfig()
@@ -856,8 +858,9 @@ def austal_weather(args):
         lat, lon, ele, nam = read_dwd_stationinfo(
             station, datafile=storage_dwd)
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
-    # elif args["wmo"] is not None:
-    #     lat, lon, ele, nam = wmo_stationinfo(args["wmo"], path=path)
+    elif args["wmo"] is not None:
+        lat, lon, ele, nam = wmo_metadata.wmo_stationinfo(args["wmo"])
+        rechts, hoch, _ = _tools.ll2gk(lat, lon)
     elif args["gk"] is not None:
         rechts, hoch = [float(x) for x in args['gk']]
         lat, lon, _ = _tools.gk2ll(rechts, hoch)
