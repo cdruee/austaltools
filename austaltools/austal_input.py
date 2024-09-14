@@ -100,8 +100,8 @@ def main():
     for x in ['dwd', 'gk', 'ut', 'sources', 'ele']:
         w_args[x] = None
     w_args['ll'] = [args['lat'], args['lon']]
-    w_args['source'] = 'ERA5'
-    w_args['year'] = 2000
+    w_args['source'] = 'CERRA'
+    w_args['year'] = 2003
     w_args['prec'] = False
     w_args['station'] = None
     # call program

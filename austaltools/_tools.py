@@ -1017,6 +1017,7 @@ def download(url, file):
                 f"Download failed: status code {req.status_code}")
     return os.path.basename(file)
 
+# -------------------------------------------------------------------------
 
 def xmlpath(xml, path):
     """
@@ -1147,6 +1148,7 @@ def xmlpath(xml, path):
         res = [x.get(getatt, default='') for x in nodes]
     return res
 
+# -------------------------------------------------------------------------
 
 def jsonpath(json_obj, path):
     """
@@ -1224,4 +1226,182 @@ def jsonpath(json_obj, path):
         obj = children
     return obj
 
+# -------------------------------------------------------------------------
 
+def wind_library(path):
+    """
+    Find the directory that contains the wind library
+
+    :param path: user supplied path
+    :type path: str
+    :return: path to wind library
+    :rtype: str
+    """
+    if os.path.basename(path) == "lib":
+        # path ist the lib-dir:
+        libpath = path
+    elif os.path.isdir(os.path.join(path, 'lib')):
+        # lib-dir is in path:
+        libpath = os.path.join(path, 'lib')
+    else:
+        logger.info('Warning: directory is NOT named lib')
+        libpath = path
+    logger.info('reading from directory: %s' % libpath)
+    return libpath
+
+# -------------------------------------------------------------------------
+
+def analyze_name(name):
+    """
+    determine wind direction, stability class and grid index
+    from the filename of a file in the wind library
+
+    :param name: filename
+    :type name: str
+    :return: grid ID, wind direction, snd stability class
+    :rtype: tuple[int, int, int]
+    """
+    # grid index
+    try:
+        grid = int(name[6])
+    except (ValueError, IndexError):
+        raise ValueError("invalid filename (grid index): %s" % name)
+    # wind direction
+    try:
+        adir = name[3:5]
+        if adir == "sn":
+            wdir = 18
+        elif adir == "we":
+            wdir = 27
+        else:
+            wdir = int(adir)
+    except (ValueError, IndexError):
+        raise ValueError("invalid filename (wind direction): %s" % name)
+    # stability class
+    try:
+        ak = int(name[1:2])
+    except (ValueError, IndexError):
+        raise ValueError("invalid filename (stability class): %s" % name)
+    return grid, wdir, ak
+
+# -------------------------------------------------------------------------
+
+def wind_files(path):
+    """
+    find wind library files
+
+    :param path: path where to search. Wind library files are expected
+      to be in this path or in the subdirectory 'lib' of this path.
+    :type path: str
+
+    :return: dict of lists containing names, stability classes,
+      general wind directions, and grid indexes of all files.
+    :rtype: dict[str, list]
+    """
+    wn = re.compile(r"w[0-9asnwe]{7}\.dmna")
+    f_name = [x for x in os.listdir(path) if wn.match(x)]
+    logger.debug('filenames: %s' % str(f_name))
+    f_grid = []
+    f_wdir = []
+    f_stab = []
+    for f in f_name:
+        grid, wdir, ak = analyze_name(f)
+        f_grid.append(grid)
+        f_wdir.append(wdir)
+        f_stab.append(ak)
+    logger.debug('stabilty classes: %s' % str(f_stab))
+    logger.debug('wind directions: %s' % str(f_wdir))
+    logger.debug('grid indexes: %s' % str(f_grid))
+    return {'name': f_name, 'stab': f_stab, "wdir": f_wdir, 'grid': f_grid}
+
+# -------------------------------------------------------------------------
+
+def read_wind(file_info: dict, path: str = '.', grid: int = 0):
+    """
+    read wind library files
+
+    :param file_info: dict of lists containing names, stability classes,
+      general wind directions, and grid indexes of all files.
+    :type file_info: dict
+    :param path: Wind library files are expected
+      to be in this path
+    :type path: str
+    :param grid: index of the grid for which to read the wind data
+    :type grid: int
+    :return: u_grid, v_grid, axes
+    :rtype: tuple of (np.ndarray, np,dnarray, dict of lists of float)
+
+    """
+    if not isinstance(grid, int):
+        raise ValueError('grid number is not numeric')
+    if grid not in file_info['grid']:
+        raise ValueError('grid %i not available in data' % grid)
+    else:
+        logger.info('reading grid: %i' % grid)
+    # extract info for the wanted grid:
+    grid_info = {}
+    for k, v in file_info.items():
+        grid_info[k] = [
+            x for i, x in enumerate(file_info[k])
+            if file_info['grid'][i] == grid
+        ]
+    ndir = len(set(grid_info["wdir"]))
+    dirs = sorted(list(set(grid_info["wdir"])))
+    nstab = len(set(grid_info['stab']))
+    stabs = sorted(list(set(grid_info['stab'])))
+
+    axes = readmet.dmna.DataFile(
+        os.path.join(path, grid_info['name'][0])).axes()
+    nx = len(axes['x'])
+    ny = len(axes['y'])
+    nz = len(axes['z'])
+
+    u_grid = np.full((nx, ny, nz, nstab, ndir), np.nan)
+    v_grid = np.full((nx, ny, nz, nstab, ndir), np.nan)
+
+    for i in progress(range(len(grid_info['name'])),
+                             desc="reading wind fields"):
+        igrd, wdir, stab = analyze_name(grid_info['name'][i])
+        if grid == igrd:
+            filename = os.path.join(path, grid_info['name'][i])
+            logger.debug('loading file: %s' % filename)
+            dmna = readmet.dmna.DataFile(filename)
+            istab = stabs.index(stab)
+            idir = dirs.index(wdir)
+            u_grid[:, :, :, istab, idir] = dmna.data['Vx']
+            v_grid[:, :, :, istab, idir] = dmna.data['Vy']
+    axes['dir'] = [x * 10. for x in dirs]
+    axes['ak'] = stabs
+    return u_grid, v_grid, axes
+
+# -------------------------------------------------------------------------
+
+def read_heff(working_dir):
+    """
+    get effective anemometer height from
+    z0 defined in austal.txt and the heights
+    given in the akterm file (weather timeseries) given
+    as parameter 'az'
+
+    :param working_dir: the working directoty of austal(2000),
+      where austal.txt resides
+    :type working_dir: str
+
+    :return: effective anemometer height
+    :rtype: float
+
+    """
+    austxt = find_austxt(working_dir)
+    conf = get_austxt(austxt)
+    if 'z0' in conf:
+        z0 = float(conf['z0'][0])
+    else:
+        raise ValueError('no z0 defined, cannot read h_eff')
+    if 'az' in conf:
+        az_file = conf['az'][0]
+    else:
+        raise ValueError('no az defined, cannot read h_eff')
+    z0_class = find_z0_class(z0)
+    az = readmet.akterm.DataFile(file=os.path.join(working_dir, az_file))
+    heff = float(az.heights[z0_class])
+    return heff
