@@ -703,6 +703,46 @@ def add_arguents_common_plot(parser: argparse.ArgumentParser
                         help='force overwriting plotfile if it exists.')
     return parser
 
+def plot_add_mark(ax, mark):
+    pf = pd.DataFrame(mark)
+    for i, p in pf.iterrows():
+        x = p['x']
+        y = p['y']
+        if 'sym' in p:
+            sym = p['symbol']
+        else:
+            sym = "o"
+    return ax.plot(x, y, sym, markersize=10)
+
+def plot_add_topo(ax, topo, working_dir='.'):
+    logger.debug('adding topography')
+    if isinstance(topo, dict):
+        logger.debug('... from data in arguments')
+        topx = topo["x"]
+        topy = topo["y"]
+        topz = topo["z"]
+    elif isinstance(topo, str):
+        logger.debug('... from file: %s' % topo)
+        if os.path.exists(topo):
+            topo_path = topo
+        elif os.path.exists(os.path.join(working_dir, topo)):
+            topo_path = os.path.join(working_dir, topo)
+        else:
+            raise ValueError('topography file not found: %s' % topo)
+        logger.info('reading topography from %s' % topo_path)
+        topofile = readmet.dmna.DataFile(topo_path)
+        topz = topofile.data[""]
+        topx = topofile.axes(ax="x")
+        topy = topofile.axes(ax="y")
+    else:
+        raise ValueError('topo must be dict of filename')
+    con = ax.contour(topx, topy, topz.T, origin="lower",
+                      colors='black',
+                      linewidths=0.75
+                      )
+    ax.clabel(con, con.levels, inline=True, fontsize=10)
+    return con
+
 
 def common_plot(args: dict,
                 dat: dict,
@@ -885,32 +925,7 @@ def common_plot(args: dict,
     # overlay topography as isolines
     #
     if topo is not None:
-        logger.debug('adding topography')
-        if isinstance(topo, dict):
-            logger.debug('... from data in arguments')
-            topx = topo["x"]
-            topy = topo["y"]
-            topz = topo["z"]
-        elif isinstance(topo, str):
-            logger.debug('... from file: %s' % topo)
-            if os.path.exists(topo):
-                topo_path = topo
-            elif os.path.exists(os.path.join(args['working_dir'], topo)):
-                topo_path = os.path.join(args['working_dir'], topo)
-            else:
-                raise ValueError('topography file not found: %s' % topo)
-            logger.info('reading topography from %s' % topo_path)
-            topofile = readmet.dmna.DataFile(topo_path)
-            topz = topofile.data[""]
-            topx = topofile.axes(ax="x")
-            topy = topofile.axes(ax="y")
-        else:
-            raise ValueError('topo must be dict of filename')
-        con = plt.contour(topx, topy, topz.T, origin="lower",
-                          colors='black',
-                          linewidths=0.75
-                          )
-        ax.clabel(con, con.levels, inline=True, fontsize=10)
+        plot_add_topo(ax, topo, args['working_dir'])
 
     # ---------------------------
     # show buildings
@@ -932,15 +947,7 @@ def common_plot(args: dict,
     # put marks on desired positions
     #
     if mark is not None:
-        pf = pd.DataFrame(mark)
-        for i, p in pf.iterrows():
-            x = p['x']
-            y = p['y']
-            if 'sym' in p:
-                sym = p['symbol']
-            else:
-                sym = "o"
-        ax.plot(x, y, sym, markersize=10)
+        plot_add_mark(ax,mark)
 
     ax.set_xlabel("x in m")
     ax.set_ylabel("y in m")

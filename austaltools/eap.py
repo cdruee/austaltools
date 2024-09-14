@@ -20,7 +20,6 @@ import subprocess
 import tempfile
 from time import sleep
 
-from ._tools import wind_library, wind_files, read_wind
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np

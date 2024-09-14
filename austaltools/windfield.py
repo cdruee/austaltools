@@ -7,6 +7,8 @@ import itertools
 import logging
 import os
 
+from colored import style
+
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
 
@@ -37,7 +39,6 @@ except ImportError:
     from _version import __version__
     import _dispersion
 
-logging.basicConfig()
 logger = logging.getLogger()
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
@@ -101,6 +102,16 @@ def main(args):
     logger.debug(format(args))
     working_dir = args["working_dir"]
     grid = int(args["grid"])
+    if args['vector']:
+        u, v, ak = [float(x) for x in args['vector']]
+    elif args['wind']:
+        ff, dd, ak = [float(x) for x in args['wind']]
+        u, v = meteolib.wind.dir2uv(ff, dd)
+    elif args['time']:
+        raise NotImplementedError
+    ak = int(ak)
+    logger.debug(f"wind: {u}, {v}, stability class: {ak}")
+    cmap = args['colormap']
     #
     conf = _tools.get_austxt(_tools.find_austxt(working_dir))
     #
@@ -113,8 +124,10 @@ def main(args):
     u_grid, v_grid, axes = _tools.read_wind(file_info, path=lib_dir,
                                      grid=grid)
     ha = _tools.read_heff(working_dir)
+    xa = conf.get('xa', 0)
+    ya = conf.get('ya', 0)
+
     # _grid indices: nx, ny, nz, nstab, ndir
-    u=1;v=0;xa=0;ya=0;ak=1
     u_field, v_field = superpose(u_grid, v_grid, axes, directions,
                                  u, v, xa, ya, ha, ak)
     nx, ny, nz = u_field.shape
@@ -174,8 +187,9 @@ def main(args):
     else:
         raise ValueError('no cut defined')
 
-
-    fix, ax = plt.subplots()
+    style = args['style']
+    color = args.get('color', 'blue')
+    fig, ax = plt.subplots()
     if view == 'top':
         con = plt.contour(topx, topy, topz.T, origin='lower',
                           colors='black',
@@ -184,15 +198,28 @@ def main(args):
         ax.clabel(con, con.levels, inline=True, fontsize=10)
         topcut = 1*(topz > altitude)
         ax.contourf(topx,topy,topcut.T, levels=[0.99,1.01],cmap='Greys')
+
         spd_slice = np.sqrt(u_slice*u_slice + v_slice*v_slice)
-        # sp = ax.streamplot(h_ccord, v_ccord, u_slice.T, v_slice.T,
-        #               color=spd_slice, cmap='plasma',
-        #               density=1.5)
-        st=5
-        plt.quiver(h_ccord[::st], v_ccord[::st],
-                   u_slice[::st, ::st].T, v_slice[::st, ::st].T,
-                   spd_slice[::st, ::st].T)
-        #plt.colorbar(sp.lines, ax=ax, label='m/s')
+        if style == 'stream':
+            ax.streamplot(h_ccord, v_ccord, u_slice.T, v_slice.T,
+                          color=color,
+                          density=1.5)
+        elif style == 'stream-color':
+            sp = ax.streamplot(h_ccord, v_ccord, u_slice.T, v_slice.T,
+                          color=spd_slice, cmap=cmap,
+                          density=1.5)
+            fig.colorbar(sp.lines, ax=ax, label='m/s')
+        elif style == 'arrows':
+            st = 5
+            plt.quiver(h_ccord[::st], v_ccord[::st],
+                       u_slice[::st, ::st].T, v_slice[::st, ::st].T
+                       )
+        elif style == 'arrows-color':
+            st = 5
+            qp = plt.quiver(h_ccord[::st], v_ccord[::st],
+                        u_slice[::st, ::st].T, v_slice[::st, ::st].T,
+                        spd_slice[::st, ::st].T, cmap=cmap)
+            fig.colorbar(qp, ax=ax, label='m/s')
     elif view == 'side':
         v_pos = np.broadcast_to(v_ccord,u_slice.shape)
         print(v_pos[0,:])
@@ -207,18 +234,18 @@ def main(args):
     else:
         raise ValueError(f'internal error: view={view}')
     plt.show()
-    # if args["plot"] == "__show__":
-    #     logger.info('showing plot')
-    #     plt.show()
-    # elif args["plot"] not in [None, ""]:
-    #     if os.path.sep in args["plot"]:
-    #         outname = args["plot"]
-    #     else:
-    #         outname = os.path.join(args["working_dir"], args["plot"])
-    #     if not outname.endswith('.png'):
-    #         outname = outname + '.png'
-    #     logger.info('writing plot: %s' % outname)
-    #     plt.savefig(outname, dpi=180)
+    if args["plot"] == "__show__":
+        logger.info('showing plot')
+        plt.show()
+    elif args["plot"] not in [None, ""]:
+        if os.path.sep in args["plot"]:
+            outname = args["plot"]
+        else:
+            outname = os.path.join(args["working_dir"], args["plot"])
+        if not outname.endswith('.png'):
+            outname = outname + '.png'
+        logger.info('writing plot: %s' % outname)
+        plt.savefig(outname, dpi=180)
 
 if __name__ == '__main__':
     main(args)

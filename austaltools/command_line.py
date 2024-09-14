@@ -21,6 +21,7 @@ try:
     from . import steepness
     from . import transform
     from . import plot
+    from . import windfield
 except ImportError:
     import _tools
     from _version import __version__, __title__
@@ -33,6 +34,7 @@ except ImportError:
     import steepness
     import transform
     import plot
+    import windfield
 # ----------------------------------------------------
 
 logging.basicConfig()
@@ -402,6 +404,89 @@ def cli_parser():
                         action='store_true',
                         help='add precipitation columns to output file')
 
+    # ----------------------------------------------------
+
+    pars_wif = subparsers.add_parser(
+        name='windfield',
+        help='Plot wind field'
+    )
+    DEFAULT_WIF_COLORMAP = 'plasma'
+    pars_wif.add_argument(dest='style',
+                          choices=['stream', 'stream-color',
+                                   'arrows', 'arrows-color',
+                                   'barbs', 'barbs-color',],
+                          help='style of wind field plot')
+    pars_wif.add_argument('-c', '--colormap',
+                         default=DEFAULT_WIF_COLORMAP,
+                         help='name of colormap to use. '
+                              'Defaults to "%s"' %
+                              DEFAULT_WIF_COLORMAP)
+    pars_wif.add_argument('-g', '--grid',
+                         default=0,
+                         help='number of grid to plot. '
+                              'Defaults to 0')
+    slice = pars_wif.add_mutually_exclusive_group(required=True)
+    slice.add_argument('-a', '--altitude',
+                       dest='alt',
+                       metavar='ASL',
+                       default=None,
+                       help='display horizontal slice at ``ASL`` meters '
+                            'above sea level. '
+                            'Defaults to `None`')
+    slice.add_argument('-z', '--height',
+                       dest='hgt',
+                       metavar='AGL',
+                       default=None,
+                       help='display horizontal slice at height ``AGT`` '
+                            'above ground level. '
+                            'Defaults to `None`')
+    slice.add_argument('-l', '--level',
+                       dest='lvl',
+                       metavar='NUMBER',
+                       default=None,
+                       help='display horizontal slice at model level '
+                            'NUMBER (0-based). '
+                            'Defaults to `None`')
+    wval = pars_wif.add_mutually_exclusive_group(required=True)
+    wval.add_argument('-t', '--time',
+                      dest='time',
+                      metavar='TIMESTAMP',
+                      default=None,
+                      help='display windfield corresponding '
+                           'to the wind and stability from akterm '
+                           'for the time ``TIMESTAMP``. '
+                           'Defaults to `None`')
+    wval.add_argument('-w', '--wind',
+                      dest='wind',
+                      metavar='SPEED DIR AK',
+                      nargs=3,
+                      default=None,
+                      help='display windfield corresponding '
+                           'to the wind `SPEED`, `DIR`ection and '
+                           'stability class `AK`. '
+                           'Defaults to `None`')
+    wval.add_argument('-W', '--wind-vector',
+                      dest='vector',
+                      metavar='U V AK',
+                      nargs=3,
+                      default=None,
+                      help='display windfield corresponding '
+                           'to the wind vector (`U`, `V`) and '
+                           'stability class `AK`. '
+                           'Defaults to `None`')
+    pars_wif.add_argument('-p', '--plot',
+                        metavar="FILE",
+                        nargs='?',
+                        const='__default__',
+                        help='save plot to a file. If `FILE` is "-" ' +
+                             'the plot is shown on screen. If `FILE` is ' +
+                             'missing, the file name defaults to ' +
+                             'the data file name with extension `png`'
+                        )
+    pars_wif.add_argument('-f', '--force',
+                        action='store_true',
+                        default=False,
+                        help='force overwriting plotfile if it exists.')
 
     # ----------------------------------------------------
 
@@ -463,6 +548,8 @@ def main():
             transform.main(args)
         elif args['command'] == 'weather':
             input_weather.main(args)
+        elif args['command'] == 'windfield':
+            windfield.main(args)
         #else:
          #   raise ValueError('unknown command: %s' % args['command'])
     except UsageError as e:
