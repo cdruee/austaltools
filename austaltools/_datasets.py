@@ -1252,6 +1252,7 @@ def _ass_cerra_getyear(opts):
         logger.debug("done subsetting: " + ncname)
         os.remove(gribname)
     logger.debug("done job %s" % str(opts))
+    return True
 
 
 # -------------------------------------------------------------------------
@@ -1333,8 +1334,10 @@ def assemble_CERRA(path: str, name="CERRA", years: list = [],
 
 
     # get data and extract region
-    with mpf.Executor(max_workers=CDSAPI_LIMIT_PARALLEL) as e:
-        e.map(_ass_cerra_getyear, combi)
+    with mpf.ThreadPoolExecutor(max_workers=CDSAPI_LIMIT_PARALLEL) as e:
+        for c in combi:
+            future = e.submit(_ass_cerra_getyear, c)
+            _ = future.result()
 
     logger.debug("finished parallel jobs")
     # combine forecasts
