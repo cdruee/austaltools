@@ -46,8 +46,9 @@ import requests
 from urllib3 import disable_warnings, exceptions
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    from osgeo import gdal
     import multiprocessing as mp
+    import concurrent.futures as mpf
+    from osgeo import gdal
     import cdo
 
 try:
@@ -1332,8 +1333,8 @@ def assemble_CERRA(path: str, name="CERRA", years: list = [],
 
 
     # get data and extract region
-    with mp.Pool(CDSAPI_LIMIT_PARALLEL) as pool:
-        _ = pool.map(_ass_cerra_getyear, combi)
+    with mpf.Executor(max_workers=CDSAPI_LIMIT_PARALLEL) as e:
+        e.map(_ass_cerra_getyear, combi)
 
     logger.debug("finished parallel jobs")
     # combine forecasts
