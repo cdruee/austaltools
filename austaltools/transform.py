@@ -12,7 +12,8 @@ import logging
 import sys
 import os
 
-from osgeo import osr
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    from osgeo import osr
 
 try:
     from . import _tools
