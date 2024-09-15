@@ -529,7 +529,7 @@ def main():
     logger.debug('args: %s' % args)
 
     if args["temp_dir"] is not None:
-        _datasets.TEMP = args["temp_dir"]
+        _tools.TEMP = args["temp_dir"]
 
     try:
         if args['command'] in ['buildings-geojson', 'bg']:
