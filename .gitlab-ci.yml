@@ -56,7 +56,7 @@ build_pages:
   stage: build
   script:
     - pip install sphinx sphinx-argparse
-    - pip install numpy pandas
+    - pip install numpy pandas pkg_resources
     - BUILDING_SPHINX=true sphinx-build -b html docs build/sphinx/html
     - mv build/sphinx/html/ public/
   artifacts:
