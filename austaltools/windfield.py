@@ -7,10 +7,9 @@ import itertools
 import logging
 import os
 
-from colored import style
-
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
+    import pandas as pd
 
     import readmet
     import meteolib
@@ -45,7 +44,7 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     logging.getLogger('readmet.dmna').setLevel(logging.ERROR)
 
 
-def load_topo(topo_path):
+def load_topo(topo_path: str) -> (list, list, np.ndarray):
     logger.info('reading topography from %s' % topo_path)
     topofile = readmet.dmna.DataFile(topo_path)
     topz = topofile.data[""]
@@ -53,8 +52,61 @@ def load_topo(topo_path):
     topy = topofile.axes(ax="y")
     return topx, topy, topz
 
-def superpose(u_grid, v_grid, axes, dirs,
-              u, v, xa, ya, ha, ak):
+# -------------------------------------------------------------------------
+
+def load_weather(working_dir: str, conf: dict = None) -> pd.DataFrame:
+    """
+    Get the weather time series height `working_dir`.
+    Files are evaluated in the same order as by AUSTAL:
+    `zeitreihe.dmna` or `timeseries.dmna` are tried to read first,
+    then the AKTERM file spezified in the config file under
+    parameter 'az'
+
+    :param working_dir: the working directoty of austal(2000),
+      where austal.txt resides
+    :type working_dir: str
+    :param conf: (optional) configuration file contents as dict
+    :type conf: dict
+
+    :return: effective anemometer height
+    :rtype: float
+
+    If `conf` is provided, this configuration is evaluated,
+    else the configuration file from `working_dir` is read.
+    This option is indended for situation in which `conf`
+    has already been read into memory for other purposes.
+    """
+    if conf is None:
+        austxt = _tools.find_austxt(working_dir)
+        conf = _tools.get_austxt(austxt)
+    working_dir_files = os.listdir(working_dir)
+    for x in ['zeitreihe.dmna', 'timeseries.dmna']:
+        if x in working_dir_files:
+            ts_file=os.path.join(working_dir, x)
+            break
+    else:
+        ts_file=None
+    if ts_file:
+        zr = readmet.dmna.DataFile(os.path.join(working_dir,ts_file)).data
+        res = pd.DataFrame(index=pd.to_datetime(zr['te']))
+        res['FF'] = zr['ua'].values
+        res['DD'] = zr['ra'].values
+        z0 = _tools.read_z0(working_dir, conf)
+        res['KM'] = [_dispersion.KM2021.get_index(z0,x) for x in zr['ra']]
+    else:
+        if 'az' in conf:
+            az_file = conf['az'][0]
+        else:
+            raise ValueError('no az defined, cannot read h_eff')
+        az = readmet.akterm.DataFile(file=os.path.join(working_dir,
+                                                       az_file))
+        res = az.data[['FF', 'DD', 'KM']]
+    return res
+
+# -------------------------------------------------------------------------
+
+def superpose(u_grid:np.ndarray, v_grid:np.ndarray, axes:dict, dirs,
+              u:float, v:float, xa:float, ya:float, ha:float, ak:int):
     # _grid indices: nx, ny, nz, nstab, ndir
     ix = np.argmin(abs(np.array(axes['x']) - xa))
     iy = np.argmin(abs(np.array(axes['y']) - ya))
@@ -64,33 +116,23 @@ def superpose(u_grid, v_grid, axes, dirs,
     for i, id in enumerate(i_dir):
         ui[i] = np.interp(ha, axes['z'], u_grid[ix, iy, :, ak, id])
         vi[i] = np.interp(ha, axes['z'], v_grid[ix, iy, :, ak, id])
-    print(u,ui)
-    print(v,vi)
     # solve equation so that u, v = linea combi of ui,vi at anemometer
     a = (v*ui[1] - u *vi[1]) / (vi[0]*ui[1] - ui[0]*vi[1])
     if vi[1] > ui[1]:
         b = (v - a * vi[0]) / vi[1]
     else:
         b = (u - a * ui[0]) / ui[1]
-    print(a,b)
+    logger.debug(f'superposition factors: a={a}, b={b}')
     # calculate wind field
     u_field = (a * u_grid[:, :, :, ak, i_dir[0]] +
                b * u_grid[:, :, :, ak, i_dir[1]])
     v_field = (a * v_grid[:, :, :, ak, i_dir[0]] +
                b * v_grid[:, :, :, ak, i_dir[1]])
-    print(np.min(u_field), np.max(u_field))
-    print(np.min(v_field), np.max(v_field))
+    logger.debug('  umin=%f, umax=%f' % (np.min(u_field), np.max(u_field)))
+    logger.debug('  vmin=%f, vmax=%f' % (np.min(v_field), np.max(v_field)))
     return u_field, v_field
 
-
-args={
-    'working_dir': '../austal/Mayen80/',
-    'grid':'0',
-    #'vyz': '76',
-    #'lvl': '2',
-    'alt':'300',
-}
-
+# -------------------------------------------------------------------------
 
 def main(args):
     """
@@ -102,18 +144,31 @@ def main(args):
     logger.debug(format(args))
     working_dir = args["working_dir"]
     grid = int(args["grid"])
+    #
+    conf = _tools.get_austxt(_tools.find_austxt(working_dir))
+    #
     if args['vector']:
         u, v, ak = [float(x) for x in args['vector']]
     elif args['wind']:
         ff, dd, ak = [float(x) for x in args['wind']]
         u, v = meteolib.wind.dir2uv(ff, dd)
     elif args['time']:
-        raise NotImplementedError
+        timestamp = pd.to_datetime(args['time'])
+        az = load_weather(working_dir, conf)
+        time = az.index[(
+                az.index - timestamp).to_series().abs().argsort()[0]]
+        if abs(time -timestamp) > pd.Timedelta('1H'):
+            raise ValueError('time outside data: %s' % str(timestamp))
+        else:
+            logger.info('using data from: %s' % str(timestamp))
+        ff = az['FF'][time]
+        dd = az['DD'][time]
+        ak = az['KM'][time]
+        u, v = meteolib.wind.dir2uv(ff, dd)
+
     ak = int(ak)
     logger.debug(f"wind: {u}, {v}, stability class: {ak}")
     cmap = args['colormap']
-    #
-    conf = _tools.get_austxt(_tools.find_austxt(working_dir))
     #
     # read the wind library data
     #
@@ -148,10 +203,31 @@ def main(args):
         topz = np.full((nx, ny), 0.)
 
     altitude = np.nan
-    if args.get('lvl', False):
+
+    if args.get('hgt', False):
+        height = float(args['hgt'])
+        level = np.argmin(abs(np.array(axes['z']) - height))
+        logger.info(f'nearest model level: {level}')
+    elif args.get('lvl', False):
         level = int(args['lvl'])
+    else:
+        level = False
+    if level:
         u_slice = u_field[:,:,level]
         v_slice = v_field[:,:,level]
+        h_ccord = np.array(axes['x'])
+        v_ccord = np.array(axes['y'])
+        view = 'top'
+    elif args.get('alt', False):
+        altitude = float(args['alt'])
+        cols = itertools.product(range(nx), range(ny))
+        u_slice = np.full((nx, ny), np.nan)
+        v_slice = np.full((nx, ny), np.nan)
+        for col in _tools.progress(cols):
+            i, j = col
+            alt = axes['z'] + topz[i, j]
+            u_slice[i, j] = np.interp([altitude], alt, u_field[i, j, :])[0]
+            v_slice[i, j] = np.interp([altitude], alt, v_field[i, j, :])[0]
         h_ccord = np.array(axes['x'])
         v_ccord = np.array(axes['y'])
         view = 'top'
@@ -171,25 +247,13 @@ def main(args):
         h_ccord = np.array(axes['x'])
         v_ccord = np.array(axes['z'])
         view = 'side'
-    elif args.get('alt', False):
-        altitude = float(args['alt'])
-        cols = itertools.product(range(nx), range(ny))
-        u_slice = np.full((nx, ny), np.nan)
-        v_slice = np.full((nx, ny), np.nan)
-        for col in _tools.progress(cols):
-            i, j = col
-            alt = axes['z'] + topz[i, j]
-            u_slice[i, j] = np.interp([altitude], alt, u_field[i, j, :])[0]
-            v_slice[i, j] = np.interp([altitude], alt, v_field[i, j, :])[0]
-        h_ccord = np.array(axes['x'])
-        v_ccord = np.array(axes['y'])
-        view = 'top'
     else:
         raise ValueError('no cut defined')
 
     style = args['style']
     color = args.get('color', 'blue')
     fig, ax = plt.subplots()
+    fig.set_size_inches(11, 8)
     if view == 'top':
         con = plt.contour(topx, topy, topz.T, origin='lower',
                           colors='black',
@@ -200,31 +264,49 @@ def main(args):
         ax.contourf(topx,topy,topcut.T, levels=[0.99,1.01],cmap='Greys')
 
         spd_slice = np.sqrt(u_slice*u_slice + v_slice*v_slice)
+
+        u_slice[spd_slice < 0.5] = np.nan
+        v_slice[spd_slice < 0.5] = np.nan
+        spd_slice[spd_slice < 0.5] = np.nan
         if style == 'stream':
             ax.streamplot(h_ccord, v_ccord, u_slice.T, v_slice.T,
                           color=color,
                           density=1.5)
         elif style == 'stream-color':
             sp = ax.streamplot(h_ccord, v_ccord, u_slice.T, v_slice.T,
-                          color=spd_slice, cmap=cmap,
+                          color=spd_slice.T, cmap=cmap,
                           density=1.5)
             fig.colorbar(sp.lines, ax=ax, label='m/s')
         elif style == 'arrows':
-            st = 5
+            st = int(u_slice.shape[0]/30)
             plt.quiver(h_ccord[::st], v_ccord[::st],
                        u_slice[::st, ::st].T, v_slice[::st, ::st].T
                        )
         elif style == 'arrows-color':
-            st = 5
+            st = int(u_slice.shape[0]/30)
             qp = plt.quiver(h_ccord[::st], v_ccord[::st],
-                        u_slice[::st, ::st].T, v_slice[::st, ::st].T,
-                        spd_slice[::st, ::st].T, cmap=cmap)
+                            u_slice[::st, ::st].T, v_slice[::st, ::st].T,
+                            spd_slice[::st, ::st].T, cmap=cmap)
             fig.colorbar(qp, ax=ax, label='m/s')
+        elif style == 'barbs':
+            st = int(u_slice.shape[0]/20)
+            plt.barbs(h_ccord[::st], v_ccord[::st],
+                      1.94 * u_slice[::st, ::st].T,
+                      1.94 * v_slice[::st, ::st].T,
+                      pivot='middle'
+                      )
+        elif style == 'barbs-color':
+            st = int(u_slice.shape[0]/20)
+            bp = plt.barbs(h_ccord[::st], v_ccord[::st],
+                           1.94 * u_slice[::st, ::st].T,
+                           1.94 * v_slice[::st, ::st].T,
+                           1.94 * spd_slice[::st, ::st].T,
+                           cmap=cmap,
+                           pivot='middle')
+            fig.colorbar(bp, ax=ax, label='m/s')
     elif view == 'side':
         v_pos = np.broadcast_to(v_ccord,u_slice.shape)
-        print(v_pos[0,:])
         t_pos = np.broadcast_to(t_slice[:,np.newaxis],u_slice.shape)
-        print(t_pos[0,:])
         h_pos = np.broadcast_to(h_ccord[:,np.newaxis],u_slice.shape)
         v_pos = v_pos + t_pos
         ax.quiver(h_pos, v_pos, u_slice.T, v_slice.T)
@@ -246,6 +328,3 @@ def main(args):
             outname = outname + '.png'
         logger.info('writing plot: %s' % outname)
         plt.savefig(outname, dpi=180)
-
-if __name__ == '__main__':
-    main(args)

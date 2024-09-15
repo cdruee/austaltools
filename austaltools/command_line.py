@@ -450,11 +450,11 @@ def cli_parser():
     wval = pars_wif.add_mutually_exclusive_group(required=True)
     wval.add_argument('-t', '--time',
                       dest='time',
-                      metavar='TIMESTAMP',
+                      metavar='"YYY-MM-DD HH:MM:SS"',
                       default=None,
                       help='display windfield corresponding '
                            'to the wind and stability from akterm '
-                           'for the time ``TIMESTAMP``. '
+                           'for the time given by ``YYY-MM-DD HH:MM:SS``. '
                            'Defaults to `None`')
     wval.add_argument('-w', '--wind',
                       dest='wind',

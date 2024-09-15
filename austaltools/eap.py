@@ -633,8 +633,9 @@ def run_austal(workdir, tmproot=None):
     if not austal_ok:
         raise ValueError('austal finished with an error')
 
-    file_info = wind_files(os.path.join(tmpdir, 'lib'))
-    u_tmp, v_tmp, ax_tmp = read_wind(file_info, os.path.join(tmpdir, 'lib'))
+    file_info = _tools.wind_files(os.path.join(tmpdir, 'lib'))
+    u_tmp, v_tmp, ax_tmp = _tools.read_wind(
+        file_info, os.path.join(tmpdir, 'lib'))
 
     shutil.rmtree(tmpdir)
     logger.debug('removed temp directory: %s' % tmpdir)
@@ -1026,11 +1027,11 @@ def main(args):
     # read the wind library data
     #
     working_dir = args["working_dir"]
-    lib_dir = wind_library(working_dir)
-    file_info = wind_files(lib_dir)
+    lib_dir = _tools.wind_library(working_dir)
+    file_info = _tools.wind_files(lib_dir)
     directions = [float(x) * 10.
                   for x in sorted(list(set(file_info["wdir"])))]
-    u_grid, v_grid, axes = read_wind(file_info, path=lib_dir,
+    u_grid, v_grid, axes = _tools.read_wind(file_info, path=lib_dir,
                                      grid=int(args['grid']))
     #
     # get the reference profile

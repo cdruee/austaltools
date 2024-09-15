@@ -848,7 +848,7 @@ def austal_weather(args):
 
     station = None
     ele = None
-    if args["dwd"] is not None:
+    if args.get("dwd", None) is not None:
         storage_dwd = _datasets.dataset_get("DWD").path
         if storage_dwd is None:
             sys.tracebacklimit = 0
@@ -858,23 +858,23 @@ def austal_weather(args):
         lat, lon, ele, nam = read_dwd_stationinfo(
             station, datafile=storage_dwd)
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
-    elif args["wmo"] is not None:
+    elif args.get("wmo", None) is not None:
         lat, lon, ele, nam = wmo_metadata.wmo_stationinfo(args["wmo"])
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
-    elif args["gk"] is not None:
+    elif args.get("gk", None) is not None:
         rechts, hoch = [float(x) for x in args['gk']]
         lat, lon, _ = _tools.gk2ll(rechts, hoch)
-    elif args["ut"] is not None:
+    elif args.get("ut", None) is not None:
         rechts, hoch, _ = _tools.ut2gk(*[float(x) for x in args['ut']])
         lat, lon, _ = _tools.gk2ll(rechts, hoch)
-    elif args["ll"] is not None:
+    elif args.get("ll", None) is not None:
         lat, lon = [float(x) for x in args['ll']]
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
     else:
         return
 
     if ele is None:
-        if args["ele"] is not None:
+        if args.get("ele", None) is not None:
             ele = float(args["ele"])
         else:
             logger.warning('no elevation info. Assuming sea level. ' +

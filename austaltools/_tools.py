@@ -448,7 +448,7 @@ def ut2gk(east: float, north:float) -> (float, float):
     return transform.TransformPoint(east, north)
 
 # -------------------------------------------------------------------------
-def gk2ut(recht: float, hoch: float) -> (float, float):
+def gk2ut(rechts: float, hoch: float) -> (float, float):
     """
     Converts Gauss-Krüger rechts/hoch (east/north) coordinates
     (DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677)
@@ -464,7 +464,7 @@ def gk2ut(recht: float, hoch: float) -> (float, float):
     :rtype: float, float
     """
     transform = osr.CoordinateTransformation(GK, UT)
-    return transform.TransformPoint(recht, hoch)
+    return transform.TransformPoint(rechts, hoch)
 
 # -------------------------------------------------------------------------
 
@@ -712,7 +712,7 @@ def plot_add_mark(ax, mark):
             sym = p['symbol']
         else:
             sym = "o"
-    return ax.plot(x, y, sym, markersize=10)
+        ax.plot(x, y, sym, markersize=10)
 
 def plot_add_topo(ax, topo, working_dir='.'):
     logger.debug('adding topography')
@@ -1383,7 +1383,7 @@ def read_wind(file_info: dict, path: str = '.', grid: int = 0):
 
 # -------------------------------------------------------------------------
 
-def read_heff(working_dir):
+def read_z0(working_dir, conf=None):
     """
     get effective anemometer height from
     z0 defined in austal.txt and the heights
@@ -1393,22 +1393,59 @@ def read_heff(working_dir):
     :param working_dir: the working directoty of austal(2000),
       where austal.txt resides
     :type working_dir: str
+    :param conf: (optional) configuration file contents as dict
+    :type conf: dict
 
     :return: effective anemometer height
     :rtype: float
 
+    If `conf` is provided, this configuration is evaluated,
+    else the configuration file from `working_dir` is read.
+    This option is indended for situation in which `conf`
+    has already been read into memory for other purposes.
     """
-    austxt = find_austxt(working_dir)
-    conf = get_austxt(austxt)
+    if conf is None:
+        austxt = find_austxt(working_dir)
+        conf = get_austxt(austxt)
     if 'z0' in conf:
         z0 = float(conf['z0'][0])
     else:
         raise ValueError('no z0 defined, cannot read h_eff')
+    return z0
+
+# -------------------------------------------------------------------------
+
+def read_heff(working_dir, conf=None):
+    """
+    get effective anemometer height from
+    z0 defined in austal.txt and the heights
+    given in the akterm file (weather timeseries) given
+    as parameter 'az'
+
+    :param working_dir: the working directoty of austal(2000),
+      where austal.txt resides
+    :type working_dir: str
+    :param conf: (optional) configuration file contents as dict
+    :type conf: dict
+
+    :return: effective anemometer height
+    :rtype: float
+
+    If `conf` is provided, this configuration is evaluated,
+    else the configuration file from `working_dir` is read.
+    This option is indended for situation in which `conf`
+    has already been read into memory for other purposes.
+    """
+    if conf is None:
+        austxt = find_austxt(working_dir)
+        conf = get_austxt(austxt)
     if 'az' in conf:
         az_file = conf['az'][0]
     else:
         raise ValueError('no az defined, cannot read h_eff')
+    z0 = read_z0(working_dir, conf)
     z0_class = find_z0_class(z0)
     az = readmet.akterm.DataFile(file=os.path.join(working_dir, az_file))
     heff = float(az.heights[z0_class])
     return heff
+
