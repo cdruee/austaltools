@@ -454,7 +454,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
           the referecnce system of the input data (in the form "EPSG:xxxx")
         - provider["utm_remove_zone"]: (str, optional)
           If 'True', 'true', 'yes', True is passed
-          to :py:func:`_fetch_dgm_opendata._ass_reduce_tile`
+          to :py:func:`_fetch_dgm_od._ass_reduce_tile`
     :type args: dict
     :return: Success (True) of Failure (False)
     :rtype: bool
@@ -487,7 +487,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
             filelist = [filelist]
     input_files = []
     for string in filelist:
-        x = _fetch_dgm_opendata.expand_filelist_string(
+        x = _fetch_dgm_od.expand_filelist_string(
             string, base_url, verify,
             args.get('xmlpath', None),
             args.get('jsonpath', None),
@@ -509,7 +509,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         i = 0
         with mp.Pool(pp) as pool:
             for tfs in _tools.progress(pool.imap_unordered(
-                    _fetch_dgm_opendata.process_input, thread_args),
+                    _fetch_dgm_od.process_input, thread_args),
                     total=len(thread_args)):
                 i = i + 1
                 logger.debug("file %5d / %5d" % (i, len(thread_args)))
@@ -518,7 +518,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         raise ValueError(f'method {method} not implemented')
 
     # merge the GeoTiff Files from all tiles into one file
-    _fetch_dgm_opendata.merge_tiles(target, tile_files)
+    _fetch_dgm_od.merge_tiles(target, tile_files)
     logger.info(f"data file written: {target}")
 
     return True
@@ -559,12 +559,12 @@ def assemble_DGM_SH(path, name, replace, args: dict):
     tile_files = []
     with mp.Pool(PROCS) as pool:
         for tf in _tools.progress(
-                pool.imap_unordered(dgm1_sh_getfid, args),
+                pool.imap_unordered(_fetch_dgm_od.dgm1_sh_getfid, args),
                 total=len(args)
         ):
             tile_files += tf
 
-    _fetch_dgm_opendata.merge_tiles(target, tile_files)
+    _fetch_dgm_od.merge_tiles(target, tile_files)
 
     return True
 
@@ -617,7 +617,7 @@ def assemble_DGM25_RP(path, name="DGM25-RP",
             logger.error(str(e))
     # merge the GeoTiff Files from all tiles into one file
     tile_files = glob.glob("DGM25_*.tif")
-    _fetch_dgm_opendata.merge_tiles(target, tile_files)
+    _fetch_dgm_od.merge_tiles(target, tile_files)
 
     return True
 
@@ -769,7 +769,7 @@ def assemble_GLO_30(path, name = "GLO_30",
     # merge the GeoTiff Files from all tiles into one file
     target = os.path.join(path, _tools.DEM_FMT % "GLO-30")
     tile_files = glob.glob("Copernicus_*.tif")
-    _fetch_dgm_opendata.merge_tiles(target, tile_files)
+    _fetch_dgm_od.merge_tiles(target, tile_files)
 
     return
 
@@ -846,7 +846,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
                       format="GTiff")
     # merge the GeoTiff Files from all tiles into one file
     tile_files = glob.glob("*.tif")
-    _fetch_dgm_opendata.merge_tiles(target, tile_files)
+    _fetch_dgm_od.merge_tiles(target, tile_files)
 
     return
 
@@ -912,9 +912,9 @@ def provide_terrain(source: str, path: str = None,
                     f.write(lic_json['licenseText'])
         elif lic_src == 'file':
             if lic_id in [None, '']:
-                lic_aux = os.path.join(str(DIST_AUX_FILES), lic_file)
+                lic_aux = os.path.join(str(_tools.DIST_AUX_FILES), lic_file)
             else:
-                lic_aux = os.path.join(str(DIST_AUX_FILES), lic_id)
+                lic_aux = os.path.join(str(_tools.DIST_AUX_FILES), lic_id)
             shutil.copy(lic_aux, lic_file)
     if dataset.notice is not None:
         not_file = os.path.join(path, dataset.file_license)
