@@ -1,6 +1,7 @@
 #!/bin/env python3
 
 import argparse
+import glob
 import logging
 import os
 import sys
@@ -12,6 +13,7 @@ from austaltools.input_terrain import AVAILABLE_DEMS
 try:
     from . import _tools
     from ._version import __version__, __title__
+    from . import _corine
     from . import _datasets
     from . import buildings_geojson
     from . import eap
@@ -26,6 +28,7 @@ except ImportError:
     import _tools
     from _version import __version__, __title__
     import _datasets
+    import _corine
     import buildings_geojson
     import eap
     import fill_timeseries
@@ -293,6 +296,26 @@ def cli_parser():
 
     # ----------------------------------------------------
 
+    pars_sim = subparsers.add_parser(
+        name="simple",
+        help='simple-to-use interface '
+             'to the most basic funtionality of `austaltools`:'
+             'the creation of input files for simulations'
+    )
+    pars_sim.add_argument(dest="lat", metavar="LAT",
+                        help='Center position latitude',
+                        nargs=None
+                        )
+    pars_sim.add_argument(dest="lon", metavar="LON",
+                        help='Center position longitude',
+                        nargs=None
+                        )
+    pars_sim.add_argument(dest="output", metavar="NAME",
+                        help="Stem for file names.",
+                        nargs=None
+                        )
+
+    # ----------------------------------------------------
     pars_ste = subparsers.add_parser(
         name="steepness",
         help='Plot AUSTAL topography steepness'
@@ -507,6 +530,65 @@ def cli_parser():
 
 # ----------------------------------------------------
 
+def simple(args):
+    print(os.path.basename(__file__) + ' version: ' + __version__)
+    #
+    # call weather
+    #
+    print('collecting weather data')
+    #
+    # collect args
+    w_args = {x: args[x] for x in ['verb', 'output']}
+    for x in ['dwd', 'gk', 'ut', 'sources', 'ele']:
+        w_args[x] = None
+    w_args['ll'] = [args['lat'], args['lon']]
+    w_args['source'] = 'CERRA'
+    w_args['year'] = 2003
+    w_args['prec'] = False
+    w_args['station'] = None
+    # call program
+    input_weather.austal_weather(w_args)
+    # select one output file, simply file name, remove the rest
+    pick = 'kms'
+    file_to_pick = ("%s_%s_%04i_%s.%s" %
+                    (w_args['source'].lower(), w_args['output'].lower(),
+                     int(w_args['year']), pick, 'akterm'))
+    rename = '%s.akterm' % args['output']
+    logger.info('picking output file: %s -> %s' % (file_to_pick, rename))
+    os.rename(file_to_pick, '%s.akterm' % args['output'])
+    for x in glob.glob(file_to_pick.replace(pick, '*')):
+        logger.info('discarding output file: %s' % x)
+        os.remove(x)
+    #
+    # call terrain
+    #
+    # collect args
+    t_args = {x: args[x] for x in ['verb', 'output']}
+    for x in ['gk', 'ut', 'sources', 'ele']:
+        t_args[x] = None
+    t_args['ll'] = [args['lat'], args['lon']]
+    t_args['source'] = "GTOPO30"
+    t_args['extent'] = 6.
+    # call program
+    input_terrain.main(t_args)
+    # remove confusing extra files
+    for x in ['grid.aux.xml', 'prj']:
+        file_to_remove = args['output'] + '.' + x
+        if os.path.isfile(file_to_remove):
+            os.remove(file_to_remove)
+    #
+    # write coordinates to txt file
+    #
+    with open(args['output'] + '.txt', 'w') as f:
+        lat, lon = float(args['lat']), float(args['lon'])
+        f.write('%s %s : Reference Position\n' % (lat, lon))
+        x, y, _ = _tools.ll2gk(lat, lon)
+        f.write('%.0f %.0f : Gauss-Krueger Coordinates\n' % (x, y))
+        z0 = _corine.mean_roughness(x, y, 20.)
+        f.write('%.1f : z0 at position of wind measurement\n' % z0)
+
+
+# ----------------------------------------------------
 
 # noinspection SpellCheckingInspection
 def main():
@@ -540,6 +622,8 @@ def main():
             fill_timeseries.main(args)
         elif args['command'] == 'plot':
             plot.main(args)
+        elif args['command'] == 'simple':
+            simple(args)
         elif args['command'] == 'steepness':
             steepness.main(args)
         elif args['command'] == 'terrain':

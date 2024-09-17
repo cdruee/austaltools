@@ -1239,8 +1239,9 @@ def _ass_cerra_getyear(opts):
         c.retrieve(*opts)
         ncname = _cerraname(y, lt) + '.nc'
         logger.debug("cdo  subsetting: " + ncname)
-        print(os.getcwd())
-        oper = cdo.Cdo(os.getcwd())
+        cwd = os.getcwd()
+        logger.debug(f'cwd: {cwd}')
+        oper = cdo.Cdo(tempdir=cwd)
         print(" ".join([str(x) for x in
                        ['489,649,479,659', '-f nc',
                         gribname, ncname]]
@@ -1337,7 +1338,7 @@ def assemble_CERRA(path: str, name="CERRA", years: list = [],
     with mpf.ThreadPoolExecutor(max_workers=CDSAPI_LIMIT_PARALLEL) as e:
         for c in combi:
             future = e.submit(_ass_cerra_getyear, c)
-            _ = future.result()
+            #_ = future.result()
 
     logger.debug("finished parallel jobs")
     # combine forecasts

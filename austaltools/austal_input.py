@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Convenience script to provie a simple-to-use interface
+Convenience script to provide a simple-to-use interface
 to the most basic funtionality of `austaltools`,
 the creation of input files for simulations with the
 German regulatory dispersion model AUSTAL [AST31]_
