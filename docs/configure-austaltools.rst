@@ -2,6 +2,8 @@
 configure-austaltools
 ---------------------
 
+:orphan:
+
 .. argparse::
    :module: austaltools.configure_austaltools
    :func: cli_parser

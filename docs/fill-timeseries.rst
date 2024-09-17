@@ -1,16 +1,10 @@
------------------------
+---------------------------
 austaltools fill-timeseries
------------------------
-
-.. argparse::
-   :module: austaltools.austal_fill_timeseries
-   :func: cli_parser
-   :prog: austal-fill-timeseries
+---------------------------
 
 
---------------------
 Detailed usage guide
---------------------
+====================
 
 There are two ways to describe the emissions, fixed and variable values:
 
@@ -22,14 +16,18 @@ The source output strength for each hour the source is active, is
 given in g/s using parameter ``-o``,``--output``.
 
 Option ``-w``/``--week-5`` defines a source active Mon-Fri,
- ``-W``/``--week-6`` defines a source active Mon-Sat.
+``-W``/``--week-6`` defines a source active Mon-Sat.
+
 Options ``-b`` and ``-e`` describe the start and end times of the
 emission on each day the source is active:
+
 ``-b``, ``--hour-begin`` defines the first active hour
 (0-23)  and defaults to 8.
+
 Only relevant with -w or -W. [08]
 ``-e``, ``--hour-end`` defines the last active hour
 (0-23) and defaults to 16.
+
 Options ``-u`` and ``-U`` can be used to define
 weeks or months in which the source does not emit.
 ``-u``,/``--holiday-week`` can be given followed by one or multiple
@@ -72,9 +70,13 @@ The file has the following structure (the indentations and hyphens are important
 
 - Each cycle in the file has a name, here ``meinname``.
 - It is valid for source 1 and substance type sO2, thus ``01.so2``.
-  These names can be found as column names in the file ``zeitreihe.dmna``, which austal creates.
+  These names can be found as column names in the file
+  ``zeitreihe.dmna``, which austal creates.
+
   - the block ``start`` specifies the start times:
+
     - the start time is specified as number(s) ``time`` and unit ``unit``.
+
       - The number can be either a single number (``5``) or a comma-separated list without spaces (``1,17,17``).
         spaces (``1,17,28,39``) or a sequence "from" - "to" / "in steps of" (``1-9/2``).
       - Possible units are ``month``, ``week``, ``day`` and ``hour``.
@@ -82,17 +84,19 @@ The file has the following structure (the indentations and hyphens are important
       is defined. This makes specifications of the form ``every odd month in the 2nd and 4th week`` possible,
       as in the example above, are possible.
   - The emission can be specified as either ``list`` or ``sequence``.
+
     - A ``list`` is a list of hourly values of the source strength.
+
       - provide values as list of the form::
 
-          list: [1.2, 3.4, 5.6]
+         list: [1.2, 3.4, 5.6]
 
       - or as list of the form::
 
-          list:
-            - 1.2
-            - 2.3
-            - 4.5
+         list:
+           - 1.2
+           - 2.3
+           - 4.5
 
     - A ``sequence`` consists of elements ``ramp`` and ``const``, for each of which the duration
       and the source strength (the time unit ``month`` is not possible here).
