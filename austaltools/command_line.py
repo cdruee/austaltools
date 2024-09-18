@@ -6,9 +6,6 @@ import logging
 import os
 import sys
 
-from mpl_toolkits.mplot3d.proj3d import transform
-
-from austaltools.input_terrain import AVAILABLE_DEMS
 
 try:
     from . import _tools
@@ -330,7 +327,7 @@ def cli_parser():
 
     # ----------------------------------------------------
 
-    if len(AVAILABLE_DEMS) > 0:
+    if len(input_terrain.AVAILABLE_DEMS) > 0:
         default_dem = list(input_terrain.AVAILABLE_DEMS)[0]
     else:
         default_dem = None
