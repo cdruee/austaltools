@@ -7,8 +7,9 @@ import itertools
 import logging
 import os
 
+import numpy as np
+
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    import numpy as np
     import pandas as pd
 
     import readmet
