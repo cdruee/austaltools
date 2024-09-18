@@ -186,7 +186,7 @@ class DataSet:
             logger.debug(f"resolving {doi_url}")
             for i in range(_tools.MAX_RETRY):
                 try:
-                    with requests.head(doi_url) as resolver:
+                    with requests.get(doi_url) as resolver:
                         redirect = resolver.url
                     break
                 except requests.HTTPError:
@@ -601,7 +601,7 @@ def assemble_DGM25_RP(path, name="DGM25-RP",
 
     url = "https://vermkv.service24.rlp.de/opendat/dgm25/dgm25.zip"
     logger.debug("downloading ... %s" % url)
-    zip_file, _ = _tools.download(url, os.path.basename(url))
+    zip_file = _tools.download(url, os.path.basename(url))
     logger.debug("extracting ... %s" % zip_file)
     shutil.unpack_archive(zip_file)
     for tile_xyz in glob.glob("*.xyz"):
@@ -799,9 +799,9 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    support_url = ("https://data.rda.ucar.edu/ds758.0/support/"
+    support_url = ("https://data.rda.ucar.edu/d758000/support/"
                    + "GTOPO30support.tar.gz")
-    download_fmt = ("https://data.rda.ucar.edu/ds758.0/elevtiles/" +
+    download_fmt = ("https://data.rda.ucar.edu/ds758000/elevtiles/" +
                     "%s.DEM.gz")
     tiles = ["W020N90"]
     # known_tiles = \
@@ -907,9 +907,10 @@ def provide_terrain(source: str, path: str = None,
         if lic_src == 'spdx':
             lic_url = ("https://spdx.org/licenses/%s.json" %
                        lic_id)
-            with requests.get(lic_url).json() as lic_json:
+            with requests.get(lic_url) as lic_json:
                 with open(lic_file, 'wb') as f:
-                    f.write(lic_json['licenseText'])
+                    text = lic_json.json()['licenseText']
+                    f.write(text.encode('utf-8'))
         elif lic_src == 'file':
             if lic_id in [None, '']:
                 lic_aux = os.path.join(str(_tools.DIST_AUX_FILES), lic_file)
