@@ -8,9 +8,9 @@ import logging
 import os
 
 import numpy as np
+import pandas as pd
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    import pandas as pd
 
     import readmet
     import meteolib
