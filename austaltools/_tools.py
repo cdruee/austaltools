@@ -145,6 +145,8 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 DEFAULT_COLORMAP = "YlOrRd"
 """Default colors used for the commpon plot type"""
 
+ELEVATION_API = "https://api.open-elevation.com/api/v1/lookup"
+"""api used for estimation of elevation"""
 
 # =========================================================================
 
@@ -219,8 +221,31 @@ class Source(Geometry):
     def __init__(self, *args, **kwargs):
         Geometry.__init__(self, *args, **kwargs)
 
-# -------------------------------------------------------------------------
+# ----------------------------------------------------
 
+def estimate_elevation(lat, lon):
+    """
+    Quick estimation of elevation at a postion (for simple cli use)
+
+    :param lat: position latitude
+    :type lat: float|str
+    :param lon: position longitude
+    :type lon: float|str
+    :return: elevation in m
+    :rtype: float
+    """
+    logger.debug(f"querying elevation from API")
+    latitude = float(lat)
+    longitude = float(lon)
+    data = f"locations={latitude},{longitude}"
+    url = "?".join([ELEVATION_API, data])
+    with requests.get(url) as req:
+        ele = req.json()['results'][0]['elevation']
+    elevation = float(ele)
+    logger.debug(f"API returned elevation {elevation}")
+    return elevation
+
+# -------------------------------------------------------------------------
 
 def expand_sequence(string):
     """

@@ -26,8 +26,7 @@ logging.basicConfig()
 logger = logging.getLogger()
 
 # ----------------------------------------------------
-
-CORINE_CLASSES_ROUGHNESS_LBM_DE = {
+LANDCOVER_CLASSES_Z0_LBM_DE = {
     331: 0.01, 512: 0.01,
     333: 0.02, 421: 0.02, 423: 0.02, 511: 0.02, 522: 0.02,
     131: 0.05, 132: 0.05, 142: 0.05, 335: 0.05, 521: 0.05,
@@ -41,8 +40,27 @@ CORINE_CLASSES_ROUGHNESS_LBM_DE = {
     111: 2.00, 311: 2.00,
 }
 """
-Dictionary mapping CORINE class codes to roughness lengths [JCR07]_ 
-(in meters).
+Dictionary mapping LBM-DE (Digitales Landbedeckungsmodell für Deutschland)
+class codes to roughness lengths [TAL2021]_ (in meters).
+
+:meta hide-value:
+"""
+LANDCOVER_CLASSES_Z0_CORINE = {
+    331: 0.01, 512: 0.01,
+    132: 0.02, 231: 0.02, 321: 0.02, 333: 0.02, 421: 0.02,
+    423: 0.02, 511: 0.02, 522: 0.02,
+    131: 0.05, 142: 0.05, 211: 0.05, 335: 0.05, 521: 0.05,
+    124: 0.10, 411: 0.10, 412: 0.10, 523: 0.10,
+    122: 0.20, 141: 0.20, 221: 0.20, 242: 0.20, 243: 0.20,
+    322: 0.20, 332: 0.20,
+    123: 0.50, 222: 0.50, 324: 0.50,
+    112: 1.00, 121: 1.00, 133: 1.00, 312: 1.00,
+    311: 1.50, 313: 1.50,
+    111: 2.00,
+}
+"""
+Dictionary mapping CORINE class codes [JCR07]_ 
+to roughness lengths [TAL2002]_ (in meters).
 
 :meta hide-value:
 """
@@ -143,8 +161,8 @@ def mean_roughness(xg: float, yg: float, h: float, fac=10.) -> float:
     for x, y in points:
         lat, lon, _ = _tools.gk2ll(x, y)
         code = query_corine_class(lat, lon)
-        if code in CORINE_CLASSES_ROUGHNESS_LBM_DE.keys():
-            z0 = CORINE_CLASSES_ROUGHNESS_LBM_DE[code]
+        if code in LANDCOVER_CLASSES_Z0_CORINE.keys():
+            z0 = LANDCOVER_CLASSES_Z0_CORINE[code]
             z0_values.append(z0)
         else:
             logger.error("Unknown corine class %s" % code)

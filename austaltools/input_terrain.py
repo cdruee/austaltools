@@ -70,11 +70,14 @@ def find_terrain_data():
 def show_notice(storage_path, source):
     noticefile = os.path.join(storage_path,
                            "%s.NOTICE.txt" % source)
-    print('data copyright notice:')
+    logger.debug('noticefile: %s' % noticefile)
+    print('IMPORTANT: data copyright notice:')
     if os.path.exists(noticefile):
         with open(noticefile, "r") as f:
             for x in f.readlines():
                 print(x)
+    else:
+        logger.debug('(no noticefile)')
 
 
 # -------------------------------------------------------------------------

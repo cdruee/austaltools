@@ -42,7 +42,6 @@ logger = logging.getLogger()
 
 # ----------------------------------------------------
 
-
 class UsageError(Exception):
     pass
 
@@ -530,15 +529,18 @@ def cli_parser():
 def simple(args):
     print(os.path.basename(__file__) + ' version: ' + __version__)
     #
+    args['ele'] = _tools.estimate_elevation(args['lat'], args['lon'])
+    #
     # call weather
     #
     print('collecting weather data')
     #
     # collect args
     w_args = {x: args[x] for x in ['verb', 'output']}
-    for x in ['dwd', 'gk', 'ut', 'sources', 'ele']:
+    for x in ['dwd', 'gk', 'ut', 'sources']:
         w_args[x] = None
     w_args['ll'] = [args['lat'], args['lon']]
+    w_args['ele'] = args['ele']
     w_args['source'] = 'CERRA'
     w_args['year'] = 2003
     w_args['prec'] = False
@@ -559,6 +561,7 @@ def simple(args):
     #
     # call terrain
     #
+    print('collecting terrain data')
     # collect args
     t_args = {x: args[x] for x in ['verb', 'output']}
     for x in ['gk', 'ut', 'sources', 'ele']:
@@ -588,10 +591,12 @@ def simple(args):
 # ----------------------------------------------------
 
 # noinspection SpellCheckingInspection
-def main():
+def main(args=None):
+    #
     # defaults
-    parser = cli_parser()
-    args = vars(parser.parse_args())
+    if args is None:
+        parser = cli_parser()
+        args = vars(parser.parse_args())
     logger.debug('args: %s' % args)
     #
     # logging level

@@ -918,7 +918,7 @@ def provide_terrain(source: str, path: str = None,
                 lic_aux = os.path.join(str(_tools.DIST_AUX_FILES), lic_id)
             shutil.copy(lic_aux, lic_file)
     if dataset.notice is not None:
-        not_file = os.path.join(path, dataset.file_license)
+        not_file = os.path.join(path, dataset.file_notice)
         with open(not_file, 'w') as f:
             f.write(dataset.notice)
     return
