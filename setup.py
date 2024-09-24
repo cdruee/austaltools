@@ -22,6 +22,7 @@ setup(
     entry_points={
         'console_scripts': [
             'austaltools=austaltools.command_line:main',
+            'austal-input=austal_input:main',
             'configure-austaltools=austaltools.configure_austaltools:main',
         ],
     },
