@@ -74,7 +74,7 @@ def cli_parser():
 
     # ------------------------------------------------------------
 
-    pars_bldg = buildings_geojson.add_options(subparsers)
+    pars_bldg = import_buildings.add_options(subparsers)
 
     # ----------------------------------------------------
 
@@ -239,7 +239,7 @@ def main(args=None):
 
     try:
         if args['command'] in ['buildings-geojson', 'bg']:
-            buildings_geojson.main(args)
+            import_buildings.main(args)
         elif args['command'] == 'eap':
             eap.main(args)
         elif args['command'] in ['fill-timeseries', 'ft']:
