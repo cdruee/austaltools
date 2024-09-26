@@ -769,7 +769,7 @@ def main(args):
 
 def add_options(subparsers):
     pars_bldg = subparsers.add_parser(
-        name='buildings-geojson',
+        name='import-buildings',
         aliases=['bg'],
         help="get buildings from geojson and write to `austal.txt`")
     pars_bldg.add_argument('-g', '--geojson',

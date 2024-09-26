@@ -13,7 +13,7 @@ try:
     from ._version import __version__, __title__
     from . import _corine
     from . import _datasets
-    from . import buildings_geojson
+    from . import import_buildings
     from . import eap
     from . import fill_timeseries
     from . import input_terrain
@@ -27,7 +27,7 @@ except ImportError:
     from _version import __version__, __title__
     import _datasets
     import _corine
-    import buildings_geojson
+    import import_buildings
     import eap
     import fill_timeseries
     import input_terrain
