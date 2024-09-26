@@ -79,8 +79,8 @@ def show_notice(storage_path, source):
     else:
         logger.debug('(no noticefile)')
 
-
 # -------------------------------------------------------------------------
+
 def main(args: dict):
     """
     This is the main working function.
@@ -181,6 +181,43 @@ def main(args: dict):
     #
     return
 
+    # -------------------------------------------------------------------------
+
+def add_options(subparsers):
+
+    if len(AVAILABLE_DEMS) > 0:
+        default_dem = list(AVAILABLE_DEMS)[0]
+    else:
+        default_dem = None
+    default_extent = 6.
+
+    pars_ter = subparsers.add_parser(
+        name='terrain',
+        help='generate terrain input for AUSTAL'
+    )
+    pars_ter.add_argument(dest="output", metavar="NAME",
+                          help="file name to store data in.",
+                          )
+
+    pars_ter = _tools.add_location_opts(parser=pars_ter)
+
+    pars_ter.add_argument('-s', '--source',
+                          metavar="CODE",
+                          nargs=None,
+                          choices=AVAILABLE_DEMS,
+                          default=default_dem,
+                          help='code for the source digital elevation ' +
+                               'model (DEM). Known DEMs are: ' +
+                               ' '.join(AVAILABLE_DEMS) +
+                               ' Defaults to ' + str(default_dem))
+    pars_ter.add_argument('-e', '--extent',
+                          metavar="KM",
+                          nargs=None,
+                          default=default_extent,
+                          help='extent of the extracted area in km ' +
+                               '(side length of the sqare)' +
+                               'Defaults to {}'.format(default_extent))
+    return pars_ter
 
 # =========================================================================
 # init at import:

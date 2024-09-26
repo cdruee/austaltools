@@ -1053,6 +1053,55 @@ def austal_weather(args):
     #
     return
 
+# -------------------------------------------------------------------------
+
+def add_options(subparsers):
+
+    default_year = 2003
+    #
+    # command line args
+    #
+    pars_wea = subparsers.add_parser(
+        name='weather',
+        help='Extract atmospheric time series for AUSTAL ' +
+             'from various sources'
+    )
+    pars_wea.add_argument(dest="output", metavar="NAME", nargs='?',
+                          help="file name to store data in."
+                          )
+    pars_wea = _tools.add_location_opts(pars_wea, stations=True)
+    pars_wea.add_argument('-s', '--source',
+                        metavar="CODE",
+                        nargs=None,
+                        choices=KNOWN_SOURCES,
+                        default=KNOWN_SOURCES[0],
+                        help='select the source for the weather data. ' +
+                             'Known ``CODE`` values are ' +
+                             ' '.join(KNOWN_SOURCES) +
+                             ' Defaults to ' +
+                             KNOWN_SOURCES[0])
+    pars_wea.add_argument('-y', '--year', dest='year',
+                        metavar='YEAR',
+                        nargs=None,
+                          required=True,
+                        help='year of interest [%04i]' % default_year)
+
+    pars_wea.add_argument('-e', '--elevation', dest='ele',
+                        metavar='METERS',
+                        help='surface elevation. ' +
+                             'only allowed with -L, -G, -U.')
+
+    # pars_wea.add_argument('-w', '--station', dest='station',
+    #                     metavar='ID',
+    #                     default=None,
+    #                     help='weather station ID. ' +
+    #                          'only allowed with -D, -W.')
+
+    pars_wea.add_argument('-p', '--precip', dest='prec',
+                        action='store_true',
+                        help='add precipitation columns to output file')
+
+    return pars_wea
 
 # =========================================================================
 

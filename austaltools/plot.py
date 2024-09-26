@@ -225,3 +225,26 @@ def main(args):
                        dots=dots, buildings=buildings, scale=levels)
 
 # ------------------------------------------------------------------------
+
+def add_options(subparsers):
+
+    pars_plot = subparsers.add_parser(
+        name='plot',
+        help='plot AUSTAL output data')
+    pars_plot.add_argument(dest="file", metavar="DATA",
+                      help="data file to plot."
+                      )
+    pars_plot.add_argument('-s', '--stdvs',
+                      metavar="STDVs",
+                      nargs='?',
+                      default=0.,
+                      const=1.,
+                      help='hash areas where the data are not ' +
+                           'significant. Sigingicant is defined as ' +
+                           'larder than `STDVs` times the standard ' +
+                           'deviation caculated by austal. ' +
+                           'If missing, `STDVs` defaults to 1.0.')
+
+    pars_plot = _tools.add_arguents_common_plot(pars_plot)
+
+    return pars_plot

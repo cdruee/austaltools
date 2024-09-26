@@ -106,7 +106,7 @@ def fetch_file(group: str, station: (int, str),
     else:
         stnr = int(station)
         flist = fetch_dirlist(
-            baseurl, "stundenwerte_%s_%05i_.*\.zip" % (gtl, stnr))
+            baseurl, r"stundenwerte_%s_%05i_.*\.zip" % (gtl, stnr))
         if len(flist) != 1:
             logger.warning('filename on server not unique: %s' % str(flist))
         fname = sorted(flist)[-1]
@@ -475,8 +475,8 @@ def meta_from_download(metadata_files, station, path_to_files):
         logging.debug('reading metadata file: %s' % file)
 
         text_cache = ""
-        re_generated = re.compile("\s*(generated|generiert).*")
-        re_blankline = re.compile("^\s*$")
+        re_generated = re.compile(r"\s*(generated|generiert).*")
+        re_blankline = re.compile(r"^\s*$")
         with open(os.path.join(path_to_files, file), 'r',
                   encoding='iso-8859-1') as f:
             for line in f.readlines():
