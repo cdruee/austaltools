@@ -57,3 +57,19 @@ def main(args):
 
 
 # ------------------------------------------------------------------------
+
+def add_options(subparsers):
+
+    pars_ste = subparsers.add_parser(
+        name="steepness",
+        help='Plot AUSTAL topography steepness'
+    )
+    pars_ste.add_argument('-g', '--grid',
+                          metavar='ID',
+                          nargs='?',
+                          default=0,
+                          help='ID (number) of the grid to evaluate. '
+                               'Defaults to 0')
+    pars_ste = _tools.add_arguents_common_plot(pars_ste)
+
+    return pars_ste

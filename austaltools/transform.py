@@ -216,3 +216,23 @@ def main(args):
             raise ValueError(f'internal error rs={rs}')
         print("model x   , model y   (AUSTAL coordinates in m):")
         print(" %-10.2f, %-10.2f " % (mx, my))
+
+# -------------------------------------------------------------------------
+
+def add_options(subparsers):
+
+    pars_transf = subparsers.add_parser(
+        name='transform',
+        help='transfrom coordinates into other projections')
+    pars_transf = _tools.add_location_opts(pars_transf, stations=True,
+                                    required=False)
+    pars_transf.add_argument('-M', '--model',
+                         metavar=("x", "y"),
+                         dest="xy",
+                         nargs=2,
+                         default=None,
+                         help='Transform position given in model '
+                              'coordinats x and y (relative '
+                              'to the model origin) into '
+                              'geographic coordinates.')
+    return pars_transf

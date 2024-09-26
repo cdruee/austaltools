@@ -766,3 +766,34 @@ def main(args):
             topo = None
         plot_building_shapes(args, polygons, buildings)
 # -------------------------------------------------------------------------
+
+def add_options(subparsers):
+    pars_bldg = subparsers.add_parser(
+        name='buildings-geojson',
+        aliases=['bg'],
+        help="get buildings from geojson and write to `austal.txt`")
+    pars_bldg.add_argument('-g', '--geojson',
+                           dest='file',
+                           help='file containing building info' +
+                                '[%s]' % DEFAULT_FILE,
+                           default=DEFAULT_FILE)
+    pars_bldg.add_argument('-n', '--dry-run',
+                           action="store_true",
+                           help='do not change austal.txt, ' +
+                                'show changes instead.')
+    pars_bldg.add_argument('-t', '--tolerance',
+                           help='limit for accepting a polygon '
+                                'as rectangle (max difference of the '
+                                'lenght of the diagonals) ' +
+                                '[%.2f]' % DEFT_TOLRANCE,
+                           default=DEFT_TOLRANCE)
+    pars_bldg_hgt = pars_bldg.add_mutually_exclusive_group()
+    pars_bldg_hgt.add_argument('-z', '--zvalue',
+                        help='name of property that gives building height' +
+                             '[%s]' % DEFAULT_ZVALUE,
+                        default=DEFAULT_ZVALUE)
+    pars_bldg_hgt.add_argument('-Z', '--height',
+                        help='height of all buildings')
+    pars_bldg = _tools.add_arguents_common_plot(pars_bldg)
+
+    return pars_bldg

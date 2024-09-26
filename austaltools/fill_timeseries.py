@@ -519,3 +519,76 @@ def main(args):
         raise ValueError('unknown action: %s' % args["action"])
     zeitreihe.data = values
     zeitreihe.write(name)
+
+# ----------------------------------------------------
+
+def add_options(subparsers):
+    pars_fts = subparsers.add_parser(
+        name='fill-timeseries',
+        aliases=['ft'],
+        help='fill source-strength columns in "zeitreihe.dmna"'
+    )
+    default = {'hour-begin': 8,
+               'hour-end': 16,
+               'cycle-file': 'cycle.yaml',
+               'holiday-week': [25, 26, 27, 28, 29, 30, 52],
+               'holiday-month': [7],
+               }
+    sched = pars_fts.add_mutually_exclusive_group(required=True)
+    sched.add_argument('-l', '--list',
+                       action='store_const', dest='action', const='list',
+                       help='list source column IDs in file' +
+                            'and exit without modifying ' +
+                            '"zeitreihe.dmna". [default]')
+    sched.add_argument('-c', '--cycle',
+                       action='store_const', dest='action', const='cycle',
+                       help='use production cycle from file')
+    sched.add_argument('-w', '--week-5',
+                       action='store_const', dest='action', const='week-5',
+                       help='source active Mon-Fri')
+    sched.add_argument('-W', '--week-6',
+                       action='store_const', dest='action', const='week-6',
+                       help='source active Mon-Sat')
+    pars_fts.add_argument('-b', '--hour-begin', metavar='HOUR',
+                          nargs=1,
+                          help='daily work begin time in hours 0-23. ' +
+                               'Only relevant with -w or -W. ' +
+                               '[%02i]' % DEFAULT_BEGIN,
+                          default=DEFAULT_BEGIN)
+    pars_fts.add_argument('-e', '--hour-end', metavar='HOUR',
+                          nargs=1,
+                          help='daily work end time in hours, ' +
+                               '0-23. Only relevant with -w or -W .' +
+                               '[%02i]' % DEFAULT_END,
+                          default=DEFAULT_END)
+    hold = pars_fts.add_mutually_exclusive_group()
+    hold.add_argument('-u', '--holiday-week', nargs="+",
+                      help='work-free weeks 1-52 as space-delimited list. ' +
+                           'Only relevant with -w or -W. [' +
+                           ' '.join(['%d' % x
+                                     for x in default['holiday-week']]) +
+                           ']',
+                      default=default['holiday-week'])
+    hold.add_argument('-U', '--holiday-month', nargs="+",
+                      help='work-free months as space-delimited list' +
+                           '(1-12). Only relevant with -w or -W. ' +
+                           ' '.join(['%d' % x
+                                     for x in default['holiday-month']]) +
+                           ']',
+                      default=default['holiday-month'])
+    pars_fts.add_argument('-f', '--cycle-file',
+                          help='emission-cycle description file. ' +
+                               'only relevant with -c. ' +
+                               '[%s]' % default['cycle-file'],
+                          default=default['cycle-file'])
+    pars_fts.add_argument('-s', '--source-id',
+                          help='source ID. ' +
+                               'Required if more than one source. ' +
+                               'list IDs in file with -l.',
+                          default=None)
+    pars_fts.add_argument('-o', '--output', nargs=1,
+                          help='output of the source in g/s. ' +
+                               '-o is relevant with -w or -W. ',
+                          default=None)
+
+    return pars_fts
