@@ -6,8 +6,6 @@ import logging
 import os
 import sys
 
-from watchdog.watchmedo import subparsers
-
 try:
     from . import _tools
     from ._version import __version__, __title__
