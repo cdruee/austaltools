@@ -6,12 +6,15 @@ import logging
 import tempfile
 import sys
 import unicodedata
+import warnings
 from importlib import resources
 from xml.etree import ElementTree
 
 import requests
 
+
 if os.getenv('BUILDING_SPHINX', 'false') == 'false':
+    from osgeo.gdal import VersionInfo as gdalVersion
     import osgeo.osr as osr
     try:
         osr.UseExceptions()

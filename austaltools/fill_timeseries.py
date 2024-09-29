@@ -581,16 +581,16 @@ def main(args):
         print('column IDs: ' + ' '.join(sids))
         return
     elif args["action"] in ['week-5', 'week-6']:
-        logger.info('filling work weeks for column: %s' % args["'column'_id"])
+        logger.info('filling work weeks for column: %s' % args["column_id"])
         if args["output"] is None:
             sys.tracebacklimit = 0
             raise ValueError('-o is required with -w or -W')
-        if args["'column'_id"] not in sids:
+        if args["column_id"] not in sids:
             if len(sids) == 1:
-                args["'column'_id"] = sids[0]
+                args["column_id"] = sids[0]
             else:
                 sys.tracebacklimit = 0
-                raise ValueError('column ID not in file: %s' % args["'column'_id"])
+                raise ValueError('column ID not in file: %s' % args["column_id"])
         if None in [args["hour_begin"], args["hour_end"], args["output"]]:
             raise ValueError('hour_begin, hour_end, or output is None')
         if args["holiday_month"] is None:
@@ -606,7 +606,7 @@ def main(args):
             if ((args["action"] == 'week-5' and 0 <= t.weekday() < 5) or
                     (args["action"] == 'week-6' and 0 <= t.weekday() < 6)):
                 if args["hour_begin"] <= t.hour <= args["hour_end"]:
-                    values.loc[i, args["'column'_id"]] = float(
+                    values.loc[i, args["column_id"]] = float(
                         args["output"][0])
     elif args["action"] in ['cycle']:
         cyclefile = os.path.join(args["working_dir"], args["cycle_file"])

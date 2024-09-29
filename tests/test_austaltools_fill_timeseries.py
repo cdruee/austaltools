@@ -2,7 +2,8 @@ import unittest
 import os
 import subprocess
 
-NAME = os.path.join('austaltools','austal_fill_timeseries.py')
+NAME = os.path.join('austaltools','command_line.py')
+COMMAND = 'fill-timeseries'
 
 
 def capture(command):
@@ -43,12 +44,18 @@ cycle01.so2:
 
 class TestCommandLine(unittest.TestCase):
     def test_no_param(self):
-        command = [NAME]
+        command = [NAME, COMMAND]
         out, err, exitcode = capture(command)
         assert exitcode == 2
 
     def test_help(self):
-        command = [NAME,
+        # test help pop up on blank command
+        command = [NAME, COMMAND]
+        out, err, exitcode = capture(command)
+        assert exitcode == 2
+        assert err.decode().startswith('usage')
+        # test help wanted
+        command = [NAME, COMMAND,
                    '-h']
         out, err, exitcode = capture(command)
         assert exitcode == 0
@@ -56,12 +63,13 @@ class TestCommandLine(unittest.TestCase):
 
     def test_week5(self):
         make_zeitreihe()
-        command = [NAME,
-                   '-w', 'tests']
+        # other directory, missing options
+        command = [NAME, '-w', 'tests', COMMAND]
         out, err, exitcode = capture(command)
-        assert exitcode == 1
-        command = [NAME,
-                   '-w', '-o', '1.0', 'tests']
+        assert exitcode == 2
+        # other directory, output only
+        command = [NAME, '-w', 'tests', COMMAND,
+                   '-w', '-o', '1.0']
         out, err, exitcode = capture(command)
         assert exitcode == 0
         os.remove('tests/zeitreihe.dmna')
@@ -70,13 +78,25 @@ class TestCommandLine(unittest.TestCase):
         make_zeitreihe()
         make_cycle('cycle.yaml')
         capture(['cat','tests/cycle.yaml'])
-        command = [NAME,
-                   '-c', 'tests']
+        # cycle file, implicit default name
+        command = [NAME, '-w', 'tests', COMMAND,
+                   '-c']
+        out, err, exitcode = capture(command)
+        assert exitcode == 0
+        # cycle file, do not accept filename after -c
+        command = [NAME, '-w', 'tests', COMMAND,
+                   '-c', 'cycle.yaml']
+        out, err, exitcode = capture(command)
+        assert exitcode == 2
+        # cycle file, explicit default name
+        command = [NAME, '-w', 'tests', COMMAND,
+                   '-c', '-f', 'cycle.yaml']
         out, err, exitcode = capture(command)
         assert exitcode == 0
         os.renames('tests/cycle.yaml', 'tests/abcde.yaml')
-        command = [NAME,
-                   '-c', '-f', 'abcde.yaml', 'tests']
+        # cycle file, non-default name
+        command = [NAME, '-w', 'tests', COMMAND,
+                   '-c', '-f', 'abcde.yaml']
         out, err, exitcode = capture(command)
         assert exitcode == 0
         os.remove('tests/zeitreihe.dmna')

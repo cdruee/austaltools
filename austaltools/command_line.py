@@ -227,6 +227,14 @@ def main(args=None):
         logger.setLevel(logging.WARNING)
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
 
+    if (int(_tools.gdalVersion()) >= 3080400 and
+            int(_tools.gdalVersion()) < 3090200):
+        logger.warning('NOTE: The messages '
+              '"swig/python detected a memory leak of type ...", '
+              'result from \n                   '
+              'a bug in the imported gdal library. '
+              'You can safely ignore them.')
+
     if args["working_dir"] is None:
         raise ValueError('PATH not given')
 
