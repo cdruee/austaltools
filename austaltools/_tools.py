@@ -785,6 +785,45 @@ def add_location_opts(parser,
     return parser
 
 # -------------------------------------------------------------------------
+def evaluate_location_opts(args: dict):
+    """
+    get position from the command-line location options and
+    if applicable the WMO station number of this position
+    :param args: parsed arguments
+    :type args: dict
+    :return: position as lat, lon (WGS84) and
+      rechts, hoch (Gauss-Krüger Band 3)
+      and WMO station number of this position (0 if not applicable)
+    :rtype: float, float, float, float, int
+    """
+    station = 0
+    ele = None
+    nam = None
+    if args.get("dwd", None) is not None:
+        storage_dwd = _datasets.dataset_get("DWD").path
+        if storage_dwd is None:
+            sys.tracebacklimit = 0
+            raise ValueError("Dataset DWD is not available, "
+                       "download or assemble it.")
+        station = int(pd.to_numeric(args["dwd"]))
+        lat, lon, ele, nam = read_dwd_stationinfo(
+            station, datafile=storage_dwd)
+        rechts, hoch, _ = _tools.ll2gk(lat, lon)
+    elif args.get("wmo", None) is not None:
+        lat, lon, ele, nam = wmo_metadata.wmo_stationinfo(args["wmo"])
+    elif args.get("gk", None) is not None:
+        rechts, hoch = [float(x) for x in args['gk']]
+        lat, lon, _ = _tools.gk2ll(rechts, hoch)
+    elif args.get("ut", None) is not None:
+        rechts, hoch, _ = _tools.ut2gk(*[float(x) for x in args['ut']])
+        lat, lon, _ = _tools.gk2ll(rechts, hoch)
+    elif args.get("ll", None) is not None:
+        lat, lon = [float(x) for x in args['ll']]
+    else:
+        lat, lon = None
+    return lat, lon, ele, station, nam
+
+# -------------------------------------------------------------------------
 
 def plot_add_mark(ax, mark):
     pf = pd.DataFrame(mark)

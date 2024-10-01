@@ -356,12 +356,14 @@ def parse_cycle(c_id: str, c_info : dict,
                 time_last = time_pointer
                 value_last = s_value
         sequence = pd.Series(sequ_value, index=sequ_time)
-    if "list" in c_info.keys():
+    elif "list" in c_info.keys():
         if not isinstance(c_info['list'], list):
             raise ValueError('list does not contain list: %s' % c_id)
         sequ_value = [float(x) for x in c_info['list']]
         sequ_time = [i * dt for i in range(len(sequ_value))]
         sequence = pd.Series(sequ_value, index=sequ_time)
+    elif "heating" in c_info.keys():
+        raise ValueError('heating not yet implemented')
     logger.debug(format(sequence))
 
     if "unit" in c_info.keys():

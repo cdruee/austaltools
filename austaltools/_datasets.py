@@ -1315,7 +1315,7 @@ def assemble_CERRA(path: str, name="CERRA", years: list = [],
     temp_path = _tools.TEMP
     logger.debug(f"looking for cdo ...{temp_path}")
     data = cdo.Cdo(tempdir=temp_path)
-    logger.debug("python-cdo version: %s" % data.__version__())
+    logger.debug("python-cdo version: %s" % cdo.__version__)
     logger.debug("cdo        version: %s" % data.version())
     data.debug = True
     data.cleanTempDir()

@@ -114,17 +114,8 @@ def main(args: dict):
     """
     logger.debug("args: %s" % format(args))
 
-    if args["gk"] is not None:
-        rechts, hoch = [float(x) for x in args['gk']]
-        lat, lon, _ = _tools.gk2ll(rechts, hoch)
-    elif args["ut"] is not None:
-        rechts, hoch, _ = _tools.ut2gk(*[float(x) for x in args['ut']])
-        lat, lon, _ = _tools.gk2ll(rechts, hoch)
-    elif args["ll"] is not None:
-        lat, lon = [float(x) for x in args['ll']]
-        rechts, hoch, _ = _tools.ll2gk(lat, lon)
-    else:
-        return
+    lat, lon, ele, stat_no, stat_nam = _tools.evaluate_location_opts(args)
+    rechts, hoch, _ = _tools.ll2gk(lat, lon)
 
     if args["source"] in AVAILABLE_DEMS:
         source = args["source"]
