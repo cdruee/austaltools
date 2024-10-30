@@ -1,5 +1,3 @@
-# template: helloworld 1.0.1
-
 workflow:
   # Run if tag is 0.00.00 indicating a release
   #     or pipeline ist started manually in gitlab
@@ -7,16 +5,21 @@ workflow:
     - if: $CI_COMMIT_TAG =~ /^[0-9]*\.[0-9]*\.[0-9]*$/
     - if: $CI_PIPELINE_SOURCE == "web" || $CI_JOB_MANUAL == "true"
 
+variables:
+  DISTRIBUTIONS: ""
+
 stages:
   - build
   - test
+  - package
   - deploy
 
 build_sdist:
   image: python:latest
   stage: build
-  script:
+  before_script:
     - pip install setuptools
+  script:
     - python setup.py sdist
     - echo 'ls dist/*tar.gz'
     - ls dist/*tar.gz
@@ -30,33 +33,12 @@ build_sdist:
     reports:
       dotenv: build.env
 
-build_bdist_deb:
-  image: ubuntu:focal
-  stage: build
-  needs:
-    - job: build_sdist
-      artifacts: true
-  script:
-    - export DEBIAN_FRONTEND=noninteractive
-    - apt update
-    - apt-get -y install dh-python debhelper
-    - apt-get -y install python-all
-    - apt-get -y install python3-numpy python3-pandas
-    - apt-get -y install python3-setuptools python3-all python3-stdeb
-    - export DEB_BUILD_OPTIONS=nocheck
-    - python3 setup.py bdist_deb
-    - rm -r deb_dist/*/
-    - echo "BUILD_DEB_VERSION=$( cd deb_dist && ls *deb )" >> build.env
-    - echo "BUILD_DEB_JOB=${CI_JOB_ID}" >> build.env
-  artifacts:
-    paths:
-      - deb_dist
-    reports:
-      dotenv: build.env
-
 build_pages:
   image: python:latest
   stage: build
+  rules:
+    - exists:
+      - docs/conf.py
   script:
     - pip install setuptools
     - pip install sphinx sphinx-argparse
@@ -75,6 +57,40 @@ test_latest:
     - echo pip install tox numpy pandas flake8
     - echo tox
 
+build_deb:
+  stage: package
+  image: $PUBLISHER:$DISTRIB
+  needs:
+    - job: build_sdist
+      artifacts: true
+  script:
+    - export DEBIAN_FRONTEND=noninteractive
+    - apt update
+    - apt-get -y install dh-python debhelper dh-make
+    - apt-get -y install python3-all
+    - apt-get -y install python3-numpy python3-pandas
+    - apt-get -y install python3-setuptools python3-all python3-stdeb
+    - bash -x ./ci_build_deb.sh $BUILD_VERSION
+    - echo "DEB_${DISTRIB^^}_VERSION=$( cd deb_dist/$DISTRIB && ls *deb )" | tee -a  build.env
+    - echo "DEB_${DISTRIB^^}_JOB=${CI_JOB_ID}" | tee -a build.env
+    - cat build.env
+  artifacts:
+    paths:
+      - deb_dist
+    reports:
+      dotenv: build.env
+  parallel:
+    matrix:
+      - PUBLISHER: ubuntu
+        DISTRIB:
+          - focal
+          - jammy
+          - noble
+      - PUBLISHER: debian
+        DISTRIB:
+          - bullseye
+          - bookworm
+
 pages:
   image: python:latest
   stage: deploy
@@ -90,29 +106,53 @@ pages:
 
 
 release:
-  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  image: ubuntu:latest
   stage: deploy
-  script:
-    - echo "Running the release job."
   needs:
     - job: build_sdist
       artifacts: true
-    - job: build_bdist_deb
+    - job: build_deb
       artifacts: true
     - job: test_latest
-  release:      # See https://docs.gitlab.com/ee/ci/yaml/#release for available properties
-     name: '$CI_COMMIT_TAG'
-     description: '$CI_COMMIT_DESCRIPTION'
-     tag_name: '$CI_COMMIT_TAG'
-     ref: '$CI_COMMIT_TAG'
-     assets:
-       links:
-         - name: "Python install package: ${BUILD_VERSION}"
-           type: 'package'
-           url: '${CI_PROJECT_URL}/-/jobs/${BUILD_JOB}/artifacts/raw/dist/${BUILD_VERSION}'
-         - name: "Debian/ubuntu package: ${BUILD_DEB_VERSION}"
-           type: 'package'
-           url: '${CI_PROJECT_URL}/-/jobs/${BUILD_DEB_JOB}/artifacts/raw/deb_dist/${BUILD_DEB_VERSION}'
+  before_script:
+    - echo "Running the release job."
+    - apt update
+    - apt -y install curl jq
+    - curl --location --output /usr/local/bin/release-cli "https://gitlab.com/api/v4/projects/gitlab-org%2Frelease-cli/packages/generic/release-cli/latest/release-cli-linux-amd64"
+    - chmod +x /usr/local/bin/release-cli
+  script:
+    - echo "Running the release job.1"
+    - export SDIST_NAME="Python install package - ${BUILD_VERSION}"
+    - echo SDIST_NAME $SDIST_NAME
+    - 'export SDIST_URL=${CI_PROJECT_URL}/-/jobs/${BUILD_JOB}/artifacts/raw/dist/${BUILD_VERSION}'
+    - echo SDIST_URL $SDIST_URL
+    - export ASSET_ARGS='[{"name":"'$SDIST_NAME'","url":"'$SDIST_URL'"}'
+    - echo ASSET_ARGS $ASSET_ARGS
+    - DISTRIBUTIONS=$( ls deb_dist | tr "\n" " ")
+    - |
+      for DISTRIB in $DISTRIBUTIONS; do
+        echo distrib $DISTRIB
+        echo DISTRIB ${DISTRIB^^}
+        VERNAM=DEB_${DISTRIB^^}_VERSION
+        echo VERNAM $VERNAM
+        JOBNAM=DEB_${DISTRIB^^}_JOB
+        echo JOBNAM $JOBNAM
+        name="binary install package for $DISTRIB - ${!VERNAM}"
+        echo name $name
+        url="${CI_PROJECT_URL}/-/jobs/${!JOBNAM}/artifacts/raw/deb_dist/${DISTRIB}/${!VERNAM}"
+        echo url $url
+        asset_info='{"name":"'$name'","url":"'$url'"}'
+        echo asset_info $asset_info
+        ASSET_ARGS="$ASSET_ARGS, $asset_info"
+      done
+      ASSET_ARGS=$ASSET_ARGS']'
+    - echo ""
+    - 'echo $ASSET_ARGS'
+    - echo ""
+    - 'jq . <<< $ASSET_ARGS'
+    - echo ""
+    - 'echo release-cli create --name "$CI_COMMIT_TAG" --tag-name "$CI_COMMIT_TAG" --description "$CI_COMMIT_MESSAGE" --ref "$CI_COMMIT_TAG" --assets-link "$( jq -c . <<< $ASSET_ARGS )"'
+    - 'release-cli create --name "$CI_COMMIT_TAG" --tag-name "$CI_COMMIT_TAG" --description "$CI_COMMIT_MESSAGE" --ref "$CI_COMMIT_TAG" --assets-link "$( jq -c . <<< $ASSET_ARGS )"'
 
 deploy_deb:
   image: ubuntu:latest
@@ -120,7 +160,7 @@ deploy_deb:
   needs:
     - job: build_sdist
       artifacts: true
-    - job: build_bdist_deb
+    - job: build_deb
       artifacts: true
     - job: test_latest
   before_script:
@@ -131,14 +171,37 @@ deploy_deb:
     - chmod 600 ~/.ssh/id_rsa
     - eval $(ssh-agent -s)
     - ssh-add ~/.ssh/id_rsa
-    - apt install -y curl
+    - apt install -y curl dupload
     - curl ifconfig.me
     - ssh-keyscan -H 'uwmhub.uni-trier.de' >> ~/.ssh/known_hosts
   script:
-    - export DISTRIBUTIONS="jammy focal buster bookworm"
     - ls -l
     - export RESDIR="deb_dist"
     - ls -l $RESDIR
-    - sed -i s/Distribution:\ unstable/Distribution:\ "${DISTRIBUTIONS}"/ $RESDIR/*.changes
-
-    - for X in deb changes buildinfo ; do ls $RESDIR/*$X; scp $RESDIR/*$X reprepro@uwmhub.uni-trier.de:~/incoming ; done
+    - |
+      cat > ~/.dupload.conf << EOF
+      package config;
+      \$default_host = "uwmhub";
+      \$cfg{'uwmhub'} = {
+        fqdn => "uwmhub.uni-trier.de",
+        method => "scp",
+        login => "reprepro",
+        incoming => "/home/reprepro/incoming/",
+        # files pass on to dinstall which sends emails itself
+        dinstall_runs => 1,
+      };
+      EOF
+    - cat ~/.dupload.conf
+    - |
+      for X in $( ls $RESDIR ); do 
+        pushd $RESDIR/$X
+        ls -l
+        for Y in *.changes; do 
+          sed -i s/Distribution:\ .\*/Distribution:\ "${X}"/ $Y   
+          cat $Y
+          dupload -f --nomail -t uwmhub $Y
+          sleep 30
+        done
+        popd
+      done
+    - echo "Ende"
