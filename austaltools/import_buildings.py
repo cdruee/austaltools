@@ -572,7 +572,7 @@ def plot_building_shapes(args: dict, polygons: list[tuple],
         topx = topofile.axes(ax="x")
         topy = topofile.axes(ax="y")
 
-        con = plt.contour(topx, topy, topz.T, origin="lower",
+        con = plt.contour(topx, topy, topz.t_slab, origin="lower",
                           colors='black',
                           linewidths=0.75
                           )
