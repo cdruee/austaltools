@@ -109,7 +109,56 @@ def parse_time(info, name='', multi=True):
 # ----------------------------------------------------
 
 def expand_cycles(yinfo):
+    """
+    Processes a dictionary of cycle information,
+    applying templates to cycles as needed.
 
+    This function validates the provided `yinfo`
+    dictionary to ensure it contains
+    the correct data structure, extracts templates,
+    and applies them to the cycles.
+    If a cycle specifies a template, the template is applied,
+    including any emission
+    factor calculations based on specified substances.
+
+    :param dict yinfo: A dictionary containing cycle information.
+      The keys represent cycle IDs and the values are dictionaries
+      with specific cycle information, which can include
+      'column', 'source', 'template', and 'factors'.
+
+    :raises ValueError:
+
+      - If `yinfo` is not a dictionary, or
+      - if it contains invalid structure such as null at the top level,
+      - missing template definitions for requested cycles,
+      - missing emission factors for specified substances, or
+      - if emission factors are present without a selected substance.
+
+    :returns: A dictionary of processed cycles where each cycle has
+      necessary attributes set such as 'multiplier', 'emissionfactor',
+      and 'substance'. The keys are cycle IDs and the values are
+      dictionaries containing the expanded cycle information.
+
+    :rtype: dict
+
+    :example:
+
+    Consider a set of cycle information with one defined template and two cycles:
+
+    >>> yinfo = {
+    ...     'template1': {'column': None, 'source': None, 'factors': {'CO2': 1.0}},
+    ...     'cycle1': {'column': 'data1', 'template': {'name': 'template1', 'substance': 'CO2'}},
+    ...     'cycle2': {'column': 'data2'}
+    ... }
+    >>> expand_cycles(yinfo)
+    {
+        'cycle1': {'column': 'data1', 'factors': {'CO2': 1.0}, 'multiplier': 1.0, 'emissionfactor': 1.0, 'substance': 'CO2'},
+        'cycle2': {'column': 'data2', 'multiplier': 1.0, 'emissionfactor': 1.0, 'substance': None}
+    }
+
+    This example demonstrates how the specified template is applied to cycle1 and cycle2
+    is processed without a template.
+    """
     # check if yinfo is in the right format at all
     if not isinstance(yinfo, dict):
         raise ValueError('cyclefile top-level is not associative list')

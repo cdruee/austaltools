@@ -2,6 +2,11 @@
 API documentation
 *****************
 
+heating
+^^^^^^^
+.. automodule:: austaltools.heating
+   :members:
+
 ================
 internal modules
 ================

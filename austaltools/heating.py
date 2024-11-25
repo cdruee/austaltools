@@ -3,8 +3,10 @@ import os
 import sys
 
 import pandas as pd
+import jsonschema 
 
 import py
+from samba.upgradehelpers import delta_update_basesamdb
 
 try:
     from . import _tools
@@ -60,6 +62,119 @@ def hottinger_inv(hgt, dtmax, th, qmax, eta):
         (qmax * th * hgt) / (eta * dtmax)
     )
     return annual_consumption
+
+# ----------------------------------------------------
+def standard_room_heat_loss_factors(parts: list[dict]):
+    r"""
+
+    :param parts:
+    :type parts:
+    :return:
+    :rtype:
+    """
+    H_T = []
+    dU_TB = 0. # W/(m²K)
+    for k in parts:
+        A_k = standard_area(k)  # m²
+        U_k = standard_part_heat_loss_factor(part)
+        other = k.get("other", "outside")
+        if other == "outside":
+            dU_TBk = k.get("dU_TBk", 0.)
+            f_Uk = k.get("f_Uk", 1.)
+            f_iek = k.get("f_iek", 1.)
+            H_T[k] = A_k * (U_k + dU_TBk) * f_Uk * f_iek
+        elif other == "room":
+            f_iak = k.get("f_iak", 1.)
+            H_T[k] = A_k * U_k * f_iak
+        elif other == "ground":
+            f_thetaann = k.get("f_thetaann", 1.)
+            U_equivk *= k.get("U_equivk", 1.)
+            f_igk = k.get("f_igk", 1.)
+            f_GWk = k.get("f_GWk", 1.)
+            H_T[k] = f_thetaann * A_k * U_equivk * f_igk * f_GWk
+
+    return H_T  # W/K
+
+
+# ----------------------------------------------------
+def room_heatconduction_loss(room):
+    r"""
+    .. math:`L_{\mathrm{conduct},i}`
+
+    :param room:
+    :type room:
+    :return:
+    :rtype:
+    """
+
+    H_T = standard_room_heat_loss_factors(room['parts'])
+    phi_Ti = phi_Ti + H_T * (room['th_int'] - x['th_e'])
+    return phi_Ti
+# ----------------------------------------------------
+def standard_heatingup_load(room):
+    r"""
+    :math:`\Phi_{hu,i}`
+
+    :param room:
+    :type room:
+    :return:
+    :rtype:
+    """
+    return 0.
+# ----------------------------------------------------
+def standard_heating_gain(room):
+    r"""
+    :math:`\Phi_{gain,i}`
+
+    :param room:
+    :type room:
+    :return:
+    :rtype:
+    """
+    return 0.
+
+# ----------------------------------------------------
+def standard_venting_loss(build):
+    r"""
+    \Phi_{V,i}
+
+    :param build:
+    :type build:
+    :return:
+    :rtype:
+    """
+    return 0.
+# ----------------------------------------------------
+def heating_load(build, t_out):
+    r"""
+    Total power needed to heat the building `build`.
+
+    .. math:: L_{\mathrm{build}} =
+            \sum_{i} L_{\mathrm{conduct},i} +
+            \sum_{i} L_{\mathrm{heatup},i} +
+            \sum_{i} L_{\mathrm{venting},i}
+
+    Sum of all individual heat-conduction losses, venting losses and
+    optional heating-up power needed to for each room.
+
+    :param build:
+    :type build: dict
+    :return: power in W
+    :rtype: float
+
+
+
+
+    """
+    t_rooms = room_temperature(build["rooms"])
+    hl = 0.
+    for i, room in enumerate(build['rooms']):
+        hl += room_heatconduction_loss(room, t_out, i, t_rooms)
+    hl += standard_venting_loss(build)
+    for i, room in build['rooms'].items():
+        hl += standard_heatingup_load(room)
+        hl += standard_heating_gain(room)
+
 
 # ----------------------------------------------------
 
@@ -118,6 +233,22 @@ def main(args):
     ]
     power = ( u_value * t_diff * (t_diff > 0) *
               [heating_schedule[x] for x in obs.index.hour]) # W
+    #
+    # build = Building()
+    # build['th_a'] = -9.
+    # build['th_g'] = 6.
+    # build['rooms'][1] = {
+    #     'th_int': 21.,
+    #     'parts': [
+    #         {'name': 'vorne',  'b': l, 'h': h, 'H_T': k_value, 'th_e': 'th_a'},
+    #         {'name': 'links',  'l': b, 'h': h, 'H_T': k_value, 'th_e': 'th_a'},
+    #         {'name': 'hinten', 'l': l, 'h': h, 'H_T': k_value, 'th_e': 'th_a'},
+    #         {'name': 'rechts', 'l': b, 'h': h, 'H_T': k_value, 'th_e': 'th_a'},
+    #         {'name': 'oben',   'l': b, 'b': b, 'H_T': k_value, 'th_e': 'th_a'},
+    #         {'name': 'unten',  'l': b, 'b': b, 'H_T': k_value, 'th_e': 'th_g'},
+    #     ]
+    # }
+    # power = standard_heating_load(build)
     energy = power * dt.total_seconds() # J
     emission_factors={
         'xx': 2100.E-6,  # g/J
