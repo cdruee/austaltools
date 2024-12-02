@@ -71,13 +71,13 @@ class Wall:
         self.n_flux = self.n_slab + 1
         self.d_flux = self.n_flux * [np.nan]
         self.f_flux = self.n_flux * [np.nan]
-        for i in range(self.n_slab):
+        for i in range(self.n_flux):
             if i == 0 :
-                self.d_flux[i] = excess + self.d_slab / 2.
-            elif i == self.n_slab :
-                self.d_flux[i] = self.d_slab / 2. + excess
+                self.d_flux[i] = excess + self.d_slab
+            elif i == self.n_flux :
+                self.d_flux[i] = self.d_slab + excess
             else:
-                self.d_flux[i] = self.d_slab / 2.
+                self.d_flux[i] = self.d_slab
         # initialize temperature
         if t_start is None:
             # assume linear temperature profile if no t_start is given
@@ -90,6 +90,8 @@ class Wall:
             self.t_slab = self.n_slab * [t_start]
 
     def tick(self, rooms, timedelta=TIMESTEP):
+        if self.name == 'front':
+            pass
         for i in range(self.n_flux):
             if i == 0:
                 dth = self.t_slab[0] - rooms[self.room_w].temp
@@ -97,12 +99,14 @@ class Wall:
                 dth = rooms[self.room_c].temp - self.t_slab[i - 1]
             else:
                 dth = self.t_slab[i] - self.t_slab[i - 1]
-            self.f_flux[i] = self.heat_conduct * dth / self.d_flux[i]
-        for i in range(self.n_slab - 1):
+            self.f_flux[i] = - self.heat_conduct * dth / self.d_flux[i]
+        for i in range(self.n_slab):
             diff = (self.f_flux[i] - self.f_flux[i + 1])
             dtdt = diff / (self.density * self.d_slab * self.heat_capacty)
             self.t_slab[i] += dtdt * timedelta
-        return self.f_flux[0], self.f_flux[-1]
+        if self.name == 'front':
+            print (rooms[self.room_w].temp, self.t_slab,rooms[self.room_c].temp )
+        return
 
 class WallList(dict):
     def __setitem__(self, index, value: Wall):
@@ -133,6 +137,7 @@ class WallList(dict):
 
 
 class Room:
+    specials = ['outside', 'soil']
     name = str()
     temp = float()
     target_temp = np.nan  # °C
@@ -150,12 +155,11 @@ class Room:
                  maxpower=None, area=None, volume=None,
                  t_set=None, p_set=None, t_start=None):
         self.name = name
-        if name  in ['outside', 'soil']:
+        if name  in self.specials:
             if t_start is None:
                 self.temp = np.nan
             else:
                 self.temp = t_start
-            self.temp = np.nan
             self.target_temp = np.nan
             self.target_power = np.nan
             self.maxpower = 0.
@@ -219,6 +223,8 @@ class Room:
         return fluxes
 
     def tick(self, walls: WallList, timedelta: float  = TIMESTEP):
+        if self.name  in self.specials:
+            return
         # density of air
         rho = m.thermodyn.gas_rho(p=PRESSURE, T=self.temp,
                                   Kelvin=False, hPa=False)
@@ -250,7 +256,7 @@ class Room:
             self.power = self.maxpower * self.target_power
         P_heat = self.power
         dQ = (P_heat + P_vent + P_flux + P_vent) * timedelta
-        dT = dQ / (m.constants.cp * rho + self.add_c)
+        dT = dQ / (m.constants.cp * rho * self.volume + self.add_c)
         self.temp = self.temp + dT
         return self.temp
 
@@ -301,7 +307,7 @@ def make_buidling(t_out=0):
     bldg = Building('house', t_out=t_out, t_soil=6.)
 
     bldg.rooms.append(Room('room', width=5., lenght=5., height=2.5,
-                           t_set=20, t_start=t_out, maxpower=2000.))
+                           t_set=20, t_start=t_out, maxpower=13000.))
 
     bldg.walls.append(Wall('front', 0.30, 'room', 'outside',
                            l=5., h=2.5, t_start=t_out))
@@ -328,14 +334,15 @@ def main():
     building = make_buidling(t_out=t_out)
 
     dt = 5
-    time = 3600
+    time = 360000
     ticks = int(time / dt)
     trec = list()
-    prec =list()
-    for tick in tqdm(range(ticks)):
+    prec = list()
+    for tick in range(ticks):
         building.tick()
         trec.append(building.rooms['room'].temp)
         prec.append(building.rooms['room'].power)
+        #prec.append(building.walls['front'].f_flux[0])
     print (trec)
     print (prec)
 
