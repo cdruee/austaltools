@@ -858,7 +858,7 @@ def plot_add_topo(ax, topo, working_dir='.'):
         topy = topofile.axes(ax="y")
     else:
         raise ValueError('topo must be dict of filename')
-    con = ax.contour(topx, topy, topz.t_slab, origin="lower",
+    con = ax.contour(topx, topy, topz.T, origin="lower",
                      colors='black',
                      linewidths=0.75
                      )
@@ -994,7 +994,7 @@ def common_plot(args: dict,
         #               its pycharm's debugging mode, stupid
         #
         img = plt.contourf(datx, daty,
-                           datz.t_slab,
+                           datz.T,
                            origin="lower",
                            levels=levels,
                            cmap=cmap,
@@ -1004,7 +1004,7 @@ def common_plot(args: dict,
         plt.colorbar(img, label=unit, extend='both')
     elif args['display'] == "grid":
         img = plt.pcolor(datx, daty,
-                         datz.t_slab,
+                         datz.T,
                          shading="nearest",
                          cmap=cmap,
                          norm=matplotlib.colors.PowerNorm(.66)

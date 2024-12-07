@@ -320,38 +320,38 @@ def main(args):
         v_slice[spd_slice < 0.5] = np.nan
         spd_slice[spd_slice < 0.5] = np.nan
         if style == 'stream':
-            ax.streamplot(h_ccord, v_ccord, u_slice.t_slab, v_slice.t_slab,
+            ax.streamplot(h_ccord, v_ccord, u_slice.T, v_slice.T,
                           color=color,
                           density=1.5)
         elif style == 'stream-color':
-            sp = ax.streamplot(h_ccord, v_ccord, u_slice.t_slab, v_slice.t_slab,
-                               color=spd_slice.t_slab, cmap=cmap,
+            sp = ax.streamplot(h_ccord, v_ccord, u_slice.T, v_slice.T,
+                               color=spd_slice.T, cmap=cmap,
                                density=1.5)
             fig.colorbar(sp.lines, ax=ax, label='m/s')
         elif style == 'arrows':
             st = int(u_slice.shape[0]/30)
             plt.quiver(h_ccord[::st], v_ccord[::st],
-                       u_slice[::st, ::st].t_slab, v_slice[::st, ::st].t_slab
+                       u_slice[::st, ::st].T, v_slice[::st, ::st].T
                        )
         elif style == 'arrows-color':
             st = int(u_slice.shape[0]/30)
             qp = plt.quiver(h_ccord[::st], v_ccord[::st],
-                            u_slice[::st, ::st].t_slab, v_slice[::st, ::st].t_slab,
-                            spd_slice[::st, ::st].t_slab, cmap=cmap)
+                            u_slice[::st, ::st].T, v_slice[::st, ::st].T,
+                            spd_slice[::st, ::st].T, cmap=cmap)
             fig.colorbar(qp, ax=ax, label='m/s')
         elif style == 'barbs':
             st = int(u_slice.shape[0]/20)
             plt.barbs(h_ccord[::st], v_ccord[::st],
-                      1.94 * u_slice[::st, ::st].t_slab,
-                      1.94 * v_slice[::st, ::st].t_slab,
+                      1.94 * u_slice[::st, ::st].T,
+                      1.94 * v_slice[::st, ::st].T,
                       pivot='middle'
                       )
         elif style == 'barbs-color':
             st = int(u_slice.shape[0]/20)
             bp = plt.barbs(h_ccord[::st], v_ccord[::st],
-                           1.94 * u_slice[::st, ::st].t_slab,
-                           1.94 * v_slice[::st, ::st].t_slab,
-                           1.94 * spd_slice[::st, ::st].t_slab,
+                           1.94 * u_slice[::st, ::st].T,
+                           1.94 * v_slice[::st, ::st].T,
+                           1.94 * spd_slice[::st, ::st].T,
                            cmap=cmap,
                            pivot='middle')
             fig.colorbar(bp, ax=ax, label='m/s')
@@ -360,7 +360,7 @@ def main(args):
         t_pos = np.broadcast_to(t_slice[:,np.newaxis],u_slice.shape)
         h_pos = np.broadcast_to(h_ccord[:,np.newaxis],u_slice.shape)
         v_pos = v_pos + t_pos
-        ax.quiver(h_pos, v_pos, u_slice.t_slab, v_slice.t_slab)
+        ax.quiver(h_pos, v_pos, u_slice.T, v_slice.T)
         ax.fill_between(h_ccord,t_slice,0*t_slice,
                         color='grey')
 
