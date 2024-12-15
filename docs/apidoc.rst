@@ -2,8 +2,12 @@
 API documentation
 *****************
 
+==============
+in development
+==============
+
 heating
-^^^^^^^
+-------
 .. automodule:: austaltools.heating
    :members:
 
@@ -12,37 +16,37 @@ internal modules
 ================
 
 _corine
-^^^^^^^
+-------
 .. automodule:: austaltools._corine
    :members:
 
 _dispersion
-^^^^^^^^^^^
+-----------
 .. automodule:: austaltools._dispersion
    :members:
 
 _datasets
-^^^^^^^^^^^
+-----------
 .. automodule:: austaltools._datasets
    :members:
 
 _fetch_dgm_od
-^^^^^^^^^^^^^^^^
+----------------
 .. automodule:: austaltools._fetch_dgm_od
    :members:
 
 _fetch_dwd_obs
-^^^^^^^^^^^^^^^^
+----------------
 .. automodule:: austaltools._fetch_dwd_obs
    :members:
 
 _tools
-^^^^^^
+------
 .. automodule:: austaltools._tools
    :members:
 
 _version
-^^^^^^^^
+--------
 .. automodule:: austaltools._version
    :members:
 

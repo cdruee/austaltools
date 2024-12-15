@@ -289,11 +289,11 @@ def expand_sequence(string):
     logger.debug('parse_time_string: %s' % string)
     for x in string:
         if x not in ['-', ',', '/'] and not x.isdigit():
-            raise ValueError('parse time: illegal character in string: %s' % x)
+            raise ValueError('expand_series: illegal character in string: %s' % x)
     if '/' in string and ',' in string:
-        raise ValueError('parse time: list and step are mutually exclusive')
+        raise ValueError('expand_series: list and step are mutually exclusive')
     if '-' in string and ',' in string:
-        raise ValueError('parse time: list and range are mutually exclusive')
+        raise ValueError('expand_series: list and range are mutually exclusive')
     if '/' in string:
         rang, step = string.split('/', 1)
         step = int(step)
@@ -307,7 +307,7 @@ def expand_sequence(string):
         start_stop = None
         discrete = [int(x) for x in rang.split(',')]
         if not sorted(discrete) == discrete:
-            raise ValueError('parse time: discrete list is not sorted')
+            raise ValueError('expand_series: discrete list is not sorted')
     else:
         start_stop = None
         discrete = [int(rang)]

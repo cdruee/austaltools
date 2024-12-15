@@ -146,15 +146,16 @@ def expand_cycles(yinfo):
     Consider a set of cycle information with one defined template and two cycles:
 
     >>> yinfo = {
-    ...     'template1': {'column': None, 'source': None, 'factors': {'CO2': 1.0}},
-    ...     'cycle1': {'column': 'data1', 'template': {'name': 'template1', 'substance': 'CO2'}},
-    ...     'cycle2': {'column': 'data2'}
+    ...     'template1': {'column': None, 'source': None, 'factors': {'NOX': 1.0}},
+    ...     'cycle1': {'column': '01.nox', 'template': {'name': 'template1', 'substance': 'NOX'}},
+    ...     'cycle2': {'column': '01.xx'},
+    ...     'cycle3': {'column': '02.nox', 'multiplier': 2.5}
     ... }
     >>> expand_cycles(yinfo)
     {
-        'cycle1': {'column': 'data1', 'factors': {'CO2': 1.0}, 'multiplier': 1.0, 'emissionfactor': 1.0, 'substance': 'CO2'},
-        'cycle2': {'column': 'data2', 'multiplier': 1.0, 'emissionfactor': 1.0, 'substance': None}
-    }
+        'cycle1': {'column': '01.nox', 'source': None, 'substance': 'NOX', 'emissionfactor': 1.0, 'multiplier': 1.0},
+        'cycle2': {'column': '01.xx', 'multiplier': 1.0, 'emissionfactor': 1.0, 'substance': None},
+        'cycle3': {'column': '02.nox', 'multiplier': 2.5, 'multiplier': 1.0, 'emissionfactor': 1.0, 'substance': None}}
 
     This example demonstrates how the specified template is applied to cycle1 and cycle2
     is processed without a template.
@@ -201,8 +202,16 @@ def expand_cycles(yinfo):
                 cycle = template.copy()
                 cycle['column'] = c_info['column']
 
+            # get substance
+            # defaults to column name suffix (e.g. `02.so2` -> `so2`)
+            # if not given under keyword 'substance'
+            if '.' in cycle['column']:
+                suffix = cycle['column'].split('.')[-1]
+            else:
+                suffix = None
+            substance = t_info.get('substance', suffix)
             # get emission factor
-            if 'substance' in t_info and 'factors' in template:
+            if substance is not None and 'factors' in template:
                 if t_info['substance'] in template['factors'].keys():
                     logger.debug(f'... selecting emission factor '
                                  f'for: {t_info['substance']}')
@@ -212,28 +221,29 @@ def expand_cycles(yinfo):
                     del cycle['factors']
                 else:
                     raise ValueError(
-                        f'requested substance {t_info["substance"]}'
+                        f'requested substance {substance}'
                         f'is not defined in template {t_name} '
                         f'in cycle {c_id}')
-            elif 'substance' not in t_info and 'factors' not in template:
+            elif substance is None and 'factors' not in template:
                 logger.debug(f'... no emission factor')
                 cycle['substance'] = None
                 cycle['emissionfactor'] = 1.
-            elif 'substance' in t_info and 'factors' not in template:
+            elif substance is not None and 'factors' not in template:
                 raise ValueError(
-                    f'no emssion factors defined in template: {t_name}')
+                    f'no emssion factor for {substance} '
+                    f'defined in template: {t_name}')
             else: # 'substance' not in t_info and 'factors' in template
                 raise ValueError(
                     f'emssion factors defined in template: {t_name}'
                     f' but no substance selected in cycle: {c_id}')
 
             if 'multiplier' in t_info:
-                logger.debug(f'... applying additional multiplyer: '
-                             f'{t_info['multiplyer']}')
+                logger.debug(f'... applying additional multiplier: '
+                             f'{t_info['multiplier']}')
                 cycle['multiplier'] = float(t_info['multiplier'])
             else:
                 cycle['multiplier'] = 1.
-            logger.debug(f'... applying additional multiplyer: '
+            logger.debug(f'... applying additional multiplier: '
                  f'{cycle['multiplier']}')
         cycles[c_id] = cycle
     return cycles
@@ -342,78 +352,111 @@ def parse_cycle(c_id: str, c_info : dict,
     if 'template' in c_info.keys():
         raise ValueError('cycle has illegal template key: %s' % c_id)
 
-    if "start" not in c_info.keys():
-        raise ValueError('cycle has no start info: %s' % c_id)
-    s_info = c_info['start']
-    if "at" not in s_info.keys():
-        raise ValueError('start has no at info: %s' % c_id)
-    a_count, a_unit = parse_time(s_info['at'], name='at', multi=True)
-    a_time = [time[0] + pd.DateOffset(**{a_unit: x}) for x in a_count]
-    logger.debug('a_time: ' + format(a_time))
+    if "timeseries" in c_info.keys():
+        ts_info = c_info['timeseries']
+        if 'file' in ts_info.keys():
+            ts_finfo = ts_info['file']
+            if not 'name' in ts_finfo.keys():
+                raise ValueError('timeseries file name missing: %s' % c_id)
+            ts_file_name = ts_finfo['name']
+            tf_file_format = ts_finfo.get('format', 'csv')
+            ts_file_var = ts_finfo.get('var')
+            if tf_file_format == 'csv':
+                ts_data = pd.read_csv(ts_file_name)
 
-    if "offset" not in s_info.keys():
-        logger.info('cycle start has no offset info: %s' % c_id)
-        o_time = [pd.DateOffset(0)]
+        elif 'table' in ts_info.keys():
+            ts_finfo = ts_info['table']
+            if 'columns' in ts_finfo.keys():
+                ts_columns = ts_finfo['columns']
+            else:
+                ts_columns = None
+            if 'data' in ts_finfo.keys():
+                ts_data = pd.DataFrame(
+                    [x.strip().split(',') for x in ts_finfo['data']],
+                    columns=ts_columns
+                )
+
     else:
-        o_count, o_unit = parse_time(s_info['offset'],
-                                     name='offset', multi=True)
-        o_time = [pd.DateOffset(**{o_unit: x}) for x in o_count]
-    logger.debug('o_time: ' + format(o_time))
-    start = pd.Series([x + y for x in a_time for y in o_time])
-    logger.debug('start: ' + format(start))
+        if "start" not in c_info.keys():
+            raise ValueError('cycle has no start info: %s' % c_id)
+        s_info = c_info['start']
+        if "at" not in s_info.keys():
+            raise ValueError('start has no at info: %s' % c_id)
+        a_count, a_unit = parse_time(s_info['at'], name='at', multi=True)
+        a_time = [time[0] + pd.DateOffset(**{a_unit: x}) for x in a_count]
+        logger.debug('a_time: ' + format(a_time))
 
-    sequence = None
-    num_keys = any([x in c_info.keys() for x in
-                ["sequence", "list", "heating"]])
-    if num_keys < 1:
-        raise ValueError('cycle has no sequence info: %s' % c_id)
-    elif num_keys > 1:
-        raise ValueError('cycle list and sequence are ' +
-                         'mutually exclusive: %s' % c_id)
-    if "sequence" in c_info.keys():
-        sequ_time = []
-        sequ_value = []
-        time_pointer = pd.Timedelta(0)
-        time_last = time_pointer
-        value_last = 0
-        for i, s_item in enumerate(c_info['sequence']):
-            logger.debug(format(s_item))
-            if len(s_item) > 1:
-                raise ValueError('sequence item entry #%d not unique: %s' %
-                                 (i, c_id))
-            for s_type, s_info in s_item.items():
-                if "value" not in s_info.keys():
-                    raise ValueError('sequence no value info: %s' % c_id)
-                s_value = s_info['value']
-                s_count, s_unit = parse_time(s_info,
-                                             name='sequence', multi=False)
-                s_delta = pd.Timedelta(value=s_count, unit=s_unit)
-                while time_pointer < time_last + s_delta:
-                    sequ_time.append(time_pointer)
-                    if s_type == 'const':
-                        sequ_value.append(s_value)
-                    elif s_type == 'ramp':
-                        x = (value_last +
-                             (s_value - value_last) *
-                             (time_pointer - time_last) / s_delta)
-                        sequ_value.append(x)
-                    else:
-                        raise ValueError('unknown sequence element: %s' %
-                                         s_type)
-                    time_pointer = time_pointer + dt
+        if "offset" not in s_info.keys():
+            logger.info('cycle start has no offset info: %s' % c_id)
+            o_time = [pd.DateOffset(0)]
+        else:
+            o_count, o_unit = parse_time(s_info['offset'],
+                                         name='offset', multi=True)
+            o_time = [pd.DateOffset(**{o_unit: x}) for x in o_count]
+        logger.debug('o_time: ' + format(o_time))
+        start = pd.Series([x + y for x in a_time for y in o_time])
+        logger.debug('start: ' + format(start))
 
-                time_last = time_pointer
-                value_last = s_value
-        sequence = pd.Series(sequ_value, index=sequ_time)
-    elif "list" in c_info.keys():
-        if not isinstance(c_info['list'], list):
-            raise ValueError('list does not contain list: %s' % c_id)
-        sequ_value = [float(x) for x in c_info['list']]
-        sequ_time = [i * dt for i in range(len(sequ_value))]
-        sequence = pd.Series(sequ_value, index=sequ_time)
-    elif "heating" in c_info.keys():
-        raise ValueError('heating not yet implemented')
-    logger.debug(format(sequence))
+        sequence = None
+        num_keys = any([x in c_info.keys() for x in
+                    ["sequence", "list", "heating"]])
+        if num_keys < 1:
+            raise ValueError('cycle has no sequence info: %s' % c_id)
+        elif num_keys > 1:
+            raise ValueError('cycle list and sequence are ' +
+                             'mutually exclusive: %s' % c_id)
+        if "sequence" in c_info.keys():
+            sequ_time = []
+            sequ_value = []
+            time_pointer = pd.Timedelta(0)
+            time_last = time_pointer
+            value_last = 0
+            for i, s_item in enumerate(c_info['sequence']):
+                logger.debug(format(s_item))
+                if len(s_item) > 1:
+                    raise ValueError(f'sequence item entry #{i} '
+                                     f'not unique: {c_id}')
+                for s_type, s_info in s_item.items():
+                    if "value" not in s_info.keys():
+                        raise ValueError(f'sequence no value info: '
+                                         f'{c_id}')
+                    s_value = s_info['value']
+                    s_count, s_unit = parse_time(
+                        s_info,name='sequence', multi=False)
+                    s_delta = pd.Timedelta(value=s_count, unit=s_unit)
+                    while time_pointer < time_last + s_delta:
+                        sequ_time.append(time_pointer)
+                        if s_type == 'const':
+                            sequ_value.append(s_value)
+                        elif s_type == 'ramp':
+                            x = (value_last +
+                                 (s_value - value_last) *
+                                 (time_pointer - time_last) / s_delta)
+                            sequ_value.append(x)
+                        else:
+                            raise ValueError(f'unknown sequence '
+                                             f'element: {s_type}')
+                        time_pointer = time_pointer + dt
+
+                    time_last = time_pointer
+                    value_last = s_value
+            sequence = pd.Series(sequ_value, index=sequ_time)
+        elif "list" in c_info.keys():
+            if not isinstance(c_info['list'], list):
+                raise ValueError('list does not contain list: %s' % c_id)
+            sequ_value = [float(x) for x in c_info['list']]
+            sequ_time = [i * dt for i in range(len(sequ_value))]
+            sequence = pd.Series(sequ_value, index=sequ_time)
+
+
+
+    if 'emissionfactor' in c_info.keys():
+        emissionfactor = c_info['emissionfactor']
+        with c_info['substance'] as es:
+            logger.info(f'cycle {c_id} given in {unit_info}, ' +
+                    f'applying emission factor for {es}: {emissionfactor}')
+    else:
+        emissionfactor = 1.
 
     if "unit" in c_info.keys():
         factor_w = factor_t = None
@@ -453,12 +496,20 @@ def parse_cycle(c_id: str, c_info : dict,
             else:
                 sys.tracebacklimit = 0
                 raise ValueError('invalid time unit: %s' % unit_t)
-        factor = factor_w * factor_t
+        unitfactor = factor_w * factor_t
     else:
         unit_info = "g/s"
-        factor = 1.
+        unitfactor = 1.
     logger.info(f'cycle {c_id} given in {unit_info}, ' +
-                f'applying conversion factor: {factor}')
+                f'applying conversion factor: {unitfactor}')
+
+    if 'multiplier' in c_info.keys():
+        multiplier = c_info['multiplier']
+        with c_info['substance'] as es:
+            logger.info(f'cycle {c_id} given in {unit_info}, ' +
+                    f'applying emission factor for {es}: {multiplier}')
+    else:
+        mutiplier = 1.
 
     if any([x < sequence.index[-1] for x in start.diff()[1:]]):
         logger.warning('sequence longer than start interval: %s' % c_id)
@@ -471,7 +522,7 @@ def parse_cycle(c_id: str, c_info : dict,
     cycle = pd.Series(0, index=time, name=c_id, dtype=float)
     for x in start:
         for dx, y in sequence.items():
-            cycle[x + dx] = y * factor
+            cycle[x + dx] = y * unitfactor * emissionfactor * multiplier
 
     return column, cycle
 # ----------------------------------------------------

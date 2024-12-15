@@ -4,6 +4,7 @@ import logging
 import os
 import sys
 
+import yaml
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
@@ -148,6 +149,17 @@ class Wall:
             # set alls slabs to have temperature t_start
             self.t_slab = self.n_slab * [t_start]
 
+    @classmethod
+    def from_dict(cls, d):
+        obj = cls.__new__(cls)  # Does not call __init__
+        for k in [x for x in Wall.__dict__ if not x.startswith('_')]:
+            if k in d:
+                obj.__dict__[k] = d[k]
+        return obj
+
+    def to_dict(self):
+        return self.__dict__
+
     def tick(self, rooms, timedelta=TIMESTEP):
         # if self.name == 'front':
         #     pass
@@ -185,6 +197,16 @@ class WallList(dict):
                     raise ValueError(
                         f'parts larger than parent: '
                         f'{self[value.partof].name}')
+
+    @classmethod
+    def from_dict(cls, d):
+        obj = cls.__new__(cls)  # Does not call __init__
+        for k,v in d.items():
+            obj[k] = Wall.from_dict(v)
+        return obj
+
+    def to_dict(self):
+        return {k:v.to_dict() for k,v in self.items()}
 
     def append(self, wall: Wall):
         self[wall.name] = wall
@@ -263,6 +285,18 @@ class Room:
                         'are required with normal rooms')
                 self.volume = self.area * self.height
 
+    @classmethod
+    def from_dict(cls, d):
+        obj = cls.__new__(cls)  # Does not call __init__
+        for k in [x for x in Room.__dict__ if not x.startswith('_')]:
+            if k in d:
+                obj.__dict__[k] = d[k]
+        return obj
+
+    def to_dict(self):
+        return self.__dict__
+
+
     def init_walls(self, walls: WallList):
         for w in walls.values():
             if w.room_w == self.name:
@@ -328,14 +362,23 @@ class RoomList(dict[Room]):
 
     def __init__(self, walls):
         dict.__init__(self)
-        self.walls = walls
+
+    @classmethod
+    def from_dict(cls, d):
+        obj = cls.__new__(cls)  # Does not call __init__
+        for k,v in d.items():
+            obj[k] = Room.from_dict(v)
+        return obj
+
+    def to_dict(self):
+        return {k:v.to_dict() for k,v in self.items()}
 
     def append(self, room):
        self[room.name] = room
 
-    def init_walls(self):
+    def init_walls(self,walls):
         for x in self.values():
-            x.init_walls(walls=self.walls)
+            x.init_walls(walls)
 
     def tick(self, walls, timedelta: float = TIMESTEP):
         for x in self.values():
@@ -346,6 +389,7 @@ class Building():
     name = str()
     walls = WallList()
     rooms = RoomList(walls=walls)
+    hvac = {}
     init = False
     output = None
 
@@ -354,6 +398,36 @@ class Building():
         self.rooms.append(Room('outside', t_start=t_out))
         self.rooms.append(Room('soil', t_start=t_soil))
 
+    @classmethod
+    def from_dict(cls, d):
+        obj = cls.__new__(cls)  # Does not call __init__
+        super(Building, obj).__init__()  # Don't forget to call any polymorphic base class initializers
+        obj.name = d['name']
+        obj.walls = WallList.from_dict(d['walls'])
+        obj.rooms = RoomList.from_dict(d['rooms'])
+        obj.hvac = d['hvac']
+        return obj
+
+    def __eq__(self, other):
+        if not isinstance(other, Building):
+            # don't attempt to compare against unrelated types
+            return NotImplemented
+        return (self.name == other.name and
+                self.walls == other.walls and
+                self.rooms == other.rooms and
+                self.hvac == other.hvac and
+                self.output == other.output
+                )
+
+    def to_dict(self):
+        res = {}
+        res['name'] = self.name
+        res['walls'] = self.walls.to_dict()
+        res['rooms'] = self.rooms.to_dict()
+        res['hvac'] = self.hvac
+        return res
+
+
     def get_rooms(self):
         return [x.name for x in self.rooms.values() if not x.is_special()]
 
@@ -361,8 +435,7 @@ class Building():
         rnames = self.rooms.keys()
         if 'outside' not in rnames or 'soil' not in rnames:
             raise ValueError('special rooms `soil` and `outside` missing')
-        self.rooms.walls = self.walls
-        self.rooms.init_walls()
+        self.rooms.init_walls(self.walls)
 
     def tick(self, timedelta: float = TIMESTEP):
         if not self.init:
@@ -394,12 +467,31 @@ def make_buidling(t_out=0):
                            l=5., h=5., t_start=t_out)) # wood
     return bldg
 
-
+import collections
+def purify(x):
+    if isinstance(x, dict):
+        return {purify(k):purify(v) for k,v in x.items()}
+    elif (isinstance(x, collections.abc.Iterable)
+          and not isinstance(x, str)):
+        return [purify(y) for y in x]
+    else:
+        if isinstance(x, np.number):
+            return float(x)
+        elif isinstance(x, (str, bool, int, float)) or x is None:
+            return x
+        else:
+            raise ValueError(f'oups {type(x)} is not caught')
 
 def building_model_timeseries(ts: pd.Series):
 
 
     building = make_buidling(t_out=ts.values[0])
+
+    manamana = purify(building.to_dict())
+    pitpitipi = building.from_dict(manamana)
+    with open('buildings.yaml', 'w') as f:
+        yaml.safe_dump(manamana, f)
+
     room_names = building.get_rooms()
     nrooms = len(room_names)
     columns = (['seconds','power'] +

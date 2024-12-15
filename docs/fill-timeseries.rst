@@ -35,7 +35,7 @@ week numbers (0-52).
 ``-U``/``--holiday-month`` can be given followed by one or multiple
 month numbers (1-12).
 Options ``-u`` and ``-U`` may be used together
-to describe comples patterns.
+to describe more complex patterns.
 
 variable values
 ---------------
@@ -45,9 +45,11 @@ use the variant ``-c, --cycle``. For this you have to create a file called ``cyc
 where the control file ``austal.txt`` is located, you have to create a file named ``cycle.yaml``.
 in which you can describe the emission cycle specify the start times in [YAML](https://de.wikipedia.org/wiki/YAML).
 
+**defining each pollutant explicitly**
+
 The file has the following structure (the indentations and hyphens are important!): ::
 
-    meinname:
+    myname:
       source: 01.so2
       start:
         at:
@@ -110,6 +112,73 @@ The file has the following structure (the indentations and hyphens are important
       `d` (day), `m` or `min` (minute), or `s` or `sec` (second).
       Example `kg/d` for kilograms per day.
   - With ``#`` you can comment out lines in the file.
+
+**using templates**
+
+If multiple pollutants from one source or pollutants from multiple sources
+are emitted following the same schedule. The schedule may be defined
+in a template that is referred to in one or more cycles::
+
+     template1
+       factors:
+         nox: 1.0
+         so2: 2.75
+       start:
+         at:
+         time: 1-52
+         unit: week
+       offset:
+         time: 1
+         unit: day
+       sequence:
+        - const:
+            time: 24
+            unit: hour
+            value: 1.1
+       unit: g/h
+
+     cycle1:
+       column: 01.nox
+       template:
+         name: template1
+     cycle2:
+       column: 01.so2
+       template:
+         name: template1
+     cycle3
+       column: 02.xx
+       template:
+         name: template1
+         substance: so2
+         multiplier: 2.5
+
+In this example: ``template1`` defines a template, including the schedule
+and a substance-independent emission value (Here: ``1.1 g/s``). For
+each pollutant emitted, this value is multiplied by a substance-specific
+factor (here: 1.0 for nox, i.e. the substance-independen value in
+this example is actually the NOx output). All pullutants used late
+must be defined in this place.
+
+``cycle1`` the defines the cycle of NOx emission from source `01`
+that follows the schedule in ``template1``.
+The pollutant substance (``nox``) is determined from the
+column name (``01.nox``)
+
+``cycle2`` the defines the cycle of SO2 emission from source `01`
+that follows the schedule in ``template1``.
+The pollutant substance (``so2``) is determined from the
+column name (``01.nox``)
+
+``cycle3`` the defines the cycle of the emission of an unknown substance
+(``xx``) from source `02` that follows the schedule in ``template1``.
+This emission is 2.5 times stronger than the SO2 release from
+source `01`.
+The pollutant substance (``so2``) is hence is
+explicitly selected using the keyword ``substance``.
+To clarify: The emission at each time a ``cycle3`` is
+the product of: <substance-independent emission value> x
+<substance-specific factor> x <multiplier>
+
 
 How to apply
 ------------

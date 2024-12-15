@@ -30,6 +30,14 @@ The module contains the following scripts
 :doc:`austaltools`
     The main comand that provides all user-facing functionality.
 
+    Additional, more detailed user guides:
+
+    :doc:`fill-timeseries`
+        explains the Syntax of the cycle file ``cycle.yaml``
+    :doc:
+
+
+
 :doc:`configure-austaltools`
     Download dataset for use with austaltools (or assemble them from the original sources)
 
