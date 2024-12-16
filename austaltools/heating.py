@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import csv
+import inspect
 import logging
 import os
 import sys
@@ -149,17 +150,6 @@ class Wall:
             # set alls slabs to have temperature t_start
             self.t_slab = self.n_slab * [t_start]
 
-    @classmethod
-    def from_dict(cls, d):
-        obj = cls.__new__(cls)  # Does not call __init__
-        for k in [x for x in Wall.__dict__ if not x.startswith('_')]:
-            if k in d:
-                obj.__dict__[k] = d[k]
-        return obj
-
-    def to_dict(self):
-        return self.__dict__
-
     def tick(self, rooms, timedelta=TIMESTEP):
         # if self.name == 'front':
         #     pass
@@ -198,15 +188,6 @@ class WallList(dict):
                         f'parts larger than parent: '
                         f'{self[value.partof].name}')
 
-    @classmethod
-    def from_dict(cls, d):
-        obj = cls.__new__(cls)  # Does not call __init__
-        for k,v in d.items():
-            obj[k] = Wall.from_dict(v)
-        return obj
-
-    def to_dict(self):
-        return {k:v.to_dict() for k,v in self.items()}
 
     def append(self, wall: Wall):
         self[wall.name] = wall
@@ -285,18 +266,6 @@ class Room:
                         'are required with normal rooms')
                 self.volume = self.area * self.height
 
-    @classmethod
-    def from_dict(cls, d):
-        obj = cls.__new__(cls)  # Does not call __init__
-        for k in [x for x in Room.__dict__ if not x.startswith('_')]:
-            if k in d:
-                obj.__dict__[k] = d[k]
-        return obj
-
-    def to_dict(self):
-        return self.__dict__
-
-
     def init_walls(self, walls: WallList):
         for w in walls.values():
             if w.room_w == self.name:
@@ -363,16 +332,6 @@ class RoomList(dict[Room]):
     def __init__(self, walls):
         dict.__init__(self)
 
-    @classmethod
-    def from_dict(cls, d):
-        obj = cls.__new__(cls)  # Does not call __init__
-        for k,v in d.items():
-            obj[k] = Room.from_dict(v)
-        return obj
-
-    def to_dict(self):
-        return {k:v.to_dict() for k,v in self.items()}
-
     def append(self, room):
        self[room.name] = room
 
@@ -399,12 +358,28 @@ class Building():
         self.rooms.append(Room('soil', t_start=t_soil))
 
     @classmethod
-    def from_dict(cls, d):
-        obj = cls.__new__(cls)  # Does not call __init__
-        super(Building, obj).__init__()  # Don't forget to call any polymorphic base class initializers
-        obj.name = d['name']
-        obj.walls = WallList.from_dict(d['walls'])
-        obj.rooms = RoomList.from_dict(d['rooms'])
+    def from_yaml(cls, name, d):
+        t_out = d.get('t_out', np.nan)
+        t_soil = d.get('t_soil', np.nan)
+        obj = Building(name, t_out, t_soil)
+        for k,v in d['walls'].items():
+            args = {'name': k}
+            for x,y in inspect.signature(Wall.__init__).parameters.items():
+                if x in ['self', 'name']: continue
+                # mandatory args (== no default value)
+                if x not in v and y.default == inspect.Parameter.empty:
+                    raise ValueError(f'{y.name} not declared in wall {k}')
+                args[x] = v.get(x,y.default)
+            obj.walls.append(Wall(**args))
+        for k, v in d['rooms'].items():
+            args = {'name': k}
+            for x,y in inspect.signature(Room.__init__).parameters.items():
+                if x in ['self', 'name']: continue
+                # mandatory args (== no default value)
+                if x not in v and y.default == inspect.Parameter.empty:
+                    raise ValueError(f'{y.name} not declared in wall {k}')
+                args[x] = v.get(x,y.default)
+            obj.rooms.append(Room(**args))
         obj.hvac = d['hvac']
         return obj
 
@@ -418,15 +393,6 @@ class Building():
                 self.hvac == other.hvac and
                 self.output == other.output
                 )
-
-    def to_dict(self):
-        res = {}
-        res['name'] = self.name
-        res['walls'] = self.walls.to_dict()
-        res['rooms'] = self.rooms.to_dict()
-        res['hvac'] = self.hvac
-        return res
-
 
     def get_rooms(self):
         return [x.name for x in self.rooms.values() if not x.is_special()]
@@ -467,31 +433,90 @@ def make_buidling(t_out=0):
                            l=5., h=5., t_start=t_out)) # wood
     return bldg
 
-import collections
-def purify(x):
-    if isinstance(x, dict):
-        return {purify(k):purify(v) for k,v in x.items()}
-    elif (isinstance(x, collections.abc.Iterable)
-          and not isinstance(x, str)):
-        return [purify(y) for y in x]
-    else:
-        if isinstance(x, np.number):
-            return float(x)
-        elif isinstance(x, (str, bool, int, float)) or x is None:
-            return x
-        else:
-            raise ValueError(f'oups {type(x)} is not caught')
 
 def building_model_timeseries(ts: pd.Series):
 
 
-    building = make_buidling(t_out=ts.values[0])
+    # building = make_buidling(t_out=ts.values[0])
 
-    manamana = purify(building.to_dict())
-    pitpitipi = building.from_dict(manamana)
-    with open('buildings.yaml', 'w') as f:
-        yaml.safe_dump(manamana, f)
+    t_out=float(ts.values[0])
 
+    # dictionary = {
+    #     'blah': {
+    #         't_out': t_out,
+    #         'rooms': {
+    #             'room': {
+    #                 'width': 5.,
+    #                 'lenght': 5.,
+    #                 'height': 2.5,
+    #                 't_set': 20,
+    #                 't_start': t_out,
+    #                 'maxpower': 13000.
+    #             }
+    #         },
+    #         'walls': {
+    #             'front': {
+    #                 'd': 0.30,
+    #                 'room_w': 'room',
+    #                 'room_c': 'outside',
+    #                 'l': 5.,
+    #                 'h': 2.5,
+    #                 't_start': t_out
+    #             },
+    #             'left': {
+    #                 'd': 0.30,
+    #                 'room_w': 'room',
+    #                 'room_c': 'outside',
+    #                 'l': 5.,
+    #                 'h': 2.5,
+    #                 't_start': t_out
+    #             },
+    #             'right': {
+    #                 'd': 0.30,
+    #                 'room_w': 'room',
+    #                 'room_c': 'outside',
+    #                 'l': 5.,
+    #                 'h': 2.5,
+    #                 't_start': t_out
+    #             },
+    #             'back': {
+    #                 'd': 0.30,
+    #                 'room_w': 'room',
+    #                 'room_c': 'outside',
+    #                 'l': 5.,
+    #                 'h': 2.5,
+    #                 't_start': t_out
+    #             },
+    #             'floor': {
+    #                 'd': 0.10,
+    #                 'room_w': 'room',
+    #                 'room_c': 'soil',
+    #                 'c': 1500,
+    #                 'k': 0.15,
+    #                 'rho': 600.,
+    #                 'l': 5.,
+    #                 'h': 5.,
+    #                 't_start': t_out
+    #             },
+    #             'ceilg': {
+    #                 'd': 0.10,
+    #                 'room_w': 'room',
+    #                 'room_c': 'soil',
+    #                 'c': 1500,
+    #                 'k': 0.15,
+    #                 'rho': 600.,
+    #                 'l': 5.,
+    #                 'h': 5.,
+    #                 't_start': t_out
+    #             }
+    #         },
+    #         'hvac': {},
+    #     }
+    # }
+    with open('buildings.yaml', 'r') as f:
+        dictionary = yaml.safe_load(f)
+    for k,v in dictionary['buildings'].items():
+        building = Building.from_yaml(k,v)
     room_names = building.get_rooms()
     nrooms = len(room_names)
     columns = (['seconds','power'] +
@@ -617,7 +642,7 @@ def main(args):
         'nox': 50.E-9,  # g/J
         'pm-u': 20.E-9,  # g/J
         'odor': 6*168000.E-9,  # GE/J
-        'wood': 1/4.04E6, # kg/J
+        'wood_kg': 1/4.04E6, # kg/J
         'kWh': 1/(3600000), # kWh
     }
     res = pd.DataFrame({'energy':energy})

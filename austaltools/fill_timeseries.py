@@ -170,6 +170,8 @@ def expand_cycles(yinfo):
     # collect templates
     for c_id, c_info in yinfo.items():
         if (('column' not in c_info.keys() or c_info['column'] is None)
+            # the following condition must be dropped,
+            # when the support for the deprecated keyword `source` is removed
             and
             ('source' not in c_info.keys() or c_info['source'] is None)):
             logger.debug(f"found template: {c_id}")
@@ -360,9 +362,10 @@ def parse_cycle(c_id: str, c_info : dict,
                 raise ValueError('timeseries file name missing: %s' % c_id)
             ts_file_name = ts_finfo['name']
             tf_file_format = ts_finfo.get('format', 'csv')
-            ts_file_var = ts_finfo.get('var')
+            ts_var = ts_finfo.get('var')
             if tf_file_format == 'csv':
                 ts_data = pd.read_csv(ts_file_name)
+            ts_columns = ts_data.columns
 
         elif 'table' in ts_info.keys():
             ts_finfo = ts_info['table']
@@ -370,13 +373,14 @@ def parse_cycle(c_id: str, c_info : dict,
                 ts_columns = ts_finfo['columns']
             else:
                 ts_columns = None
+            ts_var = ts_finfo.get('var')
             if 'data' in ts_finfo.keys():
                 ts_data = pd.DataFrame(
                     [x.strip().split(',') for x in ts_finfo['data']],
                     columns=ts_columns
                 )
-
     else:
+        ts_data = None
         if "start" not in c_info.keys():
             raise ValueError('cycle has no start info: %s' % c_id)
         s_info = c_info['start']
@@ -399,7 +403,7 @@ def parse_cycle(c_id: str, c_info : dict,
 
         sequence = None
         num_keys = any([x in c_info.keys() for x in
-                    ["sequence", "list", "heating"]])
+                    ["sequence", "list"]])
         if num_keys < 1:
             raise ValueError('cycle has no sequence info: %s' % c_id)
         elif num_keys > 1:
@@ -517,13 +521,17 @@ def parse_cycle(c_id: str, c_info : dict,
         logger.warning('total length > time period to fill: %s' % c_id)
 
     # generate cycle:
-    # copy sequence to each start time
-    # covert units in the process
-    cycle = pd.Series(0, index=time, name=c_id, dtype=float)
-    for x in start:
-        for dx, y in sequence.items():
-            cycle[x + dx] = y * unitfactor * emissionfactor * multiplier
-
+    if ts_data is None:
+        # copy sequence to each start time
+        # covert units in the process
+        cycle = pd.Series(0, index=time, name=c_id, dtype=float)
+        for x in start:
+            for dx, y in sequence.items():
+                cycle[x + dx] = (
+                        y * unitfactor * emissionfactor * multiplier
+                )
+    else:
+        cycle = ts_data[ts_var].resample(dt, origin=time[0]).mean()
     return column, cycle
 # ----------------------------------------------------
 
