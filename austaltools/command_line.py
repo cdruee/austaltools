@@ -14,6 +14,7 @@ try:
     from . import import_buildings
     from . import eap
     from . import fill_timeseries
+    from . import heating
     from . import input_terrain
     from . import input_weather
     from . import steepness
@@ -28,6 +29,7 @@ except ImportError:
     import import_buildings
     import eap
     import fill_timeseries
+    import heating
     import input_terrain
     import input_weather
     import steepness
@@ -81,6 +83,10 @@ def cli_parser():
     # ----------------------------------------------------
 
     pars_fts = fill_timeseries.add_options(subparsers)
+
+    # ----------------------------------------------------
+
+    pars_htg = heating.add_options(subparsers)
 
     # ----------------------------------------------------
 
@@ -250,6 +256,8 @@ def main(args=None):
             eap.main(args)
         elif args['command'] in ['fill-timeseries', 'ft']:
             fill_timeseries.main(args)
+        elif args['command'] == 'heating':
+            heating.main(args)
         elif args['command'] == 'plot':
             plot.main(args)
         elif args['command'] == 'simple':

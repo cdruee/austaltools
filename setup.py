@@ -17,7 +17,7 @@ setup(
               ],
     package_dir={v['__title__']: v['__title__']},
     package_data={
-        v['__title__']+".data": ["*.txt"],
+        v['__title__']+".data": ["*.txt", "*.json"],
     },
     entry_points={
         'console_scripts': [

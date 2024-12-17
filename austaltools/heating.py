@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import argparse
 import csv
 import inspect
 import logging
@@ -434,90 +435,11 @@ def make_buidling(t_out=0):
     return bldg
 
 
-def building_model_timeseries(ts: pd.Series):
-
-
-    # building = make_buidling(t_out=ts.values[0])
+def building_model_timeseries(bldg: Building, ts: pd.Series):
 
     t_out=float(ts.values[0])
 
-    # dictionary = {
-    #     'blah': {
-    #         't_out': t_out,
-    #         'rooms': {
-    #             'room': {
-    #                 'width': 5.,
-    #                 'lenght': 5.,
-    #                 'height': 2.5,
-    #                 't_set': 20,
-    #                 't_start': t_out,
-    #                 'maxpower': 13000.
-    #             }
-    #         },
-    #         'walls': {
-    #             'front': {
-    #                 'd': 0.30,
-    #                 'room_w': 'room',
-    #                 'room_c': 'outside',
-    #                 'l': 5.,
-    #                 'h': 2.5,
-    #                 't_start': t_out
-    #             },
-    #             'left': {
-    #                 'd': 0.30,
-    #                 'room_w': 'room',
-    #                 'room_c': 'outside',
-    #                 'l': 5.,
-    #                 'h': 2.5,
-    #                 't_start': t_out
-    #             },
-    #             'right': {
-    #                 'd': 0.30,
-    #                 'room_w': 'room',
-    #                 'room_c': 'outside',
-    #                 'l': 5.,
-    #                 'h': 2.5,
-    #                 't_start': t_out
-    #             },
-    #             'back': {
-    #                 'd': 0.30,
-    #                 'room_w': 'room',
-    #                 'room_c': 'outside',
-    #                 'l': 5.,
-    #                 'h': 2.5,
-    #                 't_start': t_out
-    #             },
-    #             'floor': {
-    #                 'd': 0.10,
-    #                 'room_w': 'room',
-    #                 'room_c': 'soil',
-    #                 'c': 1500,
-    #                 'k': 0.15,
-    #                 'rho': 600.,
-    #                 'l': 5.,
-    #                 'h': 5.,
-    #                 't_start': t_out
-    #             },
-    #             'ceilg': {
-    #                 'd': 0.10,
-    #                 'room_w': 'room',
-    #                 'room_c': 'soil',
-    #                 'c': 1500,
-    #                 'k': 0.15,
-    #                 'rho': 600.,
-    #                 'l': 5.,
-    #                 'h': 5.,
-    #                 't_start': t_out
-    #             }
-    #         },
-    #         'hvac': {},
-    #     }
-    # }
-    with open('buildings.yaml', 'r') as f:
-        dictionary = yaml.safe_load(f)
-    for k,v in dictionary['buildings'].items():
-        building = Building.from_yaml(k,v)
-    room_names = building.get_rooms()
+    room_names = bldg.get_rooms()
     nrooms = len(room_names)
     columns = (['seconds','power'] +
                [y % x
@@ -539,11 +461,11 @@ def building_model_timeseries(ts: pd.Series):
         temps = np.empty((nticks, nrooms))
         # for tick in range(nticks):
         tick = 0
-        building.rooms['outside'].temp = ts[ts.index[i]]
+        bldg.rooms['outside'].temp = ts[ts.index[i]]
         while pointer + dtick < ts.index[i + 1]:
-            building.tick(timedelta=dtick.total_seconds())
-            temps[tick, :] = [building.rooms[x].temp for x in room_names]
-            powers[tick, :] = [building.rooms[x].power for x in room_names]
+            bldg.tick(timedelta=dtick.total_seconds())
+            temps[tick, :] = [bldg.rooms[x].temp for x in room_names]
+            powers[tick, :] = [bldg.rooms[x].power for x in room_names]
             pointer += dtick
             tick += 1
         room_temps = temps.mean(axis=0)
@@ -590,7 +512,15 @@ def main(args):
             logger.warning('no elevation info. Assuming sea level. ' +
                            'You should consider providing -e')
             ele = 0.
-    nam = args['output']
+
+    name = args.get('building', 'default')
+    filename = args.get('file', 'heating.yaml')
+    if x := args.get('wmo', None) is not None:
+        nam = x
+    elif x := args.get('dwd', None) is not None:
+        nam = x
+    else:
+        nam = 99999
     logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
     logger.debug("lat: %s, lon: %s" % (lat, lon))
     logging.info('selected position: %.2f %.2f %.0f (%s)' %
@@ -633,7 +563,15 @@ def main(args):
     t_out = obs['t2m'].interpolate('linear').bfill().ffill()
     t_out = t_out.apply(m.temperature._to_C)
 
-    model_out = building_model_timeseries(ts=t_out)
+    with open(filename, 'r') as f:
+        dictionary = yaml.safe_load(f)
+    for k,v in dictionary['buildings'].items():
+        if k == name:
+            bldg = Building.from_yaml(k,v)
+            break
+    else:
+        raise ValueError('no building named %s' % name)
+    model_out = building_model_timeseries(bldg=bldg, ts=t_out)
     model_out.to_csv("heating_model_out.csv", quoting=csv.QUOTE_NONE,
                float_format="%12.5f")
     energy = model_out['power'] * model_out['seconds'] # J
@@ -653,6 +591,66 @@ def main(args):
                float_format="%12.5f")
     print(res.sum(axis=0))
 
+
+# ----------------------------------------------------
+
+def add_options(subparsers: argparse.ArgumentParser) -> None:
+    pars_htg = subparsers.add_parser(
+        name='heating',
+        aliases=[],
+        help='simulate a building with heating'
+    )
+    default = {'building': 'default',
+               'heating-file': 'heating.yaml',
+               'source': 'CERRA',
+               'year': 2003,
+               'output': 'heating.csv',
+               }
+    pars_htg.add_argument('-b', '--building',
+                          help='name uf the building to simulate. ' +
+                               '[%s]' % default['building'],
+                          default=default['building'])
+    pars_htg.add_argument('-f', '--heating-file',
+                          help='building/heating description file. ' +
+                               '[%s]' % default['heating-file'],
+                          default=default['heating-file'])
+    # pars_htg.add_argument('-c', '--column-id',
+    #                       help='column ID. ' +
+    #                            'Required if more than one column. ' +
+    #                            'list IDs in file with -l.',
+    #                       default=None)
+
+    pars_htg = _tools.add_location_opts(pars_htg, stations=True)
+
+    pars_htg.add_argument('-s', '--source',
+                        metavar="CODE",
+                        nargs=None,
+                        choices=input_weather.KNOWN_SOURCES,
+                        default=default['source'],
+                        help='select the source for the weather data. ' +
+                             'Known ``CODE`` values are ' +
+                             ' '.join(input_weather.KNOWN_SOURCES) +
+                             ' Defaults to ' +
+                             default['source'])
+    pars_htg.add_argument('-y', '--year', dest='year',
+                        metavar='YEAR',
+                        nargs=None,
+                          required=True,
+                        help='year of interest [%04i]' % default['year'])
+
+    pars_htg.add_argument('-e', '--elevation', dest='ele',
+                        metavar='METERS',
+                        help='surface elevation. ' +
+                             'only allowed with -L, -G, -U.')
+
+    pars_htg.add_argument('-o', '--output', nargs=1,
+                          help='name for the output file. ' +
+                               '[%s]' % default["output"],
+                          default=default["output"])
+
+    return pars_htg
+
+
 # =========================================================================
 # init at import:
 
@@ -669,9 +667,6 @@ List of locally available DEMs (filled upon imorting the module)
 
 if __name__ == "__main__":
     args = {
-        'source': 'CERRA',
-        'year': '2003',
-        'll': [49.75, 6.75],
         'output': 99999
     }
     main(args)
