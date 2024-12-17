@@ -11,8 +11,8 @@ import logging
 import sys
 import warnings
 
+import pandas as pd
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    import pandas as pd
     import readmet
     import yaml
 
