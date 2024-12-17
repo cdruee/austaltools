@@ -5,7 +5,7 @@ This module conatins tools for use with Langrangian dispersion model AUSLTA (AUS
 
 ### Requirements:
 
-    pip install numpy pandas meteolib
+    pip install numpy pandas meteolib readmet 
 
 ### Installation:
 
@@ -19,29 +19,15 @@ https://druee.gitlab-pages.uni-trier.de/austaltools/
 
 ## Time dependent simulation
 
-``austal-buildings-geojson``
-    Read buildings from a Geojson file and put them into ``austal.txt``
+``austaltools``
+    The main application. I suports subcommands like
+    ``eap``, ``fill-timeseries``, 
 
-``austal-eap``
-    Determine EAP ("Ersatz-AnemometerPosition") accoring to VDI norm
+``configure-austaltools``
+    Application to prepare local datasources for ``austaltools``.
 
 ``austal-input``
     Convenience command for easy creation of AUSTAL input data
-
-``austal-fill-time-series``
-    Fill source-strength columns in "zeitreihe.dmna"
-
-``austal-steepness``
-    Determine steepness of the model area
-
-``austal-terrain``
-    Extract surface topography for AUSTAL from various sources
-
-``austal-plot``
-    Simple baseline data plot
-
-``austal-weather``
-    Extract amospheric time series for AUSTAL from various sources
 
 Licenses
 ========
