@@ -13,7 +13,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 
 import meteolib as m
-from sqlalchemy import column
 
 try:
     from . import _tools
