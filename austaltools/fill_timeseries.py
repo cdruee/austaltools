@@ -216,7 +216,7 @@ def expand_cycles(yinfo):
             if substance is not None and 'factors' in template:
                 if t_info['substance'] in template['factors'].keys():
                     logger.debug(f'... selecting emission factor '
-                                 f'for: {t_info['substance']}')
+                                 f"for: {t_info['substance']}")
                     cycle['substance'] = t_info['substance']
                     cycle['emissionfactor'] = float(
                         template['factors'][t_info['substance']])
