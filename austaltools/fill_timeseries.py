@@ -241,12 +241,12 @@ def expand_cycles(yinfo):
 
             if 'multiplier' in t_info:
                 logger.debug(f'... applying additional multiplier: '
-                             f'{t_info['multiplier']}')
+                             f"{t_info['multiplier']}")
                 cycle['multiplier'] = float(t_info['multiplier'])
             else:
                 cycle['multiplier'] = 1.
-            logger.debug(f'... applying additional multiplier: '
-                 f'{cycle['multiplier']}')
+            logger.debug(f'... applying additional multiplier:'
+                         f' {cycle["multiplier"]}')
         cycles[c_id] = cycle
     return cycles
 
