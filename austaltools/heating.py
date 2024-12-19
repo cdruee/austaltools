@@ -51,6 +51,7 @@ logger = logging.getLogger()
 # ----------------------------------------------------
 
 cp = m.constants.cp
+
 WALL_SLAB = 0.04  # m
 TIMESTEP = 1  # s
 PRESSURE = 101325  # Pa
@@ -58,9 +59,10 @@ PRESSURE = 101325  # Pa
 HEATING_LIMIT = 15 # °C
 MEAN_ROOM_TEMP = 20 # °C
 
-# dev settings:
-READ_RAW = True
-OUTPUT_RAW = True
+# ------------------------------------------------
+
+_OUTPUT_ROOMS = None
+_OUTPUT_WALLS = None
 
 # ----------------------------------------------------
 
@@ -187,7 +189,6 @@ class WallList(dict):
                     raise ValueError(
                         f'parts larger than parent: '
                         f'{self[value.partof].name}')
-
 
     def append(self, wall: Wall):
         self[wall.name] = wall
@@ -410,29 +411,6 @@ class Building():
         self.rooms.tick(self.walls,timedelta)
 
 
-def make_buidling(t_out=0):
-    bldg = Building('house', t_out=t_out, t_soil=9.)
-
-    bldg.rooms.append(Room('room', width=5., lenght=5., height=2.5,
-                           t_set=20, t_start=t_out, maxpower=13000.))
-
-    bldg.walls.append(Wall('front', 0.30, 'room', 'outside',
-                           l=5., h=2.5, t_start=t_out))
-    bldg.walls.append(Wall('left', 0.30, 'room', 'outside',
-                           l=5., h=2.5, t_start=t_out))
-    bldg.walls.append(Wall('right', 0.30, 'room', 'outside',
-                           l=5., h=2.5, t_start=t_out))
-    bldg.walls.append(Wall('back', 0.30, 'room', 'outside',
-                           l=5., h=2.5, t_start=t_out))
-    bldg.walls.append(Wall('floor', 0.10, 'room', 'soil',
-                           c=1500., k=0.15, rho=600.,
-                           l=5., h=5., t_start=t_out)) # wood
-
-    bldg.walls.append(Wall('ceilg', 0.20, 'room', 'outside',
-                           c=1500., k=0.15, rho=600.,
-                           l=5., h=5., t_start=t_out)) # wood
-    return bldg
-
 
 def building_model_timeseries(bldg: Building, ts: pd.Series):
 
@@ -501,62 +479,22 @@ def building_model_timeseries(bldg: Building, ts: pd.Series):
     return res
 
 def main(args):
-    lat, lon, ele, stat_no, stat_nam = _tools.evaluate_location_opts(args)
-    rechts, hoch, _ = _tools.ll2gk(lat, lon)
-
-    if ele is None:
-        if args.get("ele", None) is not None:
-            ele = float(args["ele"])
-        else:
-            logger.warning('no elevation info. Assuming sea level. ' +
-                           'You should consider providing -e')
-            ele = 0.
-
     name = args.get('building', 'default')
     filename = args.get('file', 'heating.yaml')
-    if x := args.get('wmo', None) is not None:
-        nam = x
-    elif x := args.get('dwd', None) is not None:
-        nam = x
+    csv_name = args['extracted_weather']
+    if os.path.exists(csv_name):
+        logger.info('reading weather data from: %s' % csv_name)
+        # read position fom comment line
+        with open(csv_name, 'r') as f:
+            lat, lon, ele, nam = f.readline(
+                ).strip('# \n').split(maxsplit=4)
+        # read observation data
+        obs = pd.read_csv(csv_name, comment='#', index_col=0,
+                          parse_dates=True, na_values='-999')
+
     else:
-        nam = 99999
-    logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
-    logger.debug("lat: %s, lon: %s" % (lat, lon))
-    logging.info('selected position: %.2f %.2f %.0f (%s)' %
-                 (lat, lon, ele, format(nam)))
-    year = int(args['year'])
-    logger.debug("year: %s" % year)
+        raise IOError('weather data not found: %s' % csv_name)
 
-    obs = None
-    if READ_RAW != '':
-        raw_name = 'extracted_{:05d}_{:04d}.csv'.format(nam, year)
-        if os.path.exists(raw_name):
-            logger.info('reading raw data from: %s' % raw_name)
-            obs = pd.read_csv(raw_name, index_col=0,
-                              parse_dates=True, na_values='-999')
-        else:
-            logger.error('raw data not found: %s' % raw_name)
-    if obs is None:
-
-        obs = pd.DataFrame()
-        source = args['source']
-        if source == "ERA5":
-            obs, z0 = input_weather.get_era5_weather(lat, lon, year)
-        elif source == "CERRA":
-            obs, z0 = input_weather.get_cerra_weather(lat, lon, year)
-        elif source == "DWD":
-            if not _datasets.dataset_get(source).available:
-                sys.tracebacklimit = 0
-                raise ValueError(f"source {source} not available")
-            path = _datasets.dataset_get(source).path
-            obs, z0 = input_weather.get_dwd_weather(lat, lon, year, stat_no, path)
-        else:
-            raise ValueError("unknown source: %s" % source)
-
-    if OUTPUT_RAW != '':
-        raw_name = 'extracted_{:05d}_{:04d}.csv'.format(nam, year)
-        logger.info('writing raw data to: %s' % raw_name)
-        obs.to_csv(raw_name, float_format='%.2f', na_rep='-999')
 
     dt = obs.index.diff().median()
     t_out = obs['t2m'].interpolate('linear').bfill().ffill()
@@ -601,46 +539,24 @@ def add_options(subparsers: argparse.ArgumentParser) -> None:
     )
     default = {'building': 'default',
                'heating-file': 'heating.yaml',
-               'source': 'CERRA',
-               'year': 2003,
+               'extracted_weather': 'extracted_weather.csv',
+               # 'source': 'CERRA',
+               # 'year': 2003,
                'output': 'heating.csv',
                }
-    pars_htg.add_argument('-b', '--building',
-                          help='name uf the building to simulate. ' +
-                               '[%s]' % default['building'],
-                          default=default['building'])
     pars_htg.add_argument('-f', '--heating-file',
                           help='building/heating description file. ' +
                                '[%s]' % default['heating-file'],
                           default=default['heating-file'])
-    # pars_htg.add_argument('-c', '--column-id',
-    #                       help='column ID. ' +
-    #                            'Required if more than one column. ' +
-    #                            'list IDs in file with -l.',
-    #                       default=None)
-
-    pars_htg = _tools.add_location_opts(pars_htg, stations=True)
-
-    pars_htg.add_argument('-s', '--source',
-                        metavar="CODE",
-                        nargs=None,
-                        choices=input_weather.KNOWN_SOURCES,
-                        default=default['source'],
-                        help='select the source for the weather data. ' +
-                             'Known ``CODE`` values are ' +
-                             ' '.join(input_weather.KNOWN_SOURCES) +
-                             ' Defaults to ' +
-                             default['source'])
-    pars_htg.add_argument('-y', '--year', dest='year',
-                        metavar='YEAR',
-                        nargs=None,
-                          required=True,
-                        help='year of interest [%04i]' % default['year'])
-
-    pars_htg.add_argument('-e', '--elevation', dest='ele',
-                        metavar='METERS',
-                        help='surface elevation. ' +
-                             'only allowed with -L, -G, -U.')
+    pars_htg.add_argument('-b', '--building',
+                          help='name of the building to simulate. ' +
+                               '[%s]' % default['building'],
+                          default=default['building'])
+    pars_htg.add_argument('-x', '--extracted-weather',
+                          help='name of the file containing the '
+                               'weather data ' +
+                               '[%s].' % default['extracted_weather'],
+                          default=default['extracted_weather'])
 
     pars_htg.add_argument('-o', '--output', nargs=1,
                           help='name for the output file. ' +

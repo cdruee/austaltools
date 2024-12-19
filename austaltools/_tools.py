@@ -717,7 +717,7 @@ def add_arguents_common_plot(parser: argparse.ArgumentParser
                         default=DEFAULT_COLORMAP,
                         help='name of colormap to use. Defaults to "%s"' %
                              DEFAULT_COLORMAP)
-    parser.add_argument('-d', '--display',
+    parser.add_argument('-k', '--kind',
                         default='contour',
                         choices=['contour', 'grid'],
                         help='choose kind of display. ' +
@@ -744,6 +744,24 @@ def add_arguents_common_plot(parser: argparse.ArgumentParser
 def add_location_opts(parser,
                       stations=False,
                       required=True):
+    """
+    This routine adds the input arguments defining a position:
+
+    :param parser: the arguemnt parser to add the options to
+    :type parser: argpargse.ArgumentParser
+    :param stations: WMO or DWD station numbers are accepted as positions
+    :type stations: bool
+    :param required: if a location specification is required
+    type required: bool
+
+    Note:
+        - dwd (str or None): DWD option, mutually exclusive with 'wmo' and required with 'ele'.
+        - wmo (str or None): WMO option, mutually exclusive with 'dwd' and required with 'ele'.
+        - ele (str or None): Element option, required with either 'dwd' or 'wmo'.
+        - year (int or None): Year option, required with '-L', '-G', '-U', '-D', or '-W'.
+        - output (str or None): Output name, required with '-L', '-G', '-U', '-D', or '-W'.
+        - station (str or None): Station option, only valid with 'dwd' or 'wmo'.
+    """
     loc_opt = parser.add_mutually_exclusive_group(required=required)
     loc_opt.add_argument('-L', '--ll',
                          metavar=("LAT", "LON"),

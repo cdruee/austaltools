@@ -135,7 +135,7 @@ def cli_parser():
 
     # ----------------------------------------------------
 
-    parser.add_argument('-w','--working-dir',
+    parser.add_argument('-d','--working-dir',
                         dest='working_dir',
                         metavar='PATH',
                         help='woking directory '

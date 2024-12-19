@@ -10,6 +10,7 @@ import itertools
 import logging
 import os
 import sys
+import textwrap
 import zipfile
 import numpy as np
 import pandas as pd
@@ -50,8 +51,10 @@ STORAGE_PATH = None  # will be filled lazy
 WIND_VARIANT = os.environ.get('WIND_VARIANT', 'model_uv10')
 # possible defaults: weighted nearest mean
 INTER_VARIANT = os.environ.get('INTER_VARIANT', 'weighted')
+# possible values: empty or file name:
+READ_EXTRACTED = os.environ.get('READ_EXTRACTED', '')
 # possible values: empty or non-empty string:
-OUTPUT_RAW = os.environ.get('OUTPUT_RAW', '')
+WRITE_EXTRACTED = os.environ.get('WRITE_EXTRACTED', '')
 # possible values: all kms kmc pts pgc empty or non-empty string:
 CLASS_SCHEME = os.environ.get('CLASS_SCHEME', 'all')
 
@@ -846,9 +849,25 @@ def austal_weather(args):
     """
     logger.debug("args: %s" % format(args))
 
-    lat, lon, ele, stat_no, stat_nam = _tools.evaluate_location_opts(args)
-    rechts, hoch, _ = _tools.ll2gk(lat, lon)
+    if READ_EXTRACTED != "":
+        csv_name = READ_EXTRACTED
+        if os.path.exists(csv_name):
+            logger.info('reading location data from: %s' % csv_name)
+            # read position fom comment line
+            with open(csv_name, 'r') as f:
+             lat, lon, ele, nam = f.readline(
+                 ).strip('# \n').split(maxsplit=4)
+            # read observation data
+            obs = pd.read_csv(csv_name, comment='#', index_col=0,
+                              parse_dates=True, na_values='-999')
+        else:
+            raise IOError('weather data not found: %s' % csv_name)
+    else:
+        lat, lon, ele, stat_no, stat_nam = (
+            _tools.evaluate_location_opts(args))
+        obs = None
 
+    rechts, hoch, _ = _tools.ll2gk(lat, lon)
     if ele is None:
         if args.get("ele", None) is not None:
             ele = float(args["ele"])
@@ -856,32 +875,40 @@ def austal_weather(args):
             logger.warning('no elevation info. Assuming sea level. ' +
                            'You should consider providing -e')
             ele = 0.
+
     nam = args['output']
     logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
     logger.debug("lat: %s, lon: %s" % (lat, lon))
     logging.info('selected position: %.2f %.2f %.0f (%s)' %
                  (lat, lon, ele, format(nam)))
-    year = int(args['year'])
-    logger.debug("year: %s" % year)
-
-    source = args['source']
-    if source == "ERA5":
-        obs, z0 = get_era5_weather(lat, lon, year)
-    elif source == "CERRA":
-        obs, z0 = get_cerra_weather(lat, lon, year)
-    elif source == "DWD":
-        if not _datasets.dataset_get(source).available:
-            sys.tracebacklimit = 0
-            raise ValueError(f"source {source} not available")
-        path = _datasets.dataset_get(source).path
-        obs, z0 = get_dwd_weather(lat, lon, year, station, path)
+    if obs is not None:
+        year = obs.index.year[0]
+        logger.debug("year: %s" % year)
     else:
-        raise ValueError("unknown source: %s" % source)
+        year = int(args['year'])
+        logger.debug("year: %s" % year)
 
-    if OUTPUT_RAW != '':
-        raw_name = 'extracted_{:05d}_{:04d}.csv'.format(nam, year)
-        logger.info('writing raw data to: %s' % raw_name)
-        obs.to_csv(raw_name, float_format='%.2f', index=False, na_rep='-999')
+        source = args['source']
+        if source == "ERA5":
+            obs, z0 = get_era5_weather(lat, lon, year)
+        elif source == "CERRA":
+            obs, z0 = get_cerra_weather(lat, lon, year)
+        elif source == "DWD":
+            if not _datasets.dataset_get(source).available:
+                sys.tracebacklimit = 0
+                raise ValueError(f"source {source} not available")
+            path = _datasets.dataset_get(source).path
+            obs, z0 = get_dwd_weather(lat, lon, year, station, path)
+        else:
+            raise ValueError("unknown source: %s" % source)
+
+    if WRITE_EXTRACTED != '' or args.get('write-extracted', False):
+        raw_name = 'extracted_weather.csv'.format(nam, year)
+        logger.info('writing raw weather data to: %s' % raw_name)
+        with open(raw_name, 'w') as f:
+            f.write('# %.4f %.4f %.1f %s\n' %
+                    (lat, lon, ele, format(nam)))
+            obs.to_csv(f, float_format='%.2f', index=False, na_rep='-999')
 
     methods_available = []
 
@@ -920,7 +947,7 @@ def austal_weather(args):
         obs['Lo'] = dis.obukhov_length(
             ust=obs['ust'], rho=obs['rho'], Tv=obs['Tv'],
             H=obs['sshf'], E=obs['slhf'])
-        if OUTPUT_RAW != '':
+        if WRITE_EXTRACTED != '':
             obs[['time', 'v10', 'rho', 'Tv', 'Lo', 'ust']].to_csv(
                 'calculated_L_%05i_%04i.csv' % (station, year),
                 float_format='%.2f', index=False, na_rep='-999')
@@ -1037,10 +1064,40 @@ def add_options(subparsers):
     #
     # command line args
     #
+    import argparse
     pars_wea = subparsers.add_parser(
         name='weather',
         help='Extract atmospheric time series for AUSTAL ' +
-             'from various sources'
+             'from various sources',
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=textwrap.dedent("""
+        This subcommand also supports additional controls by environment variables
+        
+        WIND_VARIANT
+           controls how the 10-m wind is calculated from reanaysis data
+           possible values: `fixed_057` `fixed_010` `model_mean` `model_uv10` `model_fsr`
+           defaults to `model_uv10`
+              
+        INTER_VARIANT
+           controls the interpolation of gridded data to the position
+           possible values: `weighted` `nearest` `mean`
+           defaults to `weighted`
+          
+        READ_EXTRACTED
+           saves time by re-reading extracted weather data form a saved file
+           possible values: empty string or file name:
+           defaults to empty string (do not read file)
+        
+        WRITE_EXTRACTED
+          save extracted weather data to an extra file
+          possible values: empty string or non-empty string
+          defaults to empty string (do not write file)
+          
+        CLASS_SCHEME
+          select the scheme how stability classes are derived from weather data
+          possible values: `all` `kms` `kmc` `pts` `pgc`
+          defaults to `all` (all schemes apllicable to the weather data)
+        """)
     )
     pars_wea.add_argument(dest="output", metavar="NAME", nargs='?',
                           help="file name to store data in."
@@ -1059,7 +1116,7 @@ def add_options(subparsers):
     pars_wea.add_argument('-y', '--year', dest='year',
                         metavar='YEAR',
                         nargs=None,
-                          required=True,
+                        required=True,
                         help='year of interest [%04i]' % default_year)
 
     pars_wea.add_argument('-e', '--elevation', dest='ele',
@@ -1067,15 +1124,15 @@ def add_options(subparsers):
                         help='surface elevation. ' +
                              'only allowed with -L, -G, -U.')
 
-    # pars_wea.add_argument('-w', '--station', dest='station',
-    #                     metavar='ID',
-    #                     default=None,
-    #                     help='weather station ID. ' +
-    #                          'only allowed with -D, -W.')
-
     pars_wea.add_argument('-p', '--precip', dest='prec',
-                        action='store_true',
-                        help='add precipitation columns to output file')
+                          action='store_true',
+                          help='add precipitation columns to output file')
+
+    pars_wea.add_argument('-x', '--write-extracted',
+                          dest='write-extracted',
+                          action='store_true',
+                          help='write full extracted weather data '
+                               'to an extra file')
 
     return pars_wea
 
@@ -1122,10 +1179,10 @@ def main(args):
 
         logger.critical("options -D and -W are mutually exclusive with -e")
         sys.exit(1)
-    if ((args['dwd'] is None and args['wmo'] is None)
-            and args['station'] is not None):
-        logger.critical("options -w is only valid with -D or -W")
-        sys.exit(1)
+    # if ((args['dwd'] is None and args['wmo'] is None)
+    #         and args['station'] is not None):
+    #     logger.critical("options -w is only valid with -D or -W")
+    #     sys.exit(1)
     if args['year'] is None:
         logger.critical("options -y is required with -L, -G, -U, -D or -W")
         sys.exit(1)
@@ -1133,7 +1190,7 @@ def main(args):
         logger.critical("options NAME is required with -L, -G, -U, -D or -W")
         sys.exit(1)
 
-    ds_name = _datasets.name_yearly(args['source'], args['year'])
+    ds_name = _datasets.name_yearly(args['source'], int(args['year']))
     if not ds_name in AVAILABLE_WEATHER:
         logger.critical(f"dataset not available: {ds_name}")
         sys.exit(1)
