@@ -352,6 +352,8 @@ class Building():
     hvac = {}
     init = False
     output = None
+    _room_history = list()
+    _wall_history = list()
 
     def __init__(self, name, t_out, t_soil):
         self.name = name
@@ -395,6 +397,39 @@ class Building():
                 self.output == other.output
                 )
 
+    def remember_variables(self, time):
+        if _OUTPUT_ROOMS is None and _OUTPUT_ROOMS is None:
+            return
+        if _OUTPUT_ROOMS is True or time in _OUTPUT_ROOMS:
+            self._room_history.append(
+                {
+                    'time': time,
+                    **{f'tmp_{k}': v.temp for k,v in self.rooms.items()},
+                    **{f'pwr_{k}': v.power for k,v in self.rooms.items()}
+                })
+        if _OUTPUT_WALLS is True or time in _OUTPUT_WALLS:
+            self._wall_history.append(
+                {
+                    'time': time,
+                    **{f'temp{i:03d}_{k}': t for k,v in self.walls.items() for i, t in enumerate(v.t_slab)},
+                    **{f'flux{i:03d}_{k}': f for k,v in self.walls.items() for i, f in enumerate(v.f_flux)},
+                })
+
+    def output_variables(self, rname='heating_rooms_history.csv',
+                         wname='heating_walls_history.csv'):
+        if len(self._room_history) > 0:
+            df = pd.DataFrame.from_records(self._room_history,
+                                           index='time')
+            df.to_csv(rname,
+                      quoting=csv.QUOTE_NONE,
+                      float_format="%12.5f")
+        if len(self._wall_history) > 0:
+            df = pd.DataFrame.from_records(self._wall_history,
+                                           index='time')
+            df.to_csv(wname,
+                      quoting=csv.QUOTE_NONE,
+                      float_format="%12.5f")
+
     def get_rooms(self):
         return [x.name for x in self.rooms.values() if not x.is_special()]
 
@@ -411,7 +446,6 @@ class Building():
         self.rooms.tick(self.walls,timedelta)
 
 
-
 def building_model_timeseries(bldg: Building, ts: pd.Series):
 
     t_out=float(ts.values[0])
@@ -426,6 +460,14 @@ def building_model_timeseries(bldg: Building, ts: pd.Series):
                )
     res = pd.DataFrame(np.nan, index=ts.index, columns=columns)
 
+    global _OUTPUT_WALLS
+    _OUTPUT_WALLS = pd.date_range(start=ts.index[0],
+                                         end=ts.index[-1],
+                                         freq='1min')
+    global _OUTPUT_ROOMS
+    _OUTPUT_ROOMS = pd.date_range(start=ts.index[0],
+                                         end=ts.index[-1],
+                                         freq='1min')
 
     dtick = pd.Timedelta(TIMESTEP, unit='s') # seconds
     pointer = ts.index[0]
@@ -435,17 +477,18 @@ def building_model_timeseries(bldg: Building, ts: pd.Series):
         dtime = (ts.index[i+1] - ts.index[i]).total_seconds()
         nticks = int(dtime / dtick.total_seconds()) + 1
         powers = np.empty((nticks, nrooms))
-        temps = np.empty((nticks, nrooms))
+        rtemps = np.empty((nticks, nrooms))
         # for tick in range(nticks):
         tick = 0
         bldg.rooms['outside'].temp = ts[ts.index[i]]
         while pointer + dtick < ts.index[i + 1]:
             bldg.tick(timedelta=dtick.total_seconds())
-            temps[tick, :] = [bldg.rooms[x].temp for x in room_names]
+            rtemps[tick, :] = [bldg.rooms[x].temp for x in room_names]
             powers[tick, :] = [bldg.rooms[x].power for x in room_names]
+            bldg.remember_variables(pointer)
             pointer += dtick
             tick += 1
-        room_temps = temps.mean(axis=0)
+        room_temps = rtemps.mean(axis=0)
         mean_powers = powers.mean(axis=0)
         ix = ts.index[i]
         for i,x in enumerate(room_names):
@@ -457,6 +500,8 @@ def building_model_timeseries(bldg: Building, ts: pd.Series):
         oldpointer = pointer
 
     res.loc[res.index[-1], :] = res.loc[res.index[-2], :]
+
+    bldg.output_variables()
 #    print (trec)
 #    print (prec)
 
