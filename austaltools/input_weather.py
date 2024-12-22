@@ -10,8 +10,8 @@ import itertools
 import logging
 import os
 import sys
-import textwrap
 import zipfile
+
 import numpy as np
 import pandas as pd
 
@@ -1070,34 +1070,6 @@ def add_options(subparsers):
         help='Extract atmospheric time series for AUSTAL ' +
              'from various sources',
         formatter_class=argparse.RawTextHelpFormatter,
-        epilog=textwrap.dedent("""
-        This subcommand also supports additional controls by environment variables
-        
-        WIND_VARIANT
-           controls how the 10-m wind is calculated from reanaysis data
-           possible values: `fixed_057` `fixed_010` `model_mean` `model_uv10` `model_fsr`
-           defaults to `model_uv10`
-              
-        INTER_VARIANT
-           controls the interpolation of gridded data to the position
-           possible values: `weighted` `nearest` `mean`
-           defaults to `weighted`
-          
-        READ_EXTRACTED
-           saves time by re-reading extracted weather data form a saved file
-           possible values: empty string or file name:
-           defaults to empty string (do not read file)
-        
-        WRITE_EXTRACTED
-          save extracted weather data to an extra file
-          possible values: empty string or non-empty string
-          defaults to empty string (do not write file)
-          
-        CLASS_SCHEME
-          select the scheme how stability classes are derived from weather data
-          possible values: `all` `kms` `kmc` `pts` `pgc`
-          defaults to `all` (all schemes apllicable to the weather data)
-        """)
     )
     pars_wea.add_argument(dest="output", metavar="NAME", nargs='?',
                           help="file name to store data in."
@@ -1128,11 +1100,45 @@ def add_options(subparsers):
                           action='store_true',
                           help='add precipitation columns to output file')
 
-    pars_wea.add_argument('-x', '--write-extracted',
+    adv_wea = pars_wea.add_argument_group('advanced options')
+    adv_wea.add_argument('--class-scheme',
+                         dest='class-scheme',
+                         choices=['all', 'kms', 'kmc', 'pts', 'pgc'],
+                         default='all',
+                         help='Select the scheme how stability classes'
+                              'are derived from weather data.'
+                              'Possible values: %(choices)s. '
+                              '[%(default)s]')
+    adv_wea.add_argument('--inter-variant',
+                         dest='inter-variant',
+                         choices=['weighted', 'nearest', 'mean'],
+                         default='weighted',
+                         help='Controls the interpolation of gridded data '
+                              'to the position specified. '
+                              'Possible values: %(choices)s. '
+                              '[%(default)s]')
+    adv_wea.add_argument('--read-extracted',
+                         dest='read-extracted',
+                         help='Save time by re-reading extracted weather '
+                              'data form a saved file. '
+                              'Possible values: empty string (do not read'
+                              'a file) or file name.'
+                              ' [``]')
+    adv_wea.add_argument('-x', '--write-extracted',
                           dest='write-extracted',
                           action='store_true',
                           help='write full extracted weather data '
                                'to an extra file')
+    adv_wea.add_argument('--wind-variant',
+                          dest='wind-variant',
+                          choices=['fixed_057', 'fixed_010', 'model_mean',
+                                   'model_uv10', 'model_fsr'],
+                          default='model_uv10',
+                          help=('Controls how the 10-m wind is calculated'
+                                'from reanaysis data.'
+                                'possible values: %(choices)s. '
+                                '[%(default)s]')
+                         )
 
     return pars_wea
 
