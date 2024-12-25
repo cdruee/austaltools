@@ -697,7 +697,7 @@ class Hvac():
         # make last timer of the year start (again) at newyear
         if '01-01' not in self.starttable.keys():
             x = list(self.starttable.keys())[-1]
-            self.starttable.update({'01-01':self.starttable[x][1]})
+            self.starttable.update({'01-01':self.starttable[x]})
             # python >= 3.2: move to front by this:
             self.starttable.move_to_end('01-01', last=False)
 
@@ -713,11 +713,15 @@ class Hvac():
             if '0000' not in self.switchtables[t].keys():
                 x = list(self.switchtables[t].keys())[-1]
                 self.switchtables[t].update(
-                    {'0000':self.switchtables[t][x][1]})
+                    {'0000':self.switchtables[t][x]})
                 # python >= 3.2: move to front by this:
                 self.switchtables[t].move_to_end('0000', last=False)
+        logger.debug(str(self.starttable))
+        logger.debug(str(self.switchtables))
+        pass
+
     def _max_le(self,iter, val):
-        return sorted([x for x in iter if x >= val])[-1]
+        return sorted([x for x in iter if x <= val])[-1]
 
     def switch_mode(self, time: pd.Timestamp):
         # get mode
