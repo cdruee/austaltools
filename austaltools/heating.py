@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 import argparse
 import csv
+from collections import OrderedDict
 import inspect
 import logging
 import os
+import re
+from bisect import bisect
 
 import meteolib as m
 import numpy as np
@@ -54,7 +57,7 @@ TIMESTEP = 1  # s
 PRESSURE = 101325  # Pa
 
 HEATING_LIMIT = 15  # °C
-MEAN_ROOM_TEMP = 20  # °C
+DEFAULT_ROOMTEMP = 20  # °C
 
 
 # ------------------------------------------------
@@ -475,6 +478,18 @@ class Room:
         """
         return self._special
 
+    def get_thermo(self):
+        return self.target_temp
+    def set_thermo(self, temp):
+        self.target_temp = temp
+
+    def get_throttle(self):
+        return self.target_power
+    def set_throttle(self, percent):
+        if not (0<=percent<=100):
+            raise ValueError('Throttle percent must be between 0 and 100')
+        self.target_power = percent
+
     def tick(self, walls: WallList, timedelta: float = TIMESTEP):
         """
         Update the room's state by advancing the simulation by a given time interval,
@@ -500,7 +515,7 @@ class Room:
         P_rad = 0.  # not implemented
         P_external = P_rad + P_flux + P_vent
         # calculate heating power needed to maintain target temperature
-        if np.isnan(self.target_power):
+        if not np.isnan(self.target_temp):
             # if heatings is temperature regulated:
             # pwer to compensate heat loss by fluxes
             self.power = -P_external
@@ -511,13 +526,13 @@ class Room:
             else:
                 self.power = 0.
             # limit power to capabilities of heating
-            if self.power > self.maxpower:
-                self.power = self.maxpower
+            if self.power > self.maxpower * self.target_power/100.:
+                self.power = self.maxpower * self.target_power/100.
             elif self.power < 0.:
                 self.power = 0.
         else:
             # if heating is power-regulated
-            self.power = self.maxpower * self.target_power
+            self.power = self.maxpower * self.target_power/100.
         P_heat = self.power
         dQ = (P_heat + P_vent + P_flux + P_vent) * timedelta
         dT = dQ / (m.constants.cp * rho * self.volume + self.add_c)
@@ -525,7 +540,7 @@ class Room:
         return self.temp
 
 
-class RoomList(dict[Room]):
+class RoomList(dict):
     """
     A class to manage a list of Room objects in a building simulation context,
     inheriting from Python's dictionary to map room names to Room instances.
@@ -569,6 +584,159 @@ class RoomList(dict[Room]):
         for x in self.values():
             x.tick(walls, timedelta)
 
+class Hvac():
+    current = 'none'
+    modes = dict()
+    timers = dict()
+    rnames = list()  # rooms names
+    starttable = None
+    switchtables = {}
+
+    def __init__(self, rnames):
+        self.rnames = rnames
+
+    @classmethod
+    def from_yaml(cls, d, rnames):
+        """
+        Create a Hvac instance from YAML configuration data.
+
+        :return: the cerated Hvac instance.
+        :rtype: Hvac
+        """
+        _keywords = {'modes': ['throttle', 'roomtemp'],
+                     'switch': ['mode', 'hhmm']
+                     }
+        obj = Hvac(rnames)
+        modes={'none':
+                   {
+                       'roomtemp': {'default': DEFAULT_ROOMTEMP},
+                       'throttle': {'default': 100.}
+                   }
+               }
+        # collect the named modes
+        if 'modes' in d:
+            for name, m in d['modes'].items():
+                mode = {}
+                for k, x in m.items():
+                    if k not in _keywords['modes']:
+                        raise ValueError(f'illegal keyword {x}')
+                    # one value for all rooms
+                    if isinstance(x, (float, int)):
+                        kd = {'_default':float(x)}
+                    # idividual values for all rooms
+                    # default must be given if not all rooms are listed
+                    elif isinstance(x, dict):
+                        kd={}
+                        dv = x.get('_default', None)
+                        if dv is not None:
+                            kd['_default'] = dv
+                        for r in x.keys():
+                            if r not in rnames:
+                                raise ValueError(f'unknown room {r}')
+                            kd[r] = dv
+                    mode[k] = kd
+
+                # make sure the mode is complete:
+                for k in _keywords['modes']:
+                    if k not in mode.keys():
+                       mode[k] = {}
+                # make sure there are defaults
+                if '_default' not in mode['throttle'].keys():
+                    # no setting = full throttle
+                    mode['throttle']['_default'] = 100
+                if '_default' not in mode['roomtemp'].keys():
+                    # no setting = no limit to roomtemp
+                    mode['roomtemp']['_default'] = 9999
+
+
+                obj.modes[name] = mode
+        logger.debug(obj.modes)
+        # collect the timers
+        if 'timers' in d:
+            obj.timers = {}
+            # start must be given if more than one timer:
+            if (len(d['timers']) > 1 and
+                not all(['start' in v for k,v in d['timers'].items()])):
+                raise ValueError(f'timers must contain `start` keyword '
+                                 f'if more than one timer is defined')
+            for name, v in d['timers'].items():
+                td = {}
+                # verify data formats
+                sstr = v.get('start', '01-01')
+                if not re.match('[0-9]{2}-[0-9]{2}', sstr):
+                    raise ValueError(f'timer {t} start string does not'
+                                     f'match format mm-dd')
+                td['start'] = sstr
+                if not isinstance(v['switch'], list):
+                    raise ValueError(f'timer {t} switch keyword does not'
+                                     f'contain a list')
+                td['switch'] = []
+                for sw in v['switch']:
+                    for x in _keywords['switch']:
+                        if not x in sw:
+                          raise ValueError(f'timer {t} switch {sw} '
+                                           f'missing entry {x}')
+                    td['switch'].append({
+                        x:sw[x] for x in _keywords['switch']
+                    })
+                    if not isinstance(td['switch'][-1]['hhmm'], str):
+                        td['switch'][-1]['hhmm'] = \
+                            str(td['switch'][-1]['hhmm'])
+                    if td['switch'][-1]['mode'] not in obj.modes.keys():
+                        raise ValueError(f'timer {name} unddefined mode '
+                                         f'{td['switch'][-1]['mode']}')
+                obj.timers[name] = td
+        return obj
+
+    def _make_tables(self):
+        self.starttable = OrderedDict(
+            sorted({v['start']:k for k,v in self.timers.items()}.items())
+        )
+
+        # if no timer starts at the start of the year,
+        # make last timer of the year start (again) at newyear
+        if '01-01' not in self.starttable.keys():
+            x = list(self.starttable.keys())[-1]
+            self.starttable.update({'01-01':self.starttable[x][1]})
+            # python >= 3.2: move to front by this:
+            self.starttable.move_to_end('01-01', last=False)
+
+        self.switchtables = {}
+        for t,timer in self.timers.items():
+            self.switchtables[t] = OrderedDict(
+                sorted({x['hhmm']:x['mode']
+                        for x in timer['switch']}.items()
+                       )
+            )
+            # if no mode starts at the start of the day,
+            # make last mode of the day start (again) at midnight
+            if '0000' not in self.switchtables[t].keys():
+                x = list(self.switchtables[t].keys())[-1]
+                self.switchtables[t].update(
+                    {'0000':self.switchtables[t][x][1]})
+                # python >= 3.2: move to front by this:
+                self.switchtables[t].move_to_end('0000', last=False)
+    def _max_le(self,iter, val):
+        return sorted([x for x in iter if x >= val])[-1]
+
+    def switch_mode(self, time: pd.Timestamp):
+        # get mode
+        datestr = time.strftime('%m-%d')
+        timestr = time.strftime('%H%M')
+        if self.starttable is None:
+            self._make_tables()
+        timer = self.starttable[
+            self._max_le(self.starttable.keys(), datestr)
+        ]
+        hhmm = self._max_le(self.switchtables[timer].keys(), timestr)
+        mode = self.switchtables[timer][hhmm]
+
+        # apply mode only if it changed
+        if mode == self.current:
+            return False
+
+        return mode
+
 
 class Building():
     """
@@ -607,11 +775,12 @@ class Building():
     name = str()
     walls = WallList()
     rooms = RoomList(walls=walls)
-    hvac = {}
     init = False
     output = None
     _room_history = list()
     _wall_history = list()
+    hvac = Hvac([])
+
 
     def __init__(self, name, t_out, t_soil):
         """
@@ -656,7 +825,8 @@ class Building():
                     raise ValueError(f'{y.name} not declared in wall {k}')
                 args[x] = v.get(x, y.default)
             obj.rooms.append(Room(**args))
-        obj.hvac = d['hvac']
+        obj.hvac = Hvac.from_yaml(d['hvac'],
+                                  rnames=obj.get_rooms())
         return obj
 
     def __eq__(self, other):
@@ -743,6 +913,9 @@ class Building():
             raise ValueError('special rooms `soil` and `outside` missing')
         self.rooms.init_walls(self.walls)
 
+    def switch_mode(self, mode):
+        pass
+
     def tick(self, timedelta: float = TIMESTEP):
         """
         Advances the simulation state by a given time interval,
@@ -799,18 +972,36 @@ def building_model_timeseries(bldg: Building, ts: pd.Series, rec=None):
                                         end=ts.index[-1],
                                         freq=rec)
 
+    # timestep as datetime64
     dtick = pd.Timedelta(TIMESTEP, unit='s')  # seconds
+    # simulation time
     pointer = ts.index[0]
     oldpointer = pointer
-    # iterate over times (execept last one)
+    # iterate over times in ts (execept last one)
     for i in tqdm(range(ts.size - 1)):
+        # calculate size of storage arrays
         dtime = (ts.index[i + 1] - ts.index[i]).total_seconds()
         nticks = int(dtime / dtick.total_seconds()) + 1
+        # update parameters
+        bldg.rooms['outside'].temp = ts[ts.index[i]]
+        switch = bldg.hvac.switch_mode(ts.index[i])
+        if switch:
+            newmode = bldg.hvac.modes[switch]
+            for r in room_names:
+                if r in newmode['throttle'].keys():
+                    x = r
+                else:
+                    x = '_default'
+                bldg.rooms[r].set_throttle(newmode['throttle'][x])
+                if r in newmode['roomtemp'].keys():
+                    x = r
+                else:
+                    x = '_default'
+                bldg.rooms[r].set_thermo(newmode['roomtemp'][x])
+        # integrate forward until next time in ts
+        tick = 0
         powers = np.empty((nticks, nrooms))
         rtemps = np.empty((nticks, nrooms))
-        # for tick in range(nticks):
-        tick = 0
-        bldg.rooms['outside'].temp = ts[ts.index[i]]
         while pointer + dtick < ts.index[i + 1]:
             bldg.tick(timedelta=dtick.total_seconds())
             rtemps[tick, :] = [bldg.rooms[x].temp for x in room_names]
@@ -819,6 +1010,7 @@ def building_model_timeseries(bldg: Building, ts: pd.Series, rec=None):
                 bldg.remember_variables()
             pointer += dtick
             tick += 1
+        # evaluate at timestep
         room_temps = rtemps.mean(axis=0)
         mean_powers = powers.mean(axis=0)
         ix = ts.index[i]
@@ -828,10 +1020,13 @@ def building_model_timeseries(bldg: Building, ts: pd.Series, rec=None):
         res.loc[ix, 'power'] = mean_powers.sum()
         res.loc[ix, 'seconds'] = (pointer - oldpointer).total_seconds()
 
+        # rememeber time
         oldpointer = pointer
 
+    # repeat last value at the end of ts
     res.loc[res.index[-1], :] = res.loc[res.index[-2], :]
 
+    # write internal variables if desired
     bldg.output_recording()
 
     return res
