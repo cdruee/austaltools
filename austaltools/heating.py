@@ -739,6 +739,7 @@ class Hvac():
         if mode == self.current:
             return False
 
+        self.current = mode
         return mode
 
 
@@ -852,7 +853,7 @@ class Building():
                 self.output == other.output
                 )
 
-    def record_variables(self):
+    def record_variables(self, time):
         """
         Records current temperature and power variables of rooms
         and temperature and flux of walls to history.
@@ -1011,7 +1012,7 @@ def building_model_timeseries(bldg: Building, ts: pd.Series, rec=None):
             rtemps[tick, :] = [bldg.rooms[x].temp for x in room_names]
             powers[tick, :] = [bldg.rooms[x].power for x in room_names]
             if pointer in recording_times:
-                bldg.remember_variables()
+                bldg.record_variables(pointer)
             pointer += dtick
             tick += 1
         # evaluate at timestep
@@ -1067,7 +1068,7 @@ def main(args):
             break
     else:
         raise ValueError('no building named %s' % name)
-    model_out = building_model_timeseries(bldg=bldg, ts=t_out, rec=None)
+    model_out = building_model_timeseries(bldg=bldg, ts=t_out, rec=rec)
     model_out.to_csv("heating_model_out.csv", quoting=csv.QUOTE_NONE,
                      float_format="%12.5f")
     energy = model_out['power'] * model_out['seconds']  # J
