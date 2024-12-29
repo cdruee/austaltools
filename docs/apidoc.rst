@@ -57,18 +57,18 @@ austal_eap
 .. automodule:: austaltools.eap
    :members:
 
-========================
-austal_buildings_geojson
-========================
-
-.. automodule:: austaltools.buildings_geojson
-   :members:
-
 ======================
 austal_fill timeseries
 ======================
 
 .. automodule:: austaltools.fill_timeseries
+   :members:
+
+========================
+austal_import_buildings
+========================
+
+.. automodule:: austaltools.import_buildings
    :members:
 
 ===========

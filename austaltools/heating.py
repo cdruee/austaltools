@@ -59,6 +59,177 @@ PRESSURE = 101325  # Pa
 HEATING_LIMIT = 15  # °C
 DEFAULT_ROOMTEMP = 20  # °C
 
+# ------------------------------------------------
+
+# SCHEMA = '''{
+#   "$schema": "http://json-schema.org/draft-07/schema#",
+#   "title": "Building Configuration",
+#   "type": "object",
+#   "properties": {
+#     "t_out": {
+#       "type": "number",
+#       "description": "The starting temperature for the outdoor environment."
+#     },
+#     "t_soil": {
+#       "type": "number",
+#       "description": "The starting temperature for the soil environment."
+#     },
+#     "walls": {
+#       "type": "object",
+#       "additionalProperties": {
+#         "type": "object",
+#         "properties": {
+#           "name": {
+#             "type": "string"
+#           },
+#           "d": {
+#             "type": "number"
+#           },
+#           "room_w": {
+#             "type": "string"
+#           },
+#           "room_c": {
+#             "type": "string"
+#           },
+#           "l": {
+#             "type": "number"
+#           },
+#           "h": {
+#             "type": "number"
+#           },
+#           "area": {
+#             "type": "number"
+#           },
+#           "c": {
+#             "type": "number"
+#           },
+#           "k": {
+#             "type": "number"
+#           },
+#           "rho": {
+#             "type": "number"
+#           },
+#           "partof": {
+#             "type": "string"
+#           },
+#           "t_start": {
+#             "type": "number"
+#           }
+#         },
+#         "required": ["d", "room_w", "room_c"]
+#       }
+#     },
+#     "rooms": {
+#       "type": "object",
+#       "additionalProperties": {
+#         "type": "object",
+#         "properties": {
+#           "name": {
+#             "type": "string"
+#           },
+#           "width": {
+#             "type": "number"
+#           },
+#           "length": {
+#             "type": "number"
+#           },
+#           "height": {
+#             "type": "number"
+#           },
+#           "maxpower": {
+#             "type": "number"
+#           },
+#           "area": {
+#             "type": "number"
+#           },
+#           "volume": {
+#             "type": "number"
+#           },
+#           "t_set": {
+#             "type": "number"
+#           },
+#           "p_set": {
+#             "type": "number"
+#           },
+#           "t_start": {
+#             "type": "number"
+#           },
+#           "special": {
+#             "type": "boolean"
+#           }
+#         }
+#       }
+#     },
+#     "hvac": {
+#       "type": "object",
+#       "properties": {
+#         "modes": {
+#           "type": "object",
+#           "additionalProperties": {
+#             "type": "object",
+#             "properties": {
+#               "throttle": {
+#                 "oneOf": [
+#                   { "type": "number" },
+#                   {
+#                     "type": "object",
+#                     "patternProperties": {
+#                       "^_default$|^.*": { "type": "number" }
+#                     }
+#                   }
+#                 ]
+#               },
+#               "roomtemp": {
+#                 "oneOf": [
+#                   { "type": "number" },
+#                   {
+#                     "type": "object",
+#                     "patternProperties": {
+#                       "^_default$|^.*": { "type": "number" }
+#                     }
+#                   }
+#                 ]
+#               }
+#             }
+#           }
+#         },
+#         "timers": {
+#           "type": "object",
+#           "additionalProperties": {
+#             "type": "object",
+#             "properties": {
+#               "start": {
+#                 "type": "string",
+#                 "pattern": "^[0-9]{2}-[0-9]{2}"
+#               },
+#               "switch": {
+#                 "type": "array",
+#                 "items": {
+#                   "type": "object",
+#                   "properties": {
+#                     "mode": {
+#                       "type": "string"
+#                     },
+#                     "hhmm": {
+#                       "type": "string",
+#                       "pattern": "^[0-9]{4}"
+#                     }
+#                   },
+#                   "required": ["mode", "hhmm"]
+#                 }
+#               }
+#             },
+#             "required": ["switch"]
+#           }
+#         }
+#       }
+#     }
+#   },
+#   "required": ["walls", "rooms", "hvac"]
+# }
+# '''
+
+
 
 # ------------------------------------------------
 
@@ -412,7 +583,7 @@ class Room:
             if p_set is not None:
                 self.target_power = p_set
             else:
-                self.target_power = np.nan
+                self.target_power = 100.
             if maxpower is None:
                 raise ValueError('maxpower is required with normal rooms')
             else:
@@ -604,7 +775,7 @@ class Hvac():
         :rtype: Hvac
         """
         _keywords = {'modes': ['throttle', 'roomtemp'],
-                     'switch': ['mode', 'hhmm']
+                     'switch': ['mode', 'hhmm', 'week']
                      }
         obj = Hvac(rnames)
         modes={'none':
@@ -672,19 +843,49 @@ class Hvac():
                                      f'contain a list')
                 td['switch'] = []
                 for sw in v['switch']:
+                    for k,v in sw:
+                        if not x in _keywords['switch']:
+                            raise ValueError(f'timer {name} switch '
+                                             f'#{len(td['switch'])} '
+                                             f'unknown entry {x}')
+                        td['switch'].append({k:v})
+                    if 'week' not in td['switch'].keys():
+                        td['switch']['week'] = 'mtwtfss'
                     for x in _keywords['switch']:
-                        if not x in sw:
-                          raise ValueError(f'timer {t} switch {sw} '
-                                           f'missing entry {x}')
-                    td['switch'].append({
-                        x:sw[x] for x in _keywords['switch']
-                    })
-                    if not isinstance(td['switch'][-1]['hhmm'], str):
+                        if not x in td['switch'].keys():
+                            raise ValueError(f'timer {name} switch '
+                                             f'#{len(td['switch'])} '
+                                             f'missing entry {x}')
+                    if isinstance(td['switch'][-1]['hhmm'], (int,float)):
                         td['switch'][-1]['hhmm'] = \
-                            str(td['switch'][-1]['hhmm'])
+                            '%04i' % int(td['switch'][-1]['hhmm'])
+                    if not re.match('[0-9]{4}',
+                                    td['switch'][-1]['hhmm']):
+                        raise ValueError(f'timer {name} '
+                                         f'switch #{len(td['switch'])} '
+                                         f'hhmm string does not'
+                                         f'match format hhmm')
+                    if not (0 <= int(td['switch'][-1]['hhmm'])//100 <= 23
+                            and
+                            0 <= int(td['switch'][-1]['hhmm'])%100 <= 59):
+                        raise ValueError(f'timer {name} '
+                                         f'switch #{len(td['switch'])} '
+                                         f'hhmm string does not'
+                                         f'represent valid time')
                     if td['switch'][-1]['mode'] not in obj.modes.keys():
-                        raise ValueError(f'timer {name} unddefined mode '
+                        raise ValueError(f'timer {name} '
+                                         f'switch #{len(td['switch'])} '
+                                         f'undefined mode: '
                                          f'{td['switch'][-1]['mode']}')
+                    if not isinstance(td['switch'][-1]['week'], str)\
+                            or not len(td['switch'][-1]['week']) == 7\
+                            or not re.match('[-mtwfs]{7}',
+                                    td['switch'][-1]['week']):
+                        raise ValueError(f'timer {name} '
+                                         f'switch #{len(td['switch'])} '
+                                         f'week string invalid: '
+                                         f'{td['switch'][-1]['week']}')
+
                 obj.timers[name] = td
         return obj
 
@@ -703,19 +904,24 @@ class Hvac():
 
         self.switchtables = {}
         for t,timer in self.timers.items():
-            self.switchtables[t] = OrderedDict(
-                sorted({x['hhmm']:x['mode']
-                        for x in timer['switch']}.items()
-                       )
-            )
-            # if no mode starts at the start of the day,
-            # make last mode of the day start (again) at midnight
-            if '0000' not in self.switchtables[t].keys():
-                x = list(self.switchtables[t].keys())[-1]
-                self.switchtables[t].update(
-                    {'0000':self.switchtables[t][x]})
-                # python >= 3.2: move to front by this:
-                self.switchtables[t].move_to_end('0000', last=False)
+            # one table per weekday for each timer:
+            self.switchtables[t] = {}
+            for wd in range(6):
+                self.switchtables[t][wd] = OrderedDict(
+                    sorted({x['hhmm']:x['mode']
+                            for x in timer['switch']
+                            if x['week'][wd] != '-' }.items()
+                           )
+                )
+                # if no mode starts at the start of the day,
+                # make last mode of the day start (again) at midnight
+                if '0000' not in self.switchtables[t][wd].keys():
+                    x = list(self.switchtables[t][wd].keys())[-1]
+                    self.switchtables[t][wd].update(
+                        {'0000':self.switchtables[t][wd][x]})
+                    # python >= 3.2: move to front by this:
+                    self.switchtables[t][wd].move_to_end('0000',
+                                                         last=False)
         logger.debug(str(self.starttable))
         logger.debug(str(self.switchtables))
         pass
@@ -727,13 +933,14 @@ class Hvac():
         # get mode
         datestr = time.strftime('%m-%d')
         timestr = time.strftime('%H%M')
+        wd = time.weekday
         if self.starttable is None:
             self._make_tables()
         timer = self.starttable[
             self._max_le(self.starttable.keys(), datestr)
         ]
-        hhmm = self._max_le(self.switchtables[timer].keys(), timestr)
-        mode = self.switchtables[timer][hhmm]
+        hhmm = self._max_le(self.switchtables[timer][wd].keys(), timestr)
+        mode = self.switchtables[timer][wd][hhmm]
 
         # apply mode only if it changed
         if mode == self.current:
@@ -935,7 +1142,7 @@ class Building():
         self.rooms.tick(self.walls, timedelta)
 
 
-def building_model_timeseries(bldg: Building, ts: pd.Series, rec=None):
+def run_building_model(bldg: Building, ts: pd.Series, rec=None):
     """
     Run a time dependent simulation of the building heating.
 
@@ -1068,7 +1275,7 @@ def main(args):
             break
     else:
         raise ValueError('no building named %s' % name)
-    model_out = building_model_timeseries(bldg=bldg, ts=t_out, rec=rec)
+    model_out = run_building_model(bldg=bldg, ts=t_out, rec=rec)
     model_out.to_csv("heating_model_out.csv", quoting=csv.QUOTE_NONE,
                      float_format="%12.5f")
     energy = model_out['power'] * model_out['seconds']  # J

@@ -34,7 +34,9 @@ The module contains the following scripts
 
     :doc:`fill-timeseries`
         explains the Syntax of the cycle file ``cycle.yaml``
-    :doc:
+    :doc:`heating`
+        explains the Syntax of the cycle file ``heating.yaml``
+
 
 
 
