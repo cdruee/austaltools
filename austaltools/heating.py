@@ -843,16 +843,17 @@ class Hvac():
                                      f'contain a list')
                 td['switch'] = []
                 for sw in v['switch']:
-                    for k,v in sw:
-                        if not x in _keywords['switch']:
+                    td['switch'].append({})
+                    for k,v in sw.items():
+                        if not k in _keywords['switch']:
                             raise ValueError(f'timer {name} switch '
-                                             f'#{len(td['switch'])} '
-                                             f'unknown entry {x}')
-                        td['switch'].append({k:v})
-                    if 'week' not in td['switch'].keys():
-                        td['switch']['week'] = 'mtwtfss'
+                                             f'#{len(td['switch'])+1} '
+                                             f'unknown entry {k}')
+                        td['switch'][-1][k] = v
+                    if 'week' not in td['switch'][-1].keys():
+                        td['switch'][-1]['week'] = 'mtwtfss'
                     for x in _keywords['switch']:
-                        if not x in td['switch'].keys():
+                        if not x in td['switch'][-1].keys():
                             raise ValueError(f'timer {name} switch '
                                              f'#{len(td['switch'])} '
                                              f'missing entry {x}')
@@ -906,22 +907,36 @@ class Hvac():
         for t,timer in self.timers.items():
             # one table per weekday for each timer:
             self.switchtables[t] = {}
-            for wd in range(6):
+            for wd in range(7):
                 self.switchtables[t][wd] = OrderedDict(
                     sorted({x['hhmm']:x['mode']
                             for x in timer['switch']
                             if x['week'][wd] != '-' }.items()
                            )
                 )
+            lastsw = None
+            for wd in range(7):
+                if len(self.switchtables[t][wd]) > 0:
+                    lastsw = (wd,
+                              list(self.switchtables[t][wd].keys())[-1])
+            if lastsw is None:
+                raise ValueError(f'no active switch time in timer {t}')
+            for wd in range(7):
+                if len(self.switchtables[t][wd]) > 0:
+                    x = (wd, list(self.switchtables[t][wd].keys())[-1])
+                else:
+                    x = None
                 # if no mode starts at the start of the day,
                 # make last mode of the day start (again) at midnight
                 if '0000' not in self.switchtables[t][wd].keys():
-                    x = list(self.switchtables[t][wd].keys())[-1]
+                    k, v = lastsw
                     self.switchtables[t][wd].update(
-                        {'0000':self.switchtables[t][wd][x]})
+                        {'0000':self.switchtables[t][k][v]})
                     # python >= 3.2: move to front by this:
                     self.switchtables[t][wd].move_to_end('0000',
                                                          last=False)
+                if x is not None:
+                    lastsw = x
         logger.debug(str(self.starttable))
         logger.debug(str(self.switchtables))
         pass
@@ -933,7 +948,7 @@ class Hvac():
         # get mode
         datestr = time.strftime('%m-%d')
         timestr = time.strftime('%H%M')
-        wd = time.weekday
+        wd = time.weekday()
         if self.starttable is None:
             self._make_tables()
         timer = self.starttable[
@@ -1212,8 +1227,8 @@ def run_building_model(bldg: Building, ts: pd.Series, rec=None):
                 bldg.rooms[r].set_thermo(newmode['roomtemp'][x])
         # integrate forward until next time in ts
         tick = 0
-        powers = np.empty((nticks, nrooms))
-        rtemps = np.empty((nticks, nrooms))
+        powers = np.full((nticks, nrooms), np.nan)
+        rtemps = np.full((nticks, nrooms), np.nan)
         while pointer + dtick < ts.index[i + 1]:
             bldg.tick(timedelta=dtick.total_seconds())
             rtemps[tick, :] = [bldg.rooms[x].temp for x in room_names]
@@ -1223,8 +1238,8 @@ def run_building_model(bldg: Building, ts: pd.Series, rec=None):
             pointer += dtick
             tick += 1
         # evaluate at timestep
-        room_temps = rtemps.mean(axis=0)
-        mean_powers = powers.mean(axis=0)
+        room_temps = np.nanmean(rtemps, axis=0)
+        mean_powers = np.nanmean(powers, axis=0)
         ix = ts.index[i]
         for i, x in enumerate(room_names):
             res.loc[ix, 'tmp_%s' % x] = room_temps[i]
