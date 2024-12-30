@@ -3,8 +3,8 @@ from matplotlib import dates as mdates
 import os
 import pandas as pd
 
-start = "2003-07-10 00:00:00"
-stopp = "2003-07-24 00:00:00"
+start = "2003-04-01 00:00:00"
+stopp = "2003-04-15 00:00:00"
 
 # wf = pd.read_csv(
 #     "../austaltools/heating_walls_history.csv",

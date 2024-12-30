@@ -33,10 +33,15 @@ a2 = ax.twinx()
 plt.gca().xaxis.set_major_formatter(mdates.DateFormatter('%d.%m.'))
 for x in wp.columns:
     ax.plot(wp.index,
-        wp[x])
+            wp[x],
+            label=x)
 a2.plot(rp.index,
         rp['pwr_room'],
-        color="green")
+        linestyle=':',
+        linewidth=2,
+        color="black",
+        label="pwr")
 a2.set_ylim([0,13000])
+fig.legend()
 plt.show()
 #fig.savefig(__file__.replace('.py','.png'), dpi=180)
