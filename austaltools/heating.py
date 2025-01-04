@@ -12,6 +12,7 @@ import meteolib as m
 import numpy as np
 import pandas as pd
 import yaml
+from netaddr.ip import cidr_merge
 from tqdm import tqdm
 
 try:
@@ -233,6 +234,103 @@ DEFAULT_ROOMTEMP = 20  # °C
 
 # ------------------------------------------------
 
+def surface_heat_transfer_resistance(
+        indoor: bool, angle: float = 0,
+        t_wall:float=None, wind:float=None):
+    """
+
+    :param indoor: Surface is indoor (`True`) or outdoor (`False`)
+    :type indoor: bool
+    :param angle: Elevation angle of the wall normal direction.
+      0 means the wall is vertical. +90 means the wall is a floor.
+      -90 a ceiling.
+    :type angle: float
+    :param t_wall: wall surface temperature in °C
+    :type t_wall: float
+    :param room: name of adjacent room or special room
+    :type room: str
+    :param wind: wind speed
+    :type wind: float
+    :return: heat transfer resistance in :math:`m^2 K / W`
+    :rtype: float
+
+    Commonly H is parameterized as:
+    :math:`H = C_\mathrm{H} \left( T_\mathrm{sfc} - \mathrm{air}\right)`
+    or in resistance notation:
+    :math:` R_\mathrm{H} = \frac{ T_\mathrm{sfc} - \mathrm{air}}{H}`
+    where :math:` C_\mathrm{H} = \frac{1}{R_\mathrm{H}}
+
+    DIN 6946:2008 appendix A.1 "even surface" states
+    :math:`R_\mathrm{S} = \frac{1}{h_\mathrm{c} + h_\mathrm{r}}
+
+    with:
+      - :math:`h_\mathrm{c}`: heat transfer coefficient due to convection
+      - :math:`h_\mathrm{r}`: heat transfer coefficient due to radiation
+
+    values in case of a "well ventilated" indoor surfaces:
+    :math:`h_\mathrm{c} ~=~ h_\mathrm{ci}` with
+      - :math:`h_\mathrm{ci} ~=~ 5.0 \mathrm{W}/(\mathrm{W}^2 \mathrm{K})`
+       for heat flow upwards (i.e. from the floor);
+      - :math:`h_\mathrm{ci} ~=~ 2.5 \mathrm{W}/(\mathrm{W}^2 \mathrm{K})`
+       for heat flow horizontal (i.e. from a wall);
+      - :math:`h_\mathrm{ci} ~=~ 0.7 \mathrm{W}/(\mathrm{W}^2 \mathrm{K})`
+       for heat flow downwards (i.e. from the ceiling)
+
+    values in case of outdoor surfaces:
+    :math:`h_\mathrm{c} ~=~ h_\mathrm{ce}` with
+
+    :math:`h_\mathrm{ce} ~=~ 4. + 4. v \mathrm{W}/(\mathrm{W}^2 \mathrm{K})`
+
+    where :math:`v` is the wind speed ''above he surface'' in m/s
+
+    """
+    #
+
+    if wind is None:
+        # DIN EN ISO 6946:2008-04 Table 1
+        if indoor:
+            if angle > 30.:
+                r_s = 0.10
+            elif angle < -30.:
+                r_s = 0.17
+            else:
+                r_s = 0.13
+        else:
+            r_s = 0.04
+
+    else:
+
+
+        if indoor:
+            # even surfaces:
+            # DIN EN ISO 6946:2008-04 Table A.1
+            h_ci_up = 5.0  # W/m²K
+            h_ci_ho = 2.5  # W/m²K
+            h_ci_dn = 0.7  # W/m²K
+
+            # h_ci
+            # select value by wall-normal elevation angle
+            if angle > 45:
+                h_c = h_ci_up
+            elif angle < -45:
+                h_c = h_ci_dn
+            else:
+                h_c = h_ci_ho
+        else:
+            # h_ce
+            h_c = 4.0 + 4.0 * wind
+
+        h_r = epsilon * 4 * m.constants.sigma * m.temperature.CtoK(t_wall)
+
+        # DIN EN ISO 6946:2008-04 eqn 1.1:
+        # R = 1/(h_r+h_c)
+        r_s = 1. / (h_c + h_r)
+
+    return r_s
+
+
+# ------------------------------------------------
+
 class Wall:
     """
     Represents a wall element within a building, handling thermal dynamics
@@ -329,7 +427,8 @@ class Wall:
     height = float()  # m
     area_full = float()  # m²
     area = float()  # m²
-    orient = np.nan  # deg clockwise from north
+    facing = float()  # deg clockwise from north
+    slant = float() # deg, 0 = vertcal wall, pos = cold side facing upwards
     d_slab = float()  # m
     n_slab = int()  # 1
     t_slab = list()  # °C
@@ -344,6 +443,7 @@ class Wall:
 
     def __init__(self, name, d, room_w, room_c,
                  l=None, h=None, area=None,
+                 facing=None, slant=None,
                  c=None, k=None, rho=None,
                  partof=None, t_start=None):
         """
@@ -368,6 +468,15 @@ class Wall:
         # area is full area minus embeddded elements (corrected by WallList)
         self.partof = partof
         self.area = self.area_full
+        # orientation:
+        if facing is not None:
+            self.facing = facing
+        else:
+            self.facing = np.nan
+        if slant is not None:
+            self.slant = slant
+        else:
+            self.slant = 0.
         # calculate number of slabs
         self.thickness = d
         self.d_slab = WALL_SLAB
@@ -407,13 +516,33 @@ class Wall:
         :type timedelta: float, optional
         """
         for i in range(self.n_flux):
+            # temperature difference
             if i == 0:
+                # warm wall durface
                 dth = self.t_slab[0] - rooms[self.room_w].temp
+                t_wall = self.t_slab[0]
+                indoor = (rooms[self.room_w].name != 'outside')
+                angle = - self.slant
+                h_c = 1. / surface_heat_transfer_resistance(
+                    indoor=indoor, angle=self.slant, t_wall=t_wall
+                    # wind =None
+                )
             elif i == self.n_slab:
+                # cold wall durface
                 dth = rooms[self.room_c].temp - self.t_slab[i - 1]
+                t_wall = self.t_slab[i - 1]
+                indoor = (rooms[self.room_c].name != 'outside')
+                angle = self.slant
+                h_c = 1. / surface_heat_transfer_resistance(
+                    indoor=indoor, angle=self.slant, t_wall=t_wall
+                    # wind =None
+                )
             else:
+                # indise wall
                 dth = self.t_slab[i] - self.t_slab[i - 1]
-            self.f_flux[i] = - self.heat_conduct * dth / self.d_flux[i]
+                h_c = self.heat_conduct / self.d_flux[i]
+            # heat flux
+            self.f_flux[i] = - h_c *  dth
         for i in range(self.n_slab):
             diff = (self.f_flux[i] - self.f_flux[i + 1])
             dtdt = diff / (self.density * self.d_slab * self.heat_capacty)
@@ -1034,6 +1163,7 @@ class Building():
         obj = Building(name, t_out, t_soil)
         for k, v in d['walls'].items():
             args = {'name': k}
+            # loop all parameters of Wall init call
             for x, y in inspect.signature(
                     Wall.__init__).parameters.items():
                 if x in ['self', 'name']: continue
@@ -1044,6 +1174,7 @@ class Building():
             obj.walls.append(Wall(**args))
         for k, v in d['rooms'].items():
             args = {'name': k}
+            # loop all parameters of Room init call
             for x, y in inspect.signature(
                     Room.__init__).parameters.items():
                 if x in ['self', 'name']: continue
