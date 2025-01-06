@@ -602,20 +602,20 @@ class WallList(dict):
     def __setitem__(self, index, value: Wall):
         dict.__setitem__(self, index, value)
         if index != value.name:
-            raise ValueError(f'key does not match name in {value.name}')
+            raise ValueError(f"key does not match name in {value.name}")
         for x in self.values():
             if x.partof is not None:
                 if x.partof not in self.keys():
                     raise ValueError(
-                        f'partof element not found in: {value.name}')
+                        f"partof element not found in: {value.name}")
                 if x.partof == x.name:
                     raise ValueError(
-                        f'partof self found in: {value.name}')
+                        f"partof self found in: {value.name}")
                 self[value.partof].area -= value.area
                 if self[value.partof].area < 0:
                     raise ValueError(
-                        f'parts larger than parent: '
-                        f'{self[value.partof].name}')
+                        f"parts larger than parent: "
+                        f"{self[value.partof].name}")
 
     def append(self, wall: Wall):
         """
@@ -977,7 +977,7 @@ class Hvac():
                 mode = {}
                 for k, x in m.items():
                     if k not in _keywords['modes']:
-                        raise ValueError(f'illegal keyword {x}')
+                        raise ValueError(f"illegal keyword {x}")
                     # one value for all rooms
                     if isinstance(x, (float, int)):
                         kd = {'_default':float(x)}
@@ -990,7 +990,7 @@ class Hvac():
                             kd['_default'] = dv
                         for r in x.keys():
                             if r not in rnames:
-                                raise ValueError(f'unknown room {r}')
+                                raise ValueError(f"unknown room {r}")
                             kd[r] = dv
                     mode[k] = kd
 
@@ -1015,64 +1015,64 @@ class Hvac():
             # start must be given if more than one timer:
             if (len(d['timers']) > 1 and
                 not all(['start' in v for k,v in d['timers'].items()])):
-                raise ValueError(f'timers must contain `start` keyword '
-                                 f'if more than one timer is defined')
+                raise ValueError(f"timers must contain `start` keyword "
+                                 f"if more than one timer is defined")
             for name, v in d['timers'].items():
                 td = {}
                 # verify data formats
                 sstr = v.get('start', '01-01')
                 if not re.match('[0-9]{2}-[0-9]{2}', sstr):
-                    raise ValueError(f'timer {t} start string does not'
-                                     f'match format mm-dd')
+                    raise ValueError(f"timer {t} start string does not"
+                                     f"match format mm-dd")
                 td['start'] = sstr
                 if not isinstance(v['switch'], list):
-                    raise ValueError(f'timer {t} switch keyword does not'
-                                     f'contain a list')
+                    raise ValueError(f"timer {t} switch keyword does not"
+                                     f"contain a list")
                 td['switch'] = []
                 for sw in v['switch']:
                     td['switch'].append({})
                     for k,v in sw.items():
                         if not k in _keywords['switch']:
-                            raise ValueError(f'timer {name} switch '
-                                             f'#{len(td['switch'])+1} '
-                                             f'unknown entry {k}')
+                            raise ValueError(f"timer {name} switch "
+                                             f"#{len(td['switch'])+1} "
+                                             f"unknown entry {k}")
                         td['switch'][-1][k] = v
                     if 'week' not in td['switch'][-1].keys():
                         td['switch'][-1]['week'] = 'mtwtfss'
                     for x in _keywords['switch']:
                         if not x in td['switch'][-1].keys():
-                            raise ValueError(f'timer {name} switch '
-                                             f'#{len(td['switch'])} '
-                                             f'missing entry {x}')
+                            raise ValueError(f"timer {name} switch "
+                                             f"#{len(td['switch'])} "
+                                             f"'missing entry {x}")
                     if isinstance(td['switch'][-1]['hhmm'], (int,float)):
                         td['switch'][-1]['hhmm'] = \
                             '%04i' % int(td['switch'][-1]['hhmm'])
                     if not re.match('[0-9]{4}',
                                     td['switch'][-1]['hhmm']):
-                        raise ValueError(f'timer {name} '
-                                         f'switch #{len(td['switch'])} '
-                                         f'hhmm string does not'
-                                         f'match format hhmm')
+                        raise ValueError(f"timer {name} "
+                                         f"switch #{len(td['switch'])} "
+                                         f"hhmm string does not "
+                                         f"match format hhmm")
                     if not (0 <= int(td['switch'][-1]['hhmm'])//100 <= 23
                             and
                             0 <= int(td['switch'][-1]['hhmm'])%100 <= 59):
-                        raise ValueError(f'timer {name} '
-                                         f'switch #{len(td['switch'])} '
-                                         f'hhmm string does not'
-                                         f'represent valid time')
+                        raise ValueError(f"timer {name} "
+                                         f"switch #{len(td['switch'])} "
+                                         f"hhmm string does not "
+                                         f"represent valid time")
                     if td['switch'][-1]['mode'] not in obj.modes.keys():
-                        raise ValueError(f'timer {name} '
-                                         f'switch #{len(td['switch'])} '
-                                         f'undefined mode: '
-                                         f'{td['switch'][-1]['mode']}')
+                        raise ValueError(f"timer {name} "
+                                         f"switch #{len(td['switch'])} "
+                                         f"undefined mode: "
+                                         f"{td['switch'][-1]['mode']}")
                     if not isinstance(td['switch'][-1]['week'], str)\
                             or not len(td['switch'][-1]['week']) == 7\
                             or not re.match('[-mtwfs]{7}',
                                     td['switch'][-1]['week']):
-                        raise ValueError(f'timer {name} '
-                                         f'switch #{len(td['switch'])} '
-                                         f'week string invalid: '
-                                         f'{td['switch'][-1]['week']}')
+                        raise ValueError(f"timer {name} "
+                                         f"switch #{len(td['switch'])} "
+                                         f"week string invalid: "
+                                         f"{td['switch'][-1]['week']}")
 
                 obj.timers[name] = td
         return obj
@@ -1107,7 +1107,7 @@ class Hvac():
                     lastsw = (wd,
                               list(self.switchtables[t][wd].keys())[-1])
             if lastsw is None:
-                raise ValueError(f'no active switch time in timer {t}')
+                raise ValueError(f"no active switch time in timer {t}")
             for wd in range(7):
                 if len(self.switchtables[t][wd]) > 0:
                     x = (wd, list(self.switchtables[t][wd].keys())[-1])
@@ -1227,7 +1227,7 @@ class Building():
                 if x in ['self', 'name']: continue
                 # mandatory args (== no default value)
                 if x not in v and y.default == inspect.Parameter.empty:
-                    raise ValueError(f'{y.name} not declared in wall {k}')
+                    raise ValueError(f"{y.name} not declared in wall {k}")
                 args[x] = v.get(x, y.default)
             obj.walls.append(Wall(**args))
         for k, v in d['rooms'].items():
@@ -1238,7 +1238,7 @@ class Building():
                 if x in ['self', 'name']: continue
                 # mandatory args (== no default value)
                 if x not in v and y.default == inspect.Parameter.empty:
-                    raise ValueError(f'{y.name} not declared in wall {k}')
+                    raise ValueError(f"{y.name} not declared in wall {k}")
                 args[x] = v.get(x, y.default)
             obj.rooms.append(Room(**args))
         obj.hvac = Hvac.from_yaml(d['hvac'],
@@ -1272,15 +1272,15 @@ class Building():
         self._room_history.append(
             {
                 'time': time,
-                **{f'tmp_{k}': v.temp for k, v in self.rooms.items()},
-                **{f'pwr_{k}': v.power for k, v in self.rooms.items()}
+                **{f"tmp_{k}": v.temp for k, v in self.rooms.items()},
+                **{f"pwr_{k}": v.power for k, v in self.rooms.items()}
             })
         self._wall_history.append(
             {
                 'time': time,
-                **{f'temp{i:03d}_{k}': t for k, v in self.walls.items()
+                **{f"temp{i:03d}_{k}": t for k, v in self.walls.items()
                    for i, t in enumerate(v.t_slab)},
-                **{f'flux{i:03d}_{k}': f for k, v in self.walls.items()
+                **{f"flux{i:03d}_{k}": f for k, v in self.walls.items()
                    for i, f in enumerate(v.f_flux)},
             })
 
