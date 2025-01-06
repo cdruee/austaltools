@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 import argparse
+from bisect import bisect
 import csv
 from collections import OrderedDict
 import inspect
 import logging
 import os
 import re
-from bisect import bisect
 
 import meteolib as m
 import numpy as np
@@ -53,9 +53,14 @@ logger = logging.getLogger()
 
 cp = m.constants.cp
 
-WALL_SLAB = 0.04  # m
-TIMESTEP = 1  # s
-PRESSURE = 101325  # Pa
+WALL_EPSILON = 0.95
+# wall spectral emissivity in 1
+WALL_SLAB = 0.04
+# wall slab sthickness in m
+TIMESTEP = 1
+# model timestep in s
+PRESSURE = 101325
+# ambient air pressure in Pa
 
 HEATING_LIMIT = 15  # °C
 DEFAULT_ROOMTEMP = 20  # °C
@@ -237,7 +242,7 @@ DEFAULT_ROOMTEMP = 20  # °C
 def surface_heat_transfer_resistance(
         indoor: bool, angle: float = 0,
         t_wall:float=None, wind:float=None):
-    """
+    r"""
 
     :param indoor: Surface is indoor (`True`) or outdoor (`False`)
     :type indoor: bool
@@ -286,8 +291,10 @@ def surface_heat_transfer_resistance(
     """
     #
 
-    if wind is None:
+    if wind in [None, np.nan]:
+        # no wind -> only wall convection
         # DIN EN ISO 6946:2008-04 Table 1
+        # set r_s
         if indoor:
             if angle > 30.:
                 r_s = 0.10
@@ -297,18 +304,16 @@ def surface_heat_transfer_resistance(
                 r_s = 0.13
         else:
             r_s = 0.04
-
     else:
-
-
+        # set r_s = 1/(h_c + h_r)
         if indoor:
+            # hc = h_ci(wall direction)
+            # no wind -> only wall convection
             # even surfaces:
             # DIN EN ISO 6946:2008-04 Table A.1
             h_ci_up = 5.0  # W/m²K
             h_ci_ho = 2.5  # W/m²K
             h_ci_dn = 0.7  # W/m²K
-
-            # h_ci
             # select value by wall-normal elevation angle
             if angle > 45:
                 h_c = h_ci_up
@@ -317,10 +322,12 @@ def surface_heat_transfer_resistance(
             else:
                 h_c = h_ci_ho
         else:
-            # h_ce
+            # hc = h_ce(wind speed)
+            # wind "above wall" (no distance etc. defined !!?!)
             h_c = 4.0 + 4.0 * wind
-
-        h_r = epsilon * 4 * m.constants.sigma * m.temperature.CtoK(t_wall)
+        # h_r ((longwave) radiative transfer)
+        h_r = (WALL_EPSILON *
+               4 * m.constants.sigma * m.temperature.CtoK(t_wall))
 
         # DIN EN ISO 6946:2008-04 eqn 1.1:
         # R = 1/(h_r+h_c)
@@ -523,9 +530,10 @@ class Wall:
                 t_wall = self.t_slab[0]
                 indoor = (rooms[self.room_w].name != 'outside')
                 angle = - self.slant
+                wind =  rooms[self.room_c].wind
                 h_c = 1. / surface_heat_transfer_resistance(
-                    indoor=indoor, angle=self.slant, t_wall=t_wall
-                    # wind =None
+                    indoor=indoor, angle=self.slant, t_wall=t_wall,
+                    wind=wind
                 )
             elif i == self.n_slab:
                 # cold wall durface
@@ -533,12 +541,13 @@ class Wall:
                 t_wall = self.t_slab[i - 1]
                 indoor = (rooms[self.room_c].name != 'outside')
                 angle = self.slant
+                wind =  rooms[self.room_c].wind
                 h_c = 1. / surface_heat_transfer_resistance(
-                    indoor=indoor, angle=self.slant, t_wall=t_wall
-                    # wind =None
+                    indoor=indoor, angle=self.slant, t_wall=t_wall,
+                    wind=wind
                 )
             else:
-                # indise wall
+                # inside wall
                 dth = self.t_slab[i] - self.t_slab[i - 1]
                 h_c = self.heat_conduct / self.d_flux[i]
             # heat flux
@@ -665,7 +674,8 @@ class Room:
     """
     _special = False
     name = str()
-    temp = float()
+    temp = float() # room air temperature in °C
+    wind = float() # room "wind speed" in m/s
     target_temp = np.nan  # °C
     target_power = np.nan  # 1 (1= 100% of self.power)
     maxpower = float()  # W
@@ -692,6 +702,7 @@ class Room:
                 self.temp = np.nan
             else:
                 self.temp = t_start
+            self.wind = np.nan
             self.target_temp = np.nan
             self.target_power = np.nan
             self.maxpower = 0.
@@ -702,9 +713,10 @@ class Room:
         else:
             self._special = False
             if t_start is not None:
-                self.t_start = t_start
+                self.temp = t_start
             else:
-                self.t_start = t_set
+                self.temp = t_set
+            self.wind = np.nan
             if t_set is not None:
                 self.target_temp = t_set
             else:
@@ -777,6 +789,18 @@ class Room:
         :rtype: bool
         """
         return self._special
+
+    def get_environment(self):
+        return {'temp': self.temp, 'wind': self.wind}
+    def set_environment(self, temp=None, wind=None):
+        if self.is_special():
+            if temp is not None:
+                self.temp = temp
+            if wind is not None:
+                self.wind = wind
+        else:
+            raise ValueError('set_environment only allowed '
+                             'for special rooms.')
 
     def get_thermo(self):
         return self.target_temp
@@ -1288,15 +1312,28 @@ class Building():
         self.rooms.tick(self.walls, timedelta)
 
 
-def run_building_model(bldg: Building, ts: pd.Series, rec=None):
+def run_building_model(bldg: Building,
+                       tseries: pd.Series|str,
+                       wseries: pd.Series|str=None,
+                       df: pd.DataFrame|None=None,
+                       rec=None):
     """
     Run a time dependent simulation of the building heating.
 
     :param bldg: the Building instance to run the model on
     :type bldg: Building
-    :param ts: Timeseries containg the necessary weather data,
-        with time as index
-    :type ts: pandas.DataFrame
+    :param tseries: Timeseries containg the air temperature,
+        with time as index or column name if ``df`` is given
+        and has temperature in column ``ts``
+    :type tseries: pandas.Series | str
+    :param wseries: (optional) Timeseries containg the wind speed,
+        with time as index or column name if ``df`` is given
+        and has temperature in column ``ts``
+    :type wseries: pandas.Series | str
+    :param df: (optional) Data frame containing timeseries of
+        input data in the columns with the names given.
+        ``df`` must not be given or None if ``tseries`` is a pandas.Series.
+    :type df: pandas.DataFrame | None
     :param rec: (optional) a pandas interval string describing the time
         interval at which the model variables shall be recorded when
         running the model. For exampe "1min" for ever minute.
@@ -1311,6 +1348,32 @@ def run_building_model(bldg: Building, ts: pd.Series, rec=None):
     :rtype: pandas.DataFrame
 
     """
+    ii = [isinstance(tseries, str), isinstance(wseries, str)]
+    if all(ii):
+        if df is None:
+            raise ValueError("df is required if tseries and "
+                             "wseries are column names")
+        else:
+            ts = df[tseries]
+            if ws is not None:
+                ws = df[wseries]
+            del df
+    elif not any(ii):
+        if df is not None:
+            raise ValueError("df is not allowed tseries and "
+                             "wseries are pandas Series")
+        else:
+            ts = tseries
+            if wseries is not None:
+                ws = wseries
+                if not ws.index.equals(ts.index):
+                    raise ValueError("tseries and wseries indexes must "
+                                     "be identical")
+            del tseries, wseries
+    else:
+        raise ValueError("tseries and wseries must all be either a "
+                     "column name or a pandas.Series")
+
     t_out = float(ts.values[0])
 
     room_names = bldg.get_rooms()
@@ -1341,7 +1404,10 @@ def run_building_model(bldg: Building, ts: pd.Series, rec=None):
         dtime = (ts.index[i + 1] - ts.index[i]).total_seconds()
         nticks = int(dtime / dtick.total_seconds()) + 1
         # update parameters
-        bldg.rooms['outside'].temp = ts[ts.index[i]]
+        bldg.rooms['outside'].set_environment(
+            temp = ts[ts.index[i]],
+            wind = ws[ws.index[i]]
+        )
         switch = bldg.hvac.switch_mode(ts.index[i])
         if switch:
             newmode = bldg.hvac.modes[switch]
@@ -1412,6 +1478,7 @@ def main(args):
     dt = obs.index.diff().median()
     t_out = obs['t2m'].interpolate('linear').bfill().ffill()
     t_out = t_out.apply(m.temperature._to_C)
+    w_out = obs['ff'].interpolate('linear').bfill().ffill() / 3.
 
     with open(filename, 'r') as f:
         dictionary = yaml.safe_load(f)
@@ -1421,7 +1488,12 @@ def main(args):
             break
     else:
         raise ValueError('no building named %s' % name)
-    model_out = run_building_model(bldg=bldg, ts=t_out, rec=rec)
+    model_out = run_building_model(
+        bldg=bldg,
+        tseries=t_out,
+        wseries=w_out,
+        rec=rec
+    )
     model_out.to_csv("heating_model_out.csv", quoting=csv.QUOTE_NONE,
                      float_format="%12.5f")
     energy = model_out['power'] * model_out['seconds']  # J

@@ -44,4 +44,4 @@ a2.plot(rp.index,
 a2.set_ylim([0,13000])
 fig.legend()
 plt.show()
-#fig.savefig(__file__.replace('.py','.png'), dpi=180)
+fig.savefig(__file__.replace('.py','.png'), dpi=180)
