@@ -339,7 +339,7 @@ def surface_heat_transfer_resistance(
 # ------------------------------------------------
 
 class Wall:
-    """
+    r"""
     Represents a wall element within a building, handling thermal dynamics
     between two rooms (room_w and room_c).
 
@@ -388,6 +388,40 @@ class Wall:
     +--------+---+-----------+-+--------+-+-----+-+-----------+-+
     | flux   | X |           |X|        |X|     |X|           |X|
     +--------+---+-----------+-+--------+-+-----+-+-----------+-+
+
+    **Surface heat fluxes**
+
+    generally:
+      :math:`Q_\mathrm{s} - B_\mathrm{s} - H_\mathrm{s} - E_\mathrm{s} = 0`
+
+    indoor wall:
+      Shortwave radiation fluxes are approximately zero;
+      longwave radiative transfer included in surfac-to-atmosphere
+      heat transfer coefficient, effecitvily making
+      :math:`Q_\mathrm{s} = 0`.
+      Walls are assumed to be dry making
+      :math:`E_\mathrm{s} = 0`.
+
+      Hence: :math:`- B_\mathrm{s} - H_\mathrm{s} = 0`
+
+      Following DIN 6946, write
+      :math:`H_\mathrm{s} = h_c (T_\mathrm{s} - T_\mathrm{air})`
+
+      where :math:`T_\mathrm{s}` is the temperature of the surface.
+      Because this model uses thin slabs, it
+      can be approximated by the temperature of the outemost slab.
+
+    outdoor wall:
+      Shortwave radiation fluxes are significant;
+      longwave radiative transfer is again included in
+      surface-to-atmosphere heat transfer coefficient, effecitvily making
+      :math:`Q_\mathrm{s} = K_\mathrm{s}`.
+
+      Hence: :math:`K_\mathrm{s} - B_\mathrm{s} - H_\mathrm{s} = 0`
+
+      FIXME
+      tdb: :math:`K_\mathrm{s}`
+
 
     **Class attributes**
 
