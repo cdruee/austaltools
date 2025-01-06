@@ -12,7 +12,6 @@ import meteolib as m
 import numpy as np
 import pandas as pd
 import yaml
-from netaddr.ip import cidr_merge
 from tqdm import tqdm
 
 try:
