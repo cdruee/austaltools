@@ -65,6 +65,7 @@ def main():
     args = vars(parser.parse_args())
     args['command'] = 'simple'
     args['working_dir'] = '.'
+    args['working_dir'] = '.'
     command_line.main(args)
 
 # -------------------------------------------------------------------------

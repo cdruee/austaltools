@@ -246,7 +246,7 @@ def main(args=None):
 
     logger.debug('args: %s' % args)
 
-    if args["temp_dir"] is not None:
+    if args.get("temp_dir",None) is not None:
         _tools.TEMP = args["temp_dir"]
 
     try:
