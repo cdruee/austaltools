@@ -131,7 +131,7 @@ def main(args: dict):
     #
     # show notice
     #
-    logger.info('reading terrain data: %s' % source)
+    print('reading terrain data: %s' % source)
     show_notice(storage_path=storage_path, source=source)
     #
     # load dataset

@@ -8,11 +8,13 @@ import logging
 import os
 import re
 
-import meteolib as m
 import numpy as np
 import pandas as pd
 import yaml
 from tqdm import tqdm
+
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    import meteolib as m
 
 try:
     from . import _tools
