@@ -244,6 +244,7 @@ def surface_heat_transfer_resistance(
         indoor: bool, angle: float = 0,
         t_wall:float=None, wind:float=None):
     r"""
+    Calculate heat transfer resistance between wall and air.
 
     :param indoor: Surface is indoor (`True`) or outdoor (`False`)
     :type indoor: bool
@@ -263,28 +264,31 @@ def surface_heat_transfer_resistance(
     Commonly H is parameterized as:
     :math:`H = C_\mathrm{H} \left( T_\mathrm{sfc} - \mathrm{air}\right)`
     or in resistance notation:
-    :math:` R_\mathrm{H} = \frac{ T_\mathrm{sfc} - \mathrm{air}}{H}`
-    where :math:` C_\mathrm{H} = \frac{1}{R_\mathrm{H}}
+    :math:`R_\mathrm{H} = \frac{ T_\mathrm{sfc} - \mathrm{air}}{H}`
+    where :math:`C_\mathrm{H} = \frac{1}{R_\mathrm{H}}`
 
     DIN 6946:2008 appendix A.1 "even surface" states
-    :math:`R_\mathrm{S} = \frac{1}{h_\mathrm{c} + h_\mathrm{r}}
+    :math:`R_\mathrm{S} = \frac{1}{h_\mathrm{c} + h_\mathrm{r}}`
 
     with:
       - :math:`h_\mathrm{c}`: heat transfer coefficient due to convection
       - :math:`h_\mathrm{r}`: heat transfer coefficient due to radiation
 
     values in case of a "well ventilated" indoor surfaces:
-    :math:`h_\mathrm{c} ~=~ h_\mathrm{ci}` with
+    :math:`h_\mathrm{c} ~=~ h_\mathrm{ci}`
+    with
+
       - :math:`h_\mathrm{ci} ~=~ 5.0 \mathrm{W}/(\mathrm{W}^2 \mathrm{K})`
-       for heat flow upwards (i.e. from the floor);
+        for heat flow upwards (i.e. from the floor);
       - :math:`h_\mathrm{ci} ~=~ 2.5 \mathrm{W}/(\mathrm{W}^2 \mathrm{K})`
-       for heat flow horizontal (i.e. from a wall);
+        for heat flow horizontal (i.e. from a wall);
       - :math:`h_\mathrm{ci} ~=~ 0.7 \mathrm{W}/(\mathrm{W}^2 \mathrm{K})`
-       for heat flow downwards (i.e. from the ceiling)
+        for heat flow downwards (i.e. from the ceiling)
 
     values in case of outdoor surfaces:
-    :math:`h_\mathrm{c} ~=~ h_\mathrm{ce}` with
+    :math:`h_\mathrm{c} ~=~ h_\mathrm{ce}`
 
+    with
     :math:`h_\mathrm{ce} ~=~ 4. + 4. v \mathrm{W}/(\mathrm{W}^2 \mathrm{K})`
 
     where :math:`v` is the wind speed ''above he surface'' in m/s

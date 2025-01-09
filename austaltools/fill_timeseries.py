@@ -628,7 +628,7 @@ def get_timeseries(file: str, time: pd.DatetimeIndex):
 
 # noinspection SpellCheckingInspection
 def main(args):
-    """
+    r"""
     Process the data file based on the provided arguments.
 
     :param args: Dictionary containing the following keys:
@@ -637,17 +637,17 @@ def main(args):
       Possible values are 'list', 'week-5', 'week-6', or 'cycle'.
     :param args["cycle_file"]: (str) -- The name of the cycle file
      (required for 'cycle' action).
-    :param args["holiday_month"]: (*list, optional) --
+    :param args["holiday_month"]: (\*list, optional) --
       List of months (1-12) considered as holidays.
-    :param args["holiday_week"]: (*list, optional) -- List of weeks
+    :param args["holiday_week"]: (\*list, optional) -- List of weeks
       (1-52) considered as holidays.
-    :param args["hour_begin"]: (*int, optional) --
+    :param args["hour_begin"]: (int, optional) --
       The daily start of the working time,
       i.e. the first hour of each working day
       the source emits pollutants
       (evaluated for 'week-5' and 'week-6' actions).
       Defaults to :py:const:`DEFAULT__BEGIN`.
-    :param args["hour_end"]: (*int, optional) --
+    :param args["hour_end"]: (int, optional) --
       The daily end of the working time,
       i.e. the last hour of each working day
       the source emits pollutants

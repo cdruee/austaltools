@@ -752,7 +752,7 @@ def add_location_opts(parser,
     :param stations: WMO or DWD station numbers are accepted as positions
     :type stations: bool
     :param required: if a location specification is required
-    type required: bool
+      type required: bool
 
     Note:
         - dwd (str or None): DWD option, mutually exclusive with 'wmo' and required with 'ele'.
@@ -761,6 +761,7 @@ def add_location_opts(parser,
         - year (int or None): Year option, required with '-L', '-G', '-U', '-D', or '-W'.
         - output (str or None): Output name, required with '-L', '-G', '-U', '-D', or '-W'.
         - station (str or None): Station option, only valid with 'dwd' or 'wmo'.
+
     """
     loc_opt = parser.add_mutually_exclusive_group(required=required)
     loc_opt.add_argument('-L', '--ll',
@@ -807,12 +808,13 @@ def evaluate_location_opts(args: dict):
     """
     get position from the command-line location options and
     if applicable the WMO station number of this position
+
     :param args: parsed arguments
     :type args: dict
-    :return: position as lat, lon (WGS84) and
-      rechts, hoch (Gauss-Krüger Band 3)
-      and WMO station number of this position (0 if not applicable)
+    :return: position as lat, lon (WGS84) and rechts, hoch in Gauss-Krüger Band 3
+       and WMO station number of this position (0 if not applicable)
     :rtype: float, float, float, float, int
+
     """
     station = 0
     ele = None

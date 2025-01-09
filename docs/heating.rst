@@ -1,3 +1,5 @@
+:orphan:
+
 -------------------
 austaltools heating
 -------------------
@@ -36,6 +38,7 @@ Each builting must contain an associative array containing the tags
 Optionally, for each building
   - ``t_out`` (number) the initial air temperature in °C,
   - ``t_soil`` (number) the initial soil temperature in °C
+
 may be given. If not given, the starting values are intialized
 as :class:`numpy.nan`
 
@@ -49,6 +52,7 @@ Contains an associative array containing the tags
     the names must be unique and not contain spaces.
     Each entry in ``modes`` contains an associative
     array containing the tags:
+
       - ``roomtemp`` (optional) ist the room target temperature in °C.
         If missing, the room temperature is not limited
         (i.e. the heating always operates at constant power)
@@ -56,6 +60,7 @@ Contains an associative array containing the tags
         of the maximum heating power installed in a room.
         If missing, 100% is assumed
         (i.e. the heating uses the full installed power)
+
     Both tags may contain either one number
     **or** an associtative list. In the latter case, the keys of this list
     are the names of the rooms defined in the section ``rooms``.
@@ -70,6 +75,7 @@ Contains an associative array containing the tags
     the names must be unique and not contain spaces.
     Each entry in ``timers`` contains an associative
     array containing the tags:
+
       - ``start`` (optional, string) is the first date,
         on which the timer is applied. The format ist ``mm-dd``,
         where ``mm`` is the thwo-digit month and
@@ -79,6 +85,7 @@ Contains an associative array containing the tags
 
       - ``switch`` (required) is the list of switching times.
         Each list entry must contain the tags:
+
           - ``mode`` (required, string) is the name of the mode -
             defined under ``modes`` - that is activated at this time.
           - ``hhmm`` (required, string) the time at which the mode
@@ -231,7 +238,7 @@ Example::
         **Required** for all rooms except special rooms.
         If missing :math:`0. W`, i.e. unheated room, is assumed.
       - ``p_set`` (optional, number) the power throttling in %
-        of the heater in the room. If missing :py:`numpy.nan` is assumed,
+        of the heater in the room. If missing :class:`numpy.nan` is assumed,
         i.e. no temperature regulation.
       - ``t_set`` (optional, number) the target temperature In °C
         for the room. If missing 100 % is assumed,

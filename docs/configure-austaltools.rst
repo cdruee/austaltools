@@ -1,8 +1,7 @@
+:orphan:
 ---------------------
 configure-austaltools
 ---------------------
-
-:orphan:
 
 .. argparse::
    :module: austaltools.configure_austaltools

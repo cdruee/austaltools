@@ -95,6 +95,7 @@ def h_eff(has: float, z0s: float) -> list:
 def area_of_triangle(abc: list[tuple[float, float]]) -> float:
     """
     calculate area of the triangle spanned by the corners `abc`
+
     :param abc: corner positions of the triangle
     :type abc: list[tuple[float, float]]
     :return: area of the triangle. Positive if triangle node
@@ -141,6 +142,7 @@ def grid_surrounding_nodes(lat: float, lon: float, dims: dict) \
         -> list[tuple[float]]:
     """
     get the three nodes from dims that surround position lat / lon
+
     :param lat: point position latitude
     :type lat: float
     :param lon: point position longitude

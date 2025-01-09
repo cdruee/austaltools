@@ -533,7 +533,7 @@ def deduplicate(points, tolerance=None):
 def plot_building_shapes(args: dict, polygons: list[tuple],
                          buildings: list[_tools.Building],
                          topo: str = None):
-    """
+    r"""
     Plot buildings and polygon shapes from geojson file
 
     :param args: command line arguments
@@ -542,7 +542,7 @@ def plot_building_shapes(args: dict, polygons: list[tuple],
     :type polygons: list[tuple]
     :param buildings: Building objects
     :type buildings:  list[_tools.Building]
-    :param topo: Name of topography file (*.grid)
+    :param topo: Name of topography file (\*.grid)
     :type topo: str (optional)
 
     """
