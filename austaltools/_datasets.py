@@ -993,6 +993,8 @@ def merge_zipped_nc(source, destination):
                     # copy variable values
                     dst[k][:] = src[k][:]
 
+        # TODO
+        # time is OK here but broken when file is opened again !?!
         if not 'time' in dst.variables and 'valid_time' in dst.variables:
             dst.renameVariable("valid_time","time")
             dst.renameDimension("valid_time","time")
