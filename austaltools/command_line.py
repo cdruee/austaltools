@@ -241,7 +241,7 @@ def main(args=None):
               'a bug in the imported gdal library. '
               'You can safely ignore them.')
 
-    if args["working_dir"] is None:
+    if args.get("working_dir", None) is None:
         raise ValueError('PATH not given')
 
     logger.debug('args: %s' % args)
