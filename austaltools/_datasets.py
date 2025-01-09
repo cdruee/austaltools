@@ -49,7 +49,7 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import multiprocessing as mp
     import concurrent.futures as mpf
     from osgeo import gdal
-    import cdo
+    import netCDF4
 
 try:
     import cdsapi
@@ -923,7 +923,84 @@ def provide_terrain(source: str, path: str = None,
             f.write(dataset.notice)
     return
 
+# -------------------------------------------------------------------------
+def merge_zipped_nc(source, destination):
+    """
+    Merge multiple netcdf files contained in a zip archive
+    into one nc file.
 
+    :param source: path of the archive file to read
+    :type source: str
+    :param destination: path of the destination file to create
+    :type destination: str
+    """
+    source_file = os.path.abspath(source)
+    logger.info("unpacking downloaded zip archive %s" % source_file)
+    destination_file = os.path.abspath(destination)
+    with tempfile.TemporaryDirectory(dir=_tools.TEMP) as td:
+        with zipfile.ZipFile(source_file, 'r') as zf:
+            zf.extractall(td)
+        ncfiles = glob.glob(os.path.join(td, '*.nc'))
+        if len(ncfiles) == 0:
+            raise IOError("No files found in %s" % source)
+        sources = [netCDF4.Dataset(x, 'r') for x in ncfiles]
+
+        # create ne file/dataset
+        logger.debug("creating netcdf file %s" % destination_file)
+        if os.path.exists(destination_file):
+            os.remove(destination_file)
+        dst = netCDF4.Dataset(destination_file, "w")
+        # copy attributes
+        attributes = {}
+        for src in sources:
+            for a in src.ncattrs():
+                if a not in attributes:
+                    attributes[a] = src.getncattr(a)
+        for a in attributes:
+            dst.setncattr(a, attributes[a])
+        # copy dimensions:
+        for src in sources:
+            for d in src.dimensions:
+                if d not in dst.dimensions:
+                    dst.createDimension(d)
+        # copy variables:
+        for src in sources:
+            for k,v  in src.variables.items():
+                logger.debug(f"copy variable {k} ({v.datatype})")
+                if k not in dst.variables:
+                    if isinstance(v.datatype,
+                                  (netCDF4.VLType, netCDF4.CompoundType)):
+                        cmpr = None
+                    else:
+                        cmpr = 'zlib'
+                    if '_FillValue' in v.ncattrs():
+                        fill = v.getncattr('_FillValue')
+                    else:
+                        fill = None
+                    logger.debug(f" ... fill value {fill}")
+                    # copy variable definition
+                    dst.createVariable(k,
+                                       v.datatype,
+                                       v.dimensions,
+                                       compression=cmpr,
+                                       fill_value=fill)
+                    # copy variable attributes
+                    for a in src.variables[k].ncattrs():
+                        if a not in ['_FillValue']:
+                            logger.debug(f" ... attribute: {a}")
+                            dst.variables[k].setncattr(
+                                a, src.variables[k].getncattr(a))
+                    # copy variable values
+                    dst[k][:] = src[k][:]
+
+        if not 'time' in dst.variables and 'valid_time' in dst.variables:
+            dst.renameVariable("valid_time","time")
+            dst.renameDimension("valid_time","time")
+
+        for src in sources:
+            src.close()
+        dst.close()
+    logger.debug("finished writing netcdf file %s" % destination_file)
 # -------------------------------------------------------------------------
 def show_notice(storage_path, source):
     """
@@ -1091,6 +1168,8 @@ def assemble_ERA5(path: str, name="ERA5", years: list =[],
     """
 
     # create option tuples
+    logger.debug(f"assemble_ERA5: path={path}, name={name}, "
+                 f"years={years}, replace={replace}, args={args}")
     combi = []
     for year in years:
         yn = name_yearly(name, year)
@@ -1102,18 +1181,23 @@ def assemble_ERA5(path: str, name="ERA5", years: list =[],
                 continue
         combi.append(year)
     # get data in parallel directly to storage
+    downloaded = []
     with mp.Pool(PROCS) as pool:
-        for dld in pool.map(_ass_era5_getyear, combi):
-            year, ncname = dld
-            yn = name_yearly(name, year)
-            target = os.path.join(path, _tools.WEA_FMT % yn)
-            # gently move the old file out of way
-            if not _ass_clear_target(target, replace):
-                logger.info("skipping because dataset exists: %s" % name)
-                os.remove(ncname)
-                continue
-            shutil.move(ncname, target)
+        for ncname in pool.map(_ass_era5_getyear, combi):
+            downloaded.append(ncname)
 
+    for c in zip(combi, downloaded):
+        year, ncname = c
+        yn = name_yearly(name, year)
+        target = os.path.join(path, _tools.WEA_FMT % yn)
+        # gently move the old file out of way
+        if not _ass_clear_target(target, replace):
+            logger.info("skipping because dataset exists: %s" % name)
+            os.remove(ncname)
+            continue
+        # TODO merge nc in ZIP
+        # shutil.move(ncname, target)
+        merge_zipped_nc(ncname, target)
 # -------------------------------------------------------------------------
 def _cerraname(y, lt=None):
     """
@@ -1312,6 +1396,8 @@ def assemble_CERRA(path: str, name="CERRA", years: list = [],
       points to a valid temporary directory for intermediate files.
 
     """
+    logger.debug(f"assemble_CERRA: path={path}, name={name}, "
+                 f"years={years}, replace={replace}, args={args}")
     temp_path = _tools.TEMP
     logger.debug(f"looking for cdo ...{temp_path}")
     data = cdo.Cdo(tempdir=temp_path)

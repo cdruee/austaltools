@@ -64,11 +64,11 @@ class TestCommandLine(unittest.TestCase):
     def test_week5(self):
         make_zeitreihe()
         # other directory, missing options
-        command = [NAME, '-w', 'tests', COMMAND]
+        command = [NAME, '-d', 'tests', COMMAND]
         out, err, exitcode = capture(command)
         assert exitcode == 2
         # other directory, output only
-        command = [NAME, '-w', 'tests', COMMAND,
+        command = [NAME, '-d', 'tests', COMMAND,
                    '-w', '-o', '1.0']
         out, err, exitcode = capture(command)
         assert exitcode == 0
@@ -79,23 +79,23 @@ class TestCommandLine(unittest.TestCase):
         make_cycle('cycle.yaml')
         capture(['cat','tests/cycle.yaml'])
         # cycle file, implicit default name
-        command = [NAME, '-w', 'tests', COMMAND,
+        command = [NAME, '-d', 'tests', COMMAND,
                    '-c']
         out, err, exitcode = capture(command)
         assert exitcode == 0
         # cycle file, do not accept filename after -c
-        command = [NAME, '-w', 'tests', COMMAND,
+        command = [NAME, '-d', 'tests', COMMAND,
                    '-c', 'cycle.yaml']
         out, err, exitcode = capture(command)
         assert exitcode == 2
         # cycle file, explicit default name
-        command = [NAME, '-w', 'tests', COMMAND,
+        command = [NAME, '-d', 'tests', COMMAND,
                    '-c', '-f', 'cycle.yaml']
         out, err, exitcode = capture(command)
         assert exitcode == 0
         os.renames('tests/cycle.yaml', 'tests/abcde.yaml')
         # cycle file, non-default name
-        command = [NAME, '-w', 'tests', COMMAND,
+        command = [NAME, '-d', 'tests', COMMAND,
                    '-c', '-f', 'abcde.yaml']
         out, err, exitcode = capture(command)
         assert exitcode == 0

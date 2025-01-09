@@ -250,7 +250,7 @@ def main(args=None):
         _tools.TEMP = args["temp_dir"]
 
     try:
-        if args['command'] in ['buildings-geojson', 'bg']:
+        if args['command'] in ['import-buildings', 'bg']:
             import_buildings.main(args)
         elif args['command'] == 'eap':
             eap.main(args)

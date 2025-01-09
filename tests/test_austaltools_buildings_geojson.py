@@ -9,7 +9,7 @@ import austaltools.import_buildings as prog
 import austaltools._tools as _tools
 
 NAME = os.path.join('austaltools','command_line.py')
-SUBCMD = "buildings-geojson"
+SUBCMD = "import-buildings"
 
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)

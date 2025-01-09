@@ -59,9 +59,14 @@ def cli_parser():
     return parser
 
 # -------------------------------------------------------------------------
-# call main routine
-if __name__ == "__main__":
+# main routine
+def main():
     parser = cli_parser()
     args = vars(parser.parse_args())
     args['command'] = 'simple'
     command_line.main(args)
+
+# -------------------------------------------------------------------------
+# call main routine
+if __name__ == "__main__":
+    main()

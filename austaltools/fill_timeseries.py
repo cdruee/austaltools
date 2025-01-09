@@ -456,9 +456,8 @@ def parse_cycle(c_id: str, c_info : dict,
 
     if 'emissionfactor' in c_info.keys():
         emissionfactor = c_info['emissionfactor']
-        with c_info['substance'] as es:
-            logger.info(f'cycle {c_id} given in {unit_info}, ' +
-                    f'applying emission factor for {es}: {emissionfactor}')
+        logger.info(f'cycle {c_id} given in {unit_info}, ' +
+                f'applying emission factor: {emissionfactor}')
     else:
         emissionfactor = 1.
 

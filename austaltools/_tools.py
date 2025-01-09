@@ -826,15 +826,15 @@ def evaluate_location_opts(args: dict):
         station = int(pd.to_numeric(args["dwd"]))
         lat, lon, ele, nam = read_dwd_stationinfo(
             station, datafile=storage_dwd)
-        rechts, hoch, _ = _tools.ll2gk(lat, lon)
+        rechts, hoch, _ = ll2gk(lat, lon)
     elif args.get("wmo", None) is not None:
         lat, lon, ele, nam = wmo_metadata.wmo_stationinfo(args["wmo"])
     elif args.get("gk", None) is not None:
         rechts, hoch = [float(x) for x in args['gk']]
-        lat, lon, _ = _tools.gk2ll(rechts, hoch)
+        lat, lon, _ = gk2ll(rechts, hoch)
     elif args.get("ut", None) is not None:
-        rechts, hoch, _ = _tools.ut2gk(*[float(x) for x in args['ut']])
-        lat, lon, _ = _tools.gk2ll(rechts, hoch)
+        rechts, hoch, _ = ut2gk(*[float(x) for x in args['ut']])
+        lat, lon, _ = gk2ll(rechts, hoch)
     elif args.get("ll", None) is not None:
         lat, lon = [float(x) for x in args['ll']]
     else:

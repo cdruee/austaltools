@@ -542,7 +542,7 @@ def plot_building_shapes(args: dict, polygons: list[tuple],
     :type polygons: list[tuple]
     :param buildings: Building objects
     :type buildings:  list[_tools.Building]
-    :param topo: Name of topography file (\*.grid)
+    :param topo: Name of topography file (*.grid)
     :type topo: str (optional)
 
     """
@@ -699,6 +699,8 @@ def main(args):
         buildings_file = args['file']
     else:
         buildings_file = os.path.join(args['working_dir'], args['file'])
+    if not os.path.exists(buildings_file):
+        raise IOError(f"file not found: {buildings_file}")
     logger.info('reading: %s' % buildings_file)
     with open(buildings_file) as f:
         data = json.load(f)
