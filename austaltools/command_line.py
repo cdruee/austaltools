@@ -193,7 +193,7 @@ def simple(args):
     for x in ['gk', 'ut', 'sources', 'ele']:
         t_args[x] = None
     t_args['ll'] = [args['lat'], args['lon']]
-    t_args['source'] = "DGM25-RP"
+    t_args['source'] = "DGM25-DE"
     t_args['extent'] = 6.
     # call program
     input_terrain.main(t_args)

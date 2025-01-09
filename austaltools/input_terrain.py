@@ -117,11 +117,11 @@ def main(args: dict):
     lat, lon, ele, stat_no, stat_nam = _tools.evaluate_location_opts(args)
     rechts, hoch, _ = _tools.ll2gk(lat, lon)
 
-    if args["source"] in AVAILABLE_DEMS:
-        source = args["source"]
+    if args['source'] in AVAILABLE_DEMS:
+        source = args['source']
         storage_path = AVAILABLE_DEMS[source]
     else:
-        raise ValueError("Source must be one of the available sources")
+        raise ValueError(f"Not an available source: {args['source']}")
 
     logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
     logger.debug("lon: %s, lat: %s" % (lon, lat))
