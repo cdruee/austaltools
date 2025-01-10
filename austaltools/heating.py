@@ -52,7 +52,9 @@ logger = logging.getLogger()
 
 # ----------------------------------------------------
 
-cp = m.constants.cp
+
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    cp = m.constants.cp
 
 WALL_EPSILON = 0.95
 # wall spectral emissivity in 1
