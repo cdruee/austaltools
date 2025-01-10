@@ -34,17 +34,17 @@ Each dict has the follwing entries:
     in the same data as the dataset when it is downloaded or assembled.
     Licenses may be specified:
 
-* by an idenfifier recogized by the
-    Linux foundation `SPDX project <https://spdx.org/>`_
-    (see `this list <https://spdx.org/licenses/>`_)
-    prefixed by "spdx:".
-    For example: :json:`"license": "spdx:DL-DE-BY-2.0"`
+    - by an idenfifier recogized by the
+      Linux foundation `SPDX project <https://spdx.org/>`_
+      (see `this list <https://spdx.org/licenses/>`_)
+      prefixed by "spdx:".
+      For example: :json:`"license": "spdx:DL-DE-BY-2.0"`
 
-* in a file that should reside in `austaltools/data`.
-    The filename must be prefixed by "file:".
-    If the filename is empty, the file "<dataset code>.LICENSE.txt"
-    in `austaltools/data` will be used.
-    For example: :json:`"license": "file:"`
+    - in a file that should reside in `austaltools/data`.
+      The filename must be prefixed by "file:".
+      If the filename is empty, the file "<dataset code>.LICENSE.txt"
+      in `austaltools/data` will be used.
+      For example: :json:`"license": "file:"`
 
 "notice"
     (optional, str)

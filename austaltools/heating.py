@@ -10,11 +10,11 @@ import re
 
 import numpy as np
 import pandas as pd
-import yaml
-from tqdm import tqdm
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import meteolib as m
+    import yaml
+    from tqdm import tqdm
 
 try:
     from . import _tools
