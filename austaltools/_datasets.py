@@ -996,8 +996,23 @@ def merge_zipped_nc(source, destination):
         # TODO
         # time is OK here but broken when file is opened again !?!
         if not 'time' in dst.variables and 'valid_time' in dst.variables:
-            dst.renameVariable("valid_time","time")
-            dst.renameDimension("valid_time","time")
+            timevar = dst.variables['valid_time']
+            newvar = 'time'
+            logger.debug(f"creating new time variable {newvar}")
+            dst.createVariable(newvar,
+                               datatype='d',
+                               dimensions=timevar.dimensions,
+                               compression=cmpr,)
+            logger.debug(f"... reading old time values")
+            datesin = netCDF4.num2date(timvar[:], timevar.units)
+            logger.debug(f"... setting attributes")
+            newunit = 'hours since 1900-01-01'
+            dst.variables[newvar].setncattr('long_name', newvar)
+            dst.variables[newvar].setncattr('standard_name', newvar)
+            dst.variables[newvar].setncattr('units', newunit)
+            dst.variables[newvar].setncattr('calendar', 'proleptic_gregorian')
+            logger.debug(f"... setting new time values")
+            dst.variables[newvar][:] = date2num(datesin, newunit)
 
         for src in sources:
             src.close()
