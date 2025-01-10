@@ -155,7 +155,7 @@ def expand_cycles(yinfo):
     {
         'cycle1': {'column': '01.nox', 'source': None, 'substance': 'NOX', 'emissionfactor': 1.0, 'multiplier': 1.0},
         'cycle2': {'column': '01.xx', 'multiplier': 1.0, 'emissionfactor': 1.0, 'substance': None},
-        'cycle3': {'column': '02.nox', 'multiplier': 2.5, 'multiplier': 1.0, 'emissionfactor': 1.0, 'substance': None}}
+        'cycle3': {'column': '02.nox', 'multiplier': 2.5, 'emissionfactor': 1.0, 'substance': None}}
 
     This example demonstrates how the specified template is applied to cycle1 and cycle2
     is processed without a template.
@@ -456,6 +456,7 @@ def parse_cycle(c_id: str, c_info : dict,
 
     if 'emissionfactor' in c_info.keys():
         emissionfactor = c_info['emissionfactor']
+        unit_info = c_info.get("unit", "---")
         logger.info(f'cycle {c_id} given in {unit_info}, ' +
                 f'applying emission factor: {emissionfactor}')
     else:
@@ -508,9 +509,10 @@ def parse_cycle(c_id: str, c_info : dict,
 
     if 'multiplier' in c_info.keys():
         multiplier = c_info['multiplier']
-        with c_info['substance'] as es:
-            logger.info(f'cycle {c_id} given in {unit_info}, ' +
-                    f'applying emission factor for {es}: {multiplier}')
+        es = c_info.get('substance', '(none)')
+        logger.info(f"cycle {c_id} given in {unit_info}, " +
+                    f"applying emission factor for {es}: {multiplier}")
+        del es
     else:
         mutiplier = 1.
 

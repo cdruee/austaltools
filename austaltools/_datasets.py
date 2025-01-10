@@ -945,11 +945,36 @@ def merge_zipped_nc(source, destination):
             raise IOError("No files found in %s" % source)
         sources = [netCDF4.Dataset(x, 'r') for x in ncfiles]
 
-        # create ne file/dataset
+
+        # create new file/dataset
+        compression = 'zlib'
+        stime = 'valid_time'
+        dtime = 'time'
         logger.debug("creating netcdf file %s" % destination_file)
         if os.path.exists(destination_file):
             os.remove(destination_file)
         dst = netCDF4.Dataset(destination_file, "w")
+
+        logger.debug(f"... reading old time values")
+        stimevar = sources[0][stime]
+        numtime = netCDF4.num2date(stimevar, stimevar.units)
+        logger.debug(f"creating new time variable {dtime}")
+        dst.createDimension(dtime, stimevar.size) # copy size
+        # dst.createDimension(dtime, size=None) # UNLIMITED
+        dst.createVariable(dtime,
+                           datatype='d',
+                           dimensions=(dtime),
+                           compression=compression,
+                           )
+        dunit = 'hours since 1900-01-01'
+        logger.debug(f"... setting attributes")
+        dst.variables[dtime].setncattr('long_name', dtime)
+        dst.variables[dtime].setncattr('standard_name', dtime)
+        dst.variables[dtime].setncattr('units', dunit)
+        dst.variables[dtime].setncattr('calendar', 'proleptic_gregorian')
+        logger.debug(f"... setting new time values")
+        dst.variables[dtime][:] = netCDF4.date2num(numtime, dunit)
+
         # copy attributes
         attributes = {}
         for src in sources:
@@ -960,59 +985,45 @@ def merge_zipped_nc(source, destination):
             dst.setncattr(a, attributes[a])
         # copy dimensions:
         for src in sources:
-            for d in src.dimensions:
-                if d not in dst.dimensions:
-                    dst.createDimension(d)
+            for k,v in src.dimensions.items():
+                if k not in dst.dimensions and k != stime:
+                    dst.createDimension(k, size=v.size)
         # copy variables:
         for src in sources:
             for k,v  in src.variables.items():
                 logger.debug(f"copy variable {k} ({v.datatype})")
-                if k not in dst.variables:
+                if k not in dst.variables and k != stime:
                     if isinstance(v.datatype,
                                   (netCDF4.VLType, netCDF4.CompoundType)):
                         cmpr = None
                     else:
-                        cmpr = 'zlib'
+                        cmpr = compression
                     if '_FillValue' in v.ncattrs():
                         fill = v.getncattr('_FillValue')
                     else:
                         fill = None
                     logger.debug(f" ... fill value {fill}")
+                    dims = (x if x != stime else dtime
+                            for x in v.dimensions)
                     # copy variable definition
                     dst.createVariable(k,
                                        v.datatype,
-                                       v.dimensions,
+                                       dims,
                                        compression=cmpr,
                                        fill_value=fill)
                     # copy variable attributes
                     for a in src.variables[k].ncattrs():
-                        if a not in ['_FillValue']:
-                            logger.debug(f" ... attribute: {a}")
-                            dst.variables[k].setncattr(
-                                a, src.variables[k].getncattr(a))
+                        if a in ['_FillValue']:
+                            continue # skip
+                        logger.debug(f" ... attribute: {a}")
+                        string = src.variables[k].getncattr(a)
+                        if a == 'coordinates':
+                            string = string.replace(stime, dtime)
+                        else:
+                            pass
+                        dst.variables[k].setncattr(a, string)
                     # copy variable values
                     dst[k][:] = src[k][:]
-
-        # TODO
-        # time is OK here but broken when file is opened again !?!
-        if not 'time' in dst.variables and 'valid_time' in dst.variables:
-            timevar = dst.variables['valid_time']
-            newvar = 'time'
-            logger.debug(f"creating new time variable {newvar}")
-            dst.createVariable(newvar,
-                               datatype='d',
-                               dimensions=timevar.dimensions,
-                               compression=cmpr,)
-            logger.debug(f"... reading old time values")
-            datesin = netCDF4.num2date(timvar[:], timevar.units)
-            logger.debug(f"... setting attributes")
-            newunit = 'hours since 1900-01-01'
-            dst.variables[newvar].setncattr('long_name', newvar)
-            dst.variables[newvar].setncattr('standard_name', newvar)
-            dst.variables[newvar].setncattr('units', newunit)
-            dst.variables[newvar].setncattr('calendar', 'proleptic_gregorian')
-            logger.debug(f"... setting new time values")
-            dst.variables[newvar][:] = date2num(datesin, newunit)
 
         for src in sources:
             src.close()
@@ -1212,9 +1223,12 @@ def assemble_ERA5(path: str, name="ERA5", years: list =[],
             logger.info("skipping because dataset exists: %s" % name)
             os.remove(ncname)
             continue
-        # TODO merge nc in ZIP
-        # shutil.move(ncname, target)
-        merge_zipped_nc(ncname, target)
+        if zipfile.is_zipfile(ncname):
+            # new output format as of Jan 2024
+            merge_zipped_nc(ncname, target)
+        else:
+            # old output format as of Jan 2024
+            shutil.move(ncname, target)
 # -------------------------------------------------------------------------
 def _cerraname(y, lt=None):
     """

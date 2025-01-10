@@ -36,7 +36,7 @@ class TestCommandLine(unittest.TestCase):
         command = [NAME, CMD]
         out, err, exitcode = capture(command)
         assert exitcode != 0
-        assert out.decode().startswith('usage')
+        assert err.decode().startswith('usage')
 
     def test_help(self):
         command = [NAME, CMD, '-h']
@@ -107,7 +107,8 @@ class TestCommandLine(unittest.TestCase):
                    '-L', '6.75', '49.75',
                    OUTPUT]
         out, err, exitcode = capture(command)
-        assert exitcode == 1
+        assert exitcode == 2
+        assert err.decode().startswith('usage')
         produced_files = [x for x in expected_files(OUTPUT)
                           if os.path.exists(x)]
         for x in produced_files:
