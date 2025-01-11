@@ -68,11 +68,21 @@ def find_terrain_data():
 
 
 def show_notice(storage_path, source):
+    """
+    Shows a notice to the user when a dataset is accessed,
+    if this is required by the original supplier of the dataset.
+
+    :param storage_path: path to the dataset files
+    :type storage_path: str
+    :param source: dataset ID
+    :type source: str
+
+    """
     noticefile = os.path.join(storage_path,
                            "%s.NOTICE.txt" % source)
     logger.debug('noticefile: %s' % noticefile)
-    print('IMPORTANT: data copyright notice:')
     if os.path.exists(noticefile):
+        print('IMPORTANT: data copyright notice:')
         with open(noticefile, "r") as f:
             for x in f.readlines():
                 print(x)

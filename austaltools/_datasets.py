@@ -1041,11 +1041,17 @@ def show_notice(storage_path, source):
     :type source: str
 
     """
-    print('data copyright notice:')
-    with open(os.path.join(storage_path,
-                           "%s.NOTICE.txt" % source), "r") as f:
-        for x in f.readlines():
-            print(x)
+    def show_notice(storage_path, source):
+        noticefile = os.path.join(storage_path,
+                                  "%s.NOTICE.txt" % source)
+        logger.debug('noticefile: %s' % noticefile)
+        if os.path.exists(noticefile):
+            print('IMPORTANT: data copyright notice:')
+            with open(noticefile, "r") as f:
+                for x in f.readlines():
+                    print(x)
+        else:
+            logger.debug('(no noticefile)')
 
 
 # -------------------------------------------------------------------------

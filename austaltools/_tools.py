@@ -903,7 +903,7 @@ def common_plot(args: dict,
     :param args["colormap"]: name of colormap to use
       Defaults to :py:const:`DEFAULT_COLORMAP`:.
     :type args["colormap"]: str
-    :param args['display']: How to display the data. Permitted values are
+    :param args['kind']: How to display the data. Permitted values are
        "contour" for colour filled contour levels and
        "grid" for color-coded rectangular grid.
     :type args["display"]: str
@@ -1008,7 +1008,7 @@ def common_plot(args: dict,
         levels = [cl[0]]
         for i in range(1,len(cl)):
             levels += list(np.linspace(cl[i-1], cl[i], 10))[1:]
-    if args['display'] == "contour":
+    if args['kind'] == "contour":
         #
         # Note to self: "TypeError: 'NoneType' object is not callable"
         #               its pycharm's debugging mode, stupid
@@ -1022,7 +1022,7 @@ def common_plot(args: dict,
                            norm=matplotlib.colors.PowerNorm(.66)
                            )
         plt.colorbar(img, label=unit, extend='both')
-    elif args['display'] == "grid":
+    elif args['kind'] == "grid":
         img = plt.pcolor(datx, daty,
                          datz.T,
                          shading="nearest",
