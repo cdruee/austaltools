@@ -212,12 +212,14 @@ def simple(args):
         f.write('%s %s : Reference Position\n' % (lat, lon))
         x, y, _ = _tools.ll2gk(lat, lon)
         f.write('%.0f %.0f : Gauss-Krueger Coordinates\n' % (x, y))
-        try:
-            z0 = _corine.roughness_austal(x, y, 20.)
-        except RuntimeError:
+
+        print('getting averaged surface roughness')
+        z0 = _corine.roughness_austal(x, y, 20.)
+        if z0 is None:
             z0 = _corine.roughness_web(x, y, 20.)
         f.write('%.1f : z0 at position of wind measurement\n' % z0)
 
+    print('done.')
 
 # ----------------------------------------------------
 

@@ -686,7 +686,7 @@ def assemble_GLO_30(path, name = "GLO_30",
         for lon in range(5, 16):
             url = download_dir + file_fmt % (lat, lon)
             logger.debug("downloading ... %s" % url)
-            tar_file, _ = _tools.download(url, os.path.basename(url))
+            tar_file = _tools.download(url, os.path.basename(url))
             name_root = tar_file.replace(".tar", "")
             with tarfile.open(tar_file) as tf:
                 to_extract = [x for x in tf.getmembers()
@@ -732,7 +732,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
     """
     support_url = ("https://data.rda.ucar.edu/d758000/support/"
                    + "GTOPO30support.tar.gz")
-    download_fmt = ("https://data.rda.ucar.edu/ds758000/elevtiles/" +
+    download_fmt = ("https://data.rda.ucar.edu/d758000/elevtiles/" +
                     "%s.DEM.gz")
     tiles = ["W020N90"]
     # known_tiles = \
@@ -749,7 +749,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
         logger.info("dataset exists ... %s" % name)
         return False
     logger.debug("downloading ... %s" % support_url)
-    support_file, _ = _tools.download(
+    support_file = _tools.download(
         support_url, os.path.basename(support_url))
     with tarfile.open(support_file) as support_tar:
         # no get every tile we want
@@ -761,7 +761,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
             # now download the actual data file for the tile
             download_url = download_fmt % tile
             logger.debug("downloading ... %s" % download_url)
-            tile_file, _ = _tools.download(
+            tile_file = _tools.download(
                 download_url, os.path.basename(download_url))
             # expand the terrain data holding file *.DEM
             # and convert it to a GeoTiff file
@@ -850,9 +850,14 @@ def provide_terrain(source: str, path: str = None,
                 lic_aux = os.path.join(str(_tools.DIST_AUX_FILES), lic_id)
             shutil.copy(lic_aux, lic_file)
     if dataset.notice is not None:
+        if "dd mmm yyyy" in dataset.notice:
+            acc_txt = pd.Timestamp.now().strftime("%d %m %Y")
+            not_txt = dataset.notice.replace("dd mmm yyyy", acc_txt)
+        else:
+            not_txt = dataset.notice
         not_file = os.path.join(path, dataset.file_notice)
         with open(not_file, 'w') as f:
-            f.write(dataset.notice)
+            f.write(not_txt)
     return
 
 # -------------------------------------------------------------------------

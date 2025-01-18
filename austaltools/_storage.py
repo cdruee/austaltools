@@ -1,8 +1,15 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Module that provides funtions to manage the storage locations for
+configuration and datasets that serve as input for austaltools
+"""
 import os
 import tempfile
 import logging
-import yaml
-from setuptools.command.setopt import config_file
+
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    import yaml
 
 try:
     from ._version import __title__

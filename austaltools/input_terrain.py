@@ -175,7 +175,11 @@ def main(args: dict):
               )
     out_name = '%s.grid' % args['output']
     logger.info("writing output to: %s" % out_name)
-    gdal.Translate(out_name, tif_name, noData=-9999., format='AAIGrid')
+    gdal.Translate(out_name, tif_name,
+                   noData=-9999.,
+                   format='AAIGrid',
+                   creationOptions={'DECIMAL_PRECISION':2}
+                   )
     #
     # clean up
     #
@@ -192,7 +196,7 @@ def add_options(subparsers):
         default_dem = list(AVAILABLE_DEMS)[0]
     else:
         default_dem = None
-    default_extent = 6.
+    default_extent = 5.
 
     pars_ter = subparsers.add_parser(
         name='terrain',

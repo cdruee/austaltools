@@ -169,7 +169,13 @@ def get_roughness_length(working_dir=None, conf=None):
         else:
             logger.warning("no source height defined, assuming 10m")
             hq = 10.
-        z0 = _corine.mean_roughness(xg, yg, hq)
+        logger.debug('averaging z0 from local corine inventory')
+        z0 = _corine.roughness_austal(xg, yg, hq)
+        if z0 is None:
+            logger.debug('averaging z0 from EEA Web API')
+            z0 = _corine.roughness_web(xg, yg, hq)
+        logger.info(f"z0 at position of wind measurement: {z0}")
+
     return z0
 
 # -------------------------------------------------------------------------

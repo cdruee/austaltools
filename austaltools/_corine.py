@@ -112,16 +112,16 @@ def corine_file_load():
 
 # ----------------------------------------------------
 
-def roughness_austal(lat: float, lon: float, h: float,
+def roughness_austal(xg: float, yg: float, h: float,
                         fac: int = None) -> int:
     """
     Looks up the CORINE land cover class for a given latitude and longitude
     in the corine data file distributed along with AUSTAL.
 
-    :param lat: Latitude of the location to query.
-    :type lat: float
-    :param lon: Longitude of the location to query.
-    :type lon: float
+    :param xg: X-coordinate of the center point.
+    :type xg: float
+    :param yg: Y-coordinate of the center point.
+    :type yg: float
     :param h: Radius of the area to sample points.
     :type h: float
     :param fac: Factor to determine the density of sample points
@@ -139,19 +139,25 @@ def roughness_austal(lat: float, lon: float, h: float,
     xmin = float(CORINE_GERMANY.header['xmin'])
     ymin = float(CORINE_GERMANY.header['ymin'])
     delta = float(CORINE_GERMANY.header['delta'])
+    nx = len(CORINE_GERMANY.data['Classes'][0,0])
+    ny = CORINE_GERMANY.data['Classes'].shape[1]
+
     z0_classes = {k:v for k, v in zip(
         CORINE_GERMANY.header['clsi'].split(),
         [float(x)
          for x in CORINE_GERMANY.header['clsd'].replace(' m','').split()]
     )}
 
-    logger.debug('... for position: ' + str(lon) + ', ' + str(lat))
-    xg, yg, _ = _tools.ll2gk(lat, lon)
+    logger.debug(f"... for position: {xg}, {yg}")
+    if not xmin <= xg <= xg + delta * nx and ymin <= yg <= yg + delta * ny:
+        logger.warning('position outside region')
+        return None
+
     sample = sample_points(xg, yg, h, fac)
     values = []
-    for x, y in sample:
-        ix = int(np.floor( (xg - xmin) / delta))
-        iy = int(np.floor( (yg - ymin) / delta))
+    for xx, yy in sample:
+        ix = int(np.floor( (xx - xmin) / delta))
+        iy = int(np.floor( (yy - ymin) / delta))
         logger.debug(f"... grid position: {ix} {iy}")
         digit = CORINE_GERMANY.data['Classes'][0,iy][ix]
         if digit not in z0_classes:
@@ -188,16 +194,30 @@ def query_corine_class(lat: float, lon: float) -> int:
     data = urllib.parse.urlencode(info).encode('ascii')
     req = urllib.request.Request(url='/'.join((REST_API_URL, 'query')),
                                  data=data, method='POST')
-    response = urllib.request.urlopen(req, timeout=5)
-
-    res_text = response.read().decode()
-    res_data = json.loads(res_text)
-    features = res_data['features']
-    if features is not None and len(features) > 0:
-        result = features[0]['attributes']['Code_18']
+    try:
+        response = urllib.request.urlopen(req, timeout=5)
+    except urllib.error.HTTPError as e:
+        logger.error(f"could not look up CORINE class online: the server "
+                     f"returned the error code: {e.code} ('{e.reason}')")
+        features = None
+    except urllib.error.URLError as e:
+        logger.error(f"could not look up CORINE class online "
+                     f"due to a communication error: {e.reason}")
+        features = None
     else:
+        res_text = response.read().decode()
+        res_data = json.loads(res_text)
+        features = res_data['features']
+    if features is None:
         result = 0
-    logger.debug('... CORINE class: ' + result)
+    else:
+        if len(features) == 1:
+            result = features[0]['attributes']['Code_18']
+            logger.debug('... CORINE class: ' + result)
+        else:
+            logger.error("looking up CORINE class online did not return "
+                        "one single feature: %" % str(features))
+            result = 0
     return int(result)
 
 # ----------------------------------------------------
