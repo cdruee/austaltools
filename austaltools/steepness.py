@@ -5,6 +5,8 @@ create basic plot for austal result files
 import logging
 import os
 
+import austaltools._common
+
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
     import readmet
@@ -53,7 +55,7 @@ def main(args):
     elif args['plot'] == '__default__':
         args['plot'] = "steepness0%01d" % args["grid"]
 
-    _tools.common_plot(args, gamma, unit="m/m", topo=topo_path, dots=dots)
+    austaltools._common.common_plot(args, gamma, unit="m/m", topo=topo_path, dots=dots)
 
 
 # ------------------------------------------------------------------------
@@ -70,6 +72,6 @@ def add_options(subparsers):
                           default=0,
                           help='ID (number) of the grid to evaluate. '
                                'Defaults to 0')
-    pars_ste = _tools.add_arguents_common_plot(pars_ste)
+    pars_ste = austaltools._common.add_arguents_common_plot(pars_ste)
 
     return pars_ste

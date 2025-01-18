@@ -15,8 +15,7 @@ import zipfile
 import numpy as np
 import pandas as pd
 
-import austaltools._tools
-#from ._dwd_observations import download_DWD_weather
+import austaltools._common
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import meteolib as m
@@ -24,6 +23,8 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 try:
     from ._version import __version__, __title__
+    from . import _common
+    from . import _storage
     from . import _tools
     from . import _datasets
     from . import _fetch_dwd_obs
@@ -31,6 +32,8 @@ try:
     from . import wmo_metadata
 except ImportError:
     from _version import __version__, __title__
+    import _common
+    import _storage
     import _tools
     import _datasets
     import _fetch_dwd_obs
@@ -43,7 +46,7 @@ logger = logging.getLogger()
 
 # ----------------------------------------------------
 KNOWN_SOURCES = ["ERA5", "CERRA", "DWD"]
-STORAGE_LOCATIONS = _tools.STORAGE_LOCATIONS
+STORAGE_LOCATIONS = austaltools._storage.STORAGE_LOCATIONS
 STORAGE_DIR = "weather"
 STORAGE_PATH = None  # will be filled lazy
 
@@ -379,9 +382,13 @@ def get_era5_weather(lat, lon, year, datafile=None) \
     length `z0` from "forecast surface roughness"
 
     :param lat: position latitude in degrees
+    :type lat: float
     :param lon: position laongitude  in degrees
+    :type lon: float
     :param year: get data from this calendar year
-    :param storage_path: (optional) expect ERA5 data in this directory
+    :type year: int
+    :param datafile: (optional) read from this ERA5 data file
+    :type datafile: str | None
     :return: weather timeseries as dataframe and surface roughness in m.
         The index of the dataframe is the measurement time as `datetime64`,
         the columns are:
@@ -619,9 +626,13 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
     length `z0` from "forecast surface roughness"
 
     :param lat: position latitude in degrees
+    :type lat: float
     :param lon: position laongitude  in degrees
+    :type lon: float
     :param year: get data from this calendar year
-    :param storage_path: (optional) expect CERRA data in this directory
+    :type year: int
+    :param datafile: (optional) read from this CERRA data file
+    :type datafile: str | None
     :return: weather timeseries as dataframe and surface roughness in m.
         The index of the dataframe is the measurement time as `datetime64`,
         the columns are:
@@ -679,45 +690,6 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
 
 # ----------------------------------------------------
 
-def read_dwd_stationinfo(station, pos_lat=None, pos_lon=None,
-                         datafile=None):
-    if station is not None:
-        if pos_lat is not None and pos_lon is not None:
-            raise ValueError('lat and lon must be None ' +
-                             'unless station is None')
-    else:
-        sstr = None
-    ds = _datasets.dataset_get("DWD")
-    if datafile is None:
-        datafile = os.path.join(ds.path, ds.file_data)
-    logging.info('reading data from; %s' % datafile)
-    with zipfile.ZipFile(datafile,
-                         mode='r') as zf:
-        sf = pd.read_csv(filepath_or_buffer=zf.open(
-            'stationlist.csv', mode='r'))
-
-    srow = None
-    if station is not None:
-        srow = sf.index[sf.index == station]
-    else:
-        sf['sdist'] = _tools.spheric_distance(
-            sf['latitude'], sf['longitude'], pos_lat, pos_lon)
-        srow = sf['sdist'].argmin()
-
-    if srow is None:
-        raise ValueError('station not found: %s' % station)
-    lat = sf['latitude'][srow]
-    lon = sf['longitude'][srow]
-    ele = sf['elevation'][srow]
-    nam = sf['name'][srow]
-    logger.debug("station name: %s" % nam)
-    if station is None:
-        return lat, lon, ele, nam, int(srow)
-    else:
-        return lat, lon, ele, nam
-
-# ----------------------------------------------------
-
 def get_dwd_weather(lat, lon, year, station=None, datafile=None) \
         -> (pd.DataFrame, float):
     """
@@ -728,10 +700,13 @@ def get_dwd_weather(lat, lon, year, station=None, datafile=None) \
     length `z0` from "forecast surface roughness"
 
     :param lat: position latitude in degrees
+    :type lat: float
     :param lon: position laongitude  in degrees
+    :type lon: float
     :param year: get data from this calendar year
-    :param station: number of the station you are looking for
-    :param storage_path: (optional) expect DWD data in this directory
+    :type year: int
+    :param datafile: (optional) read from this data file
+    :type datafile: str | None
     :return: weather timeseries as dataframe and surface roughness in m.
         The index of the dataframe is the measurement time as `datetime64`,
         the columns are:
@@ -759,11 +734,11 @@ def get_dwd_weather(lat, lon, year, station=None, datafile=None) \
         datafile = os.path.join(ds.path, ds.file_data)
     logging.info('reading data from; %s' % datafile)
     if station is None:
-        lat, lon, ele, nam, station = read_dwd_stationinfo(
+        lat, lon, ele, nam, station = _common.read_dwd_stationinfo(
             station=None, pos_lat=lat, pos_lon=lon, datafile=datafile)
         logger.info(f"selected nearest station {nam}")
     else:
-        lat, lon, ele, nam = read_dwd_stationinfo(
+        lat, lon, ele, nam = _common.read_dwd_stationinfo(
             station, datafile=datafile)
     with zipfile.ZipFile(datafile,
                          mode='r') as zf:
@@ -866,7 +841,7 @@ def austal_weather(args):
             raise IOError('weather data not found: %s' % csv_name)
     else:
         lat, lon, ele, stat_no, stat_nam = (
-            _tools.evaluate_location_opts(args))
+            austaltools._common.evaluate_location_opts(args))
         obs = None
 
     rechts, hoch, _ = _tools.ll2gk(lat, lon)
@@ -1076,7 +1051,7 @@ def add_options(subparsers):
     pars_wea.add_argument(dest="output", metavar="NAME", nargs='?',
                           help="file name to store data in."
                           )
-    pars_wea = _tools.add_location_opts(pars_wea, stations=True)
+    pars_wea = austaltools._common.add_location_opts(pars_wea, stations=True)
     pars_wea.add_argument('-s', '--source',
                         metavar="CODE",
                         nargs=None,

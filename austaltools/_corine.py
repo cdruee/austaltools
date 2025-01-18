@@ -12,14 +12,21 @@ and calculate the mean roughness of a specified area.
 import json
 import logging
 import os
+import sys
 import urllib
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
 
+    import readmet
+
 try:
+    from ._version import __title__
+    from . import _storage
     from . import _tools
 except ImportError:
+    from _version import __title__
+    import _storage
     import _tools
 
 logging.basicConfig()
@@ -72,13 +79,95 @@ URL for the REST API endpoint to query CORINE land cover classes.
 :meta hide-value:
 """
 
+CORINE_GERMANY = None
 
 # ----------------------------------------------------
 
+def corine_file_help():
+    print(f"To use AUSTALs built-in CORINE landuse file, "
+          f"you must tell {__title__} where to find the "
+          f"AUSTAL installation.")
+    print(f"Run `{__title__} austal` to tell austaltools "
+          f"the location.")
+    print(f"{__title__} uses the Gauss-Krüger version of "
+          f"the land use file, i.e. you need the file "
+          f"'z0-gk.dmna' in the directory, where the"
+          f"AUSTAL executable ist stored.")
+
+# ----------------------------------------------------
+
+def corine_file_load():
+    conf = _storage.read_config()
+    austaldir = conf.get('austaldir', None)
+    if austaldir is None:
+        sys.tracebacklimit = 0
+        corine_file_help()
+        raise RuntimeError(f"`austaldir` not defined in config.")
+    corine_file = os.path.join(austaldir, 'z0-gk.dmna')
+    if not os.path.exists(corine_file):
+        corine_file_help()
+        raise RuntimeError(f"z0-gk.dmna not found in {austaldir}.")
+    z0gk = readmet.dmna.DataFile(corine_file)
+    return z0gk
+
+# ----------------------------------------------------
+
+def roughness_austal(lat: float, lon: float, h: float,
+                        fac: int = None) -> int:
+    """
+    Looks up the CORINE land cover class for a given latitude and longitude
+    in the corine data file distributed along with AUSTAL.
+
+    :param lat: Latitude of the location to query.
+    :type lat: float
+    :param lon: Longitude of the location to query.
+    :type lon: float
+    :param h: Radius of the area to sample points.
+    :type h: float
+    :param fac: Factor to determine the density of sample points
+               (default is 10).
+    :type fac: float, optional
+    :return: CORINE land cover class code for the specified location.
+    :rtype: int
+    """
+    logger.debug('querying CORINE inventory')
+    global CORINE_GERMANY
+    if CORINE_GERMANY is None:
+        logger.debug('loading AUSTALs local CORINE inventory')
+        CORINE_GERMANY = corine_file_load()
+
+    xmin = float(CORINE_GERMANY.header['xmin'])
+    ymin = float(CORINE_GERMANY.header['ymin'])
+    delta = float(CORINE_GERMANY.header['delta'])
+    z0_classes = {k:v for k, v in zip(
+        CORINE_GERMANY.header['clsi'].split(),
+        [float(x)
+         for x in CORINE_GERMANY.header['clsd'].replace(' m','').split()]
+    )}
+
+    logger.debug('... for position: ' + str(lon) + ', ' + str(lat))
+    xg, yg, _ = _tools.ll2gk(lat, lon)
+    sample = sample_points(xg, yg, h, fac)
+    values = []
+    for x, y in sample:
+        ix = int(np.floor( (xg - xmin) / delta))
+        iy = int(np.floor( (yg - ymin) / delta))
+        logger.debug(f"... grid position: {ix} {iy}")
+        digit = CORINE_GERMANY.data['Classes'][0,iy][ix]
+        if digit not in z0_classes:
+            logger.warning(f"Corine land cover class {digit} not defined")
+        z0 = z0_classes.get(digit, np.nan)
+        logger.debug(f"... CORINE class: {z0}")
+        values.append(z0)
+    result = np.mean(values, axis=0)
+    return result
+
+# ----------------------------------------------------
 
 def query_corine_class(lat: float, lon: float) -> int:
     """
-    Queries the CORINE land cover class for a given latitude and longitude.
+    Queries the CORINE land cover class for a given latitude and longitude
+    from the EEA web API.
 
     :param lat: Latitude of the location to query.
     :type lat: float
@@ -111,9 +200,9 @@ def query_corine_class(lat: float, lon: float) -> int:
     logger.debug('... CORINE class: ' + result)
     return int(result)
 
-
 # ----------------------------------------------------
-def sample_points(xg: float, yg: float, h: float, fac=10.) -> list:
+
+def sample_points(xg: float, yg: float, h: float, fac: int = None) -> list:
     """
     Generates a list of sample points within a specified radius.
 
@@ -129,6 +218,8 @@ def sample_points(xg: float, yg: float, h: float, fac=10.) -> list:
     :return: List of tuples representing the sample points (x, y).
     :rtype: list
     """
+    if fac is None:
+        fac = 10
     points = []
     for xm in np.arange(np.floor(-fac), np.ceil(fac + 1)) * h:
         for ym in np.arange(np.floor(-fac), np.ceil(fac + 1)) * h:
@@ -138,8 +229,9 @@ def sample_points(xg: float, yg: float, h: float, fac=10.) -> list:
                 points.append((x, y))
     return points
 
+# ----------------------------------------------------
 
-def mean_roughness(xg: float, yg: float, h: float, fac=10.) -> float:
+def roughness_web(xg: float, yg: float, h: float, fac=10.) -> float:
     """
     Calculates the mean roughness of an area based
     on CORINE land cover classes.
@@ -168,3 +260,35 @@ def mean_roughness(xg: float, yg: float, h: float, fac=10.) -> float:
             logger.error("Unknown corine class %s" % code)
     average = np.mean(z0_values)
     return average
+
+# ----------------------------------------------------
+
+def mean_roughness(source: str,
+                   xg: float, yg: float, h: float, fac=10.) -> float:
+    """
+    returns the mean roughness of an area based
+    on CORINE land cover classes from either source
+     - `web` for eea web API or
+     - `austal` for CORINE inventory from local austal installation
+
+    :param source: source of CORINE land cover classes.
+    :type source: str
+    :param xg: X-coordinate of the center point.
+    :type xg: float
+    :param yg: Y-coordinate of the center point.
+    :type yg: float
+    :param h: Radius of the area to calculate mean roughness.
+    :type h: float
+    :param fac: Factor to determine the density of sample points
+                (default is 10).
+    :type fac: float, optional
+    :return: Mean roughness of the specified area.
+    :rtype: float
+    """
+
+    if source == 'web':
+        return roughness_web(xg, yg, h, fac)
+    elif source == 'austal':
+        return roughness_austal(xg, yg, h, fac)
+    else:
+        raise ValueError("Source must be either 'web' or 'austal'")

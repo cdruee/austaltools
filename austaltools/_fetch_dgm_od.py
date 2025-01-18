@@ -25,10 +25,14 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 try:
     from ._version import __version__, __title__
+    from . import _datasets
+    from . import _storage
     from . import _tools
 except ImportError:
     from _version import __version__, __title__
     import _tools
+    import _datasets
+    import _storage
 
 disable_warnings(exceptions.InsecureRequestWarning)
 logger = logging.getLogger()
@@ -180,7 +184,7 @@ def xyz2tif(inputfile, srcsrs, utm_remove_zone=False):
     logger.debug(f"converting tile ... {inputfile} -> {tf1}")
     # returns a tuple containing file handle and the abs pathname!
     csvhdl, csvfile = tempfile.mkstemp(
-        prefix='dgm', suffix='.csv', dir=_tools.TEMP)
+        prefix='dgm', suffix='.csv', dir=_storage.TEMP)
     got_csv = xyz2csv(inputfile, csvfile,
                       utm_remove_zone=utm_remove_zone)
     os.remove(inputfile)
@@ -325,24 +329,24 @@ def merge_tiles(target, tile_files):
                      ] + tile_files
     gdal_merge.main(gdal_merge_options)
     s_srs = get_dataset_crs(merged_file)
-    if _tools.DEM_FMT.endswith('.tif'):
-        if s_srs == _tools.DEM_CRS:
+    if _datasets.DEM_FMT.endswith('.tif'):
+        if s_srs == _datasets.DEM_CRS:
             # we already have the wanted product
             shutil.move(merged_file, target)
         else:
             logger.debug(f"reprojecting to target projection "
-                         f"{_tools.DEM_CRS}")
+                         f"{_datasets.DEM_CRS}")
             gdal.Warp(destNameOrDestDS=target,
-                      dstSRS=_tools.DEM_CRS,
+                      dstSRS=_datasets.DEM_CRS,
                       srcDSOrSrcDSTab=merged_file,
                       format="GTiff",
                       creationOptions=["BIGTIFF=YES"]
                       )
-    elif _tools.DEM_FMT.endswith('.nc'):
-        logger.debug(f"converting and reprojecting to {_tools.DEM_CRS}")
+    elif _datasets.DEM_FMT.endswith('.nc'):
+        logger.debug(f"converting and reprojecting to {_datasets.DEM_CRS}")
         gdal.Warp(srcDSOrSrcDSTab=merged_file,
                   destNameOrDestDS=target,
-                  dstSRS=_tools.DEM_CRS,
+                  dstSRS=_datasets.DEM_CRS,
                   format="netCDF",
                   creationOptions=[
                       "FORMAT=NC4C",
@@ -350,7 +354,7 @@ def merge_tiles(target, tile_files):
                       "ZLEVEL=9"]
                   )
     else:
-        raise Exception(f'cannot handle _tools.DEM_FMT: {_tools.DEM_FMT}')
+        raise Exception(f'cannot handle _tools.DEM_FMT: {_datasets.DEM_FMT}')
     logger.debug(f"... written {target}")
 
 

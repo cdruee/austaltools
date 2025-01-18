@@ -6,6 +6,8 @@ import logging
 import os
 import sys
 
+import austaltools._storage
+
 try:
     from . import _tools
     from ._version import __version__, __title__
@@ -210,7 +212,10 @@ def simple(args):
         f.write('%s %s : Reference Position\n' % (lat, lon))
         x, y, _ = _tools.ll2gk(lat, lon)
         f.write('%.0f %.0f : Gauss-Krueger Coordinates\n' % (x, y))
-        z0 = _corine.mean_roughness(x, y, 20.)
+        try:
+            z0 = _corine.roughness_austal(x, y, 20.)
+        except RuntimeError:
+            z0 = _corine.roughness_web(x, y, 20.)
         f.write('%.1f : z0 at position of wind measurement\n' % z0)
 
 
@@ -247,7 +252,7 @@ def main(args=None):
     logger.debug('args: %s' % args)
 
     if args.get("temp_dir",None) is not None:
-        _tools.TEMP = args["temp_dir"]
+        austaltools._storage.TEMP = args["temp_dir"]
 
     try:
         if args['command'] in ['import-buildings', 'bg']:

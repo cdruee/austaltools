@@ -1,0 +1,506 @@
+import argparse
+import logging
+import os
+import sys
+import zipfile
+
+import pandas as pd
+
+if os.getenv('BUILDING_SPHINX', 'false') == 'false':
+    import numpy as np
+
+    import readmet
+
+    try:
+        import matplotlib
+        have_matplotlib = True
+        if os.name == 'posix' and "DISPLAY" not in os.environ:
+            matplotlib.use('Agg')
+            have_display = False
+        else:
+            have_display = True
+        import matplotlib.colors
+        import matplotlib.patches
+        import matplotlib.pyplot as plt
+    except ImportError:
+        have_matplotlib = False
+        have_display = False
+        matplotlib = None
+        plt = None
+
+try:
+    from . import _storage
+    from . import _tools
+    from . import _datasets
+    from . import wmo_metadata
+except ImportError:
+    import _storage
+    import _tools
+    import _datasets
+    import wmo_metadata
+
+logger = logging.getLogger(__name__)
+
+# ----------------------------------------------------
+
+DEFAULT_COLORMAP = "YlOrRd"
+"""Default colors used for the commpon plot type"""
+
+# ----------------------------------------------------
+
+def read_dwd_stationinfo(station, pos_lat=None, pos_lon=None,
+                         datafile=None):
+    if station is not None:
+        if pos_lat is not None and pos_lon is not None:
+            raise ValueError('lat and lon must be None ' +
+                             'unless station is None')
+    else:
+        sstr = None
+    ds = _datasets.dataset_get("DWD")
+    if datafile is None:
+        datafile = os.path.join(ds.path, ds.file_data)
+    logging.info('reading data from; %s' % datafile)
+    with zipfile.ZipFile(datafile,
+                         mode='r') as zf:
+        sf = pd.read_csv(filepath_or_buffer=zf.open(
+            'stationlist.csv', mode='r'))
+
+    srow = None
+    if station is not None:
+        srow = sf.index[sf.index == station]
+    else:
+        sf['sdist'] = _tools.spheric_distance(
+            sf['latitude'], sf['longitude'], pos_lat, pos_lon)
+        srow = sf['sdist'].argmin()
+
+    if srow is None:
+        raise ValueError('station not found: %s' % station)
+    lat = sf['latitude'][srow]
+    lon = sf['longitude'][srow]
+    ele = sf['elevation'][srow]
+    nam = sf['name'][srow]
+    logger.debug("station name: %s" % nam)
+    if station is None:
+        return lat, lon, ele, nam, int(srow)
+    else:
+        return lat, lon, ele, nam
+# -------------------------------------------------------------------------
+
+def add_arguents_common_plot(parser: argparse.ArgumentParser
+                             ) -> argparse.ArgumentParser:
+    """
+    Add agruments to a parser that are honored by the common_plot
+    funtion
+
+    :param parser: parser to add arguments to
+    :type parser: argparse.ArgumentParser
+    :return: parser with added arguments
+    :rtype:  argparse.ArgumentParser
+
+    """
+    parser.add_argument('-b', '--no-buildings',
+                        dest='buildings',
+                        action='store_false',
+                        help='do not show the buildings ' +
+                             'defined in config file')
+    parser.add_argument('-l', '--low-colors',
+                        dest='fewcols',
+                        action='store_true',
+                        help='use only few discrete colors ' +
+                             'for better print results')
+    parser.add_argument('-c', '--colormap',
+                        default=DEFAULT_COLORMAP,
+                        help='name of colormap to use. Defaults to "%s"' %
+                             DEFAULT_COLORMAP)
+    parser.add_argument('-k', '--kind',
+                        default='contour',
+                        choices=['contour', 'grid'],
+                        help='choose kind of display. ' +
+                             '`contour` produces filled contours, ' +
+                             '`grid` produces coloured grid cells. ' +
+                             'Defaults to `contour`')
+    parser.add_argument('-p', '--plot',
+                        metavar="FILE",
+                        nargs='?',
+                        const='__default__',
+                        help='save plot to a file. If `FILE` is "-" ' +
+                             'the plot is shown on screen. If `FILE` is ' +
+                             'missing, the file name defaults to ' +
+                             'the data file name with extension `png`'
+                        )
+    parser.add_argument('-f', '--force',
+                        action='store_true',
+                        default=False,
+                        help='force overwriting plotfile if it exists.')
+    return parser
+
+# -------------------------------------------------------------------------
+
+def add_location_opts(parser,
+                      stations=False,
+                      required=True):
+    """
+    This routine adds the input arguments defining a position:
+
+    :param parser: the arguemnt parser to add the options to
+    :type parser: argpargse.ArgumentParser
+    :param stations: WMO or DWD station numbers are accepted as positions
+    :type stations: bool
+    :param required: if a location specification is required
+      type required: bool
+
+    Note:
+        - dwd (str or None): DWD option, mutually exclusive with 'wmo' and required with 'ele'.
+        - wmo (str or None): WMO option, mutually exclusive with 'dwd' and required with 'ele'.
+        - ele (str or None): Element option, required with either 'dwd' or 'wmo'.
+        - year (int or None): Year option, required with '-L', '-G', '-U', '-D', or '-W'.
+        - output (str or None): Output name, required with '-L', '-G', '-U', '-D', or '-W'.
+        - station (str or None): Station option, only valid with 'dwd' or 'wmo'.
+
+    """
+    loc_opt = parser.add_mutually_exclusive_group(required=required)
+    loc_opt.add_argument('-L', '--ll',
+                         metavar=("LAT", "LON"),
+                         dest="ll",
+                         nargs=2,
+                         default=None,
+                         help='Center position given as Latitude and ' +
+                              'Longitude, respectively. ' +
+                              'This is the default.')
+    loc_opt.add_argument('-G', '--gk',
+                         metavar=("X", "Y"),
+                         dest="gk",
+                         nargs=2,
+                         default=None,
+                         help='Center position given in Gauß-Krüger zone 3' +
+                              'coordinates: X = `Rechtswert`, ' +
+                              'Y = `Hochwert`. ')
+    loc_opt.add_argument('-U', '--utm',
+                         metavar=("X", "Y"),
+                         dest="ut",
+                         nargs=2,
+                         default=None,
+                         help='Center position given in UTM Zone 32N' +
+                              'coordinates: X = `easting`, ' +
+                              'Y = `northing`.')
+    if stations:
+        loc_opt.add_argument('-D', '--dwd',
+                             metavar="NUMBER",
+                             dest="dwd",
+                             help='Weather station position with ' +
+                                  'German weather service (DWD) ID `NUMBER`')
+        loc_opt.add_argument('-W', '--wmo',
+                             metavar="NUMBER",
+                             dest="wmo",
+                             help='Postion of weather station with ' +
+                                  'World Meteorological Organization (WMO)' +
+                                  'station ID `NUMBER`')
+
+    return parser
+
+# -------------------------------------------------------------------------
+
+def evaluate_location_opts(args: dict):
+    """
+    get position from the command-line location options and
+    if applicable the WMO station number of this position
+
+    :param args: parsed arguments
+    :type args: dict
+    :return: position as lat, lon (WGS84) and rechts, hoch in Gauss-Krüger Band 3
+       and WMO station number of this position (0 if not applicable)
+    :rtype: float, float, float, float, int
+
+    """
+    station = 0
+    ele = None
+    nam = None
+    if args.get("dwd", None) is not None:
+        storage_dwd = _datasets.dataset_get("DWD").path
+        if storage_dwd is None:
+            sys.tracebacklimit = 0
+            raise ValueError("Dataset DWD is not available, "
+                       "download or assemble it.")
+        station = int(pd.to_numeric(args["dwd"]))
+        lat, lon, ele, nam = read_dwd_stationinfo(
+            station, datafile=storage_dwd)
+        rechts, hoch, _ = _tools.ll2gk(lat, lon)
+    elif args.get("wmo", None) is not None:
+        lat, lon, ele, nam = wmo_metadata.wmo_stationinfo(args["wmo"])
+    elif args.get("gk", None) is not None:
+        rechts, hoch = [float(x) for x in args['gk']]
+        lat, lon, _ = _tools.gk2ll(rechts, hoch)
+    elif args.get("ut", None) is not None:
+        rechts, hoch, _ = _tools.ut2gk(*[float(x) for x in args['ut']])
+        lat, lon, _ = _tools.gk2ll(rechts, hoch)
+    elif args.get("ll", None) is not None:
+        lat, lon = [float(x) for x in args['ll']]
+    else:
+        lat, lon = None
+    return lat, lon, ele, station, nam
+
+# -------------------------------------------------------------------------
+
+def plot_add_mark(ax, mark):
+    pf = pd.DataFrame(mark)
+    for i, p in pf.iterrows():
+        x = p['x']
+        y = p['y']
+        if 'sym' in p:
+            sym = p['symbol']
+        else:
+            sym = "o"
+        ax.plot(x, y, sym, markersize=10)
+
+
+def plot_add_topo(ax, topo, working_dir='.'):
+    logger.debug('adding topography')
+    if isinstance(topo, dict):
+        logger.debug('... from data in arguments')
+        topx = topo["x"]
+        topy = topo["y"]
+        topz = topo["z"]
+    elif isinstance(topo, str):
+        logger.debug('... from file: %s' % topo)
+        if os.path.exists(topo):
+            topo_path = topo
+        elif os.path.exists(os.path.join(working_dir, topo)):
+            topo_path = os.path.join(working_dir, topo)
+        else:
+            raise ValueError('topography file not found: %s' % topo)
+        logger.info('reading topography from %s' % topo_path)
+        topofile = readmet.dmna.DataFile(topo_path)
+        topz = topofile.data[""]
+        topx = topofile.axes(ax="x")
+        topy = topofile.axes(ax="y")
+    else:
+        raise ValueError('topo must be dict of filename')
+    con = ax.contour(topx, topy, topz.T, origin="lower",
+                     colors='black',
+                     linewidths=0.75
+                     )
+    ax.clabel(con, con.levels, inline=True, fontsize=10)
+    return con
+
+# -------------------------------------------------------------------------
+
+def common_plot(args: dict,
+                dat: dict,
+                unit: str = "",
+                topo: dict or str = None,
+                dots: dict or np.ndarray = None,
+                buildings: list = None,
+                mark: dict or pd.DataFrame = None,
+                scale: list or tuple = None):
+    """
+    Standard plot function for the package.
+
+    :param args: dict containing the plot configuration
+    :type args: dict
+    :param args["colormap"]: name of colormap to use
+      Defaults to :py:const:`DEFAULT_COLORMAP`:.
+    :type args["colormap"]: str
+    :param args['kind']: How to display the data. Permitted values are
+       "contour" for colour filled contour levels and
+       "grid" for color-coded rectangular grid.
+    :type args["display"]: str
+    :param args['fewcols']: if True, a colormap of at most 9
+      (or the numer of levels if explicitly passed by `scale`)
+      discrete colors ist generated for easy print reproduction.
+    :type args['fewcols']: bool
+    :param args["plot"]: Destination for the plot.
+      If empty or :py:const:`None` no plot is produced. If the value is
+      a string, the plot will be saved to file with that name. If
+      the name does have the extension ``.png``, this extension
+      is appendend. If the string does not contain a path,
+      the file will besaved in the current working directory.
+      If the string contains a path, the file will be saved
+      in the respective location.
+    :param args['working_dir']: Working directory,
+      where the data files reside.
+    :type args["working_dir"]: str
+
+    :param dat: dictionary of `x`, `y`, and `z` values to plot.
+      'x' and 'y' must be lists of float or 1-D ndarray.
+      'z' must be ndarray of a shape matching the lenght of `x` and `y`
+    :type dat: dict
+    :param unit: physical units of the values `z` in dat
+    :type unit: str
+    :param scale: range of the color scale. None means auto scaling.
+    :type unit: tuple or None
+    :param topo: topography data as dict (same form as `dat`)
+      or filename of a topography file in dmna-format
+      or None for no topography
+    :type topo: dict or string or None
+    :param dots: data to ovelay dotted areas (e.g. to mark significance).
+      `dots` must either be a dict (same form as `dat`)
+      or a ndarray matching the `z` data in `dat` in shape.
+      dat values z < 0 are not overlaid,
+      values 0 <= z < 1 are sparesely dotted,
+      values 1 <= z < 2 are sparesely dotted,
+      spography data as dict (same form as `dat`)
+      or filename of a topography file in dmna-format
+      or None for no topography
+    :param buildings: List of `Building` objects to be displayed.
+      If None or list is epmty, no buildings are plotted.
+    :type buildings: list
+    :param mark: positions to mark. either dict containing list-like
+       objects of `x`, `y` and optionally 'symbol' of the same length
+       or a pandas data frame containing such columns.
+       `symbol` are matplotlib symbol strings. If missing 'o' is used.
+    :type mark: dict or pandas.Dataframe
+
+
+
+    """
+    if not have_matplotlib:
+        raise EnvironmentError('matplotlib not available, cannot plot')
+    if args["plot"] == "__show__" and not have_display:
+        raise EnvironmentError('no display, cannot show plot')
+
+    matplotlib.rcParams.update({'font.size': 16})
+    fig, ax = plt.subplots()
+    fig.set_size_inches(11, 8)
+
+    # ---------------------------
+    # plot data as color-coded map
+    #
+    if "colormap" in args:
+        cmap_name = args["colormap"]
+    else:
+        cmap_name = DEFAULT_COLORMAP
+    if isinstance(dat, dict):
+        datx = dat['x']
+        daty = dat['y']
+        datz = dat['z']
+        if (len(datx), len(daty)) != np.shape(datz):
+            raise ValueError('lenghts of x and y do not match shape of z')
+    else:
+        raise ValueError('dat must be dict')
+
+    levels = None
+    if scale is None:
+        dmin = np.nanmin(datz)
+        dmax = np.nanmax(datz)
+    elif isinstance(scale, float):
+        dmin = 0.
+        dmax = scale
+    elif len(scale) == 2:
+        dmin, dmax = scale
+    elif len(scale) > 2:
+        levels = np.array(scale)
+    if levels is None:
+        data_range = dmax - dmin
+        order = 10 ** np.floor(np.log10(data_range))
+        dmin = np.floor(dmin / order) * order
+        dmax = np.ceil(dmax / order) * order
+        logger.debug('data_range: %f' % data_range)
+        levels = np.arange(dmin, dmax, data_range / 10)
+
+    if args['fewcols']:
+        cmap = plt.get_cmap(cmap_name, len(levels) + 1)
+    else:
+        cmap = plt.get_cmap(cmap_name,1000)
+        cl = levels
+        levels = [cl[0]]
+        for i in range(1,len(cl)):
+            levels += list(np.linspace(cl[i-1], cl[i], 10))[1:]
+    if args['kind'] == "contour":
+        #
+        # Note to self: "TypeError: 'NoneType' object is not callable"
+        #               its pycharm's debugging mode, stupid
+        #
+        img = plt.contourf(datx, daty,
+                           datz.T,
+                           origin="lower",
+                           levels=levels,
+                           cmap=cmap,
+                           extend='both',
+                           norm=matplotlib.colors.PowerNorm(.66)
+                           )
+        plt.colorbar(img, label=unit, extend='both')
+    elif args['kind'] == "grid":
+        img = plt.pcolor(datx, daty,
+                         datz.T,
+                         shading="nearest",
+                         cmap=cmap,
+                         norm=matplotlib.colors.PowerNorm(.66)
+                         )
+        plt.colorbar(img, label=unit, extend='both', boundaries=levels)
+    else:
+        raise ValueError('argument display missing or invalid')
+    logger.debug('unit: %s' % unit)
+
+    # ---------------------------
+    # overlay dots e.g. to mark significance
+    #
+    if dots is not None:
+        if isinstance(dots, dict):
+            dotx = dots['x']
+            doty = dots['y']
+            dotz = dots['z']
+        elif isinstance(dots, np.ndarray):
+            dotz = dots
+            if np.shape(dotz) != np.shape(datz):
+                raise ValueError('dots shape does not equal dat shape')
+            else:
+                dotx = datx
+                doty = daty
+        else:
+            raise ValueError('dots must be dict or ndarray')
+        plt.contourf(dotx, doty, dotz.T, origin="lower",
+                     levels=[0, 1, 2],
+                     colors=['white', 'white', 'white', 'white'],
+                     hatches=['+', '..', '..', None],
+                     extend='both',
+                     alpha=0)
+        plt.contourf(datx, daty, dotz.T, origin="lower",
+                     levels=[0, 1, 2],
+                     colors=['white', 'white', 'white', 'white'],
+                     hatches=['+', '..', '..', None],
+                     extend='both',
+                     alpha=0)
+
+    # ---------------------------
+    # overlay topography as isolines
+    #
+    if topo is not None:
+        plot_add_topo(ax, topo, args['working_dir'])
+
+    # ---------------------------
+    # show buildings
+    #
+    if buildings is not None:
+        for bb in buildings:
+            ax.add_patch(
+                matplotlib.patches.Rectangle(
+                    xy=(bb.x, bb.y),
+                    width=bb.a,
+                    height=bb.b,
+                    angle=bb.w,
+                    fill=True,
+                    color="black",
+                )
+            )
+
+    # ---------------------------
+    # put marks on desired positions
+    #
+    if mark is not None:
+        plot_add_mark(ax,mark)
+
+    ax.set_xlabel("x in m")
+    ax.set_ylabel("y in m")
+
+    if args["plot"] == "__show__":
+        logger.info('showing plot')
+        plt.show()
+    elif args["plot"] not in [None, ""]:
+        if os.path.sep in args["plot"]:
+            outname = args["plot"]
+        else:
+            outname = os.path.join(args["working_dir"], args["plot"])
+        if not outname.endswith('.png'):
+            outname = outname + '.png'
+        logger.info('writing plot: %s' % outname)
+        plt.savefig(outname, dpi=180)

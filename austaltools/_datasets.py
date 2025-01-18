@@ -65,11 +65,13 @@ except ImportError:
 
 try:
     from ._version import __version__, __title__
+    from . import _storage
     from . import _tools
     from . import _fetch_dwd_obs
     from . import _fetch_dgm_od
 except ImportError:
     from _version import __version__, __title__
+    import _storage
     import _tools
     import _fetch_dwd_obs
     import _fetch_dgm_od
@@ -85,11 +87,19 @@ with (_tools.DIST_AUX_FILES / 'dataset_definitions.json').open() as f:
     DATASET_DEFINITIONS = json.load(f)
 
 SOURCES_TERRAIN = [k for k, v in DATASET_DEFINITIONS.items()
-                   if v['storage'] == _tools.STORAGE_TERRAIN]
+                   if v['storage'] == _storage.STORAGE_TERRAIN]
 """ list of known terrain data sources """
 SOURCES_WEATHER = [k for k, v in DATASET_DEFINITIONS.items()
-                 if v['storage'] == _tools.STORAGE_WAETHER]
+                   if v['storage'] == _storage.STORAGE_WAETHER]
 """ list of known weather data sources """
+DEM_FMT = '%s.elevation.nc'  # % NAME
+""" terrain database file name template"""
+DEM_CRS = "EPSG:5677"
+""" terrain data projection (GAUSS-KRÜGER zone 3)"""
+WEA_FMT = '%s.ak-input.nc'
+""" weather model database file name template"""
+OBS_FMT = '%s.obs.zip'
+""" weather observation database file name template"""
 
 
 # =========================================================================
@@ -223,58 +233,19 @@ class DataSet:
             self.file_notice = f"{self.name}.NOTICE.txt"
         if self.file_data is None:
             if self.storage == 'terrain':
-                self.file_data = _tools.DEM_FMT % self.name
+                self.file_data = DEM_FMT % self.name
             elif self.storage == 'weather':
                 pos = kwargs.get('position', None)
                 if pos == 'station':
-                    self.file_data = _tools.OBS_FMT % self.name
+                    self.file_data = OBS_FMT % self.name
                 elif pos in ['grid', None]:
-                    self.file_data = _tools.WEA_FMT % self.name
+                    self.file_data = WEA_FMT % self.name
                 else:
                     raise ValueError(f"unkown position: {pos}")
 
 
 # =========================================================================
 
-
-def locations_available(locs):
-    """
-    Check whether locations exist
-    :param locs: paths of storage location directories
-    :type locs: list[str]
-    :return: True if locations exist, False otherwise
-    :rtype: bool
-    """
-    return [x for x in locs if os.path.isdir(x)]
-
-
-# -------------------------------------------------------------------------
-def locations_writable(locs):
-    """
-    Check whether locations are writable
-    :param locs: paths of storage location directories
-    :type locs: list[str]
-    :return: True if locations are writable, False otherwise
-    :rtype: bool
-    """
-    return [x for x in locs if os.access(x, os.W_OK)]
-
-
-# -------------------------------------------------------------------------
-def location_has_storage(location, storage):
-    """
-    Check if location has storage
-    :param location: path to storage location
-    :type location: str
-    :param storage: name of storage
-    :type storage: str
-    :return: True if location has storage
-    :rtype: bool
-    """
-    return os.path.exists(os.path.join(location, storage))
-
-
-# -------------------------------------------------------------------------
 def dataset_get(name):
     """
     Yield the dataset with the given ID
@@ -316,15 +287,15 @@ def dataset_scan(locs : list = None):
     :type locs: list[str]
     """
     if locs is None:
-        locs = _tools.STORAGE_LOCATIONS
-    loc_avail = locations_available(locs)
+        locs = _storage.STORAGE_LOCATIONS
+    loc_avail = _storage.locations_available(locs)
     if len(loc_avail) == 0:
         raise ValueError("No locations available")
     for ds in DATASETS:
         for loc in reversed(loc_avail):
             if ds.storage is None:
                 raise ValueError(f'storage not defined in: {ds.name}')
-            if location_has_storage(loc, ds.storage):
+            if _storage.location_has_storage(loc, ds.storage):
                 path = os.path.join(loc, str(ds.storage))
                 datafile = os.path.join(path, ds.file_data)
                 if os.path.exists(datafile):
@@ -333,46 +304,6 @@ def dataset_scan(locs : list = None):
 
 
 # -------------------------------------------------------------------------
-def find_writeable_storage(locs: str = None,
-                           stor: str = None) -> str or None:
-    """
-    Finds a viable data storage directory and returns its path.
-    If `storage_path` is provided, only this path is checked
-    for existance.
-
-    :param locs: Candidate locations
-    :type locs: str
-    :param stor: Storage directory expected at location
-    :type stor: str
-    :return: path to a writable data storage directory
-    :rtype: str
-    """
-    if stor is None:
-        raise ValueError('stor must be provided')
-    if locs is None:
-        locs = _tools.STORAGE_LOCATIONS
-    loc_exist = locations_available(locs)
-    if len(loc_exist) == 0:
-        return None
-    loc_write = locations_writable(loc_exist)
-    if len(loc_write) == 0:
-        return None
-    for loc in loc_write:
-        if location_has_storage(loc, stor):
-            location = loc
-            break
-    else:
-        for loc in loc_write:
-            try:
-                os.makedirs(os.path.join(loc, stor))
-            except IOError:
-                continue
-            if os.path.isdir(os.path.join(loc, stor)):
-                location = loc
-                break
-        else:
-            raise Exception('Could not create data storage directory')
-    return os.path.join(location, stor)
 
 
 # -------------------------------------------------------------------------
@@ -459,7 +390,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, _tools.DEM_FMT % name)
+    target = os.path.join(path, DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -546,7 +477,7 @@ def assemble_DGM_SH(path, name, replace, args: dict):
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, _tools.DEM_FMT % name)
+    target = os.path.join(path, DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -594,7 +525,7 @@ def assemble_DGM25_RP(path, name="DGM25-RP",
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, _tools.DEM_FMT % name)
+    target = os.path.join(path, DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -646,7 +577,7 @@ def assemble_DGM_composit(path: str, name: str,
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, _tools.DEM_FMT % name)
+    target = os.path.join(path, DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -689,18 +620,18 @@ def assemble_DGM_composit(path: str, name: str,
         res_opts = {}
 
     # tip from https://gis.stackexchange.com/a/385864
-    with (tempfile.TemporaryDirectory(dir=_tools.TEMP) as tmp):
+    with (tempfile.TemporaryDirectory(dir=_storage.TEMP) as tmp):
         logger.debug("build virtual dataset")
         gdal.BuildVRT(os.path.join(tmp, vrt_name), members)
         logger.debug("writing data file %s" % target)
-        if _tools.DEM_FMT.endswith('.tif'):
+        if DEM_FMT.endswith('.tif'):
             gdal.Translate(destName=target,
                            srcDS=os.path.join(tmp, vrt_name),
                            format="GTiff",
                            creationOptions=["BIGTIFF=YES"],
                            **res_opts
                            )
-        elif _tools.DEM_FMT.endswith('.nc'):
+        elif DEM_FMT.endswith('.nc'):
             gdal.Translate(destName=target,
                            srcDS=os.path.join(tmp, vrt_name),
                            format="netCDF",
@@ -711,7 +642,7 @@ def assemble_DGM_composit(path: str, name: str,
                            **res_opts
                            )
         else:
-            raise Exception(f'cannot handle _tools.DEM_FMT: {_tools.DEM_FMT}')
+            raise Exception(f'cannot handle _tools.DEM_FMT: {DEM_FMT}')
     return True
 
 
@@ -741,7 +672,7 @@ def assemble_GLO_30(path, name = "GLO_30",
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, _tools.DEM_FMT % name)
+    target = os.path.join(path, DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -767,7 +698,7 @@ def assemble_GLO_30(path, name = "GLO_30",
                     # now extract tar member to current dir
                     tf.extract(x, '.')
     # merge the GeoTiff Files from all tiles into one file
-    target = os.path.join(path, _tools.DEM_FMT % "GLO-30")
+    target = os.path.join(path, DEM_FMT % "GLO-30")
     tile_files = glob.glob("Copernicus_*.tif")
     _fetch_dgm_od.merge_tiles(target, tile_files)
 
@@ -812,7 +743,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
     # "E120S60 ".split()
     # get the single archive that holds the supportive
     # files for all tiles
-    target = os.path.join(path, _tools.DEM_FMT % "GTOPO30")
+    target = os.path.join(path, DEM_FMT % "GTOPO30")
     logger.debug(f'data file path: {target}')
     if os.path.exists(target) and not replace:
         logger.info("dataset exists ... %s" % name)
@@ -881,7 +812,8 @@ def provide_terrain(source: str, path: str = None,
     :raises ValueError: if `method` is not one of the allowed values.
     """
     if path is None:
-        path = find_writeable_storage(path, _tools.STORAGE_TERRAIN)
+        path = _storage.find_writeable_storage(path,
+                                      _storage.STORAGE_TERRAIN)
     dataset = dataset_get(source)
     logger.info("providing terrain source %s" % source)
     if method == 'download':
@@ -891,7 +823,7 @@ def provide_terrain(source: str, path: str = None,
     elif method == 'assemble':
         # change to temp directory
         pwd = os.getcwd()
-        with tempfile.TemporaryDirectory(dir=_tools.TEMP) as temp_dir:
+        with tempfile.TemporaryDirectory(dir=_storage.TEMP) as temp_dir:
             os.chdir(temp_dir)
             logger.debug('calling %s' % str(dataset.assemble))
             dataset.assemble(path, source, force, dataset.arguments)
@@ -937,7 +869,7 @@ def merge_zipped_nc(source, destination):
     source_file = os.path.abspath(source)
     logger.info("unpacking downloaded zip archive %s" % source_file)
     destination_file = os.path.abspath(destination)
-    with tempfile.TemporaryDirectory(dir=_tools.TEMP) as td:
+    with tempfile.TemporaryDirectory(dir=_storage.TEMP) as td:
         with zipfile.ZipFile(source_file, 'r') as zf:
             zf.extractall(td)
         ncfiles = glob.glob(os.path.join(td, '*.nc'))
@@ -1223,7 +1155,7 @@ def assemble_ERA5(path: str, name="ERA5", years: list =[],
     for c in zip(combi, downloaded):
         year, ncname = c
         yn = name_yearly(name, year)
-        target = os.path.join(path, _tools.WEA_FMT % yn)
+        target = os.path.join(path, WEA_FMT % yn)
         # gently move the old file out of way
         if not _ass_clear_target(target, replace):
             logger.info("skipping because dataset exists: %s" % name)
@@ -1435,7 +1367,7 @@ def assemble_CERRA(path: str, name="CERRA", years: list = [],
     """
     logger.debug(f"assemble_CERRA: path={path}, name={name}, "
                  f"years={years}, replace={replace}, args={args}")
-    temp_path = _tools.TEMP
+    temp_path = _storage.TEMP
     logger.debug(f"looking for cdo ...{temp_path}")
     data = cdo.Cdo(tempdir=temp_path)
     logger.debug("python-cdo version: %s" % cdo.__version__)
@@ -1471,7 +1403,7 @@ def assemble_CERRA(path: str, name="CERRA", years: list = [],
         lts = set([y for x, y in combi if x == year])
         infiles = [_cerraname(year, lt) + '.nc' for lt in lts]
         yn = name_yearly(name, year)
-        target = os.path.join(path, _tools.WEA_FMT % yn)
+        target = os.path.join(path, WEA_FMT % yn)
         # gently move the old file out of way
         if not _ass_clear_target(target, replace):
             logger.info("skipping because dataset exists: %s" % name)
@@ -1526,7 +1458,7 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
         else:
             raise ValueError(f"years is required for DWD dataset")
     # check database
-    target = os.path.join(path, _tools.OBS_FMT % name)
+    target = os.path.join(path, OBS_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -1619,12 +1551,13 @@ def provide_weather(source: str, path: str = None,
 
     # param method is implemented for future use
     if path is None:
-        path = find_writeable_storage(path, _tools.STORAGE_WAETHER)
+        path = _storage.find_writeable_storage(path,
+                                      _storage.STORAGE_WAETHER)
     #dataset = dataset_get(source)
     logger.info("downloading weather source %s" % source)
     success = True
     pwd = os.getcwd()
-    with tempfile.TemporaryDirectory(dir=_tools.TEMP) as temp_dir:
+    with tempfile.TemporaryDirectory(dir=_storage.TEMP) as temp_dir:
         os.chdir(temp_dir)
 #        try:
         success = True

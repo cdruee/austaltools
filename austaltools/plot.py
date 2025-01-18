@@ -13,6 +13,8 @@ import logging
 import os
 import re
 
+import austaltools._common
+
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
     import readmet
@@ -221,8 +223,8 @@ def main(args):
                       ) / 1000 * scale
 
     dat_dict = {'x': datx, 'y': daty, 'z': datz}
-    _tools.common_plot(args, dat=dat_dict, unit=unit, topo=topo,
-                       dots=dots, buildings=buildings, scale=levels)
+    austaltools._common.common_plot(args, dat=dat_dict, unit=unit, topo=topo,
+                                    dots=dots, buildings=buildings, scale=levels)
 
 # ------------------------------------------------------------------------
 
@@ -245,6 +247,6 @@ def add_options(subparsers):
                            'deviation caculated by austal. ' +
                            'If missing, `STDVs` defaults to 1.0.')
 
-    pars_plot = _tools.add_arguents_common_plot(pars_plot)
+    pars_plot = austaltools._common.add_arguents_common_plot(pars_plot)
 
     return pars_plot

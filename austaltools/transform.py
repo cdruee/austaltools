@@ -16,13 +16,15 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from osgeo import osr
 
 try:
-    from . import _tools
     from . import _datasets
+    from . import _common
+    from . import _tools
     from . import input_weather
     from . import wmo_metadata
 except ImportError:
-    import _tools
     import _datasets
+    import _common
+    import _tools
     import input_weather
     import wmo_metadata
 
@@ -159,7 +161,7 @@ def main(args):
             raise ValueError("Dataset DWD is not available, "
                        "download or assemble it.")
         station = int(args["dwd"])
-        lat, lon, ele, nam = input_weather.read_dwd_stationinfo(
+        lat, lon, ele, nam = _common.read_dwd_stationinfo(
             station, datafile=storage_dwd)
         rechts, hoch, _ = _tools.ll2gk(lat, lon)
         east, north, _ = _tools.ll2ut(lat, lon)
@@ -224,8 +226,8 @@ def add_options(subparsers):
     pars_transf = subparsers.add_parser(
         name='transform',
         help='transfrom coordinates into other projections')
-    pars_transf = _tools.add_location_opts(pars_transf, stations=True,
-                                    required=False)
+    pars_transf = _common.add_location_opts(pars_transf, stations=True,
+                                                        required=False)
     pars_transf.add_argument('-M', '--model',
                          metavar=("x", "y"),
                          dest="xy",

@@ -20,13 +20,13 @@ import subprocess
 import tempfile
 from time import sleep
 
+import austaltools._common
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
     import pandas as pd
     from scipy import ndimage
 
-    import readmet
     import meteolib
 
 try:
@@ -1106,7 +1106,7 @@ def main(args):
             logger.debug('select to write plot to default filename')
         else:
             logger.debug('select to write plot to custom filename')
-        _tools.common_plot(args, dat=dat_dict, mark=pos_dict, scale=scale)
+        austaltools._common.common_plot(args, dat=dat_dict, mark=pos_dict, scale=scale)
     else:
         logger.info('nothing selected, skipping plot')
 
@@ -1159,6 +1159,6 @@ def add_options(subparsers):
                           help='minimum wind speed below which data are '
                                'exluded. ' +
                                'Defaults to %f' % MIN_FF)
-    pars_eap = _tools.add_arguents_common_plot(pars_eap)
+    pars_eap = austaltools._common.add_arguents_common_plot(pars_eap)
 
     return pars_eap

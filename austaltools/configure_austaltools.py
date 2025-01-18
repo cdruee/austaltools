@@ -7,12 +7,13 @@ import logging
 import os
 import sys
 
-
 try:
+    from . import _storage
     from . import _tools
     from . import _datasets as DS
     from ._version import __version__, __title__
 except ImportError:
+    import _storage
     import _tools
     import _datasets as DS
     from _version import __version__, __title__
@@ -78,6 +79,21 @@ def cli_parser():
                                        metavar='COMMAND',
                                        required=True
                                        )
+    sub_ast = subparsers.add_parser('austal',
+                                     help='set location of the austal '
+                                          'installation.')
+    sub_ast_how = sub_ast.add_mutually_exclusive_group()
+    sub_ast_how.add_argument('-p', '--path',
+                          metavar="PATH",
+                          default=None,
+                          help='directory where the austal executable'
+                               'is stored.')
+    sub_ast_how.add_argument('-f', '--find',
+                          metavar="PATH",
+                          default='.',
+                          help='recursively serach this directory '
+                               'for the austal executable.'
+                               'Defaults to current directory.')
     sub_list = subparsers.add_parser('list',
                                      help='list known datasets '
                                           'and show availability and '
@@ -234,10 +250,14 @@ def main():
     logger.debug(args)
 
     if args['temp'] is not None:
-        _tools.TEMP = args['temp']
+        _storage.TEMP = args['temp']
 
     if args['action'] == 'list':
         list_datasets(args['only'], args['state'], args['long'])
+
+    elif args['action'] == 'austal':
+        if 'path' in args:
+            pass
 
     elif args['action'] in ['download', 'assemble']:
         if args['source'] in DS.SOURCES_TERRAIN:
@@ -262,7 +282,8 @@ def main():
                 logger.debug('years parsed into int: %s',
                              year_list)
             try:
-                avl = [DS.dataset_available(args['source'])]
+                avl = [
+                    DS.dataset_available(args['source'])]
                 if avl and not args['force']:
                     sys.tracebacklimit = 0
                     raise ValueError(f"dataset exists: {args['source']} ")
