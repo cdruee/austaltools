@@ -15,6 +15,11 @@ heating
 internal modules
 ================
 
+_common
+------
+.. automodule:: austaltools._common
+   :members:
+
 _corine
 -------
 .. automodule:: austaltools._corine
@@ -38,6 +43,11 @@ _fetch_dgm_od
 _fetch_dwd_obs
 ----------------
 .. automodule:: austaltools._fetch_dwd_obs
+   :members:
+
+_storage
+------
+.. automodule:: austaltools._storage
    :members:
 
 _tools

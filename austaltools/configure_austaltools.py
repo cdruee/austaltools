@@ -7,6 +7,8 @@ import logging
 import os
 import sys
 
+from PIL.ImImagePlugin import number
+
 try:
     from . import _storage
     from . import _tools
@@ -51,9 +53,53 @@ def list_datasets(only='all', state='known', long=False):
                 names.append(d.name)
         print(" ".join(names))
 
-
 # -------------------------------------------------------------------------
 
+def set_austaldir(args: dict):
+
+    conf = _storage.read_config()
+
+    if 'path' in args:
+        # path given by user
+        path = args['path']
+    elif 'find' in args:
+        # search in directory tree given by user
+        path_list = []
+        for dirpath, _, filenames in os.walk(args['find']):
+            for filename in filenames:
+                if filename in ['austal', 'austal.exe',
+                                'taldia', 'taldia.exe',
+                                'z0-gk.dmna', 'z0-utm.dmna']:
+                    if not dirpath in path_list:
+                        path_list.append(dirpath)
+        if len(path_list) == 0:
+            raise EnvironmentError('No austal installation found.')
+        elif len(path_list) > 1:
+            num = -1
+            for i, p in enumerate(path_list):
+                print("%2i: %s" % (i, p))
+            while num not in range(len(path_list)):
+                num = int(input("input the number of your "
+                                "preferred path."))
+            path = path_list[num]
+        else:
+            path = path_list[0]
+    else:
+        # show current setting
+        path = conf.get('austaldir', None)
+        if path is None:
+            path = "(not set)"
+        print("austaldir: %" % path)
+        return
+
+    # save setting
+    if not os.path.isdir(path):
+        raise ValueError(f"Path does not exist: {path}")
+    conf['austaldir'] = path
+    _storage.write_config(conf)
+
+
+# -------------------------------------------------------------------------
 
 def cli_parser():
     """
@@ -79,9 +125,12 @@ def cli_parser():
                                        metavar='COMMAND',
                                        required=True
                                        )
+
     sub_ast = subparsers.add_parser('austal',
-                                     help='set location of the austal '
-                                          'installation.')
+                                     help='set/show location of the austal '
+                                          'installation. If none of '
+                                          '`path` of `find` is given,'
+                                          'the current setting is shwon.')
     sub_ast_how = sub_ast.add_mutually_exclusive_group()
     sub_ast_how.add_argument('-p', '--path',
                           metavar="PATH",
@@ -94,6 +143,7 @@ def cli_parser():
                           help='recursively serach this directory '
                                'for the austal executable.'
                                'Defaults to current directory.')
+
     sub_list = subparsers.add_parser('list',
                                      help='list known datasets '
                                           'and show availability and '
@@ -256,8 +306,7 @@ def main():
         list_datasets(args['only'], args['state'], args['long'])
 
     elif args['action'] == 'austal':
-        if 'path' in args:
-            pass
+        set_austaldir(args)
 
     elif args['action'] in ['download', 'assemble']:
         if args['source'] in DS.SOURCES_TERRAIN:

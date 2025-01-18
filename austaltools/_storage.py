@@ -150,15 +150,21 @@ def read_config(locs: str = None) -> dict:
 def write_config(config: dict, locs: str = None) -> bool:
     if locs is None:
         locs = STORAGE_LOCATIONS
-    for loc in locs:
+    loc_to_write = None
+    for loc in reversed(locs):
+        if os.path.exists(os.path.join(loc, CONFIG_FILE)):
+            logger.debug(f"found writable config at {loc}")
+            loc_to_write = loc
+            break
         if os.access(loc, os.W_OK):
-            try:
-                with open(os.path.join(loc, CONFIG_FILE), 'w') as f:
-                    yaml.safe_dump(config, f)
-                logger.debug(f"wrote config file at {loc}")
-                break
-            except IOError:
-                logger.warning(f"writing config file failed at {loc}")
+            loc_to_write = loc
+    if loc_to_write is not None:
+        try:
+            with open(os.path.join(loc_to_write, CONFIG_FILE), 'w') as f:
+                yaml.safe_dump(config, f)
+            logger.debug(f"wrote config file at {loc_to_write}")
+        except IOError:
+            logger.warning(f"writing config file failed at {loc_to_write}")
     else:
         raise RuntimeError(f"could not write config file")
     return True
