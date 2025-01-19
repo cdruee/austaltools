@@ -59,6 +59,7 @@
   },
   "DGM10-BB": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGMxx",
     "arguments": {
       "resolution": 10,
@@ -74,6 +75,7 @@
   },
   "DGM10-BE": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGMxx",
     "arguments": {
       "resolution": 10,
@@ -89,6 +91,7 @@
   },
   "DGM10-BW": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGMxx",
     "arguments": {
       "resolution": 10,
@@ -109,6 +112,7 @@
   },
   "DGM10-BY": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGMxx",
     "arguments": {
       "resolution": 10,
@@ -123,6 +127,7 @@
   },
   "DGM10-HB": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGMxx",
     "arguments": {
       "resolution": 10,
@@ -141,6 +146,7 @@
   },
   "DGM10-HE": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGMxx",
     "arguments": {
       "resolution": 10,
@@ -191,6 +197,7 @@
   },
   "DGM10-HH": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGMxx",
     "arguments": {
       "resolution": 10,
@@ -207,6 +214,7 @@
   },
   "DGM10-MV": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGMxx",
     "arguments": {
       "resolution": 10,
@@ -221,6 +229,7 @@
   },
   "DGM10-NI": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGMxx",
     "arguments": {
       "resolution": 10,
@@ -236,6 +245,7 @@
   },
   "DGM10-NW": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGMxx",
     "arguments": {
       "resolution": 10,
@@ -251,6 +261,7 @@
   },
   "DGM10-RP": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGMxx",
     "arguments": {
       "resolution": 10,
@@ -266,6 +277,7 @@
   },
   "DGM10-SH": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGM_SH",
     "arguments": {
       "resolution": 10,
@@ -278,6 +290,7 @@
   },
   "DGM10-SL": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGMxx",
     "arguments": {
       "resolution": 10,
@@ -295,10 +308,11 @@
       "CRS": "EPSG:25832"
     },
     "license": "spdx:DL-DE-BY-2.0",
-    "notice": "Generated from DGM1 data '(c) GeoBasis DE / LVGL-SL, 2024', lvgl.saarland.de, licensed under DL-DE-BY-2.0"
+    "notice": "Generated from DGM1 data '(c) GeoBasis-DE/LVermGeo SH/CC BY 4.0 (Quelle verändert)'"
   },
   "DGM10-SN": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGMxx",
     "arguments": {
       "resolution": 10,
@@ -316,6 +330,7 @@
   },
   "DGM10-ST": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGMxx",
     "arguments": {
       "resolution": 10,
@@ -335,6 +350,7 @@
   },
   "DGM10-TH": {
     "storage": "terrain",
+    "uri": "https://zenodo.org/records/13363008",
     "assemble": "assemble_DGMxx",
     "arguments": {
       "resolution": 10,
@@ -346,7 +362,7 @@
       "CRS": "EPSG:25832"
     },
     "license": "spdx:DL-DE-BY-2.0",
-    "notice": "Generated from DGM1 data '(c) GeoBasis-DE / LVermGeoRP, 2024,  www.lvermgeo.rlp.de', licensed under DL-DE-BY-2.0"
+    "notice": "Generated from DGM1 data '(c) GDI-Th, Freistaat Thueringen, TLVermGeo', licensed under DL-DE-BY-2.0"
   },
   "GLO-30": {
     "storage": "terrain",
