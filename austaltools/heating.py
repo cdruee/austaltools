@@ -57,16 +57,24 @@ logger = logging.getLogger()
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     cp = m.constants.cp
 
-SOIL_EPSILON = 0.95
-# soil surface spectral emissivity in 1
+SOIL_EPSILON = 0.80
+""" soil surface default spectral emissivity in 1,
+ for dry soil, also for a mixture of forest and fields, see [Tah1992]_ """
+SOIL_ALBEDO = 0.15
+""" soil surface default albedo in 1, 
+typical values form Central Europe mixed vegetation after [SSS2016]_ """
 WALL_EPSILON = 0.95
-# wall spectral emissivity in 1
+""" wall default spectral emissivity in 1,
+ for brick as well as grey to white paint from [Tah1992]_ """
+WALL_ALBEDO = 0.45
+""" soil surface default albedo in 1, 
+median value for typical European building materials after [Tah1992]_ """
 WALL_SLAB = 0.04
-# wall slab sthickness in m
+""" wall slab thickness in m """
 TIMESTEP = 1
-# model timestep in s
+""" model timestep in s """
 PRESSURE = 101325
-# ambient air pressure in Pa
+""" ambient air pressure in Pa """
 
 HEATING_LIMIT = 15  # °C
 DEFAULT_ROOMTEMP = 20  # °C
@@ -178,60 +186,120 @@ def surface_heat_transfer_resistance(
 
 def surface_radiation_budget(time: pd.Timestamp, lat: float, lon: float,
                              t_wall: float, t_air: float,
-                             orient: float, slant: float,
-                             octa: int):
+                             heading: float, slant: float,
+                             octa: int,
+                             albedo: float = None,
+                             epsilon: float = None,
+                             components: bool = False,
+                             ) -> float | tuple[float]:
+    """
+    Calculate the surface radiation budget for a specified wall.
 
-    ALB_WALL = 0.3
-    def boltzmann(t_c):
+    This function computes the net radiation budget of a
+    vertical or slanted surface at a particular location and time,
+    considering both shortwave and longwave radiation components.
+
+    :param time: Time for which the calculation is made.
+    :type time: pd.Timestamp
+    :param lat: Latitude of the location in degrees.
+    :type lat: float
+    :param lon: Longitude of the location in degrees.
+    :type lon: float
+    :param t_wall: Temperature of the wall surface in degrees Celsius.
+    :type t_wall: float
+    :param t_air: Air temperature in degrees Celsius.
+    :type t_air: float
+    :param heading: Orientation angle of the wall normal
+      with respect to north in degrees.
+    :type heading: float
+    :param slant: Slant angle of the wall from horizontal
+      in degrees upward.
+    :type slant: float
+    :param octa: Cloud cover in oktas,
+      an integer from 0 (clear sky) to 8 (completely overcast).
+    :type octa: int
+    :param albedo: Surface albedo of the wall,
+      default is set to WALL_ALBEDO if None.
+    :type albedo: float, optional
+    :param epsilon: Emissivity of the wall surface,
+      default is set to WALL_EPSILON if None.
+    :type epsilon: float, optional
+    :param components: If True, returns the individual
+      radiation components, otherwise returns the net radiation.
+    :type components: bool, optional
+
+    :return: Net radiation (or individual components if requested),
+      consisting of shortwave and longwave calculation terms.
+    :rtype: float or tuple[float]
+
+    :raises ValueError: If the input values are out of expected ranges.
+
+    .. note::
+        This function uses the simplified Kasten and Czeplak [Kas1980]_
+        model for clear-sky conditions with adjustments for cloud cover.
+    """
+
+    # insert default values
+    if albedo is None:
+        albedo = WALL_ALBEDO
+    if epsilon is None:
+        epsilon = WALL_EPSILON
+
+    # abbreviation for Stefan-Boltzmann law
+    def _sboltz(t_c):
         return m.constants.sigma * m.temperature.CtoK(t_c) ** 4
 
     # sky view factor / soil view factor
     f_sky = (np.pi - 2 * np.deg2rad(slant)) / (2 * np.pi)
     f_soil = (np.pi + 2 * np.deg2rad(slant)) / (2 * np.pi)
 
-    # sun position
+    # get sun position
     ele, azi = m.radiation.fast_sun_position(time, lat, lon)
 
     # convert angles to radians
     rele = np.deg2rad(ele)
     razi = np.deg2rad(azi)
-    rori = np.deg2rad(orient)
+    rhdg = np.deg2rad(heading)
     rsla = np.deg2rad(slant)
 
     # calculate angular distance between sun and wall normal
     dele = rele - rsla
-    dazi = razi - rori
+    dazi = razi - rhdg
     d = (np.sin(dele * 0.5) ** 2
          + np.cos(rsla) * np.cos(rele) * np.sin(dazi * 0.5) ** 2)
     theta = 2 * np.arcsin(np.sqrt(d))
 
+    # get clear-sky irradiance
+    i_dir, i_diff = m.radiation.clear_sky_surface_irradiance(
+        time, lat, lon, heading, slant, albedo=SOIL_ALBEDO)
+
     # clearness index after Kasten and Czeplak (1980)
     k_clear = 1 - 0.75 * (octa/8) ** 3.4
 
-    # TODO
-    # just this to cause nor import errors
-    i_dn = d_eff = 0.
-
     # shortwave incoming radiation (direct + diffuse)
-    k_in = np.cos(theta) * k_clear * i_dn + f_sky * d_eff
+    k_in = np.cos(theta) * k_clear * i_dir + f_sky * k_clear * i_diff
 
     # shortwave outgoing (reflected) radiation
-    k_out = ALB_WALL * k_in
+    k_out = albedo * k_in
 
-    #
+    # get longwave sky radiation
     l_down = m.radiation.clear_sky_longwave_downwelling(
         t_k=m.temperature.CtoK(t_air),
         e=m.humidty.Humidity(t=t_wall))
 
     # incoming longwave radiation
-    l_in = f_sky * l_down + f_soil * SOIL_EPSILON * boltzmann(t_air)
+    l_in = f_sky * l_down + f_soil * SOIL_EPSILON * _sboltz(t_air)
 
     # outgoing longwave radiation
-    l_out = WALL_EPSILON * boltzmann(t_wall)
+    l_out = WALL_EPSILON * _sboltz(t_wall)
 
+    # sum up net radiation
     q = k_in - k_out + l_in - l_out
 
-    return q
+    if components:
+        return k_in, k_out, l_in, l_out
+    else:
+        return q
 
 
 # ------------------------------------------------
@@ -318,7 +386,7 @@ class Wall:
       Hence: :math:`K_\mathrm{s} - B_\mathrm{s} - H_\mathrm{s} = 0`
 
       FIXME
-      tdb: :math:`K_\mathrm{s}`
+      tdb: :math:`Q_\mathrm{s}`
 
 
     **Class attributes**
@@ -457,7 +525,7 @@ class Wall:
         for i in range(self.n_flux):
             # temperature difference
             if i == 0:
-                # warm wall durface
+                # warm wall surface
                 dth = self.t_slab[0] - rooms[self.room_w].temp
                 t_wall = self.t_slab[0]
                 indoor = (rooms[self.room_w].name != 'outside')
@@ -468,10 +536,14 @@ class Wall:
                     wind=wind
                 )
             elif i == self.n_slab:
-                # cold wall durface
+                # cold wall surface
                 dth = rooms[self.room_c].temp - self.t_slab[i - 1]
                 t_wall = self.t_slab[i - 1]
                 indoor = (rooms[self.room_c].name != 'outside')
+                # if indoor:
+                #     q_net = 0.
+                # else:
+                #     q_net = surface_radiation_budget()
                 angle = self.slant
                 wind =  rooms[self.room_c].wind
                 h_c = 1. / surface_heat_transfer_resistance(

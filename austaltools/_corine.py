@@ -288,8 +288,8 @@ def mean_roughness(source: str,
     """
     returns the mean roughness of an area based
     on CORINE land cover classes from either source
-     - `web` for eea web API or
-     - `austal` for CORINE inventory from local austal installation
+    - `web` for eea web API or
+    - `austal` for CORINE inventory from local austal installation
 
     :param source: source of CORINE land cover classes.
     :type source: str

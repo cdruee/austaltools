@@ -16,7 +16,7 @@ internal modules
 ================
 
 _common
-------
+-------
 .. automodule:: austaltools._common
    :members:
 
@@ -31,22 +31,22 @@ _dispersion
    :members:
 
 _datasets
------------
+---------
 .. automodule:: austaltools._datasets
    :members:
 
 _fetch_dgm_od
-----------------
+-------------
 .. automodule:: austaltools._fetch_dgm_od
    :members:
 
 _fetch_dwd_obs
-----------------
+--------------
 .. automodule:: austaltools._fetch_dwd_obs
    :members:
 
 _storage
-------
+--------
 .. automodule:: austaltools._storage
    :members:
 
@@ -124,6 +124,10 @@ References
     Roughness Length Classification of CORINE Land Cover Classes.
     *Proceedings of the European Wind Energy Conference*,
     Milan, Italy, 110.
+.. [Kas1980] Kasten, F., and G. Czeplak, 1980:
+    Solar and terrestrial radiation dependent on the amount and type
+    of cloud. Solar Energy, **24** , 177–189,
+    https://doi.org/10.1016/0038-092x(80)90391-6.
 .. [KoNa2019] Koßmann, M., and J. Namyslo, 2019:
     Effektive Rauigkeitslänge aus Windmessungen: *Merkblatt*.
     Deutscher Wetterdienst (DWD),
@@ -131,6 +135,16 @@ References
 .. [GOL1972] Golder, 1972: Relations among stability parameters in the
     surface layer. Boundary-Layer Meteorology, 3, 47–58,
     doi: 10.1007/bf00769106.
+.. [SSS2016] Sütterlin, M., R. Stöckli, C. B. Schaaf, and S. Wunderle,
+    2016: Albedo climatology for European land surfaces retrieved from
+    AVHRR data (1990–2014) and its spatial and temporal analysis from
+    green‐up to vegetation senescence.
+    Journal of Geophysical Research: Atmospheres, **121** , 8156–8171,
+    https://doi.org/10.1002/2016jd024933.
+.. [Tah1992] Taha, H., D. Sailor, and H. Akbari, 1992:
+    High-albedo materials for reducing building cooling energy use.
+    Office of Scientific and Technical Information (OSTI),
+    doi: 10.2172/7000986.
 .. [TAL2021] BMU, 2021: Neufassung der Ersten Allgemeinen
     Verwaltungs-Vorschrift zum Bundes-Immissionsschutzgesetz
     (Technische Anleitung zur Reinhaltung der Luft -TA Luft).
