@@ -10,6 +10,7 @@ import re
 
 import numpy as np
 import pandas as pd
+from yt_dlp.downloader.external import list_external_downloaders
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import meteolib as m
@@ -56,6 +57,8 @@ logger = logging.getLogger()
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     cp = m.constants.cp
 
+SOIL_EPSILON = 0.95
+# soil surface spectral emissivity in 1
 WALL_EPSILON = 0.95
 # wall spectral emissivity in 1
 WALL_SLAB = 0.04
@@ -67,178 +70,6 @@ PRESSURE = 101325
 
 HEATING_LIMIT = 15  # °C
 DEFAULT_ROOMTEMP = 20  # °C
-
-# ------------------------------------------------
-
-# SCHEMA = '''{
-#   "$schema": "http://json-schema.org/draft-07/schema#",
-#   "title": "Building Configuration",
-#   "type": "object",
-#   "properties": {
-#     "t_out": {
-#       "type": "number",
-#       "description": "The starting temperature for the outdoor environment."
-#     },
-#     "t_soil": {
-#       "type": "number",
-#       "description": "The starting temperature for the soil environment."
-#     },
-#     "walls": {
-#       "type": "object",
-#       "additionalProperties": {
-#         "type": "object",
-#         "properties": {
-#           "name": {
-#             "type": "string"
-#           },
-#           "d": {
-#             "type": "number"
-#           },
-#           "room_w": {
-#             "type": "string"
-#           },
-#           "room_c": {
-#             "type": "string"
-#           },
-#           "l": {
-#             "type": "number"
-#           },
-#           "h": {
-#             "type": "number"
-#           },
-#           "area": {
-#             "type": "number"
-#           },
-#           "c": {
-#             "type": "number"
-#           },
-#           "k": {
-#             "type": "number"
-#           },
-#           "rho": {
-#             "type": "number"
-#           },
-#           "partof": {
-#             "type": "string"
-#           },
-#           "t_start": {
-#             "type": "number"
-#           }
-#         },
-#         "required": ["d", "room_w", "room_c"]
-#       }
-#     },
-#     "rooms": {
-#       "type": "object",
-#       "additionalProperties": {
-#         "type": "object",
-#         "properties": {
-#           "name": {
-#             "type": "string"
-#           },
-#           "width": {
-#             "type": "number"
-#           },
-#           "length": {
-#             "type": "number"
-#           },
-#           "height": {
-#             "type": "number"
-#           },
-#           "maxpower": {
-#             "type": "number"
-#           },
-#           "area": {
-#             "type": "number"
-#           },
-#           "volume": {
-#             "type": "number"
-#           },
-#           "t_set": {
-#             "type": "number"
-#           },
-#           "p_set": {
-#             "type": "number"
-#           },
-#           "t_start": {
-#             "type": "number"
-#           },
-#           "special": {
-#             "type": "boolean"
-#           }
-#         }
-#       }
-#     },
-#     "hvac": {
-#       "type": "object",
-#       "properties": {
-#         "modes": {
-#           "type": "object",
-#           "additionalProperties": {
-#             "type": "object",
-#             "properties": {
-#               "throttle": {
-#                 "oneOf": [
-#                   { "type": "number" },
-#                   {
-#                     "type": "object",
-#                     "patternProperties": {
-#                       "^_default$|^.*": { "type": "number" }
-#                     }
-#                   }
-#                 ]
-#               },
-#               "roomtemp": {
-#                 "oneOf": [
-#                   { "type": "number" },
-#                   {
-#                     "type": "object",
-#                     "patternProperties": {
-#                       "^_default$|^.*": { "type": "number" }
-#                     }
-#                   }
-#                 ]
-#               }
-#             }
-#           }
-#         },
-#         "timers": {
-#           "type": "object",
-#           "additionalProperties": {
-#             "type": "object",
-#             "properties": {
-#               "start": {
-#                 "type": "string",
-#                 "pattern": "^[0-9]{2}-[0-9]{2}"
-#               },
-#               "switch": {
-#                 "type": "array",
-#                 "items": {
-#                   "type": "object",
-#                   "properties": {
-#                     "mode": {
-#                       "type": "string"
-#                     },
-#                     "hhmm": {
-#                       "type": "string",
-#                       "pattern": "^[0-9]{4}"
-#                     }
-#                   },
-#                   "required": ["mode", "hhmm"]
-#                 }
-#               }
-#             },
-#             "required": ["switch"]
-#           }
-#         }
-#       }
-#     }
-#   },
-#   "required": ["walls", "rooms", "hvac"]
-# }
-# '''
-
-
 
 # ------------------------------------------------
 
@@ -341,6 +172,66 @@ def surface_heat_transfer_resistance(
         r_s = 1. / (h_c + h_r)
 
     return r_s
+
+
+# ------------------------------------------------
+
+def surface_radiation_budget(time: pd.Timestamp, lat: float, lon: float,
+                             t_wall: float, t_air: float,
+                             orient: float, slant: float,
+                             octa: int):
+
+    ALB_WALL = 0.3
+    def boltzmann(t_c):
+        return m.constants.sigma * m.temperature.CtoK(t_c) ** 4
+
+    # sky view factor / soil view factor
+    f_sky = (np.pi - 2 * np.deg2rad(slant)) / (2 * np.pi)
+    f_soil = (np.pi + 2 * np.deg2rad(slant)) / (2 * np.pi)
+
+    # sun position
+    ele, azi = m.radiation.fast_sun_position(time, lat, lon)
+
+    # convert angles to radians
+    rele = np.deg2rad(ele)
+    razi = np.deg2rad(azi)
+    rori = np.deg2rad(orient)
+    rsla = np.deg2rad(slant)
+
+    # calculate angular distance between sun and wall normal
+    dele = rele - rsla
+    dazi = razi - rori
+    d = (np.sin(dele * 0.5) ** 2
+         + np.cos(rsla) * np.cos(rele) * np.sin(dazi * 0.5) ** 2)
+    theta = 2 * np.arcsin(np.sqrt(d))
+
+    # clearness index after Kasten and Czeplak (1980)
+    k_clear = 1 - 0.75 * (octa/8) ** 3.4
+
+    # TODO
+    # just this to cause nor import errors
+    i_dn = d_eff = 0.
+
+    # shortwave incoming radiation (direct + diffuse)
+    k_in = np.cos(theta) * k_clear * i_dn + f_sky * d_eff
+
+    # shortwave outgoing (reflected) radiation
+    k_out = ALB_WALL * k_in
+
+    #
+    l_down = m.radiation.clear_sky_longwave_downwelling(
+        t_k=m.temperature.CtoK(t_air),
+        e=m.humidty.Humidity(t=t_wall))
+
+    # incoming longwave radiation
+    l_in = f_sky * l_down + f_soil * SOIL_EPSILON * boltzmann(t_air)
+
+    # outgoing longwave radiation
+    l_out = WALL_EPSILON * boltzmann(t_wall)
+
+    q = k_in - k_out + l_in - l_out
+
+    return q
 
 
 # ------------------------------------------------
@@ -1029,11 +920,11 @@ class Hvac():
                 # verify data formats
                 sstr = v.get('start', '01-01')
                 if not re.match('[0-9]{2}-[0-9]{2}', sstr):
-                    raise ValueError(f"timer {t} start string does not"
+                    raise ValueError(f"timer {name} start string does not"
                                      f"match format mm-dd")
                 td['start'] = sstr
                 if not isinstance(v['switch'], list):
-                    raise ValueError(f"timer {t} switch keyword does not"
+                    raise ValueError(f"timer {name} switch keyword does not"
                                      f"contain a list")
                 td['switch'] = []
                 for sw in v['switch']:
@@ -1396,7 +1287,7 @@ def run_building_model(bldg: Building,
                              "wseries are column names")
         else:
             ts = df[tseries]
-            if ws is not None:
+            if wseries is not None:
                 ws = df[wseries]
             del df
     elif not any(ii):
