@@ -10,6 +10,7 @@ import re
 
 import numpy as np
 import pandas as pd
+from pysolar.rest import albedo
 from yt_dlp.downloader.external import list_external_downloaders
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
@@ -184,14 +185,15 @@ def surface_heat_transfer_resistance(
 
 # ------------------------------------------------
 
-def surface_radiation_budget(time: pd.Timestamp, lat: float, lon: float,
-                             t_wall: float, t_air: float,
-                             heading: float, slant: float,
-                             octa: int,
-                             albedo: float = None,
-                             epsilon: float = None,
-                             components: bool = False,
-                             ) -> float | tuple[float]:
+def surface_net_radiation(time: pd.Timestamp, lat: float, lon: float,
+                          t_wall: float, t_air: float,
+                          heading: float, slant: float,
+                          octa: int,
+                          albedo: float = None,
+                          epsilon: float = None,
+                          components: bool = False,
+                          ) -> float | tuple[
+                                float, float, float, float]:
     """
     Calculate the surface radiation budget for a specified wall.
 
@@ -267,14 +269,14 @@ def surface_radiation_budget(time: pd.Timestamp, lat: float, lon: float,
     dazi = razi - rhdg
     d = (np.sin(dele * 0.5) ** 2
          + np.cos(rsla) * np.cos(rele) * np.sin(dazi * 0.5) ** 2)
-    theta = 2 * np.arcsin(np.sqrt(d))
+    theta = 2. * np.arcsin(np.sqrt(d))
 
     # get clear-sky irradiance
     i_dir, i_diff = m.radiation.clear_sky_surface_irradiance(
         time, lat, lon, heading, slant, albedo=SOIL_ALBEDO)
 
     # clearness index after Kasten and Czeplak (1980)
-    k_clear = 1 - 0.75 * (octa/8) ** 3.4
+    k_clear = 1. - 0.75 * (octa/8) ** 3.4
 
     # shortwave incoming radiation (direct + diffuse)
     k_in = np.cos(theta) * k_clear * i_dir + f_sky * k_clear * i_diff
@@ -285,13 +287,13 @@ def surface_radiation_budget(time: pd.Timestamp, lat: float, lon: float,
     # get longwave sky radiation
     l_down = m.radiation.clear_sky_longwave_downwelling(
         t_k=m.temperature.CtoK(t_air),
-        e=m.humidty.Humidity(t=t_wall))
+        e=m.humidity.esat_w(t=t_wall, Kelvin=False, hPa=False)* 0.5)
 
     # incoming longwave radiation
     l_in = f_sky * l_down + f_soil * SOIL_EPSILON * _sboltz(t_air)
 
     # outgoing longwave radiation
-    l_out = WALL_EPSILON * _sboltz(t_wall)
+    l_out = epsilon * _sboltz(t_wall)
 
     # sum up net radiation
     q = k_in - k_out + l_in - l_out
@@ -402,29 +404,51 @@ class Wall:
         height : float
             The height of the wall in meters.
         area_full : float
-            The full area of the wall without any corrections in square meters.
+            The full area of the wall without any corrections
+            in square meters.
         area : float
-            The effective area of the wall, adjusted for embedded elements, in square meters.
-        orient : float
-            The orientation of the wall in degrees clockwise from north.
+            The effective area of the wall, adjusted for embedded elements,
+            in square meters.
+        facing : float
+            The horizontal orientation of the wall
+            in degrees clockwise from north.
+        slant : float
+            The vertical orientation of the wall
+            in degrees upward from horizontal.
         d_slab : float
             The thickness of each slab section in the wall in meters.
         n_slab : int
             The number of slab sections in the wall.
         t_slab : list
-            List containing the temperature of each slab section in degrees Celsius.
+            List containing the temperature of each slab section
+            in degrees Celsius.
         n_flux : int
             The number of flux nodes calculated across the wall.
         f_flux : list
-            List containing the flux values at each node in watts per square meter.
+            List containing the flux values at each node in watts
+            per square meter.
         d_flux : list
-            List containing the distance between slab centers used in flux calculations in meters.
+            List containing the distance between slab centers used
+            in flux calculations in meters.
         heat_conduct : float
-            The thermal conductivity of the wall material in watts per meter kelvin (default is 0.58 W/mK).
+            The thermal conductivity of the wall material
+            in watts per meter kelvin (default is 0.58 W/mK).
         heat_capacity : float
-            The heat capacity of the wall material in joules per kilogram kelvin (default is 836 J/kgK).
+            The heat capacity of the wall material
+            in joules per kilogram kelvin (default is 836 J/kgK).
         density : float
-            The density of the wall material in kilograms per cubic meter (default is 1400 kg/m³).
+            The density of the wall material
+            in kilograms per cubic meter (default is 1400 kg/m³).
+        albedo : float
+            The albedo of the cold-side wall material in 1,
+            defaults to WALL_ALBEDO
+        epsilon : float
+            The emissivity of the cold-side wall material in 1,
+            defaults to WALL_EPSILON
+        k_in, k_out, l_in, l_out: float, float, float, float
+            The net radiation components on the cold-side wall surface:
+            shortwave (solar) incoming, shortwave (solar) outgoing,
+            longwave (infrared) incoming, longwave (infrared) outgoing,
 
     """
     name = str()
@@ -435,7 +459,7 @@ class Wall:
     area_full = float()  # m²
     area = float()  # m²
     facing = float()  # deg clockwise from north
-    slant = float() # deg, 0 = vertcal wall, pos = cold side facing upwards
+    slant = float() # deg, 0 = vertical wall, pos = cold side facing upwards
     d_slab = float()  # m
     n_slab = int()  # 1
     t_slab = list()  # °C
@@ -447,11 +471,18 @@ class Wall:
     # source https://www.schweizer-fn.de/stoff/wkapazitaet/wkapazitaet_baustoff_erde.php
     heat_capacty = 836.  # J/kgK (brick wall)
     density = 1400  # kg/m³ (brick wall)
+    albedo = None
+    epsilon = None
+    k_in = np.nan
+    k_out = np.nan
+    l_in = np.nan
+    l_out = np.nan
 
     def __init__(self, name, d, room_w, room_c,
                  l=None, h=None, area=None,
                  facing=None, slant=None,
                  c=None, k=None, rho=None,
+                 albedo=None, epsilon=None,
                  partof=None, t_start=None):
         """
         Initialize a new Wall instance.
@@ -476,14 +507,12 @@ class Wall:
         self.partof = partof
         self.area = self.area_full
         # orientation:
-        if facing is not None:
-            self.facing = facing
-        else:
-            self.facing = np.nan
-        if slant is not None:
-            self.slant = slant
-        else:
-            self.slant = 0.
+        self.facing = facing if facing is not None else np.nan
+        self.slant = slant if slant is not None else 0.
+        # optical properties
+        self.albedo = albedo if albedo is not None else WALL_ALBEDO
+        self.epsilon = epsilon if epsilon is not None else WALL_EPSILON
+
         # calculate number of slabs
         self.thickness = d
         self.d_slab = WALL_SLAB
@@ -513,6 +542,21 @@ class Wall:
             # set alls slabs to have temperature t_start
             self.t_slab = self.n_slab * [t_start]
 
+    def set_solar(self, time, lat, lon, octa, rooms):
+        outdoor = self.room_c == 'outside'
+        if not outdoor:
+            self.k_in = self.k_out = self.l_in = self.l_out = np.nan
+        else:
+            t_air = rooms[self.room_c].temp
+            t_wall = self.t_slab[-1]
+            qtuple = surface_net_radiation(
+                time, lat, lon, t_wall, t_air,
+                self.facing, self.slant,
+                octa, self.albedo, self.epsilon,
+                components = True
+            )
+            self.k_in, self.k_out, self.l_in, self.l_out = qtuple
+        
     def tick(self, rooms, timedelta=TIMESTEP):
         """
         Update the wall's state by advancing the simulation.
@@ -550,6 +594,10 @@ class Wall:
                     indoor=indoor, angle=self.slant, t_wall=t_wall,
                     wind=wind
                 )
+                if all(np.isfinite(x) for x in (
+                       self.k_in, self.k_out, self.l_in, self.l_out)):
+                    h_c = h_c + (self.k_in - self.k_out +
+                                 self.l_in - self.l_out)
             else:
                 # inside wall
                 dth = self.t_slab[i] - self.t_slab[i - 1]
@@ -604,7 +652,25 @@ class WallList(dict):
        """
 
         self[wall.name] = wall
-
+        
+    def set_solar(self, time, lat, lon, octa, rooms):
+        """
+        set or update the solar ration upon external wall surfaces
+        
+        :param time: local time 
+        :type time: pd.Timestamp
+        :param lat: latitude in degrees
+        :type lat:  float
+        :param lon: longitude in degrees
+        :type lon: float
+        :param octa: cloud cover in octa (0: clear, 8: overcats)
+        :type octa: int
+        :param rooms: Room objects linked to the walls
+        :type rooms: RoomList
+        """
+        for x in self.values():
+            x.set_solar(time, lat, lon, octa, rooms)
+    
     def tick(self, rooms, timedelta: float = TIMESTEP):
         """
         Advance the simulation state by a given time interval, updating each Room's state.
@@ -1137,6 +1203,10 @@ class Building():
 
     name : str
         The name of the building.
+    lat: float
+        Latitute of the buildings postion in degrees.
+    lon: float
+        Longitude of the buildings postion in degrees.
     walls : WallList
         A list of walls associated with the building.
     rooms : RoomList
@@ -1157,6 +1227,8 @@ class Building():
     """
 
     name = str()
+    lat = None
+    lon = None
     walls = WallList()
     rooms = RoomList(walls=walls)
     init = False
@@ -1189,6 +1261,8 @@ class Building():
         t_out = d.get('t_out', np.nan)
         t_soil = d.get('t_soil', np.nan)
         obj = Building(name, t_out, t_soil)
+        obj.lat = d.get('lat', None)
+        obj.lon = d.get('lat', None)
         for k, v in d['walls'].items():
             args = {'name': k}
             # loop all parameters of Wall init call
@@ -1252,6 +1326,10 @@ class Building():
                    for i, t in enumerate(v.t_slab)},
                 **{f"flux{i:03d}_{k}": f for k, v in self.walls.items()
                    for i, f in enumerate(v.f_flux)},
+                'k_in': v.k_in,
+                'k_out': v.k_out,
+                'l_in': v.l_in,
+                'l_out': v.l_out,
             })
 
     def output_recording(self, rname='heating_rooms_history.csv',
@@ -1301,6 +1379,21 @@ class Building():
 
     def switch_mode(self, mode):
         pass
+
+    def set_solar(self, time, octa):
+        """
+        set or update the solar ration upon external wall surfaces
+
+        :param time: local time 
+        :type time: pd.Timestamp
+        :param lat: latitude in degrees
+        :type lat:  float
+        :param lon: longitude in degrees
+        :type lon: float
+        :param octa: cloud cover in octa (0: clear, 8: overcats)
+        :type octa: int
+        """
+        self.walls.set_solar(time, self.lat, self.lon, octa, self.rooms)
 
     def tick(self, timedelta: float = TIMESTEP):
         """
@@ -1412,6 +1505,13 @@ def run_building_model(bldg: Building,
             temp = ts[ts.index[i]],
             wind = ws[ws.index[i]]
         )
+        #FIXME
+        # make radiation switchable
+        radiation = True
+        if radiation:
+            #FIXME
+            # get actual cloud cover
+            bldg.set_solar(pointer, octa=0)
         switch = bldg.hvac.switch_mode(ts.index[i])
         if switch:
             newmode = bldg.hvac.modes[switch]
@@ -1479,6 +1579,10 @@ def main(args):
     else:
         raise IOError('weather data not found: %s' % csv_name)
 
+    tz = obs.index.tz
+    logger.debug(f"observation timezone is {tz}")
+    if tz is None:
+        obs.index = obs.index.tz_localize('UTC')
     dt = obs.index.diff().median()
     t_out = obs['t2m'].interpolate('linear').bfill().ffill()
     t_out = t_out.apply(m.temperature._to_C)
