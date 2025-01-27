@@ -200,7 +200,7 @@ deploy_deb:
           sed -i s/Distribution:\ .\*/Distribution:\ "${X}"/ $Y   
           cat $Y
           dupload -f --nomail -t uwmhub $Y
-          sleep 30
+          sleep 60
         done
         popd
       done

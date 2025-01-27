@@ -17,8 +17,6 @@ https://druee.gitlab-pages.uni-trier.de/austaltools/
 ### The module contains the following scripts : 
 ===============================================
 
-## Time dependent simulation
-
 ``austaltools``
     The main application. I suports subcommands like
     ``eap``, ``fill-timeseries``, 
