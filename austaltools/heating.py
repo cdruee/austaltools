@@ -195,7 +195,7 @@ def surface_heat_transfer_resistance(
 def surface_net_radiation(time: pd.Timestamp, lat: float, lon: float,
                           t_wall: float, t_air: float,
                           heading: float, slant: float,
-                          octa: int,
+                          octa: float,
                           albedo: float = None,
                           epsilon: float = None,
                           components: bool = False,
@@ -226,7 +226,7 @@ def surface_net_radiation(time: pd.Timestamp, lat: float, lon: float,
     :type slant: float
     :param octa: Cloud cover in oktas,
       an integer from 0 (clear sky) to 8 (completely overcast).
-    :type octa: int
+    :type octa: float
     :param albedo: Surface albedo of the wall,
       default is set to WALL_ALBEDO if None.
     :type albedo: float, optional
@@ -283,7 +283,7 @@ def surface_net_radiation(time: pd.Timestamp, lat: float, lon: float,
         time, lat, lon, heading, slant, albedo=SOIL_ALBEDO)
 
     # clearness index after Kasten and Czeplak (1980)
-    k_clear = 1. - 0.75 * (octa/8) ** 3.4
+    k_clear = 1. - 0.75 * (octa/8.) ** 3.4
 
     # shortwave incoming radiation (direct + diffuse)
     k_in = np.cos(theta) * k_clear * i_dir + f_sky * k_clear * i_diff
@@ -667,7 +667,7 @@ class WallList(dict):
         :param lon: longitude in degrees
         :type lon: float
         :param octa: cloud cover in octa (0: clear, 8: overcats)
-        :type octa: int
+        :type octa: float
         :param rooms: Room objects linked to the walls
         :type rooms: RoomList
         """
@@ -1394,7 +1394,7 @@ class Building():
         :param lon: longitude in degrees
         :type lon: float
         :param octa: cloud cover in octa (0: clear, 8: overcats)
-        :type octa: int
+        :type octa: float
         """
         self.walls.set_solar(time, self.lat, self.lon, octa, self.rooms)
 
@@ -1633,9 +1633,10 @@ def main(args):
     if tz is None:
         obs.index = obs.index.tz_localize('UTC')
     dt = obs.index.diff().median()
-    t_out = obs['t2m'].interpolate('linear').bfill().ffill()
-    t_out = t_out.apply(m.temperature._to_C)
-    w_out = obs['ff'].interpolate('linear').bfill().ffill() / 3.
+    t_out = obs['t2m'].interpolate('linear').bfill().ffill()  # K
+    t_out = t_out.apply(m.temperature._to_C)  # C
+    w_out = obs['ff'].interpolate('linear').bfill().ffill() / 3. # m/s @ 2m
+    c_out = obs['tcc'].interpolate('linear').bfill().ffill() * 8.  # octa
 
     with open(filename, 'r') as f:
         dictionary = yaml.safe_load(f)
@@ -1649,6 +1650,7 @@ def main(args):
         bldg=bldg,
         tseries=t_out,
         wseries=w_out,
+        cseries=c_out,
         rec=rec,
         radiation=args['radiation'],
     )
