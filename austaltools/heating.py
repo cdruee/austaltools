@@ -76,7 +76,14 @@ TIMESTEP = 1
 """ model timestep in s """
 PRESSURE = 101325
 """ ambient air pressure in Pa """
-
+DEFAULT_WIND = 3.0
+""" default wind speed in m/s 
+mean 10-m wind speed for Europe (https://www.eea.europa.eu/publications/
+europes-changing-climate-hazards-1/wind/wind-mean-wind-speed) """
+DEFAULT_COVER = 8. * 0.6
+""" default cloud cover in octa 
+mean value the 1991–2020 reference period 
+(https://climate.copernicus.eu/esotc/2022/clouds-and-sunshine-duration) """
 HEATING_LIMIT = 15  # °C
 DEFAULT_ROOMTEMP = 20  # °C
 
@@ -272,7 +279,7 @@ def surface_net_radiation(time: pd.Timestamp, lat: float, lon: float,
     theta = 2. * np.arcsin(np.sqrt(d))
 
     # get clear-sky irradiance
-    i_dir, i_diff = m.radiation.clear_sky_surface_irradiance(
+    i_dir, i_diff = m.radiation.shortwave_incoming(
         time, lat, lon, heading, slant, albedo=SOIL_ALBEDO)
 
     # clearness index after Kasten and Czeplak (1980)
@@ -285,7 +292,7 @@ def surface_net_radiation(time: pd.Timestamp, lat: float, lon: float,
     k_out = albedo * k_in
 
     # get longwave sky radiation
-    l_down = m.radiation.clear_sky_longwave_downwelling(
+    l_down = m.radiation.longwave_incoming(
         t_k=m.temperature.CtoK(t_air),
         e=m.humidity.esat_w(t=t_wall, Kelvin=False, hPa=False)* 0.5)
 
@@ -386,10 +393,6 @@ class Wall:
       :math:`Q_\mathrm{s} = K_\mathrm{s}`.
 
       Hence: :math:`K_\mathrm{s} - B_\mathrm{s} - H_\mathrm{s} = 0`
-
-      FIXME
-      tdb: :math:`Q_\mathrm{s}`
-
 
     **Class attributes**
 
@@ -1326,10 +1329,10 @@ class Building():
                    for i, t in enumerate(v.t_slab)},
                 **{f"flux{i:03d}_{k}": f for k, v in self.walls.items()
                    for i, f in enumerate(v.f_flux)},
-                'k_in': v.k_in,
-                'k_out': v.k_out,
-                'l_in': v.l_in,
-                'l_out': v.l_out,
+                **{f"{i}_{k}": f for k, v in self.walls.items()
+                   for i, f in {'k_in': v.k_in, 'k_out': v.k_out,
+                                'l_in': v.l_in, 'l_out': v.l_out
+                                }.items() }
             })
 
     def output_recording(self, rname='heating_rooms_history.csv',
@@ -1412,8 +1415,11 @@ class Building():
 def run_building_model(bldg: Building,
                        tseries: pd.Series|str,
                        wseries: pd.Series|str=None,
+                       cseries: pd.Series|str=None,
                        df: pd.DataFrame|None=None,
-                       rec=None):
+                       rec=None,
+                       radiation=True
+                       ):
     """
     Run a time dependent simulation of the building heating.
 
@@ -1427,6 +1433,10 @@ def run_building_model(bldg: Building,
         with time as index or column name if ``df`` is given
         and has temperature in column ``ts``
     :type wseries: pandas.Series | str
+    :param cseries: (optional) Timeseries containg the cloud cover in octa,
+        with time as index or column name if ``df`` is given
+        and has temperature in column ``ts``
+    :type cseries: pandas.Series | str
     :param df: (optional) Data frame containing timeseries of
         input data in the columns with the names given.
         ``df`` must not be given or None if ``tseries`` is a pandas.Series.
@@ -1436,6 +1446,9 @@ def run_building_model(bldg: Building,
         running the model. For exampe "1min" for ever minute.
         Defaults to for no recording
     :type rec: str or None
+    :param radiation: Enable heat gain by net radiation on outside walls.
+        Defaults to True.
+    :type radiation: bool
     :return: the modeled temperatures and heating powers.
         The index is the time, columns are
         `seconds` (passed since last time),
@@ -1445,17 +1458,37 @@ def run_building_model(bldg: Building,
     :rtype: pandas.DataFrame
 
     """
-    ii = [isinstance(tseries, str), isinstance(wseries, str)]
-    if all(ii):
+
+    if all([
+        isinstance(tseries, str),
+        isinstance(wseries, str|None),
+        isinstance(cseries, str|None),
+    ]):
         if df is None:
-            raise ValueError("df is required if tseries and "
+            raise ValueError("df is required if tseries, cseries and "
                              "wseries are column names")
         else:
             ts = df[tseries]
             if wseries is not None:
                 ws = df[wseries]
+            else:
+                logger.warning('no wind speed column given, '
+                               'assuming default values')
+                ws = pd.Series(DEFAULT_WIND, index=ts.index)
+            if cseries is not None:
+                cs = df[wseries]
+            else:
+                if radiation:
+                    logger.warning('net radiation activated '
+                                   'but no cloud cover column given, '
+                                   'assuming default values')
+                cs = pd.Series(DEFAULT_COVER, index=ts.index)
             del df
-    elif not any(ii):
+    elif all([
+        isinstance(tseries, pd.Series),
+        isinstance(wseries, pd.Series | None),
+        isinstance(cseries, pd.Series | None),
+    ]):
         if df is not None:
             raise ValueError("df is not allowed tseries and "
                              "wseries are pandas Series")
@@ -1466,10 +1499,31 @@ def run_building_model(bldg: Building,
                 if not ws.index.equals(ts.index):
                     raise ValueError("tseries and wseries indexes must "
                                      "be identical")
-            del tseries, wseries
+            else:
+                logger.warning('no wind speed data given, '
+                               'assuming default values')
+                ws = pd.Series(DEFAULT_WIND, index=ts.index)
+            if cseries is not None:
+                cs = cseries
+                if not cs.index.equals(ts.index):
+                    raise ValueError("tseries and cseries indexes must "
+                                     "be identical")
+            else:
+                if radiation:
+                    logger.warning('net radiation activated '
+                                   'but no cloud cover data are given, '
+                                   'assuming default values')
+                cs = pd.Series(DEFAULT_COVER, index=ts.index)
+            del tseries, wseries, cseries
     else:
-        raise ValueError("tseries and wseries must all be either a "
-                     "column name or a pandas.Series")
+        raise ValueError("tseries, wseries and cseries "
+                         "must all be either a "
+                         "column name or a pandas.Series")
+
+    if radiation and cs is None:
+        logger.error('disabling net radiation because no '
+                     'cloud cover data are given')
+        radiation = False
 
     t_out = float(ts.values[0])
 
@@ -1505,13 +1559,8 @@ def run_building_model(bldg: Building,
             temp = ts[ts.index[i]],
             wind = ws[ws.index[i]]
         )
-        #FIXME
-        # make radiation switchable
-        radiation = True
         if radiation:
-            #FIXME
-            # get actual cloud cover
-            bldg.set_solar(pointer, octa=0)
+            bldg.set_solar(pointer, octa=cs[cs.index[i]])
         switch = bldg.hvac.switch_mode(ts.index[i])
         if switch:
             newmode = bldg.hvac.modes[switch]
@@ -1600,7 +1649,8 @@ def main(args):
         bldg=bldg,
         tseries=t_out,
         wseries=w_out,
-        rec=rec
+        rec=rec,
+        radiation=args['radiation'],
     )
     model_out.to_csv("heating_model_out.csv", quoting=csv.QUOTE_NONE,
                      float_format="%12.5f")
@@ -1657,6 +1707,11 @@ def add_options(subparsers: argparse.ArgumentParser) -> None:
                           default=default["output"])
 
     adv_htg = pars_htg.add_argument_group('advanced options')
+    adv_htg.add_argument('--radiation',
+                         type = _tools.str2bool,
+                         help='enable or disable radiative heat gain'
+                              'on outside walls.',
+                         default = True)
     adv_htg.add_argument('--recording',
                          dest='recording',
                          metavar='FREQ',
@@ -1669,7 +1724,7 @@ def add_options(subparsers: argparse.ArgumentParser) -> None:
                               'dateoffset-objects>`_), '
                               'for example ``1min``. '
                               '[None]',
-                         default=None                         )
+                         default=None)
     return pars_htg
 
 

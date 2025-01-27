@@ -252,34 +252,36 @@ def expand_sequence(string):
         if x not in ['-', ',', '/'] and not x.isdigit():
             raise ValueError('expand_series: illegal character in string: %s' % x)
     if '/' in string and ',' in string:
-        raise ValueError('expand_series: list and step are mutually exclusive')
-    if '-' in string and ',' in string:
-        raise ValueError('expand_series: list and range are mutually exclusive')
-    if '/' in string:
-        rang, step = string.split('/', 1)
-        step = int(step)
-    else:
-        rang = string
-        step = 1
-    if '-' in rang:
-        start_stop = [int(x) for x in rang.split('-', 1)]
-        discrete = None
-    elif ',' in rang:
-        start_stop = None
-        discrete = [int(x) for x in rang.split(',')]
-        if not sorted(discrete) == discrete:
+        raise ValueError(
+            'expand_series: list and step are mutually exclusive')
+    if ',' in string:
+        # list
+        res = [int(x) for x in string.split(',')]
+        if not sorted(res) == res:
             raise ValueError('expand_series: discrete list is not sorted')
+    elif ('-' not in string or
+          (string.startswith('-') and '-' not in string[1:])):
+        if '/' in string:
+            raise ValueError('expand_series: step reqires `start-stop`')
+        # scalar value
+        res = [int(string)]
     else:
-        start_stop = None
-        discrete = [int(rang)]
-    if start_stop:
+        if '/' in string:
+            rang, step = string.split('/', 1)
+            step = int(step)
+        else:
+            rang = string
+            step = 1
+        if not '-' in rang:
+            raise ValueError("expand_series: range does not conatin `-`")
+        r1 = re.sub('([-]*[0-9.]+)-[-0-9]*', r'\1', rang)
+        r2 = re.sub('[-]*[0-9.]+-([-0-9]*)', r'\1', rang)
+        start_stop = [int(r1), int(r2)]
         res = []
-        x = start_stop[0]
-        while x <= start_stop[1]:
+        x = int(r1)
+        while x <= int(r2):
             res.append(x)
             x = x + step
-    else:
-        res = discrete
     return res
 # -------------------------------------------------------------------------
 
@@ -396,7 +398,7 @@ def ut2ll(east: float, north:float) -> (float, float, float):
     :return: latitude in degrees, longitude in degrees, altitude in meters
     :rtype: float, float, float
     """
-    transform = osr.CoordinateTransformation(GK, LL)
+    transform = osr.CoordinateTransformation(UT, LL)
     return transform.TransformPoint(east, north)
 
 # -------------------------------------------------------------------------
@@ -671,6 +673,26 @@ def slugify(value, allow_unicode=False):
             'ascii', 'ignore').decode('ascii')
     value = re.sub(r'[^\w\s-]', '', value.lower())
     return re.sub(r'[-\s]+', '-', value).strip('-_')
+
+# -------------------------------------------------------------------------
+
+
+def str2bool(inp):
+    """
+    Convert a string to a boolean value.
+
+    accept the usual strings indicating the user's consent or refusal
+    """
+    if isinstance(inp, bool):
+        # allow passtrough
+        res = inp
+    elif str(inp).lower() in ['yes', 'true', 'y', 't', '1']:
+        res = True
+    elif str(inp).lower() in ['no', 'false', 'n', 'f', '0']:
+        res = False
+    else:
+        raise ValueError('value not understood as boolean: %' % inp)
+    return res
 
 # -------------------------------------------------------------------------
 
