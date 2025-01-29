@@ -10,8 +10,6 @@ import re
 
 import numpy as np
 import pandas as pd
-from pysolar.rest import albedo
-from yt_dlp.downloader.external import list_external_downloaders
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import meteolib as m
