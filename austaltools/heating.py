@@ -18,32 +18,12 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 try:
     from . import _tools
-    # from ._version import __version__, __title__
-    # from . import _corine
     from . import _datasets
-    # from . import import_buildings
-    # from . import eap
-    # from . import fill_timeseries
-    # from . import input_terrain
     from . import input_weather
-    # from . import steepness
-    # from . import transform
-    # from . import plot
-    # from . import windfield
 except ImportError:
     import _tools
-    # from _version import __version__, __title__
     import _datasets
-    # import _corine
-    # import import_buildings
-    # import eap
-    # import fill_timeseries
-    # import input_terrain
     import input_weather
-    # import steepness
-    # import transform
-    # import plot
-    # import windfield
 
 # ----------------------------------------------------
 
@@ -68,8 +48,12 @@ WALL_EPSILON = 0.95
 WALL_ALBEDO = 0.45
 """ soil surface default albedo in 1, 
 median value for typical European building materials after [Tah1992]_ """
-WALL_SLAB = 0.04
-""" wall slab thickness in m """
+WALL_SLAB = 0.02
+""" wall slab default thickness in m """
+WIDTHMIN = 1.0
+""" wall slab minimal thickness for exponentially growing slabs in m """
+WIDTHSTEP = 0.5
+""" wall slab thickness steps for exponentially growing slabs in m """
 TIMESTEP = 1
 """ model timestep in s """
 PRESSURE = 101325
@@ -311,6 +295,62 @@ def surface_net_radiation(time: pd.Timestamp, lat: float, lon: float,
 
 # ------------------------------------------------
 
+def exponential_slabs(dist):
+    """
+    Function to partition distance `dist` into the minimal set of intervals
+    that grow approximately exponentially from the edge to the middle,
+    are multiples of `WIDTHSTEP` (except the two in the center two),
+    have a minimal width of `WIDTHMIN` and
+    are symmetrical around the center of L.
+
+    :param dist: distance  to patition
+    :type dist: float
+    :return: interval widths
+    :rtype: list
+    """
+    # Check that the distance L is within valid range
+    if dist < 0.:
+        raise ValueError("distance is less than zero")
+
+    if dist < WIDTHMIN:
+        res = [dist]
+    elif dist < 2. * WIDTHMIN:
+        res = [dist / 2.] * 2
+    else:
+        res = None
+
+        # Initial number of partitions on one side
+        minl = 2 * WIDTHMIN
+        n = int(np.ceil(dist / minl))
+        number = n + 1
+
+        # Iterate until a satisfactory partition is found
+        for g in np.linspace(1.,2., 200):
+            widths = [WIDTHMIN * g ** i for i in range(n)]
+
+            # Reduce n if we overshoot
+            for i in range(len(widths)):
+                if np.sum(widths[:i]) > dist/2.:
+                    widths = widths[:i]
+                    break
+
+            # Check for interval multiples of 0.5
+            widths = [round(x / 0.5) * 0.5 for x in widths]
+
+            # Calculate sum and compare to half of L
+            r = sum(widths) - dist / 2
+            if len(widths) < number and abs(r) <= 0.5:
+                widths[-1] -= r
+                res = widths + widths[::-1]
+
+        if res is None:
+            raise RuntimeError("could not partition distance")
+
+    return res
+
+# ------------------------------------------------
+
+
 class Wall:
     r"""
     Represents a wall element within a building, handling thermal dynamics
@@ -479,12 +519,13 @@ class Wall:
     l_in = np.nan
     l_out = np.nan
 
-    def __init__(self, name, d, room_w, room_c,
-                 l=None, h=None, area=None,
-                 facing=None, slant=None,
-                 c=None, k=None, rho=None,
-                 albedo=None, epsilon=None,
-                 partof=None, t_start=None):
+    def __init__(self, name: str, d: float, room_w: str, room_c: str,
+                 l: float = None, h: float = None, area: float = None,
+                 facing: float = None, slant: float = None,
+                 c: float = None, k: float = None, rho: float = None,
+                 albedo: float = None, epsilon: float = None,
+                 partof: str = None, t_start: float = None,
+                 slabs: str|float|list = None):
         """
         Initialize a new Wall instance.
 
@@ -516,22 +557,55 @@ class Wall:
 
         # calculate number of slabs
         self.thickness = d
-        self.d_slab = WALL_SLAB
-        self.n_slab = int(self.thickness / self.d_slab)
+        if slabs is None:
+            slabs = 'default'
+        if isinstance(slabs, str):
+            if slabs == 'default':
+                self.d_slab = [WALL_SLAB]
+                self.n_slab = int(self.thickness / self.d_slab)
+                excess = self.thickness % WALL_SLAB
+                self.d_slab[int(self.n_slab / 2.)] += excess
+            elif slabs == 'exponential':
+                self.d_slab = exponential_slabs(d)
+                self.n_slab = len(self.d_slab)
+            else:
+                raise ValueError(f"unknown slabs option: {slabs}")
+        elif isinstance(slabs, float):
+            # if d is a multiple of slabs (with some tolerance)
+            if d % slabs > TOLERANCE:
+                raise ValueError(f"slabs error: wall thickness is not"
+                                 f"a multiple of slabs")
+                self.n_slab = int(round(d/slabs))
+                self.d_slab = [slabs] * self.n_slab
+        elif isinstance(slabs, list):
+            if not all([isinstance(i, float) for i in slabs]):
+                raise ValueError(f"slabs option does non only contain "
+                                 "floats: {str(slabs)}")
+            # lower limit is WIDTHMIN
+            if any([i < WIDTHMIN for i in slabs]):
+                raise ValueError(f"slabs option contains negative or "
+                                 "too small values: {str(slabs)}")
+            #
+            if abs(sum(slabs) - d) > TOLERANCE:
+                raise ValueError(f"slabs option values do not add up "
+                                 "to wall thickness: {str(slabs)}")
+            self.d_slab = slabs
+            self.n_slab = len(self.d_slab)
+        else:
+          raise ValueError(f"unknown slabs option: {str(slabs)}")
         # calculate distances between slab centers for
         # flux calculation (add excess thickness at the two
         # outermost slabs)
-        excess = (self.thickness - (self.n_slab * self.d_slab)) / 2.
         self.n_flux = self.n_slab + 1
         self.d_flux = self.n_flux * [np.nan]
         self.f_flux = self.n_flux * [np.nan]
         for i in range(self.n_flux):
             if i == 0:
-                self.d_flux[i] = excess + self.d_slab
+                self.d_flux[i] = self.d_slab[0] / 2.
             elif i == self.n_flux:
-                self.d_flux[i] = self.d_slab + excess
+                self.d_flux[i] = self.d_slab[-1] / 2.
             else:
-                self.d_flux[i] = self.d_slab
+                self.d_flux[i] = (self.d_slab[i-1] + self.d_slab[i]) / 2.
         # initialize temperature
         if t_start is None:
             # assume linear temperature profile if no t_start is given
