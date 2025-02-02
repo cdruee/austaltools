@@ -1947,10 +1947,8 @@ def add_options(subparsers: argparse.ArgumentParser) -> None:
                               'The file format of the spreadsheet is '
                               'inferred from the filename extension '
                               '(.ods, .xls, or .xslx).'
-                              'The building name must be either given '
-                              'by `-b/--building` or all buildings '
-                              'are exported with ``_<builing name>`` '
-                              'appended to the filename.\n'
+                              'The building name is `default` or must be '
+                              'given by `-b/--building`.\n'
                               'The program exits after exporting the '
                               'spreadsheet data.',
                          default=None)
@@ -1962,9 +1960,8 @@ def add_options(subparsers: argparse.ArgumentParser) -> None:
                               'them in the heating file specified by '
                               '`-f/--heating-file`. Overwites all rooms '
                               'and walls in the heating file. '
-                              'The building name must be either given '
-                              'by `-b/--building` or as last part of the '
-                              'filename, separated by an ``_```.\n'
+                              'The building name is `default` or must be '
+                              'given by `-b/--building`.\n'
                               'The program exits after importing the '
                               'spreadsheet data.',
                          default=None)
