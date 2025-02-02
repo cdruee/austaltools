@@ -7,6 +7,7 @@ import inspect
 import logging
 import os
 import re
+import textwrap
 
 import numpy as np
 import pandas as pd
@@ -48,7 +49,9 @@ WALL_EPSILON = 0.95
 WALL_ALBEDO = 0.45
 """ soil surface default albedo in 1, 
 median value for typical European building materials after [Tah1992]_ """
-WALL_SLAB = 0.02
+DEFAULT_SLABS_OPT = 'even'
+""" default scheme how walls are partitioned into slabs """
+DEFAULT_SLAB = 0.04
 """ wall slab default thickness in m """
 WIDTHMIN = 1.0
 """ wall slab minimal thickness for exponentially growing slabs in m """
@@ -492,6 +495,9 @@ class Wall:
             longwave (infrared) incoming, longwave (infrared) outgoing,
 
     """
+    TOLERANCE = 0.001
+    """ allowed difference between sum ob slab thicknesses 
+    and wall thickness """
     name = str()
     partof = str()
     thickness = .36  # m
@@ -558,13 +564,15 @@ class Wall:
         # calculate number of slabs
         self.thickness = d
         if slabs is None:
-            slabs = 'default'
+            # nothing selected -> default option
+            slabs = DEFAULT_SLABS_OPT
+        if slabs == 'even':
+            # even selected -> select default width
+            slabs = DEFAULT_SLAB
         if isinstance(slabs, str):
-            if slabs == 'default':
-                self.d_slab = [WALL_SLAB]
-                self.n_slab = int(self.thickness / self.d_slab)
-                excess = self.thickness % WALL_SLAB
-                self.d_slab[int(self.n_slab / 2.)] += excess
+            if slabs == 'even':
+                # we shouldnt be getting here
+                raise RuntimeError('internal error in Wall.__init__')
             elif slabs == 'exponential':
                 self.d_slab = exponential_slabs(d)
                 self.n_slab = len(self.d_slab)
@@ -572,11 +580,10 @@ class Wall:
                 raise ValueError(f"unknown slabs option: {slabs}")
         elif isinstance(slabs, float):
             # if d is a multiple of slabs (with some tolerance)
-            if d % slabs > TOLERANCE:
-                raise ValueError(f"slabs error: wall thickness is not"
-                                 f"a multiple of slabs")
-                self.n_slab = int(round(d/slabs))
-                self.d_slab = [slabs] * self.n_slab
+            self.n_slab = int(round(d/slabs))
+            self.d_slab = [slabs] * self.n_slab
+            excess = self.thickness % slabs
+            self.d_slab[int(self.n_slab / 2.)] += excess
         elif isinstance(slabs, list):
             if not all([isinstance(i, float) for i in slabs]):
                 raise ValueError(f"slabs option does non only contain "
@@ -586,7 +593,7 @@ class Wall:
                 raise ValueError(f"slabs option contains negative or "
                                  "too small values: {str(slabs)}")
             #
-            if abs(sum(slabs) - d) > TOLERANCE:
+            if abs(sum(slabs) - d) > self.TOLERANCE:
                 raise ValueError(f"slabs option values do not add up "
                                  "to wall thickness: {str(slabs)}")
             self.d_slab = slabs
@@ -602,7 +609,7 @@ class Wall:
         for i in range(self.n_flux):
             if i == 0:
                 self.d_flux[i] = self.d_slab[0] / 2.
-            elif i == self.n_flux:
+            elif i == self.n_flux - 1:
                 self.d_flux[i] = self.d_slab[-1] / 2.
             else:
                 self.d_flux[i] = (self.d_slab[i-1] + self.d_slab[i]) / 2.
@@ -681,7 +688,8 @@ class Wall:
             self.f_flux[i] = - h_c *  dth
         for i in range(self.n_slab):
             diff = (self.f_flux[i] - self.f_flux[i + 1])
-            dtdt = diff / (self.density * self.d_slab * self.heat_capacty)
+            dtdt = diff / (
+                    self.density * self.d_slab[i] * self.heat_capacty)
             self.t_slab[i] += dtdt * timedelta
         return
 
@@ -1484,6 +1492,64 @@ class Building():
         self.rooms.tick(self.walls, timedelta)
 
 
+def spreadsheed_engine(filename):
+    extension = os.path.splitext(filename)[1]
+    default_type = 'ods'
+    if extension == '':
+        extension = '.ods'
+        filename += extension
+    if extension == ".ods":
+        engine = "odf"
+    elif extension == ".xlsx":
+        engine = "openpyxl"
+    elif extension == ".xls":
+        engine = "openpyxl"
+    else:
+        raise ValueError(f"unsupported file extension: {extension}")
+    return filename, engine
+
+def spredsheet_export(dictionary, building, basename):
+    filename, engine = spreadsheed_engine(basename)
+    bldg_names = dictionary['buildings'].keys()
+    if building not in bldg_names:
+            raise ValueError(f"building {building} not in building names")
+    sheets = {}
+    for k,v in dictionary['buildings'][building].items():
+        if k in ['walls', 'rooms']:
+            sheets[k] = v
+    logger.info(f"exporting to {filename}")
+    with pd.ExcelWriter(filename, engine=engine, mode='w') as f:
+        for k,v in sheets.items():
+            df = pd.DataFrame.from_dict(v, orient='index')
+            df.to_excel(f, sheet_name=k)
+
+def speradsheet_import(dictionary, building, filename):
+    filename, engine = spreadsheed_engine(filename)
+    bldg_names = dictionary['buildings'].keys()
+    if building not in dictionary['buildings'].keys():
+        raise ValueError(f"un known building name: {building}")
+    sheet_names = ['walls', 'rooms']
+    logger.info(f"importing from {filename}")
+    with pd.ExcelFile(filename, engine=engine) as f:
+        sheets = {}
+        for sh in sheet_names:
+            if sh in f.sheet_names:
+                df = f.parse(sh, header=0, index_col=0)
+                fullsheet = df.to_dict(orient='index')
+                # avoid 'dictionary changed size during iteration'
+                sheet={x:{} for x in fullsheet.keys()}
+                for k,v in fullsheet.items():
+                    for kk,vv in v.items():
+                        if not pd.isnull(vv):
+                            sheet[k][kk] = vv
+                sheets[sh] = sheet
+            else:
+                raise ValueError(f"{filename} does not contain the "
+                                 f"required sheet named ``{sh}``")
+    for k in sheet_names:
+        dictionary['buildings'][building][k] = sheets[k]
+    return dictionary
+
 def run_building_model(bldg: Building,
                        tseries: pd.Series|str,
                        wseries: pd.Series|str=None,
@@ -1682,11 +1748,42 @@ def run_building_model(bldg: Building,
 
 
 def main(args):
-    name = args.get('building', 'default')
-    filename = args.get('file', 'heating.yaml')
-    csv_name = args['extracted_weather']
-    rec = args['recording']
+    # first evaluate global options
+    if args.get('slabs', None) is not None:
+        global DEFAULT_SLABS_OPT
+        DEFAULT_SLABS_OPT = args.get('slabs')
+        logger.debug(f"set default slabs option to: {DEFAULT_SLABS_OPT}")
 
+    # get parameter file
+    filename = args.get('file', 'heating.yaml')
+    with open(filename, 'r') as f:
+        dictionary = yaml.safe_load(f)
+    logger.debug(f"reading parameter file: {filename}")
+
+    # get and verify building name
+    name = args.get('building', 'default')
+    if name not in dictionary['buildings'].keys():
+        raise ValueError(f"building {building} not in building names")
+    logger.info(f"selected building: {name}")
+
+    # run builtin export utility and exit
+    if (spreadname := args.get('spread_out', None)) is not None:
+        logger.info("running spreadsheet export only.")
+        spredsheet_export(dictionary, name, spreadname)
+        return
+
+    # run builtin import utility and exit
+    if (spreadname := args.get('spread_in', None)) is not None:
+        logger.info("running spreadsheet import only.")
+        speradsheet_import(dictionary, name, spreadname)
+        logger.debug(f"writing paramters to {filename}")
+        with open(filename, 'w') as f:
+            dictionary = yaml.dump(dictionary, f)
+        return
+
+
+    # get weather data
+    csv_name = args['extracted_weather']
     if os.path.exists(csv_name):
         logger.info('reading weather data from: %s' % csv_name)
         # read position fom comment line
@@ -1696,10 +1793,10 @@ def main(args):
         # read observation data
         obs = pd.read_csv(csv_name, comment='#', index_col=0,
                           parse_dates=True, na_values='-999')
-
     else:
         raise IOError('weather data not found: %s' % csv_name)
 
+    # extract variables from weather data
     tz = obs.index.tz
     logger.debug(f"observation timezone is {tz}")
     if tz is None:
@@ -1710,14 +1807,18 @@ def main(args):
     w_out = obs['ff'].interpolate('linear').bfill().ffill() / 3. # m/s @ 2m
     c_out = obs['tcc'].interpolate('linear').bfill().ffill() * 8.  # octa
 
-    with open(filename, 'r') as f:
-        dictionary = yaml.safe_load(f)
+    # get the buildimg we want
+    logger.info("intializing model")
     for k, v in dictionary['buildings'].items():
         if k == name:
             bldg = Building.from_yaml(k, v)
             break
     else:
         raise ValueError('no building named %s' % name)
+
+    # run the model
+    logger.info("running model")
+    rec = args['recording']
     model_out = run_building_model(
         bldg=bldg,
         tseries=t_out,
@@ -1726,8 +1827,13 @@ def main(args):
         rec=rec,
         radiation=args['radiation'],
     )
+
+    # write the direct output
+    logger.info("writing model output")
     model_out.to_csv("heating_model_out.csv", quoting=csv.QUOTE_NONE,
                      float_format="%12.5f")
+
+    # convert into emissions and write them into file
     energy = model_out['power'] * model_out['seconds']  # J
     emission_factors = {
         'xx': 2100.E-9,  # g/J
@@ -1745,6 +1851,18 @@ def main(args):
                float_format="%12.5f")
     print(res.sum(axis=0))
 
+# ----------------------------------------------------
+
+
+class SmartFormatter(argparse.HelpFormatter):
+    '''
+         Custom Help Formatter that maintains '\n' in argument help.
+    '''
+    def _split_lines(self, text, width):
+        r = []
+        for t in text.splitlines():
+            r.extend(argparse.HelpFormatter._split_lines(self, t, width))
+        return r
 
 # ----------------------------------------------------
 
@@ -1752,7 +1870,8 @@ def add_options(subparsers: argparse.ArgumentParser) -> None:
     pars_htg = subparsers.add_parser(
         name='heating',
         aliases=[],
-        help='simulate a building with heating.'
+        help='simulate a building with heating.',
+        formatter_class = SmartFormatter
     )
     default = {'building': 'default',
                'heating-file': 'heating.yaml',
@@ -1762,6 +1881,7 @@ def add_options(subparsers: argparse.ArgumentParser) -> None:
                'output': 'heating.csv',
                }
     pars_htg.add_argument('-f', '--heating-file',
+                          metavar='FILE',
                           help='building/heating description file. ' +
                                '[%s]' % default['heating-file'],
                           default=default['heating-file'])
@@ -1776,6 +1896,7 @@ def add_options(subparsers: argparse.ArgumentParser) -> None:
                           default=default['extracted_weather'])
 
     pars_htg.add_argument('-o', '--output', nargs=1,
+                          metavar='FILE',
                           help='name for the output file. ' +
                                '[%s]' % default["output"],
                           default=default["output"])
@@ -1784,7 +1905,7 @@ def add_options(subparsers: argparse.ArgumentParser) -> None:
     adv_htg.add_argument('--radiation',
                          type = _tools.str2bool,
                          help='enable or disable radiative heat gain'
-                              'on outside walls.',
+                              'on outside walls [True].',
                          default = True)
     adv_htg.add_argument('--recording',
                          dest='recording',
@@ -1798,6 +1919,54 @@ def add_options(subparsers: argparse.ArgumentParser) -> None:
                               'dateoffset-objects>`_), '
                               'for example ``1min``. '
                               '[None]',
+                         default=None)
+    adv_htg.add_argument('--slabs',
+                         help='change the default value how walls are '
+                         'partitioned into slabs '
+                         f'[``{DEFAULT_SLABS_OPT}``].\n'
+                         'Possible selections are: \n' 
+                         '  - ``even``: envenly spaced slabs, if the '
+                         'wall thickness is not a multiple of the slab '
+                         'size, the remainder is added to the slab in '
+                         'the middle\n'
+                         '  - ``exponential``: slab size exponentially '
+                         'increases from the minimal width of '
+                         f'{WIDTHMIN}m at the surfaces to the center. '
+                         f'All slabs are muliples of {WIDTHSTEP}m.\n'
+                         '  - a number: like `even` but this thickness '
+                         'in m is applied to all slabs, instead of the '
+                         f'default value of {DEFAULT_SLAB} m\n',
+                         default = DEFAULT_SLABS_OPT)
+    adv_iex = adv_htg.add_mutually_exclusive_group()
+    adv_iex.add_argument('--spreadsheet-export',
+                         dest='spread_out',
+                         metavar='FILE',
+                         help='export rooms and walls from the yaml '
+                              'file specified by `-f/--heating-file` '
+                              'to a spreadsheet. '
+                              'The file format of the spreadsheet is '
+                              'inferred from the filename extension '
+                              '(.ods, .xls, or .xslx).'
+                              'The building name must be either given '
+                              'by `-b/--building` or all buildings '
+                              'are exported with ``_<builing name>`` '
+                              'appended to the filename.\n'
+                              'The program exits after exporting the '
+                              'spreadsheet data.',
+                         default=None)
+    adv_iex.add_argument('--spreadsheet-import',
+                         dest='spread_in',
+                         metavar='FILE',
+                         help='import rooms and walls from spreadsheet '
+                              'in .ods, .xls, or .xslx format and wirite '
+                              'them in the heating file specified by '
+                              '`-f/--heating-file`. Overwites all rooms '
+                              'and walls in the heating file. '
+                              'The building name must be either given '
+                              'by `-b/--building` or as last part of the '
+                              'filename, separated by an ``_```.\n'
+                              'The program exits after importing the '
+                              'spreadsheet data.',
                          default=None)
     return pars_htg
 

@@ -3,7 +3,7 @@
 __title__ = 'austaltools'
 __description__ = 'Tools for use with austal.'
 __url__ = ''
-__version__ = '2.2.29_dev'
+__version__ = '2.2.29'
 __author__ = u'Clemens Drüe'
 __author_email__ = 'druee@uni-trier.de'
 __license__ = 'EUPL-1.2'
