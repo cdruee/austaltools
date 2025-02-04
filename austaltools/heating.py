@@ -1736,9 +1736,22 @@ def run_building_model(bldg: Building,
 
 def main(args):
     # first evaluate global options
-    if args.get('slabs', None) is not None:
+    if (slabs := args.get('slabs', None)) is not None:
+        if ',' in slabs:
+            # comma-separated list of floats
+            try:
+                slabs = [float(x) for x in slabs.split(',')]
+            except:
+                raise ValueError("--slabs: non-numeric values in list.")
+        else:
+            # is it a number? Test by converting it.
+            try:
+                slabs = float(slabs)
+            except ValueError:
+                # does not convert. take the string.
+                pass
         global DEFAULT_SLABS_OPT
-        DEFAULT_SLABS_OPT = args.get('slabs')
+        DEFAULT_SLABS_OPT = slabs
         logger.debug(f"set default slabs option to: {DEFAULT_SLABS_OPT}")
 
     # get parameter file
