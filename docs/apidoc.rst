@@ -113,12 +113,12 @@ austal_weather
 References
 ==========
 
-.. [AST31] Ingenieurbüro Janicke (2021)
+.. [AST31] Ingenieurbüro Janicke, 2021:
     AUSTAL – Programmbeschreibung zu Version 3.1.
     Umweltbundesamt, Dessau-Roßlau, Germany
 .. [EPA2000] EPA, 2000: Meteorological Monitoring Guidance for
     Regulatory Modeling Applications,  EPA-454/R-99-005,
-    WMO-No. 8, United States Environmental Protection Agency,
+    United States Environmental Protection Agency,
     Triangle Park, NC, USA, 171pp.
 .. [JCR07] Julieta, S., R. Carla, and G. Ricardo, 2007:
     Roughness Length Classification of CORINE Land Cover Classes.

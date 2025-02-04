@@ -171,7 +171,7 @@ class StabiltyClass:
             cz0 = sorted(lz0 + list(set(rz0) - set(lz0)))
             cil = [(self._getval(x, lb) + self._getval(x, rb)) / 2.
                    for x in cz0]
-        self._centers.append([cz0, cil])
+            self._centers.append([cz0, cil])
 
     def _centers2bounds(self):
         # calculate bounds values if center values are defined
@@ -273,7 +273,7 @@ class StabiltyClass:
 
         :param z0: roughness length in m
         :type z0: float
-        :param lob: Obukhov lentgh
+        :param index: class index
         :param inverted: True if `lob` is :math:`1/L` instead
             of :math:`L`
         :type inverted:  bool (optional)
@@ -287,7 +287,6 @@ class StabiltyClass:
         get the class name for numeric class index
 
         :param num: numeric class index
-        :type z0: int
         :return: class name
         :rtype: str
         """
@@ -436,7 +435,7 @@ def stabilty_class(classifyer, time, z0, L):
      :type L: pd.Series or float
 
     :return: Stability class indices (1-6; 9 for missing values)
-    :rtype: numpy.ndarray
+    :rtype: list
 
     :raises ValueError: If shapes of time, z0, and L are not equal.
     :raises ValueError: If an unknown classification method is provided.
@@ -478,7 +477,7 @@ def stabilty_class(classifyer, time, z0, L):
     for i, t in enumerate(time):
         sclass[i] = scale.get_index(z0.iloc[i], L.iloc[i], inverted=False)
 
-    return sclass[()]
+    return sclass[()].tolist()
 
 
 # =============================================================================
@@ -495,7 +494,7 @@ def vdi_3872_6_sun_rise_set(time, lat, lon):
 
     :param time: (required, time-like)
         An arbitrary time during the day of year for which
-        surise and sunset shout be calculated.
+        surise and sunset should be calculated.
         May be supplied as any form accepted by `pandas.to_datetime()`,
         e.g. timestamp (`"2000-12-14 18:00:00"`) or datetime64.
         If timezone is not supplied, CET (without daylight saving) is assumed.
@@ -574,7 +573,7 @@ def vdi_3872_6_standard_wind(va, hap, z0p):
     Returns the Calculation value of wind speed
     according to VDI 3782 Part 6, Annex A
 
-    The norm is based on wind wind speed values
+    The norm is based on wind speed values
     that are taken at the standard measurement
     height of 10 m above ground (VDI 3786 Part 2;
     VDI 3783 Part 8; [5; 6]) in combination with a
@@ -582,7 +581,7 @@ def vdi_3872_6_standard_wind(va, hap, z0p):
     If the wind speed :math:`v_a` is available for other than
     the standard conditions, a conversion needs to be
     carried out from the conditions (measurement height
-    :math:`h_a'`, roughness lenght :math:`z_0'` at the measurement
+    :math:`h_a'`, roughness lenght :math:`z_0'`) at the measurement
     site to the standard conditions.
 
     :param va: (required,float or array-like)
@@ -634,7 +633,7 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
 
     :param time: (required, time-like)
         An arbitrary time during the day of year for which
-        surise and sunset shout be calculated.
+        surise and sunset should be calculated.
         May be supplied as any form accepted by `pandas.to_datetime()`,
         e.g. timestamp (`"2000-12-14 18:00:00"`) or datetime64.
         If timezone is not supplied, UTC is assumed.
@@ -709,7 +708,7 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
     #
     # Wind-          |  Gesamtbedeckung in Achten  |
     # geschwindigkeit| für Nacht |     für Tages   |
-    # in 10m Höhe    | stunden**)|     stunden**)  |
+    # in 10 m Höhe   | stunden**)|     stunden**)  |
     # in m/s         | 0/8 | 7/8 | 0/8 | 3/8 | 6/8 |
     #                | bis | bis | bis | bis | bis |
     #                | 6/8 | 8/8 | 2/8 | 5/8 | 8/8 |
@@ -769,7 +768,7 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
                      (KM2002.name(kn.iloc[i]), KM2002.name(kt.iloc[i])))
     #
     # **)  Für die Abgrenzung sind Sonnenaufgang und -untergang
-    #      {MEZ) maßgebend. Die Ausbreitungsklasse für Nachtstunden
+    #      (MEZ) maßgebend. Die Ausbreitungsklasse für Nachtstunden
     #      wird noch für die auf den Sonnenaufgang folgende volle Stunde
     #      eingesetzt.
     #
@@ -792,12 +791,12 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
         #
         # Teil a)
         # Ergeben sich für die Monate Juni bis August und
-        # die Stunden von 10.00 bis 16.00 MEZ  Ausbrei-
+        # die Stunden von 10.00 bis 16.00 MEZ Ausbrei-
         # tungsklassen unter V, so ist für eine Gesamtbedek-
         # kung von nicht mehr als °/, oder eine Gesamtbe-
         # deckung von 6/8 und Windgeschwindigkeiten
         # unter 2,5 m/s die nächsthöhere Ausbreitungs-
-        # klasse  einzusetzen. Für die Stunden von 12.00 bis
+        # klasse einzusetzen. Für die Stunden von 12.00 bis
         # 15.00 MEZ bei Bedeckung von nicht mehr als 5/8
         # ist, unter Beachtung von Satz 1, die nächsthöhere
         # Ausbreitungsklasse - im Fall der Klasse IV die
@@ -1083,6 +1082,7 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
         Eastern longitudes are positive,
         western longitudes are negative.
     :param ele: (required, float) surface elvation above sea level in m.
+    :param cbh: (optional, float) cloud base height in m.
     :param cty: (optional, str) cloud type of lowest cloud layer.
         When it is "CI", "CS", or "CC", the condition
         "cloud coverage exclusively consits of high clouds (Cirrus)" is met.
@@ -1215,7 +1215,7 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
     if cbh is None:
         c1_base = [np.nan for x in time]
     #       print('c1_base in nan')
-    if cbh is not None:
+    else:
         if _isscalar(ele):
             x = pd.Series(ele, index=time)
         else:
@@ -1623,7 +1623,7 @@ def klug_manier_scheme(*args, **kwargs):
 
 def pasquill_taylor_scheme(time, ff, tcc, lat, lon, ceil):
     """
-    Calulate stability class after Pasquill an Turner [EPA2000]_
+    Calulate stability class after Pasquill and Turner [EPA2000]_
 
     ========== ================= =======
       Category  Atmospheric        Index
@@ -1659,20 +1659,7 @@ def pasquill_taylor_scheme(time, ff, tcc, lat, lon, ceil):
         If timezone is not supplied, UTC is assumed.
         If timezone is supplied, time is converted to CET.
     :param ff: (required, float)
-        wind speed in 10m height. VDI 3782 Part 6 states:
-
-        The standard conditions for
-        the wind speed (υa) are the standard measurement
-        height of 10 m above ground (VDI 3786 Part 2;
-        VDI 3783 Part 8) in combination with a
-        roughness length of z0 = 0,1 m. Other measurement
-        heights are suitable if they equal at least twelve
-        times the roughness length and are at least 4 m
-        above ground level. If the wind speed is available
-        for other than the above standard conditions,
-        i.e. for another suitable measurement height
-        or a different roughness length,
-        a conversion needs to be carried out.
+        wind speed in 10m height.
     :param tcc: (required, float)
         total cloud cover as fraction of 1
         (equals value in octa divided by 8).
@@ -1681,12 +1668,7 @@ def pasquill_taylor_scheme(time, ff, tcc, lat, lon, ceil):
     :param lon: (required, float) longitude in degrees.
         Eastern longitudes are positive,
         western longitudes are negative.
-    :param ele: (required, float) surface elvation above sea level in m.
-    :param cty: (optional, str) cloud type of lowest cloud layer.
-        When it is "CI", "CS", or "CC", the condition
-        "cloud coverage exclusively consits of high clouds (Cirrus)" is met.
-        If absent, "CU" is assumed.
-    :param _cloudout: (optional, boolean) for verification only.
+    :param ceil: (required, float) cloud base height in m.
 
     :return: class value (numeric index)
     :rtype: `int` if `time` is a scalar,

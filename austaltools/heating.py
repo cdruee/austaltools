@@ -1,13 +1,10 @@
 #!/usr/bin/env python3
-import argparse
-from bisect import bisect
 import csv
 from collections import OrderedDict
 import inspect
 import logging
 import os
 import re
-import textwrap
 
 import numpy as np
 import pandas as pd
@@ -18,10 +15,12 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from tqdm import tqdm
 
 try:
+    from . import _common
     from . import _tools
     from . import _datasets
     from . import input_weather
 except ImportError:
+    import _common
     import _tools
     import _datasets
     import input_weather
@@ -88,8 +87,6 @@ def surface_heat_transfer_resistance(
     :type angle: float
     :param t_wall: wall surface temperature in °C
     :type t_wall: float
-    :param room: name of adjacent room or special room
-    :type room: str
     :param wind: wind speed
     :type wind: float
     :return: heat transfer resistance in :math:`m^2 K / W`
@@ -571,7 +568,7 @@ class Wall:
             slabs = DEFAULT_SLAB
         if isinstance(slabs, str):
             if slabs == 'even':
-                # we shouldnt be getting here
+                # we shouldn't be getting here
                 raise RuntimeError('internal error in Wall.__init__')
             elif slabs == 'exponential':
                 self.d_slab = exponential_slabs(d)
@@ -615,11 +612,12 @@ class Wall:
                 self.d_flux[i] = (self.d_slab[i-1] + self.d_slab[i]) / 2.
         # initialize temperature
         if t_start is None:
-            # assume linear temperature profile if no t_start is given
-            t_a = room_w.temp
-            t_b = room_c.temp
-            self.t_slab = [(t_b - t_a) / (self.n_slab + 1) * (x + 1)
-                           for x in range(self.n_slab)]
+            raise ValueError('start temperature not given')
+            # # assume linear temperature profile if no t_start is given
+            # t_a = room_w.temp
+            # t_b = room_c.temp
+            # self.t_slab = [(t_b - t_a) / (self.n_slab + 1) * (x + 1)
+            #                for x in range(self.n_slab)]
         else:
             # set alls slabs to have temperature t_start
             self.t_slab = self.n_slab * [t_start]
@@ -658,7 +656,7 @@ class Wall:
                 angle = - self.slant
                 wind =  rooms[self.room_c].wind
                 h_c = 1. / surface_heat_transfer_resistance(
-                    indoor=indoor, angle=self.slant, t_wall=t_wall,
+                    indoor=indoor, angle=angle, t_wall=t_wall,
                     wind=wind
                 )
             elif i == self.n_slab:
@@ -673,7 +671,7 @@ class Wall:
                 angle = self.slant
                 wind =  rooms[self.room_c].wind
                 h_c = 1. / surface_heat_transfer_resistance(
-                    indoor=indoor, angle=self.slant, t_wall=t_wall,
+                    indoor=indoor, angle=angle, t_wall=t_wall,
                     wind=wind
                 )
                 if all(np.isfinite(x) for x in (
@@ -758,7 +756,7 @@ class WallList(dict):
         """
         Advance the simulation state by a given time interval, updating each Room's state.
 
-        :param walls: Reference to wall data necessary for updating the state of each room.
+        :param rooms: Reference to room data necessary for updating the state of each wall.
         :param timedelta: The time step duration by which to advance the simulation, default is TIMESTEP.
         :type timedelta: float, optional
         """
@@ -804,7 +802,8 @@ class Room:
         target_temp : float
             The target temperature for the room, default is NaN.
         target_power : float
-            The target power setting for the room (1 represents 100% of self.power), default is NaN.
+            The target power setting for the room (1 represents 100%
+            of `self.power`), default is NaN.
         maxpower : float
             The maximum power that can be supplied to the room in watts.
         power : float
@@ -834,14 +833,14 @@ class Room:
     maxpower = float()  # W
     power = float()  # W
     width = float()  # m
-    lenght = float()  # m
+    length = float()  # m
     height = float()  # m
     area = float()  # m² overrides width * lenght
     volume = float()  # m³ overrides area * height
     add_c = 0.  # J/K additional heat capacity by objects in the room
     wall_sign = {}
 
-    def __init__(self, name, width=None, lenght=None, height=None,
+    def __init__(self, name, width=None, length=None, height=None,
                  maxpower=None, area=None, volume=None,
                  t_set=None, p_set=None, t_start=None, special=None):
         """
@@ -859,7 +858,7 @@ class Room:
             self.target_temp = np.nan
             self.target_power = np.nan
             self.maxpower = 0.
-            self.lenght = np.nan
+            self.length = np.nan
             self.height = np.nan
             self.area = np.nan
             self.volume = 0.
@@ -883,20 +882,20 @@ class Room:
             else:
                 self.maxpower = maxpower
             self.width = width
-            self.lenght = lenght
+            self.length = length
             self.height = height
             if area is not None:
                 self.area = area
             else:
-                if lenght is None and width is None:
+                if length is None and width is None:
                     raise ValueError(
                         'either width & length or area'
                         'are required with normal rooms')
-                self.area = self.width * self.lenght
+                self.area = self.width * self.length
             if volume is not None:
                 self.volume = volume
             else:
-                if lenght is None and width is None:
+                if length is None and width is None:
                     raise ValueError(
                         'either height or volume'
                         'are required with normal rooms')
@@ -1061,7 +1060,7 @@ class RoomList(dict):
         for x in self.values():
             x.tick(walls, timedelta)
 
-class Hvac():
+class Hvac:
     current = 'none'
     modes = dict()
     timers = dict()
@@ -1084,17 +1083,11 @@ class Hvac():
                      'switch': ['mode', 'hhmm', 'week']
                      }
         obj = Hvac(rnames)
-        modes={'none':
-                   {
-                       'roomtemp': {'default': DEFAULT_ROOMTEMP},
-                       'throttle': {'default': 100.}
-                   }
-               }
         # collect the named modes
         if 'modes' in d:
-            for name, m in d['modes'].items():
+            for name, mdict in d['modes'].items():
                 mode = {}
-                for k, x in m.items():
+                for k, x in mdict.items():
                     if k not in _keywords['modes']:
                         raise ValueError(f"illegal keyword {x}")
                     # one value for all rooms
@@ -1111,6 +1104,8 @@ class Hvac():
                             if r not in rnames:
                                 raise ValueError(f"unknown room {r}")
                             kd[r] = dv
+                    else:
+                        raise ValueError(f"illegal type of {x}")
                     mode[k] = kd
 
                 # make sure the mode is complete:
@@ -1136,19 +1131,19 @@ class Hvac():
                 not all(['start' in v for k,v in d['timers'].items()])):
                 raise ValueError(f"timers must contain `start` keyword "
                                  f"if more than one timer is defined")
-            for name, v in d['timers'].items():
+            for name, tdict in d['timers'].items():
                 td = {}
                 # verify data formats
-                sstr = v.get('start', '01-01')
+                sstr = tdict.get('start', '01-01')
                 if not re.match('[0-9]{2}-[0-9]{2}', sstr):
                     raise ValueError(f"timer {name} start string does not"
                                      f"match format mm-dd")
                 td['start'] = sstr
-                if not isinstance(v['switch'], list):
+                if not isinstance(tdict['switch'], list):
                     raise ValueError(f"timer {name} switch keyword does not"
                                      f"contain a list")
                 td['switch'] = []
-                for sw in v['switch']:
+                for sw in tdict['switch']:
                     td['switch'].append({})
                     for k,v in sw.items():
                         if not k in _keywords['switch']:
@@ -1247,8 +1242,8 @@ class Hvac():
         logger.debug(str(self.switchtables))
         pass
 
-    def _max_le(self,iter, val):
-        return sorted([x for x in iter if x <= val])[-1]
+    def _max_le(self, itr, val):
+        return sorted([x for x in itr if x <= val])[-1]
 
     def switch_mode(self, time: pd.Timestamp):
         # get mode
@@ -1469,10 +1464,6 @@ class Building():
 
         :param time: local time 
         :type time: pd.Timestamp
-        :param lat: latitude in degrees
-        :type lat:  float
-        :param lon: longitude in degrees
-        :type lon: float
         :param octa: cloud cover in octa (0: clear, 8: overcats)
         :type octa: float
         """
@@ -1494,7 +1485,6 @@ class Building():
 
 def spreadsheed_engine(filename):
     extension = os.path.splitext(filename)[1]
-    default_type = 'ods'
     if extension == '':
         extension = '.ods'
         filename += extension
@@ -1525,7 +1515,6 @@ def spredsheet_export(dictionary, building, basename):
 
 def speradsheet_import(dictionary, building, filename):
     filename, engine = spreadsheed_engine(filename)
-    bldg_names = dictionary['buildings'].keys()
     if building not in dictionary['buildings'].keys():
         raise ValueError(f"un known building name: {building}")
     sheet_names = ['walls', 'rooms']
@@ -1581,7 +1570,7 @@ def run_building_model(bldg: Building,
     :type df: pandas.DataFrame | None
     :param rec: (optional) a pandas interval string describing the time
         interval at which the model variables shall be recorded when
-        running the model. For exampe "1min" for ever minute.
+        running the model. For exampe "1min" for every minute.
         Defaults to for no recording
     :type rec: str or None
     :param radiation: Enable heat gain by net radiation on outside walls.
@@ -1591,7 +1580,7 @@ def run_building_model(bldg: Building,
         The index is the time, columns are
         `seconds` (passed since last time),
         `power` (total heating power of all rooms),
-        `tmp_NAME' and `pwr_NAME` for every room where `NAME` is the name
+        `tmp_NAME` and `pwr_NAME` for every room where `NAME` is the name
         the respective room
     :rtype: pandas.DataFrame
 
@@ -1663,8 +1652,6 @@ def run_building_model(bldg: Building,
                      'cloud cover data are given')
         radiation = False
 
-    t_out = float(ts.values[0])
-
     room_names = bldg.get_rooms()
     nrooms = len(room_names)
     columns = (['seconds', 'power'] +
@@ -1688,18 +1675,18 @@ def run_building_model(bldg: Building,
     pointer = ts.index[0]
     oldpointer = pointer
     # iterate over times in ts (execept last one)
-    for i in tqdm(range(ts.size - 1)):
+    for ti in tqdm(range(ts.size - 1)):
         # calculate size of storage arrays
-        dtime = (ts.index[i + 1] - ts.index[i]).total_seconds()
+        dtime = (ts.index[ti + 1] - ts.index[ti]).total_seconds()
         nticks = int(dtime / dtick.total_seconds()) + 1
         # update parameters
         bldg.rooms['outside'].set_environment(
-            temp = ts[ts.index[i]],
-            wind = ws[ws.index[i]]
+            temp = ts[ts.index[ti]],
+            wind = ws[ws.index[ti]]
         )
         if radiation:
-            bldg.set_solar(pointer, octa=cs[cs.index[i]])
-        switch = bldg.hvac.switch_mode(ts.index[i])
+            bldg.set_solar(pointer, octa=cs[cs.index[ti]])
+        switch = bldg.hvac.switch_mode(ts.index[ti])
         if switch:
             newmode = bldg.hvac.modes[switch]
             for r in room_names:
@@ -1717,7 +1704,7 @@ def run_building_model(bldg: Building,
         tick = 0
         powers = np.full((nticks, nrooms), np.nan)
         rtemps = np.full((nticks, nrooms), np.nan)
-        while pointer + dtick < ts.index[i + 1]:
+        while pointer + dtick < ts.index[ti + 1]:
             bldg.tick(timedelta=dtick.total_seconds())
             rtemps[tick, :] = [bldg.rooms[x].temp for x in room_names]
             powers[tick, :] = [bldg.rooms[x].power for x in room_names]
@@ -1728,7 +1715,7 @@ def run_building_model(bldg: Building,
         # evaluate at timestep
         room_temps = np.nanmean(rtemps, axis=0)
         mean_powers = np.nanmean(powers, axis=0)
-        ix = ts.index[i]
+        ix = ts.index[ti]
         for i, x in enumerate(room_names):
             res.loc[ix, 'tmp_%s' % x] = room_temps[i]
             res.loc[ix, 'pwr_%s' % x] = mean_powers[i]
@@ -1763,7 +1750,7 @@ def main(args):
     # get and verify building name
     name = args.get('building', 'default')
     if name not in dictionary['buildings'].keys():
-        raise ValueError(f"building {building} not in building names")
+        raise ValueError(f"building {name} not in building names")
     logger.info(f"selected building: {name}")
 
     # run builtin export utility and exit
@@ -1778,30 +1765,20 @@ def main(args):
         speradsheet_import(dictionary, name, spreadname)
         logger.debug(f"writing paramters to {filename}")
         with open(filename, 'w') as f:
-            dictionary = yaml.dump(dictionary, f)
+            yaml.dump(dictionary, f)
         return
 
 
     # get weather data
     csv_name = args['extracted_weather']
-    if os.path.exists(csv_name):
-        logger.info('reading weather data from: %s' % csv_name)
-        # read position fom comment line
-        with open(csv_name, 'r') as f:
-            lat, lon, ele, nam = f.readline(
-            ).strip('# \n').split(maxsplit=4)
-        # read observation data
-        obs = pd.read_csv(csv_name, comment='#', index_col=0,
-                          parse_dates=True, na_values='-999')
-    else:
-        raise IOError('weather data not found: %s' % csv_name)
+    lat, lon, ele, z0, source, stat_nam, obs = \
+            _common.read_extracted_weather(csv_name)
 
     # extract variables from weather data
     tz = obs.index.tz
     logger.debug(f"observation timezone is {tz}")
     if tz is None:
         obs.index = obs.index.tz_localize('UTC')
-    dt = obs.index.diff().median()
     t_out = obs['t2m'].interpolate('linear').bfill().ffill()  # K
     t_out = t_out.apply(m.temperature._to_C)  # C
     w_out = obs['ff'].interpolate('linear').bfill().ffill() / 3. # m/s @ 2m
@@ -1841,7 +1818,7 @@ def main(args):
         'pm-u': 20.E-9,  # g/J
         'odor': 6 * 168000.E-9,  # GE/J
         'wood_kg': 1 / 4.04E6,  # kg/J
-        'kWh': 1 / (3600000),  # kWh
+        'kWh': 1 / 3600000,  # kWh
     }
     res = pd.DataFrame({'energy': energy})
     for k, v in emission_factors.items():
@@ -1853,25 +1830,12 @@ def main(args):
 
 # ----------------------------------------------------
 
-
-class SmartFormatter(argparse.HelpFormatter):
-    '''
-         Custom Help Formatter that maintains '\n' in argument help.
-    '''
-    def _split_lines(self, text, width):
-        r = []
-        for t in text.splitlines():
-            r.extend(argparse.HelpFormatter._split_lines(self, t, width))
-        return r
-
-# ----------------------------------------------------
-
-def add_options(subparsers: argparse.ArgumentParser) -> None:
+def add_options(subparsers):
     pars_htg = subparsers.add_parser(
         name='heating',
         aliases=[],
         help='simulate a building with heating.',
-        formatter_class = SmartFormatter
+        formatter_class = _tools.SmartFormatter
     )
     default = {'building': 'default',
                'heating-file': 'heating.yaml',

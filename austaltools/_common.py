@@ -504,3 +504,35 @@ def common_plot(args: dict,
             outname = outname + '.png'
         logger.info('writing plot: %s' % outname)
         plt.savefig(outname, dpi=180)
+
+# -------------------------------------------------------------------------
+
+def read_extracted_weather(csv_name: str) -> (
+        float, float, float, str, str, pd.DataFrame):
+    """
+    read weather data that were previously extracted from a
+    dataset and stored into a csv file with specially crafted header line
+
+    :param csv_name: file name and path
+    :type csv_name: str
+    :return: latitude, longitude, elevation, roughness length z0,
+      code of the original dataset, station name (if applicable),
+      and the weather data
+    :rtype: float, float, float, str, str, pd.DataFrame
+    """
+    # halt if file is not found
+    if not os.path.exists(csv_name):
+        raise IOError('weather data not found: %s' % csv_name)
+    logger.info('reading weather data from: %s' % csv_name)
+
+    # read position fom comment line
+    with open(csv_name, 'r') as f:
+        lat, lon, ele, z0, source, nam = f.readline(
+        ).strip('# \n').split(maxsplit=6)
+    stat_no = 0
+
+    # read observation data from subsequent lines
+    obs = pd.read_csv(csv_name, comment='#', index_col=0,
+                      parse_dates=True, na_values='-999')
+
+    return lat, lon, ele, z0, source, nam, obs

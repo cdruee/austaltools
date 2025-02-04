@@ -230,6 +230,8 @@ def main(args=None):
     if args is None:
         parser = cli_parser()
         args = vars(parser.parse_args())
+    else:
+        parser = None
     logger.debug('args: %s' % args)
     #
     # logging level
@@ -282,7 +284,8 @@ def main(args=None):
         #else:
          #   raise ValueError('unknown command: %s' % args['command'])
     except UsageError as e:
-        parser.print_usage()
+        if parser is not None:
+            parser.print_usage()
         print(str(e))
         sys.exit(2)
 

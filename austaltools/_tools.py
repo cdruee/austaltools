@@ -1,3 +1,4 @@
+import argparse
 import os
 import re
 import shlex
@@ -115,6 +116,19 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 ELEVATION_API = "https://api.open-elevation.com/api/v1/lookup"
 """api used for estimation of elevation"""
+
+# =========================================================================
+
+
+class SmartFormatter(argparse.HelpFormatter):
+    '''
+         Custom Help Formatter that maintains '\n' in argument help.
+    '''
+    def _split_lines(self, text, width):
+        r = []
+        for t in text.splitlines():
+            r.extend(argparse.HelpFormatter._split_lines(self, t, width))
+        return r
 
 # =========================================================================
 
@@ -1162,3 +1176,4 @@ def read_heff(working_dir, conf=None):
     heff = float(az.heights[z0_class])
     return heff
 
+# -------------------------------------------------------------------------
