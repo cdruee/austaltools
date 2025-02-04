@@ -853,9 +853,9 @@ def austal_weather(args):
 
     else:
         lat, lon, ele, stat_no, stat_nam = (
-            austaltools._common.evaluate_location_opts(args))
-        logging.info('selected position: %.2f %.2f %.0f (%s)' %
-                     (lat, lon, ele, format(stat_nam)))
+            _common.evaluate_location_opts(args))
+        logging.info('selected position: %.2f %.2f (%s)' %
+                     (lat, lon, format(stat_nam)))
 
         year = int(args['year'])
         logger.debug("year: %s" % year)
@@ -887,6 +887,7 @@ def austal_weather(args):
     nam = args['output']
     logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
     logger.debug("lat: %s, lon: %s" % (lat, lon))
+    logger.debug("elevation: %s" % (ele))
 
     if args.get('write-extracted', False):
         csv_name = 'extracted_weather.csv'
@@ -1015,9 +1016,10 @@ def austal_weather(args):
     #                      margins = True))
     #
     #    print(skm.classification_report(data['kmc'], data['pgc']))
-
+    logger.debug("methods_available: %s" % methods_available)
     for method in methods_available:
-        if args.get('class-scheme') in [method, 'all']:
+        if args.get('class-scheme',
+                    DEFAULT_CLASS_SCHEME) in [method, 'all']:
             logger.debug('generating output for: ' + method)
             if args['prec']:
                 df = pd.DataFrame({'FF': data['ff'],

@@ -887,10 +887,10 @@ class Room:
             if area is not None:
                 self.area = area
             else:
-                if length is None and width is None:
+                if length is None or width is None:
                     raise ValueError(
-                        'either width & length or area'
-                        'are required with normal rooms')
+                        f'either width & length or area '
+                        f'are required with normal rooms: {name}')
                 self.area = self.width * self.length
             if volume is not None:
                 self.volume = volume
