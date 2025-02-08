@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import csv
+import sys
 from collections import OrderedDict
 import inspect
 import logging
@@ -52,10 +53,12 @@ DEFAULT_SLABS_OPT = 'even'
 """ default scheme how walls are partitioned into slabs """
 DEFAULT_SLAB = 0.04
 """ wall slab default thickness in m """
-WIDTHMIN = 1.0
+WIDTHMIN = 0.01
 """ wall slab minimal thickness for exponentially growing slabs in m """
-WIDTHSTEP = 0.5
+WIDTHSTEP = 0.005
 """ wall slab thickness steps for exponentially growing slabs in m """
+WIDTHEXP = 2.
+""" all slab thickness max exponent (>1)"""
 TIMESTEP = 1
 """ model timestep in s """
 PRESSURE = 101325
@@ -325,7 +328,7 @@ def exponential_slabs(dist):
         number = n + 1
 
         # Iterate until a satisfactory partition is found
-        for g in np.linspace(1.,2., 200):
+        for g in np.linspace(1., WIDTHEXP, 200):
             widths = [WIDTHMIN * g ** i for i in range(n)]
 
             # Reduce n if we overshoot
@@ -335,11 +338,11 @@ def exponential_slabs(dist):
                     break
 
             # Check for interval multiples of 0.5
-            widths = [round(x / 0.5) * 0.5 for x in widths]
+            widths = [round(x / WIDTHSTEP) * WIDTHSTEP for x in widths]
 
             # Calculate sum and compare to half of L
             r = sum(widths) - dist / 2
-            if len(widths) < number and abs(r) <= 0.5:
+            if len(widths) < number and abs(r) <= WIDTHSTEP:
                 widths[-1] -= r
                 res = widths + widths[::-1]
 
@@ -534,6 +537,7 @@ class Wall:
 
         """
         self.name = name
+        logger.debug(f"initializing wall: {name}")
         self.room_w = room_w
         self.room_c = room_c
         if c is not None:
@@ -597,6 +601,9 @@ class Wall:
             self.n_slab = len(self.d_slab)
         else:
           raise ValueError(f"unknown slabs option: {str(slabs)}")
+        logger.debug("slab sizes : %s cm" %
+                     str([100*x for x in self.d_slab]))
+
         # calculate distances between slab centers for
         # flux calculation (add excess thickness at the two
         # outermost slabs)
@@ -610,6 +617,9 @@ class Wall:
                 self.d_flux[i] = self.d_slab[-1] / 2.
             else:
                 self.d_flux[i] = (self.d_slab[i-1] + self.d_slab[i]) / 2.
+        logger.debug("flux deltas: %s cm" %
+                     str([100*x for x in self.d_flux]))
+
         # initialize temperature
         if t_start is None:
             raise ValueError('start temperature not given')
@@ -1736,12 +1746,27 @@ def run_building_model(bldg: Building,
 
 def main(args):
     # first evaluate global options
+    if (txt :=args.get('slabs', '')).startswith('exponential'):
+        if ',' in txt:
+            args['slabs'] = 'exponential'
+            tupl = txt.split(',')
+            global WIDTHMIN, WIDTHSTEP, WIDTHEXP
+            if len(tupl) > 1:
+                WIDTHMIN = float(tupl[1])
+            if len(tupl) > 2:
+                WIDTHSTEP = float(tupl[2])
+            if len(tupl) > 3:
+                WIDTHEXP = float(tupl[3])
+        logger.debug(f"set WIDTHMIN, WIDTHSTEP, WIDTHEXP to:"
+                     f"{(WIDTHMIN, WIDTHSTEP, WIDTHEXP)}")
+
     if (slabs := args.get('slabs', None)) is not None:
         if ',' in slabs:
             # comma-separated list of floats
             try:
                 slabs = [float(x) for x in slabs.split(',')]
             except:
+                sys.tracebacklimit = 0
                 raise ValueError("--slabs: non-numeric values in list.")
         else:
             # is it a number? Test by converting it.
@@ -1753,6 +1778,18 @@ def main(args):
         global DEFAULT_SLABS_OPT
         DEFAULT_SLABS_OPT = slabs
         logger.debug(f"set default slabs option to: {DEFAULT_SLABS_OPT}")
+
+    if (timestep := args.get('timestep', None)) is not None:
+        # is it a number? Test by converting it.
+        try:
+            timestep = float(timestep)
+        except ValueError:
+            sys.tracebacklimit = 0
+            raise ValueError(f"timestep is not a floating point number: "
+                             f"{timestep}")
+        global TIMESTEP
+        TIMESTEP = timestep
+        logger.debug(f"set timestep option to: {TIMESTEP}")
 
     # get parameter file
     filename = args.get('file', 'heating.yaml')
@@ -1942,6 +1979,11 @@ def add_options(subparsers):
                               'The program exits after importing the '
                               'spreadsheet data.',
                          default=None)
+    adv_htg.add_argument('--timestep',
+                         dest='timestep',
+                         help='the model timestep in s'
+                         f'[``{TIMESTEP}``].\n',
+                         default = TIMESTEP)
     return pars_htg
 
 
