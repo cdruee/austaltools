@@ -254,7 +254,7 @@ def expand_cycles(yinfo):
 # ----------------------------------------------------
 
 def parse_cycle(c_id: str, c_info : dict,
-                time: pd.Series) -> pd.Series:
+                time: pd.DatetimeIndex) -> pd.Series:
     """
     Parse cycle information and
     generate an emission time series.
@@ -328,10 +328,11 @@ def parse_cycle(c_id: str, c_info : dict,
     # test and evaluate time
     if not type(time) in [list, pd.Series, pd.DatetimeIndex]:
         raise ValueError('time is not list-like')
-    time = pd.to_datetime(time)
-    if not (hasattr(time, "dt") and hasattr(time.dt, "tz")):
+    if not isinstance(time, pd.DatetimeIndex):
+        time = pd.DatetimeIndex(pd.to_datetime(time))
+    if time.tz is None:
         logger.info("time passed without time zone, assuming UTC")
-        time = time.dt.tz_localize("UTC")
+        time = time.tz_localize("UTC")
     dt = time.diff()[1:].unique()
     if len(dt) > 1:
         raise ValueError('time intervals are not uniform')
@@ -378,9 +379,9 @@ def parse_cycle(c_id: str, c_info : dict,
                 sys.tracebacklimit = 0
                 raise ValueError(f"unsupported format {tf_file_format} "
                                  f"in file: {ts_file_name}")
-            if not (hasattr(time, "dt") and hasattr(time.dt, "tz")):
-                logger.info("time passed without time zone, assuming UTC")
-                time = ts_data.index.tz_localize("UTC")
+            if ts_data.index.tz is None:
+                logger.info("time in file has not time zone, assuming UTC")
+                ts_data.index = ts_data.index.tz_localize("UTC")
             ts_columns = ts_data.columns
             if not ts_var in ts_columns:
                 sys.tracebacklimit = 0
@@ -637,11 +638,16 @@ def get_timeseries(file: str, time: pd.DatetimeIndex):
         yinfo = yaml.safe_load(f)
     logger.debug(format(yinfo))
 
-    # prepare output
-    time = pd.to_datetime(time)
-    if not (hasattr(time, "dt") and hasattr(time.dt, "tz")):
+    # test and prepare time
+    if not type(time) in [list, pd.Series, pd.DatetimeIndex]:
+        raise ValueError('time is not list-like')
+    if not isinstance(time, pd.DatetimeIndex):
+        time = pd.DatetimeIndex(pd.to_datetime(time))
+    if time.tz is None:
         logger.info("time passed without time zone, assuming UTC")
-        time = time.dt.tz_localize("UTC")
+        time = time.tz_localize("UTC")
+
+    # prepare output
     res = pd.DataFrame(index=time)
 
     # get cycle info
