@@ -8,6 +8,7 @@ German regulatory dispersion model AUSTAL [AST31]_
 """
 import os
 import logging
+import shutil
 import sys
 import warnings
 
@@ -239,21 +240,21 @@ def expand_cycles(yinfo):
                     f'emssion factors defined in template: {t_name}'
                     f' but no substance selected in cycle: {c_id}')
 
-            if 'multiplier' in t_info:
-                logger.debug(f'... applying additional multiplier: '
-                             f"{t_info['multiplier']}")
-                cycle['multiplier'] = float(t_info['multiplier'])
-            else:
-                cycle['multiplier'] = 1.
-            logger.debug(f'... applying additional multiplier:'
-                         f' {cycle["multiplier"]}')
+            # if 'multiplier' in t_info:
+            #     logger.debug(f'... applying additional multiplier: '
+            #                  f"{t_info['multiplier']}")
+            #     cycle['multiplier'] = float(t_info['multiplier'])
+            # else:
+            #     cycle['multiplier'] = 1.
+            # logger.debug(f'... applying additional multiplier:'
+            #              f' {cycle["multiplier"]}')
         cycles[c_id] = cycle
     return cycles
 
 # ----------------------------------------------------
 
 def parse_cycle(c_id: str, c_info : dict,
-                time: pd.DatetimeIndex) -> pd.Series:
+                time: pd.Series) -> pd.Series:
     """
     Parse cycle information and
     generate an emission time series.
@@ -297,6 +298,7 @@ def parse_cycle(c_id: str, c_info : dict,
 
     :example:
 
+        >>> import pandas as pd
         >>> c_id = "foo"
         >>> c_info = {'column': '01.so2',
         ...   'start': {'at': {'time': '1-11/2', 'unit': 'month'},
@@ -305,7 +307,7 @@ def parse_cycle(c_id: str, c_info : dict,
         ...     {'ramp': {'time': 1, 'unit': 'day', 'value': 9.0}
         ...    },
         ...    {'const': {'time': 36, 'unit': 'hour', 'value': 1.1}}]}
-        >>> time = pandas.date_range("2000-01-01 00:00",
+        >>> time = pd.date_range("2000-01-01 00:00",
         ...                          "2000-01-02 00:00", freq="1h")
         >>> fill_timeseries.parse_cycle(c_id, c_info, time)
             ('01.so2',
@@ -327,6 +329,9 @@ def parse_cycle(c_id: str, c_info : dict,
     if not type(time) in [list, pd.Series, pd.DatetimeIndex]:
         raise ValueError('time is not list-like')
     time = pd.to_datetime(time)
+    if not (hasattr(time, "dt") and hasattr(time.dt, "tz")):
+        logger.info("time passed without time zone, assuming UTC")
+        time = time.dt.tz_localize("UTC")
     dt = time.diff()[1:].unique()
     if len(dt) > 1:
         raise ValueError('time intervals are not uniform')
@@ -354,6 +359,7 @@ def parse_cycle(c_id: str, c_info : dict,
     if 'template' in c_info.keys():
         raise ValueError('cycle has illegal template key: %s' % c_id)
 
+    ts_data = None
     if "timeseries" in c_info.keys():
         ts_info = c_info['timeseries']
         if 'file' in ts_info.keys():
@@ -364,8 +370,22 @@ def parse_cycle(c_id: str, c_info : dict,
             tf_file_format = ts_finfo.get('format', 'csv')
             ts_var = ts_finfo.get('var')
             if tf_file_format == 'csv':
-                ts_data = pd.read_csv(ts_file_name)
+                ts_data = pd.read_csv(ts_file_name,
+                                      index_col=0,
+                                      parse_dates=True
+                                      )
+            else:
+                sys.tracebacklimit = 0
+                raise ValueError(f"unsupported format {tf_file_format} "
+                                 f"in file: {ts_file_name}")
+            if not (hasattr(time, "dt") and hasattr(time.dt, "tz")):
+                logger.info("time passed without time zone, assuming UTC")
+                time = ts_data.index.tz_localize("UTC")
             ts_columns = ts_data.columns
+            if not ts_var in ts_columns:
+                sys.tracebacklimit = 0
+                raise ValueError(f"no var named `{ts_var}` "
+                                 f"in: {ts_file_name}")
 
         elif 'table' in ts_info.keys():
             ts_finfo = ts_info['table']
@@ -379,6 +399,9 @@ def parse_cycle(c_id: str, c_info : dict,
                     [x.strip().split(',') for x in ts_finfo['data']],
                     columns=ts_columns
                 )
+            else:
+                sys.tracebacklimit = 0
+                raise ValueError("required key `data` not in `table`")
     else:
         ts_data = None
         if "start" not in c_info.keys():
@@ -509,30 +532,37 @@ def parse_cycle(c_id: str, c_info : dict,
 
     if 'multiplier' in c_info.keys():
         multiplier = c_info['multiplier']
-        es = c_info.get('substance', '(none)')
         logger.info(f"cycle {c_id} given in {unit_info}, " +
-                    f"applying emission factor for {es}: {multiplier}")
-        del es
+                    f"applying cycle multiplier: {multiplier}")
     else:
-        mutiplier = 1.
+        multiplier = 1.
+        logger.info(f"cycle {c_id} given in {unit_info}, " +
+                    f"no cycle multiplier (applying 1.0)")
 
-    if any([x < sequence.index[-1] for x in start.diff()[1:]]):
-        logger.warning('sequence longer than start interval: %s' % c_id)
-    if (start.values[-1] + sequence.index[-1]) > time.values[-1]:
-        logger.warning('total length > time period to fill: %s' % c_id)
-
+    effective_factor = unitfactor * emissionfactor * multiplier
+    logger.debug(f"effective factor: {effective_factor}")
     # generate cycle:
     if ts_data is None:
+        # check start times
+        if (len(start) > 1 and
+                any([x < sequence.index[-1] for x in start.diff()[1:]])):
+            logger.warning(
+                'sequence longer than start interval: %s' % c_id)
+        if (start.values[-1] + sequence.index[-1]) > time.values[-1]:
+            logger.warning('total length > time period to fill: %s' % c_id)
+
         # copy sequence to each start time
         # covert units in the process
         cycle = pd.Series(0, index=time, name=c_id, dtype=float)
         for x in start:
             for dx, y in sequence.items():
                 cycle[x + dx] = (
-                        y * unitfactor * emissionfactor * multiplier
+                        y * effective_factor
                 )
     else:
         cycle = ts_data[ts_var].resample(dt, origin=time[0]).mean()
+        cycle = cycle * effective_factor
+        cycle.name = c_id
     return column, cycle
 # ----------------------------------------------------
 
@@ -608,6 +638,10 @@ def get_timeseries(file: str, time: pd.DatetimeIndex):
     logger.debug(format(yinfo))
 
     # prepare output
+    time = pd.to_datetime(time)
+    if not (hasattr(time, "dt") and hasattr(time.dt, "tz")):
+        logger.info("time passed without time zone, assuming UTC")
+        time = time.dt.tz_localize("UTC")
     res = pd.DataFrame(index=time)
 
     # get cycle info
@@ -616,11 +650,16 @@ def get_timeseries(file: str, time: pd.DatetimeIndex):
         logger.info('working on cycle: %s' % c_id)
         column, cycle = parse_cycle(c_id, c_info, time)
 
-        # add cyle as column or add values to existing column
+        # add cyle as / to column
+        # if column does not yet exist yet:
         if column not in res.columns:
+            # make new all-zero column
             res[column] = 0.
+        # temporarily add cycle as column `c_id`
         res = res.join(cycle)
+        # add temporary column `c_id` to column
         res[column] = res[column] + res[c_id]
+        # drop temporary column `c_id`
         res = res.drop(c_id, axis=1)
 
     return res
@@ -677,6 +716,11 @@ def main(args):
     logger.debug('args: %s' % args)
     #
     name = os.path.join(args["working_dir"], 'zeitreihe.dmna')
+    bck = name + '~'
+    logger.info(f"creating backup copy {bck}")
+    shutil.copyfile(name, bck)
+    #
+    logger.info(f"reading new file {name}")
     zeitreihe = readmet.dmna.DataFile(file=name)
     if zeitreihe.filetype != 'timeseries':
         raise ValueError('is not dmna timeseries format: %s' % name)
@@ -731,6 +775,8 @@ def main(args):
     else:
         raise ValueError('unknown action: %s' % args["action"])
     zeitreihe.data = values
+
+    logger.info(f"writing new file {name}")
     zeitreihe.write(name)
 
 # ----------------------------------------------------

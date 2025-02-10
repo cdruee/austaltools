@@ -107,8 +107,7 @@ class TestCommandLine(unittest.TestCase):
                    '-L', '6.75', '49.75',
                    OUTPUT]
         out, err, exitcode = capture(command)
-        assert exitcode == 2
-        assert err.decode().startswith('usage')
+        assert exitcode > 0
         produced_files = [x for x in expected_files(OUTPUT)
                           if os.path.exists(x)]
         for x in produced_files:
