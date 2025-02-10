@@ -333,7 +333,7 @@ def parse_cycle(c_id: str, c_info : dict,
     if time.tz is None:
         logger.info("time passed without time zone, assuming UTC")
         time = time.tz_localize("UTC")
-    dt = time.diff()[1:].unique()
+    dt = time.to_series().diff()[1:].unique()
     if len(dt) > 1:
         raise ValueError('time intervals are not uniform')
     dt = pd.Timedelta(dt[0])
