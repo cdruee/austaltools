@@ -76,6 +76,10 @@ DEFAULT_ROOMTEMP = 20  # °C
 
 # ------------------------------------------------
 
+_ROOM_DEFAULT = '_default'
+
+# ------------------------------------------------
+
 def surface_heat_transfer_resistance(
         indoor: bool, angle: float = 0,
         t_wall:float=None, wind:float=None):
@@ -720,11 +724,11 @@ class WallList(dict):
                 if x.partof == x.name:
                     raise ValueError(
                         f"partof self found in: {value.name}")
-                self[value.partof].area -= value.area
-                if self[value.partof].area < 0:
+                self[x.partof].area -= x.area
+                if self[x.partof].area < 0:
                     raise ValueError(
                         f"parts larger than parent: "
-                        f"{self[value.partof].name}")
+                        f"{self[x.partof].name}")
 
     def append(self, wall: Wall):
         """
@@ -1102,18 +1106,23 @@ class Hvac:
                         raise ValueError(f"illegal keyword {x}")
                     # one value for all rooms
                     if isinstance(x, (float, int)):
-                        kd = {'_default':float(x)}
+                        kd = {_ROOM_DEFAULT:float(x)}
                     # idividual values for all rooms
                     # default must be given if not all rooms are listed
                     elif isinstance(x, dict):
+                        for r in rnames:
+                            if (r not in x.keys() and
+                                _ROOM_DEFAULT not in x.keys()):
+                                raise ValueError(f"mode {name}: "
+                                                 f"room {r} not in "
+                                                 f"roomtemp definions "
+                                                 f"and no {_ROOM_DEFAULT} "
+                                                 f"defined")
                         kd={}
-                        dv = x.get('_default', None)
-                        if dv is not None:
-                            kd['_default'] = dv
                         for r in x.keys():
-                            if r not in rnames:
+                            if r not in rnames and r != _ROOM_DEFAULT:
                                 raise ValueError(f"unknown room {r}")
-                            kd[r] = dv
+                            kd[r] = x[r]
                     else:
                         raise ValueError(f"illegal type of {x}")
                     mode[k] = kd
@@ -1123,12 +1132,12 @@ class Hvac:
                     if k not in mode.keys():
                        mode[k] = {}
                 # make sure there are defaults
-                if '_default' not in mode['throttle'].keys():
+                if _ROOM_DEFAULT not in mode['throttle'].keys():
                     # no setting = full throttle
-                    mode['throttle']['_default'] = 100
-                if '_default' not in mode['roomtemp'].keys():
+                    mode['throttle'][_ROOM_DEFAULT] = 100
+                if _ROOM_DEFAULT not in mode['roomtemp'].keys():
                     # no setting = no limit to roomtemp
-                    mode['roomtemp']['_default'] = 9999
+                    mode['roomtemp'][_ROOM_DEFAULT] = 9999
 
 
                 obj.modes[name] = mode
@@ -1703,12 +1712,12 @@ def run_building_model(bldg: Building,
                 if r in newmode['throttle'].keys():
                     x = r
                 else:
-                    x = '_default'
+                    x = _ROOM_DEFAULT
                 bldg.rooms[r].set_throttle(newmode['throttle'][x])
                 if r in newmode['roomtemp'].keys():
                     x = r
                 else:
-                    x = '_default'
+                    x = _ROOM_DEFAULT
                 bldg.rooms[r].set_thermo(newmode['roomtemp'][x])
         # integrate forward until next time in ts
         tick = 0
@@ -1988,12 +1997,4 @@ def add_options(subparsers):
 
 
 # =========================================================================
-# init at import:
-
-AVAILABLE_WEATHER = input_weather.find_weather_data()
-"""
-List of locally available DEMs (filled upon importing the module)
-
-:meta hide-value:
-"""
 
