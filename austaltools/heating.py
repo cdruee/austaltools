@@ -18,13 +18,9 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 try:
     from . import _common
     from . import _tools
-    from . import _datasets
-    from . import input_weather
 except ImportError:
     import _common
     import _tools
-    import _datasets
-    import input_weather
 
 # ----------------------------------------------------
 

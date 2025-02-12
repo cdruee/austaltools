@@ -100,6 +100,16 @@ WEA_FMT = '%s.ak-input.nc'
 """ weather model database file name template"""
 OBS_FMT = '%s.obs.zip'
 """ weather observation database file name template"""
+PROCS = None
+""" Number of parallel processes to run downlading data or  
+    `None` (then the number of processor cores in the system is used). """
+DATASETS: list = None
+"""
+All known datasets as :py:class:`DataSet` instances. 
+Filled on demand.
+
+:meta hide-value:
+"""
 
 
 # =========================================================================
@@ -246,6 +256,27 @@ class DataSet:
 
 # =========================================================================
 
+def dataset_list():
+    """
+    Get list of datasets
+    :return: the requested dataset object
+    :rtype: dict[dict]
+
+    :raises ValueError: if the dataset does not exist
+    """
+    _init_datasets()
+    res = {}
+    for ds in DATASETS:
+        res[ds.name] = {
+            'storage': ds.storage,
+            'available': ds.available,
+            'uri': ds.uri,
+            'path': ds.path
+        }
+    return res
+
+
+# -------------------------------------------------------------------------
 def dataset_get(name):
     """
     Yield the dataset with the given ID
@@ -256,6 +287,7 @@ def dataset_get(name):
 
     :raises ValueError: if the dataset does not exist
     """
+    _init_datasets()
     for x in DATASETS:
         if x.name == name:
             return x
@@ -275,22 +307,80 @@ def dataset_available(name):
     """
     return dataset_get(name).available
 
+# -------------------------------------------------------------------------
+
+def update_available():
+    """
+    update availability of datasets stored in conf
+    by scanning storrage locations
+    """
+    _init_datasets()
+    logger.debug("re-scanning available datasets")
+    available_datasets = _available_scan()
+    logger.debug("setting available flags")
+    _datasets_set_available(DATASETS, available_datasets)
+    logger.debug("writing available datasest to config")
+    _available_write(DATASETS)
 
 # -------------------------------------------------------------------------
-def dataset_scan(locs : list = None):
+
+def _available_read() -> dict:
     """
-    Scan for datasets available on the system.
-    Set the :py:attr:`DataSet.available` attribute
-    in the global list :py:const:`DATASETS` accordingly.
+    Read datasets available on the system from the config.
 
     :param locs: list of possible storage loactions
     :type locs: list[str]
     """
+    conf = _storage.read_config()
+    available_datasets = {}
+
+    # if conf has an entry `available`
+    if (c_avail := conf.get("available", None)) is not None:
+        # if `available' has a sub-enty st
+        for st in _storage.STORAGES:
+            if (st_avail := c_avail.get(st, None)) is not None:
+                # append any item to the dict
+                for k,v in st_avail.items():
+                    available_datasets[k] = v
+    return available_datasets
+
+
+# -------------------------------------------------------------------------
+
+def _available_write(datasets: list[DataSet]):
+
+    # read config
+    conf = _storage.read_config()
+
+    # assemble availability tree
+    c_avail = {}
+    for st in _storage.STORAGES:
+        st_avail = {}
+        for ds in datasets:
+            if ds.available:
+                st_avail[ds.name] = ds.path
+        c_avail[st] = st_avail
+    conf['available'] = c_avail
+
+    # write config
+    _storage.write_config(conf)
+
+# -------------------------------------------------------------------------
+
+def _available_scan(locs : list = None) -> dict:
+    """
+    Scan for datasets available on the system.
+
+    :param locs: list of possible storage loactions
+    :type locs: list[str]
+    """
+    _init_datasets()
     if locs is None:
         locs = _storage.STORAGE_LOCATIONS
     loc_avail = _storage.locations_available(locs)
     if len(loc_avail) == 0:
         raise ValueError("No locations available")
+    available_datasets = {}
     for ds in DATASETS:
         for loc in reversed(loc_avail):
             if ds.storage is None:
@@ -299,12 +389,69 @@ def dataset_scan(locs : list = None):
                 path = os.path.join(loc, str(ds.storage))
                 datafile = os.path.join(path, ds.file_data)
                 if os.path.exists(datafile):
-                    ds.available = True
-                    ds.path = path
+                    available_datasets[ds.name] =  path
 
+    return available_datasets
 
 # -------------------------------------------------------------------------
 
+def _datasets_expand(defs: dict) -> list[DataSet]:
+    datasets = []
+    for k,v in defs.items():
+        if "split" in v.keys():
+            if v["split"] == "years":
+                years_available = _tools.expand_sequence(
+                    v["years_available"])
+                for ya in years_available:
+                    name = name_yearly(k, ya)
+                    vy = v.copy()
+                    if 'uri' in v and isinstance(v['uri'], dict):
+                        vy['uri'] = v['uri'][str(ya)]
+                    datasets.append(DataSet(name=name, **vy))
+            else:
+                raise ValueError(f"unkown split type {v['split']}")
+        else:
+            datasets.append(DataSet(name=k, **v))
+    return datasets
+
+# -------------------------------------------------------------------------
+
+def _datasets_set_available(
+        datasets: list[DataSet], avail: dict) -> list[DataSet]:
+    """
+    Set the :py:attr:`DataSet.available` attribute
+    in the global list `datasets` accordingly.
+
+    :return:  list of all known datasets
+    :rtype: list[DataSet]
+    """
+    for k, v in avail.items():
+        for ds in datasets:
+            if k == ds.name:
+                ds.available = True
+                ds.path = v
+                break
+        else:
+            logger.warning(f"found unknown dataset: {k}")
+
+    return datasets
+
+# -------------------------------------------------------------------------
+
+def _init_datasets():
+    """
+    initialize datsets and retrieve storage patths from config
+
+    :return:  list of all known datasets
+    :rtype: list[DataSet]
+    """
+    global DATASETS
+    if DATASETS is not None:
+        return
+    datasets = _datasets_expand(DATASET_DEFINITIONS)
+    available = _available_read()
+    datasets = _datasets_set_available(datasets, available)
+    DATASETS = datasets
 
 # -------------------------------------------------------------------------
 
@@ -1086,8 +1233,8 @@ def _ass_era5_getyear(year):
 
 
 # -------------------------------------------------------------------------
-def assemble_ERA5(path: str, name="ERA5", years: list =[],
-                  replace : bool = False, args : dict ={}):
+def assemble_ERA5(path: str, name="ERA5", years:list=None,
+                  replace : bool = False, args:dict=None):
     """
     Downloads and assembles ERA5 reanalysis data for a list of specified
     years, saving the data to a designated path.
@@ -1139,6 +1286,11 @@ def assemble_ERA5(path: str, name="ERA5", years: list =[],
     """
 
     # create option tuples
+    if args is None:
+        args = {}
+    if years is None:
+        years = []
+    _init_datasets()
     logger.debug(f"assemble_ERA5: path={path}, name={name}, "
                  f"years={years}, replace={replace}, args={args}")
     combi = []
@@ -1316,8 +1468,8 @@ def _ass_cerra_getyear(opts):
 
 
 # -------------------------------------------------------------------------
-def assemble_CERRA(path: str, name="CERRA", years: list = [],
-                   replace : bool = False, args : dict ={}):
+def assemble_CERRA(path: str, name="CERRA", years=None,
+                   replace : bool = False, args=None):
     """
     Downloads, extracts, and merges CERRA dataset forecasts for specified
     years into single NetCDF files per year.
@@ -1370,6 +1522,11 @@ def assemble_CERRA(path: str, name="CERRA", years: list = [],
       points to a valid temporary directory for intermediate files.
 
     """
+    if args is None:
+        args = {}
+    if years is None:
+        years = []
+    _init_datasets()
     logger.debug(f"assemble_CERRA: path={path}, name={name}, "
                  f"years={years}, replace={replace}, args={args}")
     temp_path = _storage.TEMP
@@ -1590,37 +1747,44 @@ def name_yearly(name, year):
     return '%s-%04i' % (name, year)
 
 # -------------------------------------------------------------------------
-def expand_datasets(defs: dict):
-    datasets = []
-    for k,v in defs.items():
-        if "split" in v.keys():
-            if v["split"] == "years":
-                years_available = _tools.expand_sequence(
-                    v["years_available"])
-                for ya in years_available:
-                    name = name_yearly(k, ya)
-                    vy = v.copy()
-                    if 'uri' in v and isinstance(v['uri'], dict):
-                        vy['uri'] = v['uri'][str(ya)]
-                    datasets.append(DataSet(name=name, **vy))
-            else:
-                raise ValueError(f"unkown split type {v['split']}")
-        else:
-            datasets.append(DataSet(name=k, **v))
+
+def find_weather_data():
+    """
+    Searches all known storage locations for the known terrain datasets
+    and yields a list of the datasets available locally.
+
+    :return: dataset IDs of the locally available datasets
+    :rtype: list[str]
+    """
+    _init_datasets()
+    datasets = {}
+    for ds in DATASETS:
+        # is ds a terrain dataset?
+        if ds.storage == 'weather':
+            # is it locally available (i.e. downloaded already?):
+            if ds.available:
+                datasets[ds.name] = ds.path
     return datasets
 
 # -------------------------------------------------------------------------
-# initialize
-DATASETS = expand_datasets(DATASET_DEFINITIONS)
-"""
-All known datasets as :py:class:`DataSet` instances.
 
-:meta hide-value:
-"""
-PROCS = None
-"""
-Number of parallel processes to run downlading data or  
-`None`. If `None` the number of processor cores in the system is used.
-"""
-dataset_scan()
+def find_terrain_data():
+    """
+    Searches all known storage locations for the known terrain datasets
+    and yields a list of the datasets available locally.
+
+    :return: dataset IDs of the locally available datasets
+    :rtype: list[str]
+    """
+    _init_datasets()
+    datasets = {}
+    for ds in DATASETS:
+        # is ds a terrain dataset?
+        if ds.storage == 'terrain':
+            # is it locally available (i.e. downloaded already?):
+            if ds.available:
+                datasets[ds.name] = ds.path
+    return datasets
+
+# -------------------------------------------------------------------------
 

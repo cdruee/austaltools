@@ -51,25 +51,25 @@ TEMP = tempfile.gettempdir()
 
 # =========================================================================
 
-def locations_available(locs):
+def locations_available(locs: list[str]) -> list[str]:
     """
     Check whether locations exist
     :param locs: paths of storage location directories
     :type locs: list[str]
-    :return: True if locations exist, False otherwise
-    :rtype: bool
+    :return: locations that exist
+    :rtype: list[str]
     """
     return [x for x in locs if os.path.isdir(x)]
 
 # -------------------------------------------------------------------------
 
-def locations_writable(locs):
+def locations_writable(locs: list[str]) -> list[str]:
     """
     Check whether locations are writable
     :param locs: paths of storage location directories
     :type locs: list[str]
-    :return: True if locations are writable, False otherwise
-    :rtype: bool
+    :return: locations that are writable
+    :rtype: list[str]
     """
     return [x for x in locs if os.access(x, os.W_OK)]
 
@@ -135,7 +135,8 @@ def find_writeable_storage(locs: str = None,
 
 def read_config(locs: str = None) -> dict:
     if locs is None:
-        locs = STORAGE_LOCATIONS
+        # user files override centrally installed files -> reversed
+        locs = reversed(STORAGE_LOCATIONS)
     config = {}
     for loc in locs:
         if os.path.exists(os.path.join(loc, CONFIG_FILE)):
@@ -149,9 +150,10 @@ def read_config(locs: str = None) -> dict:
 
 def write_config(config: dict, locs: str = None) -> bool:
     if locs is None:
+        # try central directories before user directories
         locs = STORAGE_LOCATIONS
     loc_to_write = None
-    for loc in reversed(locs):
+    for loc in locs:
         if os.path.exists(os.path.join(loc, CONFIG_FILE)):
             logger.debug(f"found writable config at {loc}")
             loc_to_write = loc

@@ -7,8 +7,6 @@ import logging
 import os
 import sys
 
-from PIL.ImImagePlugin import number
-
 try:
     from . import _storage
     from . import _tools
@@ -27,30 +25,43 @@ logger = logging.getLogger()
 
 
 def list_datasets(only='all', state='known', long=False):
+    """
+    Print a list of all known or available datasets
+    contaimning terrain or weather or both
+
+    :param only: kind of datasets to print:
+      `terrain` or `weather` or `all` (default)
+    :type only: str
+    :param state: which datasets to print:
+        'available' or 'known' (default)
+    :type state: str
+    :param long: print short (``False``) or long (``True``, default) list
+    :type long: bool
+    """
     if long:
         lfmt = "| %-10s | %6s | %6s | %s"
         print(lfmt % (' Dataset  ', 'online', 'avail.', 'path'))
         print(lfmt % ('----------', '------', '------', '-------------'))
-        for d in DS.DATASETS:
-            if (only in [d.storage, 'all'] and
-                    (state == 'known' or d.available)):
-                if d.uri is not None:
+        for name, props in DS.dataset_list().items():
+            if (only in [props['storage'], 'all'] and
+                    (state == 'known' or props.available)):
+                if props['uri'] is not None:
                     dl_str = ' Yes  '
                 else:
                     dl_str = ' No   '
-                if d.available:
+                if props['available']:
                     pr_str = ' Yes  '
-                    pa_str = d.path
+                    pa_str = props['path']
                 else:
                     pr_str = ' No   '
                     pa_str = ''
-                print(lfmt % (d.name, dl_str, pr_str, pa_str))
+                print(lfmt % (name, dl_str, pr_str, pa_str))
     else:
         names=[]
-        for d in DS.DATASETS:
-            if (only in [d.storage, 'all'] and
-                    (state == 'known' or d.available)):
-                names.append(d.name)
+        for name, props in DS.dataset_list().items():
+            if (only in [props['storage'], 'all'] and
+                    (state == 'known' or props['available'])):
+                names.append(name)
         print(" ".join(names))
 
 # -------------------------------------------------------------------------
@@ -89,7 +100,7 @@ def set_austaldir(args: dict):
         path = conf.get('austaldir', None)
         if path is None:
             path = "(not set)"
-        print("austaldir: %" % path)
+        print("austaldir: %s" % path)
         return
 
     # save setting
@@ -125,95 +136,6 @@ def cli_parser():
                                        metavar='COMMAND',
                                        required=True
                                        )
-
-    sub_ast = subparsers.add_parser('austal',
-                                     help='set/show location of the austal '
-                                          'installation. If none of '
-                                          '`path` of `find` is given,'
-                                          'the current setting is shwon.')
-    sub_ast_how = sub_ast.add_mutually_exclusive_group()
-    sub_ast_how.add_argument('-p', '--path',
-                          metavar="PATH",
-                          default=None,
-                          help='directory where the austal executable'
-                               'is stored.')
-    sub_ast_how.add_argument('-f', '--find',
-                          metavar="PATH",
-                          default='.',
-                          help='recursively serach this directory '
-                               'for the austal executable.'
-                               'Defaults to current directory.')
-
-    sub_list = subparsers.add_parser('list',
-                                     help='list known datasets '
-                                          'and show availability and '
-                                          'storage locations')
-    sub_only_grp = sub_list.add_mutually_exclusive_group()
-    sub_only_grp.add_argument('-w', '--weather',
-                              dest='only',
-                              action='store_const',
-                              const='weather',
-                              default='all')
-    sub_only_grp.add_argument('-t', '--terrain',
-                              dest='only',
-                              action='store_const',
-                              const='terrain',
-                              default='all')
-    sub_only_grp.add_argument('--all',
-                              dest='only',
-                              action='store_const',
-                              const='all',
-                              default='all')
-    sub_state_grp = sub_list.add_mutually_exclusive_group()
-    sub_state_grp.add_argument('-k', '--known',
-                               dest='state',
-                               action='store_const',
-                               const='known',
-                               default='available')
-    sub_state_grp.add_argument('--available',
-                               dest='state',
-                               action='store_const',
-                               const='available',
-                               default='available')
-    sub_list.add_argument('-l', '--long',
-                          action='store_true',
-                          help='show verbose list instead of just codes')
-
-    sub_down = subparsers.add_parser('download',
-                                     help='download pre-assembled dataset '
-                                          'from a location configured '
-                                          'for the dataset.')
-    sub_down.add_argument('-s', '--source',
-                          metavar="CODE",
-                          nargs=None,
-                          choices=DS.SOURCES_TERRAIN + DS.SOURCES_WEATHER,
-                          default=default_dem,
-                          help='code for the source digital elevation ' +
-                               'model (DEM). Known DEMs are: ' +
-                               ' '.join(DS.SOURCES_TERRAIN) + ' ' +
-                               'Defaults to ' + default_dem)
-    sub_down.add_argument('-y', '--years',
-                          metavar="YEAR",
-                          help='Year for which to download weather data.' +
-                               ' A range of years may be given as ' +
-                               '<start year>-<end year>. ' +
-                               'No default, required with ' +
-                               'weather datasets.')
-    sub_down.add_argument('-p', '--path',
-                          metavar="PATH",
-                          default=None,
-                          help='download files to PATH instead of one ' +
-                               'of the default locations. Note: ' +
-                               'data downloaded to a custom PATH are ' +
-                               'not considered by austaltools by default.')
-
-    sub_down.add_argument('-f', '--force',
-                          action='store_true',
-                          help='overwrite dataset if it exists.'
-                               'If dataset exists in a system-wide ' +
-                               'installation, it might be downloaded ' +
-                               'to the user directory (again), where ' +
-                               'it takes higher preference.')
 
     sub_assm = subparsers.add_parser('assemble',
                                      help='assemble dataset from original ' +
@@ -253,6 +175,101 @@ def cli_parser():
                                'installation, it might be downloaded ' +
                                'to the user directory (again), where ' +
                                'it takes higher preference.')
+
+
+    sub_ast = subparsers.add_parser('austal',
+                                     help='set/show location of the austal '
+                                          'installation. If none of '
+                                          '`path` of `find` is given,'
+                                          'the current setting is shwon.')
+    sub_ast_how = sub_ast.add_mutually_exclusive_group()
+    sub_ast_how.add_argument('-p', '--path',
+                          metavar="PATH",
+                          default=None,
+                          help='directory where the austal executable'
+                               'is stored.')
+    sub_ast_how.add_argument('-f', '--find',
+                          metavar="PATH",
+                          default='.',
+                          help='recursively search this directory '
+                               'for the austal executable.'
+                               'Defaults to current directory.')
+
+    sub_down = subparsers.add_parser('download',
+                                     help='download pre-assembled dataset '
+                                          'from a location configured '
+                                          'for the dataset.')
+    sub_down.add_argument('-s', '--source',
+                          metavar="CODE",
+                          nargs=None,
+                          choices=DS.SOURCES_TERRAIN + DS.SOURCES_WEATHER,
+                          default=default_dem,
+                          help='code for the source digital elevation ' +
+                               'model (DEM). Known DEMs are: ' +
+                               ' '.join(DS.SOURCES_TERRAIN) + ' ' +
+                               'Defaults to ' + default_dem)
+    sub_down.add_argument('-y', '--years',
+                          metavar="YEAR",
+                          help='Year for which to download weather data.' +
+                               ' A range of years may be given as ' +
+                               '<start year>-<end year>. ' +
+                               'No default, required with ' +
+                               'weather datasets.')
+    sub_down.add_argument('-p', '--path',
+                          metavar="PATH",
+                          default=None,
+                          help='download files to PATH instead of one ' +
+                               'of the default locations. Note: ' +
+                               'data downloaded to a custom PATH are ' +
+                               'not considered by austaltools by default.')
+
+    sub_down.add_argument('-f', '--force',
+                          action='store_true',
+                          help='overwrite dataset if it exists.'
+                               'If dataset exists in a system-wide ' +
+                               'installation, it might be downloaded ' +
+                               'to the user directory (again), where ' +
+                               'it takes higher preference.')
+
+    sub_list = subparsers.add_parser('list',
+                                     help='list known datasets '
+                                          'and show availability and '
+                                          'storage locations')
+    sub_only_grp = sub_list.add_mutually_exclusive_group()
+    sub_only_grp.add_argument('-w', '--weather',
+                              dest='only',
+                              action='store_const',
+                              const='weather',
+                              default='all')
+    sub_only_grp.add_argument('-t', '--terrain',
+                              dest='only',
+                              action='store_const',
+                              const='terrain',
+                              default='all')
+    sub_only_grp.add_argument('--all',
+                              dest='only',
+                              action='store_const',
+                              const='all',
+                              default='all')
+    sub_state_grp = sub_list.add_mutually_exclusive_group()
+    sub_state_grp.add_argument('-k', '--known',
+                               dest='state',
+                               action='store_const',
+                               const='known',
+                               default='available')
+    sub_state_grp.add_argument('--available',
+                               dest='state',
+                               action='store_const',
+                               const='available',
+                               default='available')
+    sub_list.add_argument('-l', '--long',
+                          action='store_true',
+                          help='show verbose list instead of just codes')
+
+    sub_scan = subparsers.add_parser('scan',
+                                     help='list known datasets '
+                                          'and show availability and '
+                                          'storage locations')
 
 
     parser.add_argument('--storage',
@@ -304,6 +321,9 @@ def main():
 
     if args['action'] == 'list':
         list_datasets(args['only'], args['state'], args['long'])
+
+    elif args['action'] == 'scan':
+        DS.update_available()
 
     elif args['action'] == 'austal':
         set_austaldir(args)

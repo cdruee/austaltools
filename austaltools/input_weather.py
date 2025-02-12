@@ -48,7 +48,6 @@ logger = logging.getLogger()
 KNOWN_SOURCES = ["ERA5", "CERRA", "DWD"]
 STORAGE_LOCATIONS = austaltools._storage.STORAGE_LOCATIONS
 STORAGE_DIR = "weather"
-STORAGE_PATH = None  # will be filled lazy
 
 # possible defaults: fixed_057 fixed_010 model_mean model_uv10 model_fsr
 DEFAULT_WIND_VARIANT = os.environ.get('WIND_VARIANT', 'model_uv10')
@@ -1185,28 +1184,6 @@ def add_options(subparsers):
 
 # =========================================================================
 
-def find_weather_data():
-    """
-    Searches all known storage locations for the known terrain datasets
-    and yields a list of the datasets available locally.
-
-    :return: dataset IDs of the locally available datasets
-    :rtype: list[str]
-    """
-    datasets = {}
-    for ds in _datasets.DATASETS:
-        # is ds a terrain dataset?
-        if ds.storage == 'weather':
-            # is it locally available (i.e. downloaded already?):
-            if ds.available:
-                datasets[ds.name] = ds.path
-    return datasets
-
-
-
-# -------------------------------------------------------------------------
-
-
 def main(args):
     """
     This is the main routine that processes the input arguments and calls the main working function `austal_weather`.
@@ -1237,8 +1214,19 @@ def main(args):
         logger.critical("options NAME is required with -L, -G, -U, -D or -W")
         sys.exit(1)
 
+    available_weather = _datasets.find_weather_data()
+    if available_weather is None or len(available_weather) == 0:
+        logger.warning("No available weather data in config file,"
+                       "trying to serch weather data. \n"
+                       "Run configure_autaltools to collect the "
+                       "available weather data infomation once.")
+        available_weather = _datasets.find_weather_data()
+        if len(available_weather) == 0:
+            logger.error("No available weather data found.")
+            sys.exit(1)
+
     ds_name = _datasets.name_yearly(args['source'], int(args['year']))
-    if not ds_name in AVAILABLE_WEATHER:
+    if not ds_name in available_weather:
         logger.critical(f"dataset not available: {ds_name}")
         sys.exit(1)
 
@@ -1249,11 +1237,3 @@ def main(args):
     austal_weather(args)
 
 # =========================================================================
-# init at import:
-
-AVAILABLE_WEATHER = find_weather_data()
-"""
-List of locally available DEMs (filled upon imorting the module)
-
-:meta hide-value:
-"""

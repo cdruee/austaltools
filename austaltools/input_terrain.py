@@ -48,27 +48,6 @@ that are part of the module are stored
 # -------------------------------------------------------------------------
 
 
-def find_terrain_data():
-    """
-    Searches all known storage locations for the known terrain datasets
-    and yields a list of the datasets available locally.
-
-    :return: dataset IDs of the locally available datasets
-    :rtype: list[str]
-    """
-    datasets = {}
-    for ds in _datasets.DATASETS:
-        # is ds a terrain dataset?
-        if ds.storage == 'terrain':
-            # is it locally available (i.e. downloaded already?):
-            if ds.available:
-                datasets[ds.name] = ds.path
-    return datasets
-
-
-# -------------------------------------------------------------------------
-
-
 def show_notice(storage_path, source):
     """
     Shows a notice to the user when a dataset is accessed,
@@ -129,26 +108,37 @@ def main(args: dict):
     lat, lon, ele, stat_no, stat_nam = austaltools._common.evaluate_location_opts(args)
     rechts, hoch, _ = _tools.ll2gk(lat, lon)
 
-    if args['source'] in AVAILABLE_DEMS:
-        source = args['source']
-        storage_path = AVAILABLE_DEMS[source]
-    else:
-        raise ValueError(f"Not an available source: {args['source']}")
+    available_dems = _datasets.find_terrain_data()
+    if available_dems is None or len(available_dems) == 0:
+        logger.warning("No available terrain data in config file,"
+                       "trying to serch terrain data. \n"
+                       "Run configure_autaltools to collect the "
+                       "available terrain data infomation once.")
+        available_dems = _datasets.find_weather_data()
+        if len(available_dems) == 0:
+            logger.error("No available terrain data found.")
+            sys.exit(1)
+            
+    ds_name = args['source']
+    if ds_name not in available_dems:
+        logger.critical(f"Dataset not available: {ds_name}")
+        sys.exit(1)
+
+    storage_path = available_dems[ds_name]
 
     logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
     logger.debug("lon: %s, lat: %s" % (lon, lat))
     size = float(args['extent']) * 1000  # km -> m
     logger.debug("size: %s m" % size)
-    source = args['source']
     #
     # show notice
     #
-    print('reading terrain data: %s' % source)
-    show_notice(storage_path=storage_path, source=source)
+    print('reading terrain data: %s' % ds_name)
+    show_notice(storage_path=storage_path, source=ds_name)
     #
     # load dataset
     #
-    file_name = os.path.join(storage_path, DEM_FMT % source)
+    file_name = os.path.join(storage_path, DEM_FMT % ds_name)
     logger.debug("file_name: %s" % file_name)
     dataset = gdal.Open(file_name)
 
@@ -192,10 +182,7 @@ def main(args: dict):
 
 def add_options(subparsers):
 
-    if len(AVAILABLE_DEMS) > 0:
-        default_dem = list(AVAILABLE_DEMS)[0]
-    else:
-        default_dem = None
+    default_dem = 'GTOPO30'
     default_extent = 5.
 
     pars_ter = subparsers.add_parser(
@@ -211,12 +198,14 @@ def add_options(subparsers):
     pars_ter.add_argument('-s', '--source',
                           metavar="CODE",
                           nargs=None,
-                          choices=AVAILABLE_DEMS,
+                          # choices=AVAILABLE_DEMS,
                           default=default_dem,
                           help='code for the source digital elevation ' +
-                               'model (DEM). Known DEMs are: ' +
-                               ' '.join(AVAILABLE_DEMS) +
-                               ' Defaults to ' + str(default_dem))
+                               'model (DEM). '
+                               # 'Known DEMs are: ' +
+                               # ' '.join(AVAILABLE_DEMS) +
+                               ' Defaults to ' + str(default_dem)
+                          )
     pars_ter.add_argument('-e', '--extent',
                           metavar="KM",
                           nargs=None,
@@ -227,11 +216,3 @@ def add_options(subparsers):
     return pars_ter
 
 # =========================================================================
-# init at import:
-
-AVAILABLE_DEMS = find_terrain_data()
-"""
-List of locally available DEMs (filled upon imorting the module)
-
-:meta hide-value:
-"""
