@@ -1334,6 +1334,10 @@ class Building():
     _wall_history = list()
     hvac = Hvac([])
 
+    #defaulkt recording output file names
+    rname='heating_rooms_history.csv'
+    wname='heating_walls_history.csv'
+
 
     def __init__(self, name, t_out, t_soil):
         """
@@ -1405,11 +1409,18 @@ class Building():
                 self.output == other.output
                 )
 
-    def record_variables(self, time):
+    def record_variables(self, time, flush=False,
+                         rname=None, wname=None,
+                         ):
         """
         Records current temperature and power variables of rooms
         and temperature and flux of walls to history.
         """
+        if rname is None:
+            rname = self.rname
+        if wname is None:
+            wname = self.wname
+
         self._room_history.append(
             {
                 'time': time,
@@ -1428,9 +1439,12 @@ class Building():
                                 'l_in': v.l_in, 'l_out': v.l_out
                                 }.items() }
             })
+        if flush:
+            self.output_recording(rname=rname, wname=wname, append=True)
+            self._room_history = list()
+            self._wall_history = list()
 
-    def output_recording(self, rname='heating_rooms_history.csv',
-                         wname='heating_walls_history.csv'):
+    def output_recording(self, rname=None, wname=None, append=False):
         """
         Outputs the recorded room and wall data to CSV files.
 
@@ -1439,16 +1453,27 @@ class Building():
         :param wname: The filename for wall history data, default is 'heating_walls_history.csv'.
         :type wname: str, optional
         """
+        if rname is None:
+            rname = self.rname
+        if wname is None:
+            wname = self.wname
+        if append:
+            mode = 'a'
+            header = False
+        else:
+            mode = 'w'  # pandas default
+            header = True
+
         if len(self._room_history) > 0:
             df = pd.DataFrame.from_records(self._room_history,
                                            index='time')
-            df.to_csv(rname,
+            df.to_csv(rname, mode=mode, header=header,
                       quoting=csv.QUOTE_NONE,
                       float_format="%12.5f")
         if len(self._wall_history) > 0:
             df = pd.DataFrame.from_records(self._wall_history,
                                            index='time')
-            df.to_csv(wname,
+            df.to_csv(wname, mode=mode, header=header,
                       quoting=csv.QUOTE_NONE,
                       float_format="%12.5f")
 
@@ -1564,6 +1589,7 @@ def run_building_model(bldg: Building,
                        cseries: pd.Series|str=None,
                        df: pd.DataFrame|None=None,
                        rec=None,
+                       flush=True,
                        radiation=True
                        ):
     """
@@ -1592,6 +1618,9 @@ def run_building_model(bldg: Building,
         running the model. For exampe "1min" for every minute.
         Defaults to for no recording
     :type rec: str or None
+    :param flush: (optional) whether to flush the simulation recording
+        each (modeled) hour. Default is True.
+    :type flush: bool
     :param radiation: Enable heat gain by net radiation on outside walls.
         Defaults to True.
     :type radiation: bool
@@ -1728,7 +1757,7 @@ def run_building_model(bldg: Building,
             rtemps[tick, :] = [bldg.rooms[x].temp for x in room_names]
             powers[tick, :] = [bldg.rooms[x].power for x in room_names]
             if pointer in recording_times:
-                bldg.record_variables(pointer)
+                bldg.record_variables(pointer, flush=True)
             pointer += dtick
             tick += 1
         # evaluate at timestep
@@ -1741,7 +1770,7 @@ def run_building_model(bldg: Building,
         res.loc[ix, 'power'] = mean_powers.sum()
         res.loc[ix, 'seconds'] = (pointer - oldpointer).total_seconds()
 
-        # rememeber time
+        # remember time
         oldpointer = pointer
 
     # repeat last value at the end of ts
@@ -1855,11 +1884,13 @@ def main(args):
     # run the model
     logger.info("running model")
     rec = args['recording']
+    flush = args['flush']
     model_out = run_building_model(
         bldg=bldg,
         tseries=t_out,
         wseries=w_out,
         cseries=c_out,
+        flush=flush,
         rec=rec,
         radiation=args['radiation'],
     )
@@ -1883,7 +1914,7 @@ def main(args):
     for k, v in emission_factors.items():
         res[k] = res['energy'] * v
     print(res)
-    res.to_csv("heating.csv", quoting=csv.QUOTE_NONE,
+    res.to_csv("heating_devel_emissions.csv", quoting=csv.QUOTE_NONE,
                float_format="%12.5f")
     print(res.sum(axis=0))
 
@@ -1925,8 +1956,14 @@ def add_options(subparsers):
                           default=default["output"])
 
     adv_htg = pars_htg.add_argument_group('advanced options')
+    adv_htg.add_argument('--flush',
+                         type=_tools.str2bool,
+                         help='enable or disable continuous writing'
+                              'of recorded data, applys only if '
+                              '``--recording`` is enabled [True].',
+                         default = True)
     adv_htg.add_argument('--radiation',
-                         type = _tools.str2bool,
+                         type=_tools.str2bool,
                          help='enable or disable radiative heat gain'
                               'on outside walls [True].',
                          default = True)
