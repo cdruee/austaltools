@@ -1332,6 +1332,7 @@ class Building():
     output = None
     _room_history = list()
     _wall_history = list()
+    _header_written = False
     hvac = Hvac([])
 
     #defaulkt recording output file names
@@ -1457,12 +1458,14 @@ class Building():
             rname = self.rname
         if wname is None:
             wname = self.wname
-        if append:
+        if append and self._header_written:
             mode = 'a'
             header = False
         else:
             mode = 'w'  # pandas default
             header = True
+            self._header_written = True
+
 
         if len(self._room_history) > 0:
             df = pd.DataFrame.from_records(self._room_history,
