@@ -1328,7 +1328,14 @@ class Building():
     output = None
     _room_history = list()
     _wall_history = list()
+    _slab_history = list()
+    _header_written = False
     hvac = Hvac([])
+
+    #defaulkt recording output file names
+    rname='heating_rooms_history.csv'
+    wname='heating_walls_history.csv'
+    sname='heating_slabs_history.csv'
 
 
     def __init__(self, name, t_out, t_soil):
@@ -1401,32 +1408,57 @@ class Building():
                 self.output == other.output
                 )
 
-    def record_variables(self, time):
+    def record_variables(self, time, flush=False,
+                         rname=None, wname=None, sname=None,
+                         slabout=False,
+                         ):
         """
         Records current temperature and power variables of rooms
         and temperature and flux of walls to history.
         """
-        self._room_history.append(
-            {
-                'time': time,
-                **{f"tmp_{k}": v.temp for k, v in self.rooms.items()},
-                **{f"pwr_{k}": v.power for k, v in self.rooms.items()}
-            })
-        self._wall_history.append(
-            {
-                'time': time,
-                **{f"temp{i:03d}_{k}": t for k, v in self.walls.items()
-                   for i, t in enumerate(v.t_slab)},
-                **{f"flux{i:03d}_{k}": f for k, v in self.walls.items()
-                   for i, f in enumerate(v.f_flux)},
-                **{f"{i}_{k}": f for k, v in self.walls.items()
-                   for i, f in {'k_in': v.k_in, 'k_out': v.k_out,
-                                'l_in': v.l_in, 'l_out': v.l_out
-                                }.items() }
-            })
+        if rname is None:
+            rname = self.rname
+        if wname is None:
+            wname = self.wname
+        if sname is None:
+            sname = self.sname
 
-    def output_recording(self, rname='heating_rooms_history.csv',
-                         wname='heating_walls_history.csv'):
+        record = {'time': time}
+        for k, v in self.rooms.items():
+            record[f"tmp_{k}"] = v.temp
+        for k, v in self.rooms.items():
+            record[f"pwr_{k}"] = v.power
+        self._room_history.append(record)
+
+        record = {'time': time}
+        for k, v in self.rooms.items():
+            for w, f in v.get_fluxes(self.walls).items():
+                record[f"flx_{k}_{w}"] = f
+                if k == 'outside':
+                    record[f"flx_{k}_{w}_k_in"] = self.walls[w].k_in
+                    record[f"flx_{k}_{w}_k_out"] = self.walls[w].k_out
+                    record[f"flx_{k}_{w}_l_in"] = self.walls[w].l_in
+                    record[f"flx_{k}_{w}_l_out"] = self.walls[w].l_out
+        self._wall_history.append(record)
+
+        record = {'time': time}
+        for k, v in self.walls.items():
+            for i, t in enumerate(v.t_slab):
+                record[f"temp{i:03d}_{k}"] = t
+        for k, v in self.walls.items():
+            for i, f in enumerate(v.f_flux):
+                record[f"flux{i:03d}_{k}"] = f
+        self._slab_history.append(record)
+
+        if flush:
+            self.output_recording(rname=rname, wname=wname, sname=sname,
+                                  slabout=slabout, append=True)
+            self._room_history = list()
+            self._wall_history = list()
+            self._slab_history = list()
+
+    def output_recording(self, rname=None, wname=None, sname=None,
+                         slabout=True, append=False):
         """
         Outputs the recorded room and wall data to CSV files.
 
@@ -1435,16 +1467,38 @@ class Building():
         :param wname: The filename for wall history data, default is 'heating_walls_history.csv'.
         :type wname: str, optional
         """
+        if rname is None:
+            rname = self.rname
+        if wname is None:
+            wname = self.wname
+        if sname is None:
+            sname = self.sname
+
+        if append and self._header_written:
+            mode = 'a'
+            header = False
+        else:
+            mode = 'w'  # pandas default
+            header = True
+            self._header_written = True
+
+
         if len(self._room_history) > 0:
             df = pd.DataFrame.from_records(self._room_history,
                                            index='time')
-            df.to_csv(rname,
+            df.to_csv(rname, mode=mode, header=header,
                       quoting=csv.QUOTE_NONE,
                       float_format="%12.5f")
         if len(self._wall_history) > 0:
             df = pd.DataFrame.from_records(self._wall_history,
                                            index='time')
-            df.to_csv(wname,
+            df.to_csv(wname, mode=mode, header=header,
+                      quoting=csv.QUOTE_NONE,
+                      float_format="%12.5f")
+        if len(self._slab_history) > 0 and slabout:
+            df = pd.DataFrame.from_records(self._slab_history,
+                                           index='time')
+            df.to_csv(sname, mode=mode, header=header,
                       quoting=csv.QUOTE_NONE,
                       float_format="%12.5f")
 
@@ -1560,6 +1614,8 @@ def run_building_model(bldg: Building,
                        cseries: pd.Series|str=None,
                        df: pd.DataFrame|None=None,
                        rec=None,
+                       slabout=False,
+                       flush=True,
                        radiation=True
                        ):
     """
@@ -1588,6 +1644,9 @@ def run_building_model(bldg: Building,
         running the model. For exampe "1min" for every minute.
         Defaults to for no recording
     :type rec: str or None
+    :param flush: (optional) whether to flush the simulation recording
+        each (modeled) hour. Default is True.
+    :type flush: bool
     :param radiation: Enable heat gain by net radiation on outside walls.
         Defaults to True.
     :type radiation: bool
@@ -1724,7 +1783,8 @@ def run_building_model(bldg: Building,
             rtemps[tick, :] = [bldg.rooms[x].temp for x in room_names]
             powers[tick, :] = [bldg.rooms[x].power for x in room_names]
             if pointer in recording_times:
-                bldg.record_variables(pointer)
+                bldg.record_variables(pointer,
+                                      flush=flush, slabout=slabout)
             pointer += dtick
             tick += 1
         # evaluate at timestep
@@ -1737,14 +1797,14 @@ def run_building_model(bldg: Building,
         res.loc[ix, 'power'] = mean_powers.sum()
         res.loc[ix, 'seconds'] = (pointer - oldpointer).total_seconds()
 
-        # rememeber time
+        # remember time
         oldpointer = pointer
 
     # repeat last value at the end of ts
     res.loc[res.index[-1], :] = res.loc[res.index[-2], :]
 
     # write internal variables if desired
-    bldg.output_recording()
+    bldg.output_recording(slabout=slabout)
 
     return res
 
@@ -1839,7 +1899,7 @@ def main(args):
     w_out = obs['ff'].interpolate('linear').bfill().ffill() / 3. # m/s @ 2m
     c_out = obs['tcc'].interpolate('linear').bfill().ffill() * 8.  # octa
 
-    # get the buildimg we want
+    # get the building we want
     logger.info("intializing model")
     for k, v in dictionary['buildings'].items():
         if k == name:
@@ -1850,13 +1910,14 @@ def main(args):
 
     # run the model
     logger.info("running model")
-    rec = args['recording']
     model_out = run_building_model(
         bldg=bldg,
         tseries=t_out,
         wseries=w_out,
         cseries=c_out,
-        rec=rec,
+        flush=args['flush'],
+        slabout=args['slabout'],
+        rec=args['recording'],
         radiation=args['radiation'],
     )
 
@@ -1879,7 +1940,7 @@ def main(args):
     for k, v in emission_factors.items():
         res[k] = res['energy'] * v
     print(res)
-    res.to_csv("heating.csv", quoting=csv.QUOTE_NONE,
+    res.to_csv("heating_devel_emissions.csv", quoting=csv.QUOTE_NONE,
                float_format="%12.5f")
     print(res.sum(axis=0))
 
@@ -1921,8 +1982,14 @@ def add_options(subparsers):
                           default=default["output"])
 
     adv_htg = pars_htg.add_argument_group('advanced options')
+    adv_htg.add_argument('--flush',
+                         type=_tools.str2bool,
+                         help='enable or disable continuous writing'
+                              'of recorded data, applys only if '
+                              '``--recording`` is enabled [True].',
+                         default = True)
     adv_htg.add_argument('--radiation',
-                         type = _tools.str2bool,
+                         type=_tools.str2bool,
                          help='enable or disable radiative heat gain'
                               'on outside walls [True].',
                          default = True)
@@ -1939,6 +2006,13 @@ def add_options(subparsers):
                               'for example ``1min``. '
                               '[None]',
                          default=None)
+    adv_htg.add_argument('--record-slabs',
+                         type=_tools.str2bool,
+                         dest='slabout',
+                         help='record internal model variables '
+                              'for each individual wall slab'
+                              '[False]',
+                         default=False)
     adv_htg.add_argument('--slabs',
                          help='change the default value how walls are '
                          'partitioned into slabs '

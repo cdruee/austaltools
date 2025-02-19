@@ -17,3 +17,4 @@ build/
 /austal/
 /austaltools.egg-info/
 /dist/
+.Rproj.user
