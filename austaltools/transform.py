@@ -17,16 +17,16 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 try:
     from . import _datasets
-    from . import _common
+    from . import _plotting
     from . import _tools
     from . import input_weather
-    from . import wmo_metadata
+    from . import _wmo_metadata
 except ImportError:
     import _datasets
-    import _common
+    import _plotting
     import _tools
     import input_weather
-    import wmo_metadata
+    import _wmo_metadata
 
 try:
     from ._version import __version__
@@ -226,7 +226,7 @@ def add_options(subparsers):
     pars_transf = subparsers.add_parser(
         name='transform',
         help='transfrom coordinates into other projections')
-    pars_transf = _common.add_location_opts(pars_transf, stations=True,
+    pars_transf = _plotting.add_location_opts(pars_transf, stations=True,
                                                         required=False)
     pars_transf.add_argument('-M', '--model',
                          metavar=("x", "y"),

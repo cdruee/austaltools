@@ -13,7 +13,7 @@ import logging
 import os
 import re
 
-import austaltools._common
+
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
@@ -21,7 +21,9 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 try:
     from . import _tools
+    from . import _plotting
 except ImportError:
+    import _plotting
     import _tools
 try:
     from ._version import __version__
@@ -138,6 +140,13 @@ def main(args):
     """
     logger.debug("args: %s" % format(args))
 
+    # disable subcommand if no plotting is possible
+    if not _plotting.have_matplotlib():
+        logger.critical(f"  subcommand {__name__} is disabled. " +
+                        _plotting.NO_MATPLOTLIB_HELP
+        )
+        return
+
     # get the model configuration, if the file is present
     try:
         austxt = _tools.find_austxt(args['working_dir'])
@@ -230,6 +239,17 @@ def main(args):
 
 def add_options(subparsers):
 
+    # disable subcommand if no plotting is possible
+    if not _plotting.have_matplotlib():
+        msg = 'disabled because Matplotlib is not installed.'
+        subparsers.add_parser(
+            name=f'{__name__}',
+            help=msg,
+            description=msg
+        )
+        return
+
+    # act normally otherwise
     pars_plot = subparsers.add_parser(
         name='plot',
         help='plot AUSTAL output data')
@@ -247,6 +267,6 @@ def add_options(subparsers):
                            'deviation caculated by austal. ' +
                            'If missing, `STDVs` defaults to 1.0.')
 
-    pars_plot = austaltools._common.add_arguents_common_plot(pars_plot)
+    pars_plot = _plotting.add_arguents_common_plot(pars_plot)
 
     return pars_plot

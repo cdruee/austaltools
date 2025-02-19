@@ -6,13 +6,12 @@ import logging
 import os
 import sys
 
-import austaltools._storage
 
 try:
     from . import _tools
     from ._version import __version__, __title__
     from . import _corine
-    from . import _datasets
+    from . import _storage
     from . import import_buildings
     from . import eap
     from . import fill_timeseries
@@ -26,8 +25,8 @@ try:
 except ImportError:
     import _tools
     from _version import __version__, __title__
-    import _datasets
     import _corine
+    import _storage
     import import_buildings
     import eap
     import fill_timeseries
@@ -242,21 +241,13 @@ def main(args=None):
         logger.setLevel(logging.WARNING)
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
 
-    if (int(_tools.gdalVersion()) >= 3080400 and
-            int(_tools.gdalVersion()) < 3090200):
-        logger.warning('NOTE: The messages '
-              '"swig/python detected a memory leak of type ...", '
-              'result from \n                   '
-              'a bug in the imported gdal library. '
-              'You can safely ignore them.')
-
     if args.get("working_dir", None) is None:
         raise ValueError('PATH not given')
 
     logger.debug('args: %s' % args)
 
     if args.get("temp_dir",None) is not None:
-        austaltools._storage.TEMP = args["temp_dir"]
+        _storage.TEMP = args["temp_dir"]
 
     try:
         if args['command'] in ['import-buildings', 'bg']:

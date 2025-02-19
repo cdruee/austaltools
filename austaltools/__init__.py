@@ -6,6 +6,7 @@ from . import _tools
 from . import _corine
 from . import _fetch_dwd_obs
 from . import _fetch_dgm_od
+from . import _wmo_metadata
 
 from . import import_buildings
 from . import eap
@@ -16,4 +17,3 @@ from . import steepness
 from . import transform
 from . import input_terrain
 from . import input_weather
-from . import wmo_metadata

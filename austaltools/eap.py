@@ -20,7 +20,7 @@ import subprocess
 import tempfile
 from time import sleep
 
-import austaltools._common
+import austaltools._plotting
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
@@ -33,10 +33,12 @@ try:
     from . import _tools
     from ._version import __version__
     from . import _dispersion
+    from . import _plotting
 except ImportError:
     import _tools
     from _version import __version__
     import _dispersion
+    import _plotting
 
 logging.basicConfig()
 logger = logging.getLogger()
@@ -1106,7 +1108,7 @@ def main(args):
             logger.debug('select to write plot to default filename')
         else:
             logger.debug('select to write plot to custom filename')
-        austaltools._common.common_plot(args, dat=dat_dict, mark=pos_dict, scale=scale)
+            _plotting.common_plot(args, dat=dat_dict, mark=pos_dict, scale=scale)
     else:
         logger.info('nothing selected, skipping plot')
 
@@ -1159,6 +1161,6 @@ def add_options(subparsers):
                           help='minimum wind speed below which data are '
                                'exluded. ' +
                                'Defaults to %f' % MIN_FF)
-    pars_eap = austaltools._common.add_arguents_common_plot(pars_eap)
+    pars_eap = _plotting.add_arguents_common_plot(pars_eap)
 
     return pars_eap

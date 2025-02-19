@@ -11,15 +11,16 @@ import logging
 import os
 import sys
 
-import austaltools._common
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
 
 try:
     from . import _tools
+    from . import _plotting
 except ImportError:
     import _tools
+    import _plotting
 
 try:
     from ._version import __version__
@@ -798,6 +799,6 @@ def add_options(subparsers):
                         default=DEFAULT_ZVALUE)
     pars_bldg_hgt.add_argument('-Z', '--height',
                         help='height of all buildings')
-    pars_bldg = austaltools._common.add_arguents_common_plot(pars_bldg)
+    pars_bldg = _plotting.add_arguents_common_plot(pars_bldg)
 
     return pars_bldg

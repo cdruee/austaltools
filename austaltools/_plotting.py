@@ -1,4 +1,5 @@
 import argparse
+import importlib.util
 import logging
 import os
 import sys
@@ -11,9 +12,44 @@ if os.getenv('BUILDING_SPHINX', 'false') == 'false':
 
     import readmet
 
+
+try:
+    from . import _storage
+    from . import _tools
+    from . import _datasets
+    from . import _wmo_metadata
+except ImportError:
+    import _storage
+    import _tools
+    import _datasets
+    import _wmo_metadata
+
+logger = logging.getLogger(__name__)
+
+# ----------------------------------------------------
+
+DEFAULT_COLORMAP = "YlOrRd"
+"""Default colors used for the commpon plot type"""
+NO_MATPLOTLIB_HELP = ("The matplotlib library "
+                      "does not appear to be installed. "
+                      "You can install it by running "
+                      "`pip install matplotlib` "
+                      "or using the package manager of your choice.")
+# ----------------------------------------------------
+
+def have_matplotlib():
+    return False
+    # if not os.getenv('BUILDING_SPHINX', 'false') == 'false':
+    #   return importlib.util.find_spec("matplotlib") is not None
+    # else:
+    #   return True
+# ----------------------------------------------------
+have_display = False
+matplotlib = None
+plt = None
+def import_matplotlib():
     try:
         import matplotlib
-        have_matplotlib = True
         if os.name == 'posix' and "DISPLAY" not in os.environ:
             matplotlib.use('Agg')
             have_display = False
@@ -22,29 +58,9 @@ if os.getenv('BUILDING_SPHINX', 'false') == 'false':
         import matplotlib.colors
         import matplotlib.patches
         import matplotlib.pyplot as plt
+        return True
     except ImportError:
-        have_matplotlib = False
-        have_display = False
-        matplotlib = None
-        plt = None
-
-try:
-    from . import _storage
-    from . import _tools
-    from . import _datasets
-    from . import wmo_metadata
-except ImportError:
-    import _storage
-    import _tools
-    import _datasets
-    import wmo_metadata
-
-logger = logging.getLogger(__name__)
-
-# ----------------------------------------------------
-
-DEFAULT_COLORMAP = "YlOrRd"
-"""Default colors used for the commpon plot type"""
+        return False
 
 # ----------------------------------------------------
 
@@ -84,13 +100,30 @@ def read_dwd_stationinfo(station, pos_lat=None, pos_lon=None,
         return lat, lon, ele, nam, int(srow)
     else:
         return lat, lon, ele, nam
+
 # -------------------------------------------------------------------------
 
-def add_arguents_common_plot(parser: argparse.ArgumentParser
+def _add_epilog(parser: argparse.ArgumentParser
+                ) -> argparse.ArgumentParser:
+    """
+    Add note as epilog to parser
+
+    :param parser: parser to add arguments to
+    :type parser: argparse.ArgumentParser
+    :return: parser with added arguments
+    :rtype:  argparse.ArgumentParser
+
+    """
+    parser.epilog = ("Note: Plotting is not possible." +
+                     NO_MATPLOTLIB_HELP)
+    return parser
+
+# -------------------------------------------------------------------------
+
+def _add_arguments(parser: argparse.ArgumentParser
                              ) -> argparse.ArgumentParser:
     """
-    Add agruments to a parser that are honored by the common_plot
-    funtion
+    Actually add agruments to a parser
 
     :param parser: parser to add arguments to
     :type parser: argparse.ArgumentParser
@@ -133,6 +166,25 @@ def add_arguents_common_plot(parser: argparse.ArgumentParser
                         default=False,
                         help='force overwriting plotfile if it exists.')
     return parser
+
+# -------------------------------------------------------------------------
+
+def add_arguents_common_plot(parser: argparse.ArgumentParser
+                             ) -> argparse.ArgumentParser:
+    """
+    Add agruments to a parser that are honored by the common_plot
+    function add a notice instead if maptplotlib is not installed
+
+    :param parser: parser to add arguments to
+    :type parser: argparse.ArgumentParser
+    :return: parser with added arguments
+    :rtype:  argparse.ArgumentParser
+
+    """
+    if have_matplotlib():
+        return _add_arguments(parser)
+    else:
+        return _add_epilog(parser)
 
 # -------------------------------------------------------------------------
 

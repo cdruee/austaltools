@@ -11,30 +11,12 @@ from xml.etree import ElementTree
 import requests
 
 if os.getenv('BUILDING_SPHINX', 'false') == 'false':
-    from osgeo.gdal import VersionInfo as gdalVersion
     import osgeo.osr as osr
     try:
         osr.UseExceptions()
     except:
         pass
     import numpy as np
-
-    try:
-        import matplotlib
-        have_matplotlib = True
-        if os.name == 'posix' and "DISPLAY" not in os.environ:
-            matplotlib.use('Agg')
-            have_display = False
-        else:
-            have_display = True
-        import matplotlib.colors
-        import matplotlib.patches
-        import matplotlib.pyplot as plt
-    except ImportError:
-        have_matplotlib = False
-        have_display = False
-        matplotlib = None
-        plt = None
 
     try:
         from tqdm import tqdm
@@ -49,8 +31,6 @@ except ImportError:
     from _version import __version__, __title__
 
 logger = logging.getLogger(__name__)
-if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 
 # -------------------------------------------------------------------------
 
@@ -705,7 +685,7 @@ def str2bool(inp):
     elif str(inp).lower() in ['no', 'false', 'n', 'f', '0']:
         res = False
     else:
-        raise ValueError('value not understood as boolean: %' % inp)
+        raise ValueError('value not understood as boolean: %s' % inp)
     return res
 
 # -------------------------------------------------------------------------
@@ -784,7 +764,7 @@ def xmlpath(xml, path):
 
     :example:
 
-        >>> xml_string = '''<data>
+        >>> xmlstring = '''<data>
         ...                     <item id="1">Item 1</item>
         ...                     <item id="2" extra="yes">Item 2</item>
         ...                </data>'''

@@ -15,7 +15,7 @@ import zipfile
 import numpy as np
 import pandas as pd
 
-import austaltools._common
+import austaltools._plotting
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import meteolib as m
@@ -23,22 +23,22 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 try:
     from ._version import __version__, __title__
-    from . import _common
+    from . import _plotting
     from . import _storage
     from . import _tools
     from . import _datasets
     from . import _fetch_dwd_obs
     from . import _dispersion as dis
-    from . import wmo_metadata
+    from . import _wmo_metadata
 except ImportError:
     from _version import __version__, __title__
-    import _common
+    import _plotting
     import _storage
     import _tools
     import _datasets
     import _fetch_dwd_obs
     import _dispersion as dis
-    import wmo_metadata
+    import _wmo_metadata
 
 
 logging.basicConfig()
@@ -1061,7 +1061,7 @@ def add_options(subparsers):
     pars_wea.add_argument(dest="output", metavar="NAME", nargs='?',
                           help="file name to store data in."
                           )
-    pars_wea = austaltools._common.add_location_opts(pars_wea, stations=True)
+    pars_wea = _plotting.add_location_opts(pars_wea, stations=True)
     pars_wea.add_argument('-s', '--source',
                         metavar="CODE",
                         nargs=None,

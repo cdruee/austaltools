@@ -5,7 +5,6 @@ create basic plot for austal result files
 import logging
 import os
 
-import austaltools._common
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
@@ -13,8 +12,10 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 try:
     from . import _tools
+    from . import _plotting
 except ImportError:
     import _tools
+    import _plotting
 
 logger = logging.getLogger()
 # -------------------------------------------------------------------------
@@ -25,6 +26,13 @@ def main(args):
     # logging level
     #
     logger.debug("args: %s" % format(args))
+
+    # disable subcommand if no plotting is possible
+    if not _plotting.have_matplotlib():
+        logger.critical(f"  subcommand {__name__} is disabled. " +
+                        _plotting.NO_MATPLOTLIB_HELP
+        )
+        return
 
     # try to load topography
     topo_path = os.path.join(args['working_dir'],
@@ -55,13 +63,24 @@ def main(args):
     elif args['plot'] == '__default__':
         args['plot'] = "steepness0%01d" % args["grid"]
 
-    austaltools._common.common_plot(args, gamma, unit="m/m", topo=topo_path, dots=dots)
+    _plotting.common_plot(args, gamma, unit="m/m", topo=topo_path, dots=dots)
 
 
 # ------------------------------------------------------------------------
 
 def add_options(subparsers):
 
+    # disable subcommand if no plotting is possible
+    if not _plotting.have_matplotlib():
+        msg = 'disabled because Matplotlib is not installed.'
+        subparsers.add_parser(
+            name=f'{__name__}',
+            help=msg,
+            description=msg
+        )
+        return
+
+    # act normally otherwise
     pars_ste = subparsers.add_parser(
         name="steepness",
         help='Plot AUSTAL topography steepness'
@@ -72,6 +91,6 @@ def add_options(subparsers):
                           default=0,
                           help='ID (number) of the grid to evaluate. '
                                'Defaults to 0')
-    pars_ste = austaltools._common.add_arguents_common_plot(pars_ste)
+    pars_ste = _plotting.add_arguents_common_plot(pars_ste)
 
     return pars_ste

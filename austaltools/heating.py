@@ -16,10 +16,10 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from tqdm import tqdm
 
 try:
-    from . import _common
+    from . import _plotting
     from . import _tools
 except ImportError:
-    import _common
+    import _plotting
     import _tools
 
 # ----------------------------------------------------

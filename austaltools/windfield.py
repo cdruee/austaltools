@@ -16,32 +16,18 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import readmet
     import meteolib
 
-    try:
-        import matplotlib
-        have_matplotlib = True
-        if os.name == 'posix' and "DISPLAY" not in os.environ:
-            matplotlib.use('Agg')
-            have_display = False
-        else:
-            have_display = True
-        import matplotlib.pyplot as plt
-        import matplotlib.colors as mco
-    except ImportError:
-        have_matplotlib = False
-        have_display = False
-        matplotlib = None
-        plt = None
-
 try:
     from . import _tools
     from ._version import __version__
     from . import _corine
     from . import _dispersion
+    from . import _plotting
 except ImportError:
     import _tools
     from _version import __version__
     import _corine
     import _dispersion
+    import _plotting
 
 logger = logging.getLogger()
 
@@ -188,6 +174,31 @@ def main(args):
     :type args: dict
     """
     logger.debug(format(args))
+
+    # disable subcommand if no plotting is possible
+    if not _plotting.have_matplotlib():
+        logger.critical(f"  subcommand {__name__} is disabled. " +
+                        _plotting.NO_MATPLOTLIB_HELP
+        )
+        return
+
+    # act normally otherwise
+    try:
+        import matplotlib
+        have_matplotlib = True
+        if os.name == 'posix' and "DISPLAY" not in os.environ:
+            matplotlib.use('Agg')
+            have_display = False
+        else:
+            have_display = True
+        import matplotlib.pyplot as plt
+        import matplotlib.colors as mco
+    except ImportError:
+        have_matplotlib = False
+        have_display = False
+        matplotlib = None
+        plt = None
+
     working_dir = args["working_dir"]
     grid = int(args["grid"])
     #
@@ -390,6 +401,15 @@ def main(args):
 
 def add_options(subparsers):
 
+    # disable subcommand if no plotting is possible
+    if not _plotting.have_matplotlib():
+        subparsers.add_parser(
+            name=f'{__name__}',
+            help='disabled because Matplotlib is not installed.'
+        )
+        return
+
+    # act normally otherwise
     pars_wif = subparsers.add_parser(
         name='windfield',
         help='Plot wind field'

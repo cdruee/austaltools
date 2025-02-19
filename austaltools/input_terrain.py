@@ -10,18 +10,18 @@ import os
 import tempfile
 from importlib import resources
 
-import austaltools._common
-
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from osgeo import gdal
 
 try:
     from . import _tools
     from . import _datasets
+    from . import _plotting
     from ._version import __title__
 except ImportError:
     import _tools
     import _datasets
+    import _plotting
     from _version import __title__
 
 logging.basicConfig()
@@ -193,7 +193,7 @@ def add_options(subparsers):
                           help="file name to store data in.",
                           )
 
-    pars_ter = austaltools._common.add_location_opts(parser=pars_ter)
+    pars_ter = _plotting.add_location_opts(parser=pars_ter)
 
     pars_ter.add_argument('-s', '--source',
                           metavar="CODE",
