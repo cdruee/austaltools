@@ -12,17 +12,16 @@ import logging
 import sys
 import os
 
-if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    from osgeo import osr
-
 try:
     from . import _datasets
+    from . import _geo
     from . import _plotting
     from . import _tools
     from . import input_weather
     from . import _wmo_metadata
 except ImportError:
     import _datasets
+    import _geo
     import _plotting
     import _tools
     import input_weather
@@ -35,21 +34,6 @@ except ImportError:
 
 logging.basicConfig()
 logger = logging.getLogger()
-
-# -------------------------------------------------------------------------
-
-if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    GK_REFS = {x: osr.SpatialReference() for x in [1,2,3,4,5]}
-    # DHDN / 3-degree Gauss-Kruger zone 1 (E-N), https://epsg.io/5680
-    GK_REFS[1].ImportFromEPSG(5680)
-    # DHDN / 3-degree Gauss-Kruger zone 2 (E-N), https://epsg.io/5676
-    GK_REFS[2].ImportFromEPSG(5676)
-    # DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677
-    GK_REFS[3].ImportFromEPSG(5677)
-    # DHDN / 3-degree Gauss-Kruger zone 4 (E-N), https://epsg.io/5678
-    GK_REFS[4].ImportFromEPSG(5678)
-    # DHDN / 3-degree Gauss-Kruger zone 5 (E-N), https://epsg.io/5679
-    GK_REFS[5].ImportFromEPSG(5679)
 
 # -------------------------------------------------------------------------
 
@@ -122,6 +106,27 @@ def in_bounds(lat, lon, crs):
 # -------------------------------------------------------------------------
 
 def main(args):
+
+    # sub-command-specific imports
+    from osgeo import osr
+    try:
+        from . import _geo
+    except ImportError:
+        import _geo
+
+    GK_REFS = {x: osr.SpatialReference() for x in [1,2,3,4,5]}
+    # DHDN / 3-degree Gauss-Kruger zone 1 (E-N), https://epsg.io/5680
+    GK_REFS[1].ImportFromEPSG(5680)
+    # DHDN / 3-degree Gauss-Kruger zone 2 (E-N), https://epsg.io/5676
+    GK_REFS[2].ImportFromEPSG(5676)
+    # DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677
+    GK_REFS[3].ImportFromEPSG(5677)
+    # DHDN / 3-degree Gauss-Kruger zone 4 (E-N), https://epsg.io/5678
+    GK_REFS[4].ImportFromEPSG(5678)
+    # DHDN / 3-degree Gauss-Kruger zone 5 (E-N), https://epsg.io/5679
+    GK_REFS[5].ImportFromEPSG(5679)
+
+
     lat = lon = None
     rechts = hoch = None
     east = north = None
@@ -144,13 +149,13 @@ def main(args):
         elif rs == 'GK':
             rechts = rx + mx
             hoch = ry + my
-            lat, lon, _ = _tools.gk2ll(rechts, hoch)
-            east, north, _ = _tools.gk2ut(rechts, hoch)
+            lat, lon, _ = _geo.gk2ll(rechts, hoch)
+            east, north, _ = _geo.gk2ut(rechts, hoch)
         elif rs == 'UT':
             east = rx + mx
             north = ry + my
-            rechts, hoch, _ = _tools.ut2gk(east, north)
-            lat, lon, _ = _tools.ut2ll(east, north)
+            rechts, hoch, _ = _geo.ut2gk(east, north)
+            lat, lon, _ = _geo.ut2ll(east, north)
         else:
             raise ValueError(f'internal error rs={rs}')
 
@@ -161,26 +166,26 @@ def main(args):
             raise ValueError("Dataset DWD is not available, "
                        "download or assemble it.")
         station = int(args["dwd"])
-        lat, lon, ele, nam = _common.read_dwd_stationinfo(
+        lat, lon, ele, nam = _plotting.read_dwd_stationinfo(
             station, datafile=storage_dwd)
-        rechts, hoch, _ = _tools.ll2gk(lat, lon)
-        east, north, _ = _tools.ll2ut(lat, lon)
+        rechts, hoch, _ = _geo.ll2gk(lat, lon)
+        east, north, _ = _geo.ll2ut(lat, lon)
     elif args["wmo"] is not None:
-        lat, lon, ele, nam = wmo_metadata.wmo_stationinfo(args["wmo"])
-        rechts, hoch, _ = _tools.ll2gk(lat, lon)
-        east, north, _ = _tools.ll2ut(lat, lon)
+        lat, lon, ele, nam = _wmo_metadata.wmo_stationinfo(args["wmo"])
+        rechts, hoch, _ = _geo.ll2gk(lat, lon)
+        east, north, _ = _geo.ll2ut(lat, lon)
     elif args["gk"] is not None:
         rechts, hoch = [float(x) for x in args['gk']]
-        lat, lon, _ = _tools.gk2ll(rechts, hoch)
-        east, north, _ = _tools.gk2ut(rechts, hoch)
+        lat, lon, _ = _geo.gk2ll(rechts, hoch)
+        east, north, _ = _geo.gk2ut(rechts, hoch)
     elif args["ut"] is not None:
         east, north = [float(x) for x in args['ut']]
-        rechts, hoch, _ = _tools.ut2gk(east, north)
-        lat, lon, _ = _tools.ut2ll(rechts, hoch)
+        rechts, hoch, _ = _geo.ut2gk(east, north)
+        lat, lon, _ = _geo.ut2ll(rechts, hoch)
     elif args["ll"] is not None:
         lat, lon = [float(x) for x in args['ll']]
-        rechts, hoch, _ = _tools.ll2gk(lat, lon)
-        east, north, _ = _tools.ll2ut(lat, lon)
+        rechts, hoch, _ = _geo.ll2gk(lat, lon)
+        east, north, _ = _geo.ll2ut(lat, lon)
 
 
 
@@ -199,7 +204,7 @@ def main(args):
             logger.debug('in #%i' % zone)
             break
     if crs:
-        transform = osr.CoordinateTransformation(_tools.LL, crs)
+        transform = osr.CoordinateTransformation(_geo.LL, crs)
         gx, gy, _ = transform.TransformPoint(lat, lon)
         print(" %-10.2f, %-10.2f, %i " % (gx, gy, zone))
     else:

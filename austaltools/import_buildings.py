@@ -11,6 +11,7 @@ import logging
 import os
 import sys
 
+import austaltools._geo
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
@@ -693,7 +694,7 @@ def main(args):
         gx = austxt['gx'][0]
         gy = austxt['gy'][0]
     elif 'ux' in austxt and 'uy' in austxt:
-        gx, gy = _tools.ut2gk(austxt['ux'][0], austxt['uy'][0])
+        gx, gy = austaltools._geo.ut2gk(austxt['ux'][0], austxt['uy'][0])
     else:
         raise ValueError('neither GaussKrueger nor UTM in config')
     origin = np.array((gx, gy))

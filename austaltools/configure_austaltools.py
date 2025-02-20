@@ -23,7 +23,6 @@ logger = logging.getLogger()
 
 # -------------------------------------------------------------------------
 
-
 def list_datasets(only='all', state='known', long=False):
     """
     Print a list of all known or available datasets
@@ -44,7 +43,7 @@ def list_datasets(only='all', state='known', long=False):
         print(lfmt % ('----------', '------', '------', '-------------'))
         for name, props in DS.dataset_list().items():
             if (only in [props['storage'], 'all'] and
-                    (state == 'known' or props.available)):
+                    (state == 'known' or props['available'])):
                 if props['uri'] is not None:
                     dl_str = ' Yes  '
                 else:
@@ -267,8 +266,8 @@ def cli_parser():
                           help='show verbose list instead of just codes')
 
     sub_scan = subparsers.add_parser('scan',
-                                     help='list known datasets '
-                                          'and show availability and '
+                                     help='search for known datasets, '
+                                          'show availability and '
                                           'storage locations')
 
 
@@ -282,6 +281,20 @@ def cli_parser():
                         default=None,
                         help='custom location for temp files [/tmp]'
                         )
+
+
+    if not DS.have_lib('cdo') or not DS.have_lib('cdsapi'):
+        parser.epilog += (f"Source CERRA cannot be assembled. ")
+    if not DS.have_lib('cdsapi'):
+        parser.epilog += (f"Source ERA cannot be assembled. ")
+    if not DS.have_lib('gdal'):
+        parser.epilog += (f"Terrain sources cannot be assembled. ")
+    for x in DS.LIB2IMPORT.keys():
+        if not DS.have_lib(x):
+            parser.epilog += DS.NO_LIB_HELP[x]
+
+
+
 
     return parser
 
@@ -350,13 +363,12 @@ def main():
                                          args["years"])
                 logger.debug('years parsed into int: %s',
                              year_list)
-            try:
-                avl = [
-                    DS.dataset_available(args['source'])]
+            if args['source'] in DS.dataset_list():
+                avl = DS.dataset_available(args['source'])
                 if avl and not args['force']:
                     sys.tracebacklimit = 0
                     raise ValueError(f"dataset exists: {args['source']} ")
-            except ValueError:
+            else:
                 for yr in year_list:
                     yn = DS.name_yearly(args['source'], yr)
                     avl = DS.dataset_available(yn)

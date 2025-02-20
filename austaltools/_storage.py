@@ -15,7 +15,6 @@ try:
     from ._version import __title__
 except ImportError:
     from _version import __title__
-from austaltools import __title__
 
 logger = logging.getLogger(__name__)
 

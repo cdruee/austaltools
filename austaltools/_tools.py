@@ -11,11 +11,6 @@ from xml.etree import ElementTree
 import requests
 
 if os.getenv('BUILDING_SPHINX', 'false') == 'false':
-    import osgeo.osr as osr
-    try:
-        osr.UseExceptions()
-    except:
-        pass
     import numpy as np
 
     try:
@@ -79,18 +74,6 @@ Z0_CLASSES = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1.0, 1.5, 2.0]
 """Surface roughness values corresponding to the roughness classes
 defined by austal"""
 
-# -------------------------------------------------------------------------
-
-if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    # WGS84 - World Geodetic System 1984, https://epsg.io/4326
-    LL = osr.SpatialReference()
-    LL.ImportFromEPSG(4326)
-    # DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677
-    GK = osr.SpatialReference()
-    GK.ImportFromEPSG(5677)
-    # ETRS89 / UTM zone 32N, https://epsg.io/25832
-    UT = osr.SpatialReference()
-    UT.ImportFromEPSG(25832)
 
 # -------------------------------------------------------------------------
 
@@ -342,118 +325,16 @@ def progress(itr=None, desc="", *args, **kwargs):
 
 # -------------------------------------------------------------------------
 
-def gk2ll(rechts: float, hoch: float) -> (float, float, float):
-    """
-    Converts Gauss-Krüger rechts/hoch (east/north) coordinates
-    (DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677)
-    into Latitude/longitude  (WGS84, https://epsg.io/4326) position.
-
-    :param rechts: "Rechtswert" (eastward coordinate) in m
-    :type: float
-    :param hoch: "Hochwert" (northward coordinate) in m
-    :type: float
-    :return: latitude in degrees, longitude in degrees, altitude in meters
-    :rtype: float, float, float
-    """
-    transform = osr.CoordinateTransformation(GK, LL)
-    return transform.TransformPoint(rechts, hoch)
+# -------------------------------------------------------------------------
 
 # -------------------------------------------------------------------------
 
-def ll2gk(lat: float, lon: float) -> (float, float):
-    """
-    Converts Latitude/longitude  (WGS84, https://epsg.io/4326) position
-    into Gauss-Krüger rechts/hoch (east/north) coordinates
-    (DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677).
-
-    :param lat: latitude in degrees
-    :type: float
-    :param lon: longitude in degrees
-    :type: float
-    :return: "Rechtswert" (eastward coordinate) in m,
-        "Hochwert" (northward coordinate) in m
-    :rtype: float, float
-    """
-    transform = osr.CoordinateTransformation(LL, GK)
-    return transform.TransformPoint(lat, lon)
-
 # -------------------------------------------------------------------------
-
-def ut2ll(east: float, north:float) -> (float, float, float):
-    """
-    Converts UTM east/north coordinates
-    (ETRS89 / UTM zone 32N, https://epsg.io/25832)
-    into Latitude/longitude  (WGS84, https://epsg.io/4326) position.
-
-    :param east: eastward UTM coordinate in m
-    :type: float
-    :param north: northward UTM coordinate in m
-    :type: float
-    :return: latitude in degrees, longitude in degrees, altitude in meters
-    :rtype: float, float, float
-    """
-    transform = osr.CoordinateTransformation(UT, LL)
-    return transform.TransformPoint(east, north)
-
-# -------------------------------------------------------------------------
-
-def ll2ut(lat: float, lon: float) -> (float, float):
-    """
-    Converts Latitude/longitude  (WGS84, https://epsg.io/4326) position
-    into UTM east/north coordinates
-    (ETRS89 / UTM zone 32N, https://epsg.io/25832)
-
-    :param lat: latitude in degrees
-    :type: float
-    :param lon: longitude in degrees
-    :type: float
-    :return: "easting" (eastward coordinate) in m,
-        "northing" (northward coordinate) in m
-    :rtype: float, float
-    """
-    transform = osr.CoordinateTransformation(LL, UT)
-    return transform.TransformPoint(lat, lon)
 
 
 # ----------------------------------------------------
 
-def ut2gk(east: float, north:float) -> (float, float):
-    """
-    Converts UTM east/north coordinates
-    (ETRS89 / UTM zone 32N, https://epsg.io/25832)
-    into Gauss-Krüger rechts/hoch (east/north) coordinates
-    (DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677).
-
-    :param east: eastward UTM coordinate in m
-    :type: float
-    :param north: northward UTM coordinate in m
-    :type: float
-    :return: "Rechtswert" (eastward coordinate) in m,
-        "Hochwert" (northward coordinate) in m,
-        Altitude in m
-    :rtype: float, float, float
-    """
-    transform = osr.CoordinateTransformation(UT, GK)
-    return transform.TransformPoint(east, north)
-
 # -------------------------------------------------------------------------
-def gk2ut(rechts: float, hoch: float) -> (float, float):
-    """
-    Converts Gauss-Krüger rechts/hoch (east/north) coordinates
-    (DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677)
-    into UTM east/north coordinates
-    (ETRS89 / UTM zone 32N, https://epsg.io/25832).
-
-    :param rechts: "Rechtswert" (eastward coordinate) in m
-    :type: float
-    :param hoch: "Hochwert" (northward coordinate) in m
-    :type: float
-    :return: "easting" (eastward coordinate) in m,
-        "northing" (northward coordinate) in m
-    :rtype: float, float
-    """
-    transform = osr.CoordinateTransformation(GK, UT)
-    return transform.TransformPoint(rechts, hoch)
 
 # -------------------------------------------------------------------------
 

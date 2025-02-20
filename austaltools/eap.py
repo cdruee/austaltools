@@ -20,8 +20,6 @@ import subprocess
 import tempfile
 from time import sleep
 
-import austaltools._plotting
-
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
     import pandas as pd

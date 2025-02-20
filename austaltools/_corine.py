@@ -15,6 +15,8 @@ import os
 import sys
 import urllib
 
+import austaltools._geo
+
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
 
@@ -23,11 +25,9 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 try:
     from ._version import __title__
     from . import _storage
-    from . import _tools
 except ImportError:
     from _version import __title__
     import _storage
-    import _tools
 
 logging.basicConfig()
 logger = logging.getLogger()
@@ -271,7 +271,7 @@ def roughness_web(xg: float, yg: float, h: float, fac=10.) -> float:
     points = sample_points(xg, yg, h, fac)
     z0_values = []
     for x, y in points:
-        lat, lon, _ = _tools.gk2ll(x, y)
+        lat, lon, _ = austaltools._geo.gk2ll(x, y)
         code = query_corine_class(lat, lon)
         if code in LANDCOVER_CLASSES_Z0_CORINE.keys():
             z0 = LANDCOVER_CLASSES_Z0_CORINE[code]

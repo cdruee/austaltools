@@ -15,7 +15,7 @@ import zipfile
 import numpy as np
 import pandas as pd
 
-import austaltools._plotting
+import austaltools._tools
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import meteolib as m
@@ -27,18 +27,14 @@ try:
     from . import _storage
     from . import _tools
     from . import _datasets
-    from . import _fetch_dwd_obs
     from . import _dispersion as dis
-    from . import _wmo_metadata
 except ImportError:
     from _version import __version__, __title__
     import _plotting
     import _storage
     import _tools
     import _datasets
-    import _fetch_dwd_obs
     import _dispersion as dis
-    import _wmo_metadata
 
 
 logging.basicConfig()
@@ -46,7 +42,7 @@ logger = logging.getLogger()
 
 # ----------------------------------------------------
 KNOWN_SOURCES = ["ERA5", "CERRA", "DWD"]
-STORAGE_LOCATIONS = austaltools._storage.STORAGE_LOCATIONS
+STORAGE_LOCATIONS = _storage.STORAGE_LOCATIONS
 STORAGE_DIR = "weather"
 
 # possible defaults: fixed_057 fixed_010 model_mean model_uv10 model_fsr
@@ -159,7 +155,7 @@ def grid_surrounding_nodes(lat: float, lon: float, dims: dict) \
         grd_lon = dims['lon']
     else:
         raise ValueError('dims have unsupported shape')
-    vec_s_d = np.vectorize(_tools.spheric_distance)
+    vec_s_d = np.vectorize(austaltools._tools.spheric_distance)
     tgt_lat = np.full(np.shape(dims['lat']), lat)
     tgt_lon = np.full(np.shape(dims['lon']), lon)
     distance = vec_s_d(tgt_lat, tgt_lon, grd_lat, grd_lon)
@@ -752,11 +748,11 @@ def get_dwd_weather(lat: float, lon: float, year:int,
         datafile = os.path.join(ds.path, ds.file_data)
     logging.info('reading data from; %s' % datafile)
     if station is None:
-        _, _, _, nam, station = _common.read_dwd_stationinfo(
+        _, _, _, nam, station = _plotting.read_dwd_stationinfo(
             station=None, pos_lat=lat, pos_lon=lon, datafile=datafile)
         logger.info(f"selected nearest station {nam}")
     else:
-        _, _, _, nam = _common.read_dwd_stationinfo(
+        _, _, _, nam = _plotting.read_dwd_stationinfo(
             station, datafile=datafile)
     with zipfile.ZipFile(datafile,
                          mode='r') as zf:
@@ -842,17 +838,23 @@ def austal_weather(args):
     """
     logger.debug("args: %s" % format(args))
 
+    # sub-command-specific imports
+    try:
+        from . import _geo
+    except ImportError:
+        import _geo
+
     if args.get('read-extracted', None) is not None:
         csv_name = args['read-extracted']
         lat, lon, ele, z0, source, stat_nam, obs = \
-            austaltools._common.read_extracted_weather(csv_name)
+            _plotting.read_extracted_weather(csv_name)
 
         year = obs.index.year[0]
         logger.debug("year: %s" % year)
 
     else:
         lat, lon, ele, stat_no, stat_nam = (
-            _common.evaluate_location_opts(args))
+            _geo.evaluate_location_opts(args))
         logging.info('selected position: %.2f %.2f (%s)' %
                      (lat, lon, format(stat_nam)))
 
@@ -874,7 +876,7 @@ def austal_weather(args):
         else:
             raise ValueError("unknown source: %s" % source)
 
-    rechts, hoch, _ = _tools.ll2gk(lat, lon)
+    rechts, hoch, _ = _geo.ll2gk(lat, lon)
     if ele is None:
         if args.get("ele", None) is not None:
             ele = float(args["ele"])
@@ -1035,8 +1037,8 @@ def austal_weather(args):
                                   index=data.index)
                 ak = readmet.akterm.DataFile(data=df, z0=z0)
             outname = ('{:s}_{:s}_{:04d}_'.format(
-                austaltools._tools.slugify(source),
-                austaltools._tools.slugify(nam), year) +
+                _tools.slugify(source),
+                _tools.slugify(nam), year) +
                        method + '.akterm')
             logger.info('writing output file: %s' % outname)
             ak.write(outname)

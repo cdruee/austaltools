@@ -7,11 +7,9 @@ German regulatory dispersion model AUSTAL [AST31]_
 """
 import logging
 import os
+import sys
 import tempfile
 from importlib import resources
-
-if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    from osgeo import gdal
 
 try:
     from . import _tools
@@ -105,8 +103,15 @@ def main(args: dict):
     """
     logger.debug("args: %s" % format(args))
 
-    lat, lon, ele, stat_no, stat_nam = austaltools._common.evaluate_location_opts(args)
-    rechts, hoch, _ = _tools.ll2gk(lat, lon)
+    # sub-command-specific imports
+    from osgeo import gdal
+    try:
+        from . import _geo
+    except ImportError:
+        import _geo
+
+    lat, lon, ele, stat_no, stat_nam = _geo.evaluate_location_opts(args)
+    rechts, hoch, _ = _geo.ll2gk(lat, lon)
 
     available_dems = _datasets.find_terrain_data()
     if available_dems is None or len(available_dems) == 0:

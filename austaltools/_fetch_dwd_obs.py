@@ -298,11 +298,11 @@ def build_table(dat_df_in, meta_df_in, years):
 
     meta_frame = pd.DataFrame(np.nan,
                               index=hr_idx, columns=meta_cols)
-    meta_df_in.fillna(method='ffill', inplace=True)
+    meta_df_in.ffill(inplace=True)
     #meta_df_in = meta_df_in[meta_df_in.index.isin(hr_idx)]
     for c in meta_df_in.columns:
         meta_frame[c] = meta_df_in[c].reindex(hr_idx)
-    meta_frame.fillna(method='ffill', inplace=True)
+    meta_frame.ffill(inplace=True)
         # meta_frame[c] = meta_frame[c].astype(meta_df_in[c].dtype)
         # for i in meta_df_in.index:
         #     dat_frame.loc[i, c] = meta_df_in.loc[i, c]
@@ -545,7 +545,7 @@ def meta_from_download(metadata_files, station, path_to_files):
         df = pd.concat((df1, df2))
         #
         logging.debug("fill blank metadata values")
-        df = df.fillna(method='ffill')
+        df = df.ffill()
         #
         logging.debug('merging metadata')
         if meta is None:
@@ -560,7 +560,7 @@ def meta_from_download(metadata_files, station, path_to_files):
                              )
         logging.debug(meta.columns)
 
-    meta = meta.fillna(method='ffill')
+    meta = meta.ffill()
     # remove duplicates
     meta = meta.drop_duplicates()
     meta = meta[~meta.index.duplicated(keep='last')]

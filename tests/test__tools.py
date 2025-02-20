@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import patch, MagicMock
 
+import austaltools._geo
+import austaltools._tools
 from austaltools import _tools
 
 class TestEstimateElevation(unittest.TestCase):
@@ -63,7 +65,7 @@ class TestGk2Ll(unittest.TestCase):
     def test_gk2ll(self):
         # reference
         la, lo, z = (50.0, 9.0, 0.0)
-        (lat, lon, zz) = _tools.gk2ll(3500074.92, 5540407.23)
+        (lat, lon, zz) = austaltools._geo.gk2ll(3500074.92, 5540407.23)
         # Assert
         self.assertAlmostEqual(lat, la, delta=0.0000001)
         self.assertAlmostEqual(lon, lo, delta=0.0000001)
@@ -74,7 +76,7 @@ class TestLl2Gk(unittest.TestCase):
     def test_ll2gk(self):
         # reference
         r, h, z = (3500074.92, 5540407.23, 0.)
-        re, ho, zz  = _tools.ll2gk(50.0, 9.0)
+        re, ho, zz  = austaltools._geo.ll2gk(50.0, 9.0)
         # Assert
         self.assertAlmostEqual(re, r, delta=0.01)
         self.assertAlmostEqual(ho, h, delta=0.01)
@@ -85,7 +87,7 @@ class TestUt2Ll(unittest.TestCase):
     def test_ut2ll(self):
         # reference
         la, lo, z = (50.0, 9.0, 0.0)
-        (lat, lon, zz) = _tools.ut2ll(500000, 5538630.70)
+        (lat, lon, zz) = austaltools._geo.ut2ll(500000, 5538630.70)
         # Assert
         self.assertAlmostEqual(lat, la, delta=0.0000001)
         self.assertAlmostEqual(lon, lo, delta=0.0000001)
@@ -96,7 +98,7 @@ class TestLl2Ut(unittest.TestCase):
     def test_ll2ut(self):
         # reference
         r, h, z = (500000, 5538630.70, 0.)
-        re, ho, zz  = _tools.ll2ut(50.0, 9.0)
+        re, ho, zz  = austaltools._geo.ll2ut(50.0, 9.0)
         # Assert
         self.assertAlmostEqual(re, r, delta=0.01)
         self.assertAlmostEqual(ho, h, delta=0.01)
@@ -105,7 +107,7 @@ class TestLl2Ut(unittest.TestCase):
 class TestSphericDistance(unittest.TestCase):
 
     def test_spheric_distance(self):
-        distance = _tools.spheric_distance(0, 0, 0, 1)
+        distance = austaltools._tools.spheric_distance(0, 0, 0, 1)
         self.assertAlmostEqual(distance, 111.19, places=2)
 
 class FindAustxt(unittest.TestCase):

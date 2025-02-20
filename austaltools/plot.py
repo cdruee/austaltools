@@ -232,7 +232,7 @@ def main(args):
                       ) / 1000 * scale
 
     dat_dict = {'x': datx, 'y': daty, 'z': datz}
-    austaltools._common.common_plot(args, dat=dat_dict, unit=unit, topo=topo,
+    _plotting.common_plot(args, dat=dat_dict, unit=unit, topo=topo,
                                     dots=dots, buildings=buildings, scale=levels)
 
 # ------------------------------------------------------------------------

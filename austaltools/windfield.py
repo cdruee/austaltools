@@ -11,6 +11,8 @@ import sys
 import numpy as np
 import pandas as pd
 
+import austaltools._geo
+
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
     import readmet
@@ -145,7 +147,7 @@ def get_roughness_length(working_dir=None, conf=None):
         elif 'xu' in conf and 'yu' in conf:
             xu = conf['xu']
             yu = conf['yu']
-            xg, yg = _tools.ut2gk(xu, yu)
+            xg, yg = austaltools._geo.ut2gk(xu, yu)
         else:
             sys.tracebacklimit = 0
             raise ValueError("neither z0 nor position defined, "
