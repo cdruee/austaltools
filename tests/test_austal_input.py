@@ -3,12 +3,6 @@ import os
 import subprocess
 import unittest
 
-import numpy as np
-from stone.cli import argparse
-
-import austaltools.import_buildings as prog
-import austaltools._tools as _tools
-
 NAME = os.path.join('austaltools','austal_input.py')
 SUBCMD = "buildings-geojson"
 

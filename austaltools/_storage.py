@@ -7,6 +7,7 @@ configuration and datasets that serve as input for austaltools
 import os
 import tempfile
 import logging
+from importlib import resources
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import yaml
@@ -21,18 +22,16 @@ logger = logging.getLogger(__name__)
 # -------------------------------------------------------------------------
 
 CONFIG_FILE = f'{__title__}.yaml'
-"""
-Name of the optional austaltools config file
-"""
+""" Name of the optional austaltools config file """
+DIST_AUX_FILES = resources.files(__title__ + '.data')
+""" path to the auxiliary data files distributes alongside the code """
 
 STORAGE_LOCATIONS = ["/opt/%s" % __title__,
                      os.path.expanduser("~/.local/share/%s" % __title__),
                      os.path.expanduser("~/.%s" % __title__),
                          "."
                      ]
-"""
-Default locations where downloaded or cashed data are expected
-"""
+""" Default locations where downloaded or cashed data are expected """
 STORAGE_TERRAIN = "terrain"
 """
 storage directory that holds terrain data inside the storage locations

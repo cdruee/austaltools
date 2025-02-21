@@ -4,13 +4,20 @@ import sys
 import osgeo.osr as osr
 import pandas as pd
 
-from austaltools import _datasets, _wmo_metadata
-from austaltools._plotting import read_dwd_stationinfo
 
 try:
     osr.UseExceptions()
 except:
     pass
+
+try:
+    from . import _datasets
+    from . import _plotting
+    from . import _wmo_metadata
+except ImportError:
+    import _datasets
+    import _plotting
+    import _wmo_metadata
 
 # -------------------------------------------------------------------------
 
@@ -163,11 +170,12 @@ def evaluate_location_opts(args: dict):
             raise ValueError("Dataset DWD is not available, "
                        "download or assemble it.")
         station = int(pd.to_numeric(args["dwd"]))
-        lat, lon, ele, nam = read_dwd_stationinfo(
+        lat, lon, ele, nam = _plotting.read_dwd_stationinfo(
             station, datafile=storage_dwd)
         rechts, hoch, _ = ll2gk(lat, lon)
     elif args.get("wmo", None) is not None:
-        lat, lon, ele, nam = _wmo_metadata.wmo_stationinfo(args["wmo"])
+        lat, lon, ele, nam = _wmo_metadata.wmo_stationinfo(
+            args["wmo"])
     elif args.get("gk", None) is not None:
         rechts, hoch = [float(x) for x in args['gk']]
         lat, lon, _ = gk2ll(rechts, hoch)

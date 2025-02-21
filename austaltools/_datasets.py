@@ -55,7 +55,7 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 try:
     from ._version import __version__, __title__
-    from . import _storage, _tools
+    from . import _storage
     from . import _tools
     from . import _fetch_dwd_obs
 except ImportError:
@@ -71,7 +71,7 @@ logger = logging.getLogger()
 CDSAPI_LIMIT_PARALLEL = 2
 """ Copernicus per-user limit for parallel queries """
 
-with (_tools.DIST_AUX_FILES / 'dataset_definitions.json').open() as f:
+with (_storage.DIST_AUX_FILES / 'dataset_definitions.json').open() as f:
     DATASET_DEFINITIONS = json.load(f)
 
 SOURCES_TERRAIN = [k for k, v in DATASET_DEFINITIONS.items()
@@ -1028,9 +1028,11 @@ def provide_terrain(source: str, path: str = None,
                     f.write(text.encode('utf-8'))
         elif lic_src == 'file':
             if lic_id in [None, '']:
-                lic_aux = os.path.join(str(_tools.DIST_AUX_FILES), lic_file)
+                lic_aux = os.path.join(str(
+                    _storage.DIST_AUX_FILES), lic_file)
             else:
-                lic_aux = os.path.join(str(_tools.DIST_AUX_FILES), lic_id)
+                lic_aux = os.path.join(str(
+                    _storage.DIST_AUX_FILES), lic_id)
             shutil.copy(lic_aux, lic_file)
     if dataset.notice is not None:
         if "dd mmm yyyy" in dataset.notice:

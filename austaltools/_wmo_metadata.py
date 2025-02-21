@@ -10,12 +10,12 @@ import os
 
 try:
     from ._version import __version__, __title__
-    from . import _tools
+    from . import _storage
 except ImportError:
     from _version import __version__, __title__
-    import _tools
+    import _storage
 
-OSCARFILE = os.path.join(_tools.DIST_AUX_FILES, 'wmo_stationlist.json')
+OSCARFILE = os.path.join(_storage.DIST_AUX_FILES, 'wmo_stationlist.json')
 STATIONLIST = {}
 
 def _lazy_load_list(file: str = None):

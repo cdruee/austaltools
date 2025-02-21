@@ -6,23 +6,18 @@ import zipfile
 
 import pandas as pd
 
-import austaltools._geo
-import austaltools._tools
+
 
 if os.getenv('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
     import readmet
 
 try:
-    from . import _storage
-    from . import _tools
     from . import _datasets
-    from . import _wmo_metadata
+    from . import _tools
 except ImportError:
-    import _storage
-    import _tools
     import _datasets
-    import _wmo_metadata
+    import _tools
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +80,7 @@ def read_dwd_stationinfo(station, pos_lat=None, pos_lon=None,
     if station is not None:
         srow = sf.index[sf.index == station]
     else:
-        sf['sdist'] = austaltools._tools.spheric_distance(
+        sf['sdist'] = _tools.spheric_distance(
             sf['latitude'], sf['longitude'], pos_lat, pos_lon)
         srow = sf['sdist'].argmin()
 
