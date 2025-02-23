@@ -6,9 +6,10 @@ Thisn module provides geo-position related functionality.
 import logging
 import os
 
-import numpy as np
-import osgeo.osr as osr
-import pandas as pd
+if os.getenv('BUILDING_SPHINX', 'false') == 'false':
+    import numpy as np
+    import osgeo.osr as osr
+    import pandas as pd
 
 try:
     osr.UseExceptions()
