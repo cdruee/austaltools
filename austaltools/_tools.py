@@ -322,53 +322,6 @@ def progress(itr=None, desc="", *args, **kwargs):
 
 # -------------------------------------------------------------------------
 
-# -------------------------------------------------------------------------
-
-# -------------------------------------------------------------------------
-
-# -------------------------------------------------------------------------
-
-
-# ----------------------------------------------------
-
-# -------------------------------------------------------------------------
-
-# -------------------------------------------------------------------------
-
-def spheric_distance(lat1, lon1, lat2, lon2):
-    """
-    Calculate the great circle distance between two points
-    (specified in decimal degrees) on a spheric earth.
-    Reference:
-    https://stackoverflow.com/a/29546836/7657658
-
-    :param lat1: Position 1 latitude in degrees
-    :type: float
-    :param lon1: Position 1 longitude in degrees
-    :type: float
-    :param lat2: Position 2 latitude in degrees
-    :type: float
-    :param lon2: Position 2 longitude in degrees
-    :type: float
-    :returns: Great circle distance in km
-    :rtype: float
-    """
-    rlat1 = np.radians(lat1)  # deg -> rad
-    rlon1 = np.radians(lon1)  # deg -> rad
-    rlat2 = np.radians(lat2)  # deg -> rad
-    rlon2 = np.radians(lon2)  # deg -> rad
-
-    dlon = rlon2 - rlon1  # rad
-    dlat = rlat2 - rlat1  # rad
-    a = (np.sin(dlat / 2.0) ** 2 +
-         np.cos(rlat1) * np.cos(rlat2) * np.sin(dlon / 2.0) ** 2)
-    c = 2 * np.arcsin(np.sqrt(a))
-    km = 6371 * c  # km
-
-    return km
-
-# -------------------------------------------------------------------------
-
 def find_z0_class(z0):
     """
     return index of roughness-length class that matches z0 best

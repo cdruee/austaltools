@@ -15,6 +15,7 @@ import zipfile
 import numpy as np
 import pandas as pd
 
+import austaltools._geo
 import austaltools._tools
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
@@ -155,7 +156,7 @@ def grid_surrounding_nodes(lat: float, lon: float, dims: dict) \
         grd_lon = dims['lon']
     else:
         raise ValueError('dims have unsupported shape')
-    vec_s_d = np.vectorize(austaltools._tools.spheric_distance)
+    vec_s_d = np.vectorize(austaltools._geo.spheric_distance)
     tgt_lat = np.full(np.shape(dims['lat']), lat)
     tgt_lon = np.full(np.shape(dims['lon']), lon)
     distance = vec_s_d(tgt_lat, tgt_lon, grd_lat, grd_lon)
@@ -748,11 +749,11 @@ def get_dwd_weather(lat: float, lon: float, year:int,
         datafile = os.path.join(ds.path, ds.file_data)
     logging.info('reading data from; %s' % datafile)
     if station is None:
-        _, _, _, nam, station = _plotting.read_dwd_stationinfo(
+        _, _, _, nam, station = austaltools._geo.read_dwd_stationinfo(
             station=None, pos_lat=lat, pos_lon=lon, datafile=datafile)
         logger.info(f"selected nearest station {nam}")
     else:
-        _, _, _, nam = _plotting.read_dwd_stationinfo(
+        _, _, _, nam = austaltools._geo.read_dwd_stationinfo(
             station, datafile=datafile)
     with zipfile.ZipFile(datafile,
                          mode='r') as zf:

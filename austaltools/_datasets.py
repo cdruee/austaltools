@@ -1781,6 +1781,56 @@ def provide_weather(source: str, path: str = None,
 
 
 # -------------------------------------------------------------------------
+def stationlist_DWD(path: str = None, fmt: str = None):
+    """
+    Downloads, extracts, and merges DWD station lists.
+
+    :param path: The path where the final merged file
+      will be stored.
+    :type path: str
+    :param fmt: file format or generate
+    :type name: str
+
+    - This function assumes that a global `_tools.TEMP` variable is defined and
+      points to a valid temporary directory for intermediate files.
+
+    """
+    if fmt is None:
+        fmt = 'csv'
+    # get list of stations
+    logger.info("fetching stationlists")
+    # get list without date checking
+    stations = _fetch_dwd_obs.fetch_stationlist(years=None)
+    station_numbers = stations.keys()
+    sf = pd.DataFrame.from_dict(stations, orient='index')
+
+    logger.info("writing stationlist")
+    if path is None:
+        fid = sys.stdout
+    else:
+        fid = open(path, mode="w")
+    if fmt == 'csv':
+        sf.to_csv(fid)
+    elif fmt == 'json':
+        ugly = sf.to_json(orient="index")
+        pretty = json.dumps(json.loads(ugly), indent=4)
+        fid.write(pretty)
+    if path is not None:
+        fid.close()
+
+# -------------------------------------------------------------------------
+
+def provide_stationlist(source:str=None, fmt:str=None, out:str=None):
+    logging.debug(f"provide_stationlist -> {source}")
+    if source is None:
+        raise ValueError("provide_stationlist() requires a source")
+    if source == "DWD":
+        stationlist_DWD(path=out, fmt=fmt)
+    else:
+        sys.tracebacklimit = 0
+        raise ValueError(f"stationlist: unkwnown source {source}")
+
+# -------------------------------------------------------------------------
 def name_yearly(name, year):
     return '%s-%04i' % (name, year)
 

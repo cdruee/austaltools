@@ -270,6 +270,28 @@ def cli_parser():
                                           'show availability and '
                                           'storage locations')
 
+    sub_sl = subparsers.add_parser('stationlist',
+                                   help="generate new stationlist for "
+                                        "one of the weather sources")
+    sub_sl.add_argument('-s', '--source',
+                        metavar="CODE",
+                        dest="sl_source",
+                        help="Select the respectice source "
+                             "from: %(choices)s. [%(default)s]",
+                        choices=["DWD"],
+                        default="DWD")
+    sub_sl.add_argument('-f', '--format',
+                        metavar="CODE",
+                        dest="sl_format",
+                        help="Select the output file format "
+                             "from: %(choices)s. [%(default)s]",
+                        choices=["csv", "json"],
+                        default="json")
+    sub_sl.add_argument('-o', '--out',
+                        metavar="PATH",
+                        dest="sl_out",
+                        help="File to write to or None for stdout. [None]",
+                        default=None)
 
     parser.add_argument('--storage',
                         metavar='PATH',
@@ -284,11 +306,11 @@ def cli_parser():
 
 
     if not DS.have_lib('cdo') or not DS.have_lib('cdsapi'):
-        parser.epilog += (f"Source CERRA cannot be assembled. ")
+        parser.epilog += f"Source CERRA cannot be assembled. "
     if not DS.have_lib('cdsapi'):
-        parser.epilog += (f"Source ERA cannot be assembled. ")
+        parser.epilog += f"Source ERA cannot be assembled. "
     if not DS.have_lib('gdal'):
-        parser.epilog += (f"Terrain sources cannot be assembled. ")
+        parser.epilog += f"Terrain sources cannot be assembled. "
     for x in DS.LIB2IMPORT.keys():
         if not DS.have_lib(x):
             parser.epilog += DS.NO_LIB_HELP[x]
@@ -337,6 +359,11 @@ def main():
 
     elif args['action'] == 'scan':
         DS.update_available()
+
+    elif args['action'] == 'stationlist':
+        DS.provide_stationlist(source=args["sl_source"],
+                               fmt=args["sl_format"],
+                               out=args["sl_out"])
 
     elif args['action'] == 'austal':
         set_austaldir(args)

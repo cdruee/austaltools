@@ -5,6 +5,7 @@ Created on Thu Feb  3 19:20:42 2022
 
 @author: clemens
 """
+import datetime
 import io
 import logging
 import os
@@ -119,7 +120,8 @@ def fetch_file(group: str, station: (int, str),
 
 # -------------------------------------------------------------------------
 
-def fetch_stationlist(years, fullyear=True):
+def fetch_stationlist(years: list[int]|int|None = None, fullyear=True
+                      ) -> dict[str,dict]:
     """
     compile the station list from (opendata) server
 
@@ -130,9 +132,10 @@ def fetch_stationlist(years, fullyear=True):
       for the full period. If False, stations that have strated operation
       in the first or ceised operation in the last year are also listed.
     :return: list of stations
-    :rtype: list[dict]
+    :rtype: dict[dict]
     """
-    if not isinstance(years, list):
+    logger.debug(f"fetch_stationlist: years = {years}")
+    if years is not None and not isinstance(years, list):
         years = [years]
     stations={}
     for (groupname, gtl, groupabbr) in TO_COLLECT:
@@ -155,7 +158,7 @@ def fetch_stationlist(years, fullyear=True):
     # get all station IDs
     sids = list(set([x for k,v in stations.items() for x in v.keys()]))
     # find stations that provide all parameters
-    complete_stations={}
+    complete_stations=dict(dict())
     for sid in sids:
         # skip stations not listed in all groups
         if not all([sid in v.keys() for k,v in stations.items()]):
@@ -181,9 +184,10 @@ def fetch_stationlist(years, fullyear=True):
                 [s_nam == v[sid]['name'] for k, v in stations.items()]):
             logger.warning(f'multiple name for station {sid}')
 
-        if not years:
-            start_limit = s_start - pd.Timedelta(1, "year")
-            end_limit = s_end + pd.Timedelta(1, "year")
+        if years is None:
+            # earliest and last time python can produce
+            start_limit = datetime.datetime.max
+            end_limit = datetime.datetime.min
         else:
             if fullyear:
                 start_limit = pd.Timestamp(years[0], 1, 1, 0, 0, 0)

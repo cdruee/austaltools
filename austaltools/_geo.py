@@ -1,23 +1,28 @@
-import os
-import sys
+"""
 
+Thisn module provides geo-position related functionality.
+
+"""
+import logging
+import os
+
+import numpy as np
 import osgeo.osr as osr
 import pandas as pd
 
-
 try:
     osr.UseExceptions()
-except:
+except ImportError:
     pass
 
 try:
-    from . import _datasets
-    from . import _plotting
+    from . import _storage
     from . import _wmo_metadata
 except ImportError:
-    import _datasets
-    import _plotting
+    import _storage
     import _wmo_metadata
+
+logger = logging.getLogger()
 
 # -------------------------------------------------------------------------
 
@@ -127,6 +132,7 @@ def ut2gk(east: float, north:float) -> (float, float):
     transform = osr.CoordinateTransformation(UT, GK)
     return transform.TransformPoint(east, north)
 
+# -------------------------------------------------------------------------
 
 def gk2ut(rechts: float, hoch: float) -> (float, float):
     """
@@ -164,14 +170,8 @@ def evaluate_location_opts(args: dict):
     ele = None
     nam = None
     if args.get("dwd", None) is not None:
-        storage_dwd = _datasets.dataset_get("DWD").path
-        if storage_dwd is None:
-            sys.tracebacklimit = 0
-            raise ValueError("Dataset DWD is not available, "
-                       "download or assemble it.")
         station = int(pd.to_numeric(args["dwd"]))
-        lat, lon, ele, nam = _plotting.read_dwd_stationinfo(
-            station, datafile=storage_dwd)
+        lat, lon, ele, nam = read_dwd_stationinfo(station)
         rechts, hoch, _ = ll2gk(lat, lon)
     elif args.get("wmo", None) is not None:
         lat, lon, ele, nam = _wmo_metadata.wmo_stationinfo(
@@ -185,5 +185,117 @@ def evaluate_location_opts(args: dict):
     elif args.get("ll", None) is not None:
         lat, lon = [float(x) for x in args['ll']]
     else:
-        lat, lon = None
+        lat, lon = None, None
     return lat, lon, ele, station, nam
+
+# -------------------------------------------------------------------------
+
+def read_dwd_stationinfo(station: int, pos_lat: float | None = None,
+                         pos_lon: float | None = None,
+                         datafile: str | None = None
+
+                         ):
+    """
+     Reads information about a weather station from a dataset.
+
+     This function retrieves metadata about a specific weather station from
+     a dataset that is either provided or located in a default location. The
+     dataset is expected to be a JSON file containing information about multiple
+     weather stations, including their geographical coordinates, elevation, and
+     names.
+
+     :param station: The ID or identifier of the station whose information is
+                     to be retrieved. If None, the nearest station to the provided
+                     latitude and longitude coordinates is returned.
+     :type station: str or None
+
+     :param pos_lat: The latitude coordinate (in degrees) to search for the
+                     nearest station when no station ID is provided. Should be
+                     None if a station ID is specified.
+     :type pos_lat: float or None
+
+     :param pos_lon: The longitude coordinate (in degrees) to search for the
+                     nearest station when no station ID is provided. Should be
+                     None if a station ID is specified.
+     :type pos_lon: float or None
+
+     :param datafile: The path to the JSON file containing station information.
+                      If not provided, a default path is used.
+     :type datafile: str or None
+
+     :return: A tuple containing the latitude, longitude, and elevation of the
+              specified or nearest station, along with the station's name. If
+              the nearest station is searched using coordinates, the index of
+              that station in the dataset is also included in the returned tuple.
+     :rtype: tuple(float, float, float, str) or tuple(float, float, float, str, int)
+
+     :raises ValueError: If both station and coordinates (pos_lat and pos_lon)
+                         are specified, if the specified station ID is not
+                         found in the dataset, or if no station can be found
+                         at the given coordinates.
+    """
+    if station is not None:
+        if pos_lat is not None and pos_lon is not None:
+            raise ValueError('lat and lon must be None ' +
+                             'unless station is None')
+    if datafile is None:
+        datafile = os.path.join(_storage.DIST_AUX_FILES,
+                                'dwd_stationlist.json')
+    logging.info('reading data from; %s' % datafile)
+    with open(datafile, mode='r') as f:
+        sf = pd.read_json(f, orient='index', convert_dates=True)
+
+    if station is not None:
+        if station not in sf.index:
+            raise ValueError('station not in datafile')
+        srow = sf[station]
+    else:
+        sf['sdist'] = spheric_distance(
+            sf['latitude'], sf['longitude'], pos_lat, pos_lon)
+        srow = sf['sdist'].argmin()
+
+    if srow is None:
+        raise ValueError('station not found: %s' % station)
+    lat = sf['latitude'][srow]
+    lon = sf['longitude'][srow]
+    ele = sf['elevation'][srow]
+    nam = sf['name'][srow]
+    logger.debug("station name: %s" % nam)
+    if station is None:
+        return lat, lon, ele, nam, int(srow)
+    else:
+        return lat, lon, ele, nam
+
+# -------------------------------------------------------------------------
+
+def spheric_distance(lat1, lon1, lat2, lon2):
+    """
+    Calculate the great circle distance between two points
+    (specified in decimal degrees) on a spheric earth.
+    Reference:
+    https://stackoverflow.com/a/29546836/7657658
+
+    :param lat1: Position 1 latitude in degrees
+    :type: float
+    :param lon1: Position 1 longitude in degrees
+    :type: float
+    :param lat2: Position 2 latitude in degrees
+    :type: float
+    :param lon2: Position 2 longitude in degrees
+    :type: float
+    :returns: Great circle distance in km
+    :rtype: float
+    """
+    rlat1 = np.radians(lat1)  # deg -> rad
+    rlon1 = np.radians(lon1)  # deg -> rad
+    rlat2 = np.radians(lat2)  # deg -> rad
+    rlon2 = np.radians(lon2)  # deg -> rad
+
+    dlon = rlon2 - rlon1  # rad
+    dlat = rlat2 - rlat1  # rad
+    a = (np.sin(dlat / 2.0) ** 2 +
+         np.cos(rlat1) * np.cos(rlat2) * np.sin(dlon / 2.0) ** 2)
+    c = 2 * np.arcsin(np.sqrt(a))
+    km = 6371 * c  # km
+
+    return km

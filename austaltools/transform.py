@@ -166,7 +166,7 @@ def main(args):
             raise ValueError("Dataset DWD is not available, "
                        "download or assemble it.")
         station = int(args["dwd"])
-        lat, lon, ele, nam = _plotting.read_dwd_stationinfo(
+        lat, lon, ele, nam = _geo.read_dwd_stationinfo(
             station, datafile=storage_dwd)
         rechts, hoch, _ = _geo.ll2gk(lat, lon)
         east, north, _ = _geo.ll2ut(lat, lon)

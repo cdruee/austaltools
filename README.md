@@ -36,10 +36,11 @@ See ``LICENSE`` for the license text or navigate to https://eupl.eu/1.2/en/
 Some auxiliary files in the folder ``data`` are licensed under
 various other licenses:
 
-| file                 | provider                                                                        | license               |
-|----------------------|---------------------------------------------------------------------------------|-----------------------|
-| DGM10-HE.LICENSE.txt | Hessian state law (https://www.rv.hessenrecht.hessen.de/perma?a=VermGeoInfG_HE) | none (PD)             |
-| wmo_stationlist.json | World Meteorological Organization (WMO) and its members                         | CC BY 4.0             |
+| file                  | provider                                                                        | license               |
+|-----------------------|---------------------------------------------------------------------------------|-----------------------|
+| DGM10-HE.LICENSE.txt  | Hessian state law (https://www.rv.hessenrecht.hessen.de/perma?a=VermGeoInfG_HE) | none (PD)             |
+| dwd_stationlist.json  | Deutscher Wetterdienst (DWD) open data portal                                   | CC BY 4.0             |
+| wmo_stationlist.json  | World Meteorological Organization (WMO) and its members                         | CC BY 4.0             |
 
 
 <!-- note to self: &#8209; = non-breaking hyphen -->

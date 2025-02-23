@@ -107,7 +107,7 @@ class TestLl2Ut(unittest.TestCase):
 class TestSphericDistance(unittest.TestCase):
 
     def test_spheric_distance(self):
-        distance = austaltools._tools.spheric_distance(0, 0, 0, 1)
+        distance = austaltools._geo.spheric_distance(0, 0, 0, 1)
         self.assertAlmostEqual(distance, 111.19, places=2)
 
 class FindAustxt(unittest.TestCase):

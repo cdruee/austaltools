@@ -2,7 +2,6 @@ import argparse
 import importlib.util
 import logging
 import os
-import zipfile
 
 import pandas as pd
 
@@ -11,13 +10,6 @@ import pandas as pd
 if os.getenv('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
     import readmet
-
-try:
-    from . import _datasets
-    from . import _tools
-except ImportError:
-    import _datasets
-    import _tools
 
 logger = logging.getLogger(__name__)
 
@@ -57,44 +49,6 @@ def import_matplotlib():
     except ImportError:
         return False
 
-# ----------------------------------------------------
-
-def read_dwd_stationinfo(station, pos_lat=None, pos_lon=None,
-                         datafile=None):
-    if station is not None:
-        if pos_lat is not None and pos_lon is not None:
-            raise ValueError('lat and lon must be None ' +
-                             'unless station is None')
-    else:
-        sstr = None
-    ds = _datasets.dataset_get("DWD")
-    if datafile is None:
-        datafile = os.path.join(ds.path, ds.file_data)
-    logging.info('reading data from; %s' % datafile)
-    with zipfile.ZipFile(datafile,
-                         mode='r') as zf:
-        sf = pd.read_csv(filepath_or_buffer=zf.open(
-            'stationlist.csv', mode='r'))
-
-    srow = None
-    if station is not None:
-        srow = sf.index[sf.index == station]
-    else:
-        sf['sdist'] = _tools.spheric_distance(
-            sf['latitude'], sf['longitude'], pos_lat, pos_lon)
-        srow = sf['sdist'].argmin()
-
-    if srow is None:
-        raise ValueError('station not found: %s' % station)
-    lat = sf['latitude'][srow]
-    lon = sf['longitude'][srow]
-    ele = sf['elevation'][srow]
-    nam = sf['name'][srow]
-    logger.debug("station name: %s" % nam)
-    if station is None:
-        return lat, lon, ele, nam, int(srow)
-    else:
-        return lat, lon, ele, nam
 
 # -------------------------------------------------------------------------
 
