@@ -11,10 +11,10 @@ if os.getenv('BUILDING_SPHINX', 'false') == 'false':
     import osgeo.osr as osr
     import pandas as pd
 
-try:
-    osr.UseExceptions()
-except ImportError:
-    pass
+    try:
+        osr.UseExceptions()
+    except ImportError:
+        pass
 
 try:
     from . import _storage
