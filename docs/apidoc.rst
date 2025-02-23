@@ -2,32 +2,13 @@
 API documentation
 *****************
 
-==============
-in development
-==============
-
-heating
--------
-.. automodule:: austaltools.heating
-   :members:
-
 ================
 internal modules
 ================
 
-_common
--------
-.. automodule:: austaltools._common
-   :members:
-
 _corine
 -------
 .. automodule:: austaltools._corine
-   :members:
-
-_dispersion
------------
-.. automodule:: austaltools._dispersion
    :members:
 
 _datasets
@@ -35,14 +16,24 @@ _datasets
 .. automodule:: austaltools._datasets
    :members:
 
-_fetch_dgm_od
--------------
-.. automodule:: austaltools._fetch_dgm_od
+_dispersion
+-----------
+.. automodule:: austaltools._dispersion
    :members:
 
 _fetch_dwd_obs
 --------------
 .. automodule:: austaltools._fetch_dwd_obs
+   :members:
+
+_geo
+-----------
+.. automodule:: austaltools._geo
+   :members:
+
+_plotting
+-----------
+.. automodule:: austaltools._plotting
    :members:
 
 _storage
@@ -60,53 +51,79 @@ _version
 .. automodule:: austaltools._version
    :members:
 
+_wmo_metadata
+--------
+.. automodule:: austaltools._wmo_metadata
+   :members:
+
 ==========
-austal_eap
+eap
 ==========
 
 .. automodule:: austaltools.eap
    :members:
 
 ======================
-austal_fill timeseries
+fill_timeseries
 ======================
 
 .. automodule:: austaltools.fill_timeseries
    :members:
 
+======================
+heating
+======================
+
+.. automodule:: austaltools.heating
+   :members:
+
 ========================
-austal_import_buildings
+import_buildings
 ========================
 
 .. automodule:: austaltools.import_buildings
    :members:
 
-===========
-austal_plot
-===========
-
-.. automodule:: austaltools.plot
-   :members:
-
-============================
-austaltools.austal_steepness
-============================
-
-.. automodule:: austaltools.steepness
-   :members:
-
 ==============
-austal_terrain
+input_terrain
 ==============
 
 .. automodule:: austaltools.input_terrain
    :members:
 
 ==============
-austal_weather
+input_weather
 ==============
 
 .. automodule:: austaltools.input_weather
+   :members:
+
+===========
+plot
+===========
+
+.. automodule:: austaltools.plot
+   :members:
+
+============================
+steepness
+============================
+
+.. automodule:: austaltools.steepness
+   :members:
+
+============================
+transform
+============================
+
+.. automodule:: austaltools.transform
+   :members:
+
+============================
+windfield
+============================
+
+.. automodule:: austaltools.windfield
    :members:
 
 ==========
