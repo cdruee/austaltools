@@ -45,8 +45,6 @@ from pathlib import PurePath
 import numpy as np
 import pandas as pd
 import requests
-from osgeo import gdal, osr
-from osgeo_utils import gdal_merge
 from urllib3 import disable_warnings, exceptions
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
@@ -104,17 +102,23 @@ Filled on demand.
 cdsapi = None
 cdo = None
 gdal = None
+gdal_merge = None
+osr = None
 # link libraries used to libraries imported
 LIB2IMPORT = {
     'cdo': 'cdo',
     'cdsapi': 'cdsapi',
     'gdal': 'osgeo',
+    'osr': 'osgeo',
+    'gdal_merge': 'osgeo_utils'
 }
 # link libraries used to their poular names
 LIB2NAME = {
     'cdo': 'CDO',
     'cdsapi': 'CSDapi',
     'gdal': 'GDAL',
+    'osr': 'OSR',
+    'gdal_merge': 'GDAL merge'
 }
 def have_lib(lib):
     """ ask if a libray is installed
@@ -136,7 +140,13 @@ def import_lib(lib):
     :type lib: str
     """
     if lib in LIB2IMPORT.keys():
-        importlib.import_module(LIB2IMPORT[lib])
+        mod = LIB2IMPORT[lib]
+        if mod == lib:
+            # ``import mod``
+            importlib.import_module(LIB2IMPORT[lib])
+        else:
+            # ``from mod import lib``
+            importlib.import_module('.'+lib, mod)
     else:
         raise ValueError(f"Unknown library '{lib}'")
 NO_LIB_HELP = {k: (f"The {v} library does not appear to be installed. "
@@ -1003,7 +1013,10 @@ def provide_terrain(source: str, path: str = None,
             raise Exception("Dataset has no download uri, assemble it.")
         dataset.download(path)
     elif method == 'assemble':
+        # load libraries
         import_lib('gdal')
+        import_lib('gdal_merge')
+        import_lib('osr')
         # change to temp directory
         pwd = os.getcwd()
         with tempfile.TemporaryDirectory(dir=_storage.TEMP) as temp_dir:
