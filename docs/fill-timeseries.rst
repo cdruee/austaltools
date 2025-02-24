@@ -43,9 +43,12 @@ variable values
 ---------------
 
 To use an emission cycle with variable values,
-use the variant ``-c, --cycle``. For this you have to create a file called ``cycle.yaml`` in the same directory,
-where the control file ``austal.txt`` is located, you have to create a file named ``cycle.yaml``.
-in which you can describe the emission cycle specify the start times in [YAML](https://de.wikipedia.org/wiki/YAML).
+use the variant ``-c, --cycle``.
+For this you have to create a file called ``cycle.yaml``
+in the same directory, where the control file ``austal.txt`` is located.
+In this file which you can describe the emission cycle for each
+indiviual source and pollutant in the
+[YAML](https://de.wikipedia.org/wiki/YAML) language.
 
 **defining each pollutant explicitly**
 
@@ -81,8 +84,9 @@ The file has the following structure (the indentations and hyphens are important
 
     - the start time is specified as number(s) ``time`` and unit ``unit``.
 
-      - The number can be either a single number (``5``) or a comma-separated list without spaces (``1,17,17``).
-        spaces (``1,17,28,39``) or a sequence "from" - "to" / "in steps of" (``1-9/2``).
+      - The number can be either a single number (`5`)
+        or a comma-separated list without spaces (`1,17,17`).
+        spaces (`1,17,28,39`) or a sequence "from" - "to" / "in steps of" (`1-9/2`).
       - Possible units are ``month``, ``week``, ``day`` and ``hour``.
     - Optionally you can add an ``offset``, which is also defined by ``time`` and ``unit``.
       is defined. This makes specifications of the form ``every odd month in the 2nd and 4th week`` possible,
@@ -114,6 +118,62 @@ The file has the following structure (the indentations and hyphens are important
       `d` (day), `m` or `min` (minute), or `s` or `sec` (second).
       Example `kg/d` for kilograms per day.
   - With ``#`` you can comment out lines in the file.
+
+**using a pre-calulated timeseries**
+
+Instead of giving ``start`` and ``sequence``,
+use the keyword ``timeseries``.
+
+Under this keyword, either a file can be specified or
+the data can be given as a list.
+
+In case a file is used, ``timeseries`` must contain the value ``file``.
+By default, the file must be in csv format:
+
+   - comma-separated lines,
+   - fist line contains comma-seprated list of column names,
+   - timestamps are in first column
+
+Optionally, the format may be selected by giving the additional
+value ``format``. For the time being
+
+Example: ::
+
+     cycle_nox:
+       column: 01.nox
+         timeseries:
+           file:
+             name: emissiondata.csv
+             var: NOx
+
+In case data are given as list, ``timeseries`` must contain
+the keyword ``table``. Under this the keywords ``data`` and ``var``
+must exist, ``columns`` may be given optionally.
+``data`` has to contain the data as a list ofr records:
+
+  - one line per timestamp,
+  - comma-sepetrated columns,
+  - timestamps are in first column
+
+``var`` selects the columt to pick.
+``column`` allows to specify the columns names as a seperate list,
+instead of the first row under ``data``.
+
+Example: ::
+
+     cycle_so2:
+       column: 01.so2
+         timeseries:
+           data:
+             var: SO2
+             data:
+             - 2000-01-01 00:00,0.0003,0.0010
+             - 2000-01-01 01:00,0.0004,0.0023
+             - 2000-01-01 02:00,0.0005,0.0034
+     ...
+             - 2000-12-31 22:00,0.0002,0.0052
+             - 2000-12-31 23:00,0.0001,0.0019
+             columns: [time, SO2, PAK]
 
 **using templates**
 

@@ -364,12 +364,9 @@ def parse_cycle(c_id: str, c_info : dict,
     if "timeseries" in c_info.keys():
         ts_info = c_info['timeseries']
         if 'file' in ts_info.keys():
-            ts_finfo = ts_info['file']
-            if not 'name' in ts_finfo.keys():
-                raise ValueError('timeseries file name missing: %s' % c_id)
-            ts_file_name = ts_finfo['name']
-            tf_file_format = ts_finfo.get('format', 'csv')
-            ts_var = ts_finfo.get('var')
+            ts_file_name = ts_info['file']
+            tf_file_format = ts_info.get('format', 'csv')
+            ts_var = ts_info.get('var')
             if tf_file_format == 'csv':
                 ts_data = pd.read_csv(ts_file_name,
                                       index_col=0,
@@ -389,20 +386,15 @@ def parse_cycle(c_id: str, c_info : dict,
                                  f"in: {ts_file_name}")
 
         elif 'table' in ts_info.keys():
-            ts_finfo = ts_info['table']
-            if 'columns' in ts_finfo.keys():
-                ts_columns = ts_finfo['columns']
+            if 'columns' in ts_info.keys():
+                ts_columns = ts_info['columns']
             else:
                 ts_columns = None
-            ts_var = ts_finfo.get('var')
-            if 'data' in ts_finfo.keys():
-                ts_data = pd.DataFrame(
-                    [x.strip().split(',') for x in ts_finfo['data']],
-                    columns=ts_columns
-                )
-            else:
-                sys.tracebacklimit = 0
-                raise ValueError("required key `data` not in `table`")
+            ts_var = ts_info.get('var')
+            ts_data = pd.DataFrame(
+                [x.strip().split(',') for x in ts_info['data']],
+                columns=ts_columns
+            )
     else:
         ts_data = None
         if "start" not in c_info.keys():

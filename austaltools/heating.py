@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""
+This module contains a simple heating model that allows to
+simulate the room temperatures and power consumption of a building.
+In contrast to a full-featured building information model (BIM),
+it requires only little information and is intended for approximative
+simulations only.
+"""
 import csv
 import sys
 from collections import OrderedDict
@@ -22,12 +29,12 @@ except ImportError:
     import _plotting
     import _tools
 
-# ----------------------------------------------------
+# -------------------------------------------------------------------------
 
 logging.basicConfig()
 logger = logging.getLogger()
 
-# ----------------------------------------------------
+# -------------------------------------------------------------------------
 
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
@@ -70,11 +77,11 @@ mean value the 1991–2020 reference period
 HEATING_LIMIT = 15  # °C
 DEFAULT_ROOMTEMP = 20  # °C
 
-# ------------------------------------------------
+# -------------------------------------------------------------------------
 
 _ROOM_DEFAULT = '_default'
 
-# ------------------------------------------------
+# -------------------------------------------------------------------------
 
 def surface_heat_transfer_resistance(
         indoor: bool, angle: float = 0,
@@ -175,7 +182,7 @@ def surface_heat_transfer_resistance(
     return r_s
 
 
-# ------------------------------------------------
+# -------------------------------------------------------------------------
 
 def surface_net_radiation(time: pd.Timestamp, lat: float, lon: float,
                           t_wall: float, t_air: float,
@@ -296,7 +303,7 @@ def surface_net_radiation(time: pd.Timestamp, lat: float, lon: float,
         return q
 
 
-# ------------------------------------------------
+# -------------------------------------------------------------------------
 
 def exponential_slabs(dist):
     """
@@ -351,8 +358,7 @@ def exponential_slabs(dist):
 
     return res
 
-# ------------------------------------------------
-
+# =========================================================================
 
 class Wall:
     r"""
@@ -633,6 +639,22 @@ class Wall:
             self.t_slab = self.n_slab * [t_start]
 
     def set_solar(self, time, lat, lon, octa, rooms):
+        """
+        Set or update the radiative fluxes at the surface of the
+        outside-facing side (if the wall has one).
+
+        :param time: Time (incl time zone)
+        :type time: datetime64 (timezone-aware
+        :param lat: building position latitude in degrees
+        :type lat: float
+        :param lon: building position longitude in degrees
+        :type lon: float
+        :param octa: total cloud cover of the sky in octa,
+          i.e. 0 = clear, 8 = overcast.
+        :type octa: float
+        :param rooms: list of Room objects of the building
+        :type rooms: RoomList
+        """
         outdoor = self.room_c == 'outside'
         if not outdoor:
             self.k_in = self.k_out = self.l_in = self.l_out = np.nan
@@ -653,7 +675,8 @@ class Wall:
 
         :param rooms: A dictionary of room objects linked to the wall.
         :type rooms: dict
-        :param timedelta: The duration by which the simulation advances, default is TIMESTEP.
+        :param timedelta: The duration by which the simulation advances,
+          default is TIMESTEP.
         :type timedelta: float, optional
         """
         for i in range(self.n_flux):
@@ -701,6 +724,7 @@ class Wall:
             self.t_slab[i] += dtdt * timedelta
         return
 
+# =========================================================================
 
 class WallList(dict):
     """
@@ -773,6 +797,7 @@ class WallList(dict):
         for x in self.values():
             x.tick(rooms, timedelta)
 
+# =========================================================================
 
 class Room:
     """
@@ -786,22 +811,28 @@ class Room:
     :type length: float, optional
     :param height: The height of the room in meters, optional.
     :type height: float, optional
-    :param maxpower: The maximum power that can be supplied to the room in watts.
+    :param maxpower: The maximum power that can be supplied
+      to the room in watts.
     :type maxpower: float
-    :param area: The area of the room in square meters, which can override width * length.
+    :param area: The area of the room in square meters,
+      which can override width * length.
     :type area: float, optional
-    :param volume: The volume of the room in cubic meters, which can override area * height.
+    :param volume: The volume of the room in cubic meters,
+      which can override area * height.
     :type volume: float, optional
-    :param t_set: The target temperature to be maintained in the room, optional.
+    :param t_set: The target temperature to be maintained
+      in the room, optional.
     :type t_set: float, optional
     :param p_set: The target power setting for the room, optional.
     :type p_set: float, optional
     :param t_start: The starting temperature of the room, optional.
     :type t_start: float, optional
-    :param special: Flag to indicate if the room is of a special type, optional.
+    :param special: Flag to indicate if the room is of
+      a special type, optional.
     :type special: bool, optional
 
-    :raises ValueError: If required parameters for normal rooms are not provided.
+    :raises ValueError: If required parameters for normal
+      rooms are not provided.
 
     **Class attributes**
 
@@ -825,13 +856,17 @@ class Room:
         height : float
             The height of the room in meters.
         area : float
-            The area of the room in square meters, which can override width * length.
+            The area of the room in square meters,
+            which can override width * length.
         volume : float
-            The volume of the room in cubic meters, which can override area * height.
+            The volume of the room in cubic meters,
+            which can override area * height.
         add_c : float
-            Additional heat capacity by objects in the room, in Joules per Kelvin.
+            Additional heat capacity by objects in the room,
+            in Joules per Kelvin.
         wall_sign : dict
-            Mapping of wall names to directional signs indicating their association with the room.
+            Mapping of wall names to directional signs indicating
+            their association with the room.
 
     """
     _special = False
@@ -915,7 +950,8 @@ class Room:
         """
         Associate walls with the room based on their configurations.
 
-        :param walls: A WallList containing wall objects to be linked with the room.
+        :param walls: A WallList containing wall objects to be
+          linked with the room.
         :type walls: WallList
         """
         for w in walls.values():
@@ -926,9 +962,11 @@ class Room:
 
     def get_fluxes(self, walls: WallList):
         """
-        Calculate and return the fluxes for each wall associated with the room.
+        Calculate and return the fluxes for each wall
+        associated with the room.
 
-        :param walls: A WallList containing wall objects to calculate fluxes for.
+        :param walls: A WallList containing wall objects
+          to calculate fluxes for.
         :type walls: WallList
         :return: A dictionary mapping each wall's name to its flux.
         :rtype: dict
@@ -953,8 +991,22 @@ class Room:
         return self._special
 
     def get_environment(self):
+        """
+        Return temperature and wind speed in the room
+
+        :return: temperature and wind speed
+        :rtype: float, float
+        """
         return {'temp': self.temp, 'wind': self.wind}
     def set_environment(self, temp=None, wind=None):
+        """
+        Set temperature and wind speed of the air in the room.
+        Is only accepted for special rooms
+        (that allow a prescribed values)
+
+        :return: temperature and wind speed
+        :rtype: float, float
+        """
         if self.is_special():
             if temp is not None:
                 self.temp = temp
@@ -965,25 +1017,48 @@ class Room:
                              'for special rooms.')
 
     def get_thermo(self):
+        """
+        Return thermostat setting (``t_set``) in the room
+        :return: set temperature
+        :rtype: float
+        """
         return self.target_temp
     def set_thermo(self, temp):
+        """
+        Set the thermostat temperature (``t_set``) in the room
+        :param temp: set temperature
+        :type temp: float
+        """
         self.target_temp = temp
 
     def get_throttle(self):
+        """
+        Return heating throttle in percent in the room.
+        :return: set temperature
+        :rtype: float
+        """
         return self.target_power
     def set_throttle(self, percent):
+        """
+        Set the heating throttle for the room, in percent.
+        :param percent: throttle value (0=off, 100=full power available)
+        :type percent: float
+        """
         if not (0<=percent<=100):
             raise ValueError('Throttle percent must be between 0 and 100')
         self.target_power = percent
 
     def tick(self, walls: WallList, timedelta: float = TIMESTEP):
         """
-        Update the room's state by advancing the simulation by a given time interval,
+        Update the room's state by advancing the simulation
+        by a given time interval,
         adjusting temperature based on power input and fluxes.
 
-        :param walls: A WallList containing wall objects linked to this room.
+        :param walls: A WallList containing wall objects
+          linked to this room.
         :type walls: WallList
-        :param timedelta: The duration by which the simulation is advanced, default is TIMESTEP.
+        :param timedelta: The duration by which the simulation
+          is advanced, default is TIMESTEP.
         :type timedelta: float, optional
         :return: The updated temperature of the room.
         :rtype: float
@@ -1025,13 +1100,16 @@ class Room:
         self.temp = self.temp + dT
         return self.temp
 
+# =========================================================================
 
 class RoomList(dict):
     """
-    A class to manage a list of Room objects in a building simulation context,
-    inheriting from Python's dictionary to map room names to Room instances.
+    A class to manage a list of Room objects in a building simulation,
+    inheriting from Python's dictionary to map names to Room instances.
 
-    :param walls: A reference to wall structures to be associated with rooms.
+    :param walls: A reference to wall structures
+      to be associated with rooms.
+    :type walls: WallList
 
     """
 
@@ -1054,23 +1132,33 @@ class RoomList(dict):
         """
         Initialize wall connections for each Room in the RoomList.
 
-        :param walls: Reference to wall configurations used to initialize each room's wall associations.
+        :param walls: Reference to wall configurations used
+          to initialize each room's wall associations.
         """
         for x in self.values():
             x.init_walls(walls)
 
     def tick(self, walls, timedelta: float = TIMESTEP):
         """
-        Advance the simulation state by a given time interval, updating each Room's state.
+        Advance the simulation state by a given time interval,
+        updating each Room's state.
 
-        :param walls: Reference to wall data necessary for updating the state of each room.
-        :param timedelta: The time step duration by which to advance the simulation, default is TIMESTEP.
+        :param walls: Reference to wall data necessary for updating
+          the state of each room.
+        :param timedelta: The time step duration by which to advance
+          the simulation, default is TIMESTEP.
         :type timedelta: float, optional
         """
         for x in self.values():
             x.tick(walls, timedelta)
 
+# =========================================================================
+
 class Hvac:
+    """
+    Data structure dscribing the settings and schedule for
+    the operation of the heating, ventilation anc cooling control (HVAC)
+    """
     current = 'none'
     modes = dict()
     timers = dict()
@@ -1155,8 +1243,8 @@ class Hvac:
                                      f"match format mm-dd")
                 td['start'] = sstr
                 if not isinstance(tdict['switch'], list):
-                    raise ValueError(f"timer {name} switch keyword does not"
-                                     f"contain a list")
+                    raise ValueError(f"timer {name} switch keyword does "
+                                     f" not contain a list")
                 td['switch'] = []
                 for sw in tdict['switch']:
                     td['switch'].append({})
@@ -1258,9 +1346,29 @@ class Hvac:
         pass
 
     def _max_le(self, itr, val):
+        """
+        Returns the largest item from a list that is less than or equal to
+        a value.
+
+        :param itr: List of values
+        :type itr: list or iterable
+        :param val: Value to campare to
+        :type val: float
+        :return: Largest list item that is lees / equal to val
+        :rtype: float
+        """
         return sorted([x for x in itr if x <= val])[-1]
 
     def switch_mode(self, time: pd.Timestamp):
+        """
+        Return the name of the mode in which the heating system
+        should operate a a given time.
+
+        :param time: Time to evaluate the settings for
+        :type time: pd.Timestamp
+        :return: name of the mode the heating system should be operated
+        :rtype: str
+        """
         # get mode
         datestr = time.strftime('%m-%d')
         timestr = time.strftime('%H%M')
@@ -1280,10 +1388,12 @@ class Hvac:
         self.current = mode
         return mode
 
+# =========================================================================
 
 class Building():
     """
-    A class to represent a building with rooms and walls, capable of simulating temperature and power dynamics.
+    A class to represent a building with rooms and walls,
+    capable of simulating temperature and power dynamics.
 
     :param name: The name of the building.
     :type name: str
@@ -1307,13 +1417,17 @@ class Building():
     hvac : dict
         Dictionary holding HVAC configuration details.
     init : bool
-        Initialization flag for the building; if False, triggers initial wall setup.
+        Initialization flag for the building; if False,
+        triggers initial wall setup.
     output : Any
-        Storage for output data related to building operations (can be tailored as needed).
+        Storage for output data related to building operations
+        (can be tailored as needed).
     _room_history : list
-        Internal storage for the historical record of room variables such as temperature and power.
+        Internal storage for the historical record of room variables
+        such as temperature and power.
     _wall_history : list
-        Internal storage for the historical record of wall variables such as temperature and flux.
+        Internal storage for the historical record of wall variables
+        such as temperature and flux.
 
     Methods
     -------
@@ -1353,9 +1467,11 @@ class Building():
 
         :param name: The name of the building.
         :type name: str
-        :param d: A dictionary containing building setup data, expected to include walls, rooms, and their parameters.
+        :param d: A dictionary containing building setup data,
+          expected to include walls, rooms, and their parameters.
         :type d: dict
-        :return: A new instance of Building initialized with the configuration from the YAML data.
+        :return: A new instance of Building initialized with
+          the configuration from the YAML data.
         :rtype: Building
         """
         t_out = d.get('t_out', np.nan)
@@ -1393,7 +1509,7 @@ class Building():
         """
         Compares this Building instance with another for equality.
 
-        :param other: Another instance of the Building class to compare against.
+        :param other: Another instance of the Building class to compare.
         :type other: Building
         :return: True if the two instances are equal, False otherwise.
         :rtype: bool
@@ -1462,10 +1578,21 @@ class Building():
         """
         Outputs the recorded room and wall data to CSV files.
 
-        :param rname: The filename for room history data, default is 'heating_rooms_history.csv'.
+        :param rname: The filename for room history data,
+          default is 'heating_rooms_history.csv'.
         :type rname: str, optional
-        :param wname: The filename for wall history data, default is 'heating_walls_history.csv'.
+        :param wname: The filename for wall history data,
+          default is 'heating_walls_history.csv'.
         :type wname: str, optional
+        :param sname: The filename for slab temperature history data,
+          default is 'heating_slabs_history.csv'.
+        :type sname: str, optional
+        :param slabout: Add individual wall-slab temperatures
+          to a separate output file. Defaults to ``True``.
+        :type slabout: bool, optional
+        :param append: Append data written to existing data files.
+          Defaults to ``False``.
+        :type append: bool, optional
         """
         if rname is None:
             rname = self.rname
@@ -1506,7 +1633,8 @@ class Building():
         """
         Retrieves a list of non-special room names.
 
-        :return: A list containing the names of all non-special rooms in the building.
+        :return: A list containing the names of all
+          non-special rooms in the building.
         :rtype: list of str
         """
         return [x.name for x in self.rooms.values() if not x.is_special()]
@@ -1525,6 +1653,8 @@ class Building():
         self.rooms.init_walls(self.walls)
 
     def switch_mode(self, mode):
+        #FIME
+        # is there something importatnzt missing here??
         pass
 
     def set_solar(self, time, octa):
@@ -1551,8 +1681,30 @@ class Building():
         self.walls.tick(self.rooms, timedelta)
         self.rooms.tick(self.walls, timedelta)
 
+# -------------------------------------------------------------------------
 
 def spreadsheed_engine(filename):
+    """
+        Determine the spreadsheet engine based on the file extension
+        and ensure the filename is complete.
+
+        :param filename: The name of the spreadsheet file,
+          which may or may not include an extension.
+        :type filename: str
+        :raises ValueError: If the file extension is unsupported.
+        :return: A tuple containing the filename (with extension)
+          and the spreadsheet engine.
+        :rtype: tuple
+
+        The function checks the file extension of the provided filename
+        to determine the appropriate spreadsheet engine to use.
+        Supported extensions are `.ods`, `.xlsx`, and `.xls`.
+        If no extension is provided, `.ods` is assumed by default.
+        It returns the possibly modified filename and the
+        corresponding engine.
+
+        :raises `ValueError`: for unsupported extensions, such as `.csv`.
+        """
     extension = os.path.splitext(filename)[1]
     if extension == '':
         extension = '.ods'
@@ -1567,7 +1719,33 @@ def spreadsheed_engine(filename):
         raise ValueError(f"unsupported file extension: {extension}")
     return filename, engine
 
+# -------------------------------------------------------------------------
+
 def spredsheet_export(dictionary, building, basename):
+    """
+    Export specific building data from a Building object
+    to a spreadsheet file.
+
+    :param dictionary: A dictionary containing building data,
+      including structures like walls and rooms.
+    :type dictionary: dict
+    :param building: The name of the building to export data for.
+    :type building: str
+    :param basename: The base name of the output spreadsheet file
+      (may or may not include extension).
+    :type basename: str
+    :return: None
+
+    This function exports the walls and rooms data of a specified building
+    from a given dictionary (e.g. read from a heating.yaml)
+    into a spreadsheet file. The file is named based on the provided
+    `basename` and uses an appropriate engine determined by the
+    `spreadsheed_engine` function. The spreadsheet will contain
+    sheets for 'walls' and 'rooms', if available.
+
+    :raises ValueError: If the specified building is not found in the dictionary.
+    """
+
     filename, engine = spreadsheed_engine(basename)
     bldg_names = dictionary['buildings'].keys()
     if building not in bldg_names:
@@ -1582,7 +1760,36 @@ def spredsheet_export(dictionary, building, basename):
             df = pd.DataFrame.from_dict(v, orient='index')
             df.to_excel(f, sheet_name=k)
 
+# -------------------------------------------------------------------------
+
 def speradsheet_import(dictionary, building, filename):
+    """
+    Import building data from a spreadsheet file into a dictionary.
+
+    :param dictionary: A dictionary containing building data
+      to be updated.
+    :type dictionary: dict
+    :param building: The name of the building to import data for.
+    :type building: str
+    :param filename: The name of the spreadsheet file
+      to import data from.
+    :type filename: str
+    :return: The updated dictionary with imported building data.
+    :rtype: dict
+
+    This function imports the 'walls' and 'rooms' data for a specified
+    building from a given spreadsheet file into an existing
+    dictionary structure. It performs the following steps:
+
+    The spreadsheet file must contain the required sheets
+    'walls' and 'rooms'.
+
+
+    :raises ValueError: If the specified building is not found in the
+      dictionary or if required sheets are missing in the file.
+
+    """
+
     filename, engine = spreadsheed_engine(filename)
     if building not in dictionary['buildings'].keys():
         raise ValueError(f"un known building name: {building}")
@@ -1607,6 +1814,8 @@ def speradsheet_import(dictionary, building, filename):
     for k in sheet_names:
         dictionary['buildings'][building][k] = sheets[k]
     return dictionary
+
+# -------------------------------------------------------------------------
 
 def run_building_model(bldg: Building,
                        tseries: pd.Series|str,
@@ -1644,6 +1853,11 @@ def run_building_model(bldg: Building,
         running the model. For exampe "1min" for every minute.
         Defaults to for no recording
     :type rec: str or None
+    :param slabout: (optional) add additional file to the output that
+      contains the individual wall-slab temperatures. This parameter
+      is only relevant when `rec` is not ``False``.
+      Defaults to ``False``
+    :type slabout: bool
     :param flush: (optional) whether to flush the simulation recording
         each (modeled) hour. Default is True.
     :type flush: bool
@@ -1808,8 +2022,15 @@ def run_building_model(bldg: Building,
 
     return res
 
+# -------------------------------------------------------------------------
 
 def main(args):
+    """
+    main routine of the module `heating`, i.e. "the command"
+
+    :param args: parsed command-line arguments
+    :type args: dict
+    """
     # first evaluate global options
     if (txt :=args.get('slabs', '')).startswith('exponential'):
         if ',' in txt:
@@ -1887,7 +2108,7 @@ def main(args):
     # get weather data
     csv_name = args['extracted_weather']
     lat, lon, ele, z0, source, stat_nam, obs = \
-            _common.read_extracted_weather(csv_name)
+            _plotting.read_extracted_weather(csv_name)
 
     # extract variables from weather data
     tz = obs.index.tz
@@ -1944,7 +2165,7 @@ def main(args):
                float_format="%12.5f")
     print(res.sum(axis=0))
 
-# ----------------------------------------------------
+# -------------------------------------------------------------------------
 
 def add_options(subparsers):
     pars_htg = subparsers.add_parser(

@@ -9,9 +9,9 @@ Welcome to austaltools documentation!
 This documentation is currently being built up.
 Please do not expect it to be complete.
 
-=======
+*******
 General
-=======
+*******
 
 This module conatins tools for use with Langrangian dispersion model
 AUSTAL (AUSbreitungsmodell nach TA Luft)
@@ -92,9 +92,8 @@ See files containing `LICENSE.*` for the individual licence texts.
 Provide input for AUSTAL (or AUSTAL2000)
 ****************************************
 
-============
 austal-input
-============
+------------
 
 This is the most simple way to create input data for AUSTAL.
 For example::
@@ -112,20 +111,21 @@ Its full command-line options are as the following:
    :func: cli_parser
    :prog: austal-input
 
-==============
-Developer info
-==============
+**************
+Detailed info
+**************
 
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
 
-   apidoc
+   api_commands
+   api_internal
+   references
 
-
-==================
+******************
 Indices and tables
-==================
+******************
 
 * :ref:`genindex`
 * :ref:`modindex`
