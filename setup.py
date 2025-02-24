@@ -9,9 +9,6 @@ v_path = os.path.join(*'austaltools/_version.py'.split('/'))
 with open(v_path) as v_file:
     exec(v_file.read(), v)
 
-with open('requirements.txt') as f:
-    requirements = [x.lower() for x in f.read().splitlines()]
-
 setup(
     name=v['__title__'],
     version=v['__version__'],
@@ -33,7 +30,21 @@ setup(
     author_email=v['__author_email__'],
     license=v['__license__'],
     url=v['__url__'],
-    install_requires=requirements,
+    install_requires=[
+        "austaltools",
+        "numpy",
+        "pandas",
+        "matplotlib",
+        "setuptools",
+        "requests",
+        "meteolib",
+        "scipy",
+        "gdal",
+        "readmet",
+        "tqdm",
+        "pyyaml",
+        "urllib3",
+    ],
     description=v['__description__'],
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
