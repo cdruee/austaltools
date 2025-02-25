@@ -577,6 +577,9 @@ class Wall:
             self.n_slab = 2
             self.d_slab = [np.nan, np.nan]
 
+            logger.debug("slabs diabled (thin wall)")
+            logger.debug(f"heat resistance: {resistance} m²K/W")
+
         else:
             # normal wall consisting of slabs
 
@@ -663,17 +666,13 @@ class Wall:
                 self.d_flux[i] = self.d_slab[-1] / 2.
             else:
                 self.d_flux[i] = (self.d_slab[i-1] + self.d_slab[i]) / 2.
-        logger.debug("flux deltas: %s cm" %
+        if not resistance:
+            logger.debug("flux deltas: %s cm" %
                      str([100*x for x in self.d_flux]))
 
         # initialize temperature
         if t_start is None:
             raise ValueError('start temperature not given')
-            # # assume linear temperature profile if no t_start is given
-            # t_a = room_w.temp
-            # t_b = room_c.temp
-            # self.t_slab = [(t_b - t_a) / (self.n_slab + 1) * (x + 1)
-            #                for x in range(self.n_slab)]
         else:
             # set alls slabs to have temperature t_start
             self.t_slab = self.n_slab * [t_start]
