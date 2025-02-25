@@ -119,18 +119,18 @@ def surface_heat_transfer_resistance(
     :math:`h_\mathrm{c} ~=~ h_\mathrm{ci}`
     with
 
-      - :math:`h_\mathrm{ci} ~=~ 5.0 \mathrm{W}/(\mathrm{W}^2 \mathrm{K})`
+      - :math:`h_\mathrm{ci} ~=~ 5.0 \mathrm{W}/(\mathrm{m}^2 \mathrm{K})`
         for heat flow upwards (i.e. from the floor);
-      - :math:`h_\mathrm{ci} ~=~ 2.5 \mathrm{W}/(\mathrm{W}^2 \mathrm{K})`
+      - :math:`h_\mathrm{ci} ~=~ 2.5 \mathrm{W}/(\mathrm{m}^2 \mathrm{K})`
         for heat flow horizontal (i.e. from a wall);
-      - :math:`h_\mathrm{ci} ~=~ 0.7 \mathrm{W}/(\mathrm{W}^2 \mathrm{K})`
+      - :math:`h_\mathrm{ci} ~=~ 0.7 \mathrm{W}/(\mathrm{m}^2 \mathrm{K})`
         for heat flow downwards (i.e. from the ceiling)
 
     values in case of outdoor surfaces:
     :math:`h_\mathrm{c} ~=~ h_\mathrm{ce}`
 
     with
-    :math:`h_\mathrm{ce} ~=~ 4. + 4. v \mathrm{W}/(\mathrm{W}^2 \mathrm{K})`
+    :math:`h_\mathrm{ce} ~=~ 4. + 4. v \mathrm{W}/(\mathrm{m}^2 \mathrm{K})`
 
     where :math:`v` is the wind speed ''above he surface'' in m/s
 
@@ -172,8 +172,11 @@ def surface_heat_transfer_resistance(
             # wind "above wall" (no distance etc. defined !!?!)
             h_c = 4.0 + 4.0 * wind
         # h_r ((longwave) radiative transfer)
-        h_r = (WALL_EPSILON *
+        if t_wall is not None:
+            h_r = (WALL_EPSILON *
                4 * m.constants.sigma * m.temperature.CtoK(t_wall))
+        else:
+            h_r = 0.
 
         # DIN EN ISO 6946:2008-04 eqn 1.1:
         # R = 1/(h_r+h_c)
@@ -380,11 +383,13 @@ class Wall:
     :param area: The full area of the wall in square meters, optional.
     :type area: float, optional
     :param c: The heat capacity of the wall material in J/kgK, optional.
-    :type c: float, optional
+    :type c: float, optional, mutually exclusive with resistance
     :param k: The thermal conductivity of the wall material in W/mK, optional.
-    :type k: float, optional
+    :type k: float, optional, mutually exclusive with resistance
     :param rho: The density of the wall material in kg/m³, optional.
-    :type rho: float, optional
+    :type rho: float, optional, mutually exclusive with resistance
+    :param resistance:
+    :type resistance: float, optional, mutually exclusive with k, c abd rho
     :param partof: Indicates what part of the building the wall belongs to, optional.
     :type partof: str, optional
     :param t_start: Starting temperature for the wall slabs in degrees Celsius, optional.
@@ -480,15 +485,21 @@ class Wall:
         d_flux : list
             List containing the distance between slab centers used
             in flux calculations in meters.
+        resistance: bool
+            If True, a thin wall is assumed of which the bulk
+            heat resistance (1 / heat_conduct) is known.
         heat_conduct : float
             The thermal conductivity of the wall material
             in watts per meter kelvin (default is 0.58 W/mK).
+            (1 / heat_resistance) if resistance is True.
         heat_capacity : float
             The heat capacity of the wall material
             in joules per kilogram kelvin (default is 836 J/kgK).
+            Irrelevant when resistance is True.
         density : float
             The density of the wall material
             in kilograms per cubic meter (default is 1400 kg/m³).
+            Irrelevant when resistance is True.
         albedo : float
             The albedo of the cold-side wall material in 1,
             defaults to WALL_ALBEDO
@@ -513,6 +524,7 @@ class Wall:
     area = float()  # m²
     facing = float()  # deg clockwise from north
     slant = float() # deg, 0 = vertical wall, pos = cold side facing upwards
+    resistance = False
     d_slab = float()  # m
     n_slab = int()  # 1
     t_slab = list()  # °C
@@ -531,10 +543,11 @@ class Wall:
     l_in = np.nan
     l_out = np.nan
 
-    def __init__(self, name: str, d: float, room_w: str, room_c: str,
+    def __init__(self, name: str, room_w: str, room_c: str, d: float=None,
                  l: float = None, h: float = None, area: float = None,
                  facing: float = None, slant: float = None,
                  c: float = None, k: float = None, rho: float = None,
+                 resistance = None,
                  albedo: float = None, epsilon: float = None,
                  partof: str = None, t_start: float = None,
                  slabs: str|float|list = None):
@@ -546,19 +559,87 @@ class Wall:
         logger.debug(f"initializing wall: {name}")
         self.room_w = room_w
         self.room_c = room_c
-        if c is not None:
-            self.heat_capacty = c
-        if k is not None:
-            self.heat_conduct = k
-        if rho is not None:
-            self.density = rho
+        if resistance is not None:
+            # thin wall with defined heat resistance
+
+            if any([x is not None for x in [c, k, rho, d]]):
+                raise ValueError("resistance is mutually exclusive with "
+                                 "any of c, k, rho, and d")
+            if resistance <= 0:
+                raise ValueError("resistance must be positive")
+            # invalidate unneeded attributes
+            self.heat_capacty = np.nan
+            self.density = np.nan
+            self.thickness = np.nan
+
+            self.resistance = True
+            self.heat_conduct = 1. / resistance
+            self.n_slab = 2
+            self.d_slab = [np.nan, np.nan]
+
+        else:
+            # normal wall consisting of slabs
+
+            # invalidate unneeded attributes
+            self.resistance = False
+
+            # heat properties
+            if c is not None:
+                self.heat_capacty = c
+            if k is not None:
+                self.heat_conduct = k
+            if rho is not None:
+                self.density = rho
+            # calculate number of slabs
+            self.thickness = d
+            if slabs is None:
+                # nothing selected -> default option
+                slabs = DEFAULT_SLABS_OPT
+            if slabs == 'even':
+                # even selected -> select default width
+                slabs = DEFAULT_SLAB
+            if isinstance(slabs, str):
+                if slabs == 'even':
+                    # we shouldn't be getting here
+                    raise RuntimeError('internal error in Wall.__init__')
+                elif slabs == 'exponential':
+                    self.d_slab = exponential_slabs(d)
+                    self.n_slab = len(self.d_slab)
+                else:
+                    raise ValueError(f"unknown slabs option: {slabs}")
+            elif isinstance(slabs, float):
+                # if d is a multiple of slabs (with some tolerance)
+                self.n_slab = int(round(d/slabs))
+                self.d_slab = [slabs] * self.n_slab
+                excess = self.thickness % slabs
+                self.d_slab[int(self.n_slab / 2.)] += excess
+            elif isinstance(slabs, list):
+                if not all([isinstance(i, float) for i in slabs]):
+                    raise ValueError(f"slabs option does non only contain "
+                                     "floats: {str(slabs)}")
+                # lower limit is WIDTHMIN
+                if any([i < WIDTHMIN for i in slabs]):
+                    raise ValueError(f"slabs option contains negative or "
+                                     "too small values: {str(slabs)}")
+                #
+                if abs(sum(slabs) - d) > self.TOLERANCE:
+                    raise ValueError(f"slabs option values do not add up "
+                                     "to wall thickness: {str(slabs)}")
+                self.d_slab = slabs
+                self.n_slab = len(self.d_slab)
+            else:
+              raise ValueError(f"unknown slabs option: {str(slabs)}")
+            logger.debug("slab sizes : %s cm" %
+                         str([100*x for x in self.d_slab]))
+
+        # wall area
         if l is not None and h is not None:
             self.lenght = l
             self.height = h
             self.area_full = l * h
         if area is not None:
             self.area_full = area
-        # area is full area minus embeddded elements (corrected by WallList)
+        # area is full area minus embedded elements (corrected by WallList)
         self.partof = partof
         self.area = self.area_full
         # orientation:
@@ -568,47 +649,6 @@ class Wall:
         self.albedo = albedo if albedo is not None else WALL_ALBEDO
         self.epsilon = epsilon if epsilon is not None else WALL_EPSILON
 
-        # calculate number of slabs
-        self.thickness = d
-        if slabs is None:
-            # nothing selected -> default option
-            slabs = DEFAULT_SLABS_OPT
-        if slabs == 'even':
-            # even selected -> select default width
-            slabs = DEFAULT_SLAB
-        if isinstance(slabs, str):
-            if slabs == 'even':
-                # we shouldn't be getting here
-                raise RuntimeError('internal error in Wall.__init__')
-            elif slabs == 'exponential':
-                self.d_slab = exponential_slabs(d)
-                self.n_slab = len(self.d_slab)
-            else:
-                raise ValueError(f"unknown slabs option: {slabs}")
-        elif isinstance(slabs, float):
-            # if d is a multiple of slabs (with some tolerance)
-            self.n_slab = int(round(d/slabs))
-            self.d_slab = [slabs] * self.n_slab
-            excess = self.thickness % slabs
-            self.d_slab[int(self.n_slab / 2.)] += excess
-        elif isinstance(slabs, list):
-            if not all([isinstance(i, float) for i in slabs]):
-                raise ValueError(f"slabs option does non only contain "
-                                 "floats: {str(slabs)}")
-            # lower limit is WIDTHMIN
-            if any([i < WIDTHMIN for i in slabs]):
-                raise ValueError(f"slabs option contains negative or "
-                                 "too small values: {str(slabs)}")
-            #
-            if abs(sum(slabs) - d) > self.TOLERANCE:
-                raise ValueError(f"slabs option values do not add up "
-                                 "to wall thickness: {str(slabs)}")
-            self.d_slab = slabs
-            self.n_slab = len(self.d_slab)
-        else:
-          raise ValueError(f"unknown slabs option: {str(slabs)}")
-        logger.debug("slab sizes : %s cm" %
-                     str([100*x for x in self.d_slab]))
 
         # calculate distances between slab centers for
         # flux calculation (add excess thickness at the two
@@ -679,49 +719,94 @@ class Wall:
           default is TIMESTEP.
         :type timedelta: float, optional
         """
-        for i in range(self.n_flux):
-            # temperature difference
-            if i == 0:
-                # warm wall surface
-                dth = self.t_slab[0] - rooms[self.room_w].temp
-                t_wall = self.t_slab[0]
-                indoor = (rooms[self.room_w].name != 'outside')
-                angle = - self.slant
-                wind =  rooms[self.room_c].wind
-                h_c = 1. / surface_heat_transfer_resistance(
-                    indoor=indoor, angle=angle, t_wall=t_wall,
-                    wind=wind
-                )
-            elif i == self.n_slab:
-                # cold wall surface
-                dth = rooms[self.room_c].temp - self.t_slab[i - 1]
-                t_wall = self.t_slab[i - 1]
-                indoor = (rooms[self.room_c].name != 'outside')
-                # if indoor:
-                #     q_net = 0.
-                # else:
-                #     q_net = surface_radiation_budget()
-                angle = self.slant
-                wind =  rooms[self.room_c].wind
-                h_c = 1. / surface_heat_transfer_resistance(
-                    indoor=indoor, angle=angle, t_wall=t_wall,
-                    wind=wind
-                )
-                if all(np.isfinite(x) for x in (
-                       self.k_in, self.k_out, self.l_in, self.l_out)):
-                    h_c = h_c + (self.k_in - self.k_out +
-                                 self.l_in - self.l_out)
-            else:
-                # inside wall
-                dth = self.t_slab[i] - self.t_slab[i - 1]
-                h_c = self.heat_conduct / self.d_flux[i]
-            # heat flux
-            self.f_flux[i] = - h_c *  dth
-        for i in range(self.n_slab):
-            diff = (self.f_flux[i] - self.f_flux[i + 1])
-            dtdt = diff / (
-                    self.density * self.d_slab[i] * self.heat_capacty)
-            self.t_slab[i] += dtdt * timedelta
+
+        # surface heat transfer coefficient: warm side
+        angle = - self.slant
+        wind = rooms[self.room_c].wind
+        # only longwave heat transfer estimation after DIN:
+        h_cw = 1. / surface_heat_transfer_resistance(
+            indoor=False, angle=angle, t_wall=None,
+            wind=wind
+        )
+
+        # surface heat transfer coefficient: cold side
+        indoor = (rooms[self.room_c].name != 'outside')
+        angle = self.slant
+        wind = rooms[self.room_c].wind
+        if all(np.isfinite(x) for x in (
+                self.k_in, self.k_out, self.l_in, self.l_out)):
+            # full radiative transfer calculation
+            h_cc = 1. / surface_heat_transfer_resistance(
+                indoor=indoor, angle=angle, t_wall=None,
+                wind=wind
+            )
+            q_net = (self.k_in - self.k_out +
+                             self.l_in - self.l_out)
+        else:
+            # only longwave heat transfer estimation after DIN
+            h_cc = 1. / surface_heat_transfer_resistance(
+                indoor=indoor, angle=angle, t_wall=self.t_slab[-1],
+                wind=wind
+            )
+            q_net = 0.
+
+        # thin wall (resistance)
+        if self.resistance:
+            # abbreviations
+            h_ci = 1. / self.heat_conduct
+            trw = rooms[self.room_w].temp
+            trc = rooms[self.room_c].temp
+
+            # surface temperatures
+            tw = (
+                    (
+                        trw * h_cw * h_ci * (h_cc + h_ci) +
+                        trc * h_cc * h_ci - q_net * h_ci
+                    ) / (h_cc * h_ci + h_cw * (h_cc + h_ci))
+            )
+            tc = tw - (trw - tw) * h_cw / h_ci
+
+            # store temperatures
+            self.t_slab[0] = tw
+            self.t_slab[1] = tc
+
+            # fluxes temperatures
+            self.f_flux[0] = (trw - tw) * h_cw
+            self.f_flux[1] = (tw - tc) * h_ci
+            self.f_flux[2] = (tc - trc) * h_cc + q_net
+
+        # thick wall (slabs)
+        else:
+
+            # fluxes between slabs (and trough surfaces)
+            for i in range(self.n_flux):
+                if i == 0:
+                    # warm wall surface
+                    dth = self.t_slab[0] - rooms[self.room_w].temp
+                    h_c = h_cw
+                    q_slab = 0.
+                elif i == self.n_slab:
+                    # cold wall surface
+                    dth = rooms[self.room_c].temp - self.t_slab[i - 1]
+                    h_c = h_cc
+                    q_slab = q_net
+                else:
+                    # inside wall
+                    dth = self.t_slab[i] - self.t_slab[i - 1]
+                    h_c = self.heat_conduct / self.d_flux[i]
+                    q_slab = 0.
+                # heat flux
+                self.f_flux[i] = - h_c *  dth + q_slab
+
+            # temperature change in slabs
+            for i in range(self.n_slab):
+                # flux difference
+                diff = (self.f_flux[i] - self.f_flux[i + 1])
+                # temperature change rate
+                dtdt = diff / (
+                        self.density * self.d_slab[i] * self.heat_capacty)
+                # temperature change
+                self.t_slab[i] += dtdt * timedelta
         return
 
 # =========================================================================
