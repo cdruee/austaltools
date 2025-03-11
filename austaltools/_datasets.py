@@ -864,31 +864,44 @@ def assemble_GLO_30(path, name = "GLO_30",
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
+    def gettile_eu(lat, lon):
+        download_dir = ("https://prism-dem-open.copernicus.eu/" +
+                        "pd-desk-open-access/prismDownload/" +
+                        "COP-DEM_GLO-30-DGED__2022_1/")
+        file_fmt = "Copernicus_DSM_10_N%02i_00_E%03i_00.tar"
+        url = download_dir + file_fmt % (lat, lon)
+        logger.debug("downloading ... %s" % url)
+        tar_file = _tools.download(url, os.path.basename(url))
+        name_root = tar_file.replace(".tar", "")
+        with tarfile.open(tar_file) as tf:
+            to_extract = [x for x in tf.getmembers()
+                          if name_root + "/DEM/" in x.name]
+            for x in to_extract:
+                # remove path from name of tar member to extract
+                x.name = os.path.basename(x.name)
+                logger.debug("... extracting %s" % x.name)
+                # now extract tar member to current dir
+                tf.extract(x, '.')
+
+    def gettile_aws(lat, lon):
+        location = ("http://copernicus-dem-30m.s3.amazonaws.com/")
+        path_fmt = "Copernicus_DSM_COG_10_N%02i_00_E%03i_00_DEM/"
+        file_fmt = "Copernicus_DSM_10_N%02i_00_E%03i_00.tif"
+        url = location + path_fmt % (lat, lon) + file_fmt % (lat, lon)
+        logger.debug("downloading ... %s" % url)
+
     target = os.path.join(path, DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
 
-    download_dir = ("https://prism-dem-open.copernicus.eu/" +
-                    "pd-desk-open-access/prismDownload/" +
-                    "COP-DEM_GLO-30-DGED__2022_1/")
-    file_fmt = "Copernicus_DSM_10_N%02i_00_E%03i_00.tar"
-
     for lat in range(47, 54):
         for lon in range(5, 16):
-            url = download_dir + file_fmt % (lat, lon)
-            logger.debug("downloading ... %s" % url)
-            tar_file = _tools.download(url, os.path.basename(url))
-            name_root = tar_file.replace(".tar", "")
-            with tarfile.open(tar_file) as tf:
-                to_extract = [x for x in tf.getmembers()
-                              if name_root + "/DEM/" in x.name]
-                for x in to_extract:
-                    # remove path from name of tar member to extract
-                    x.name = os.path.basename(x.name)
-                    logger.debug("... extracting %s" % x.name)
-                    # now extract tar member to current dir
-                    tf.extract(x, '.')
+            ## worked until DEC 2024:
+            # gettile_eu(lat, lon)
+            # working MAR 2025
+            gettile_aws(lat, lon)
+
     # merge the GeoTiff Files from all tiles into one file
     target = os.path.join(path, DEM_FMT % "GLO-30")
     tile_files = glob.glob("Copernicus_*.tif")

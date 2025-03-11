@@ -1082,6 +1082,7 @@ class Room:
         :rtype: float, float
         """
         return {'temp': self.temp, 'wind': self.wind}
+
     def set_environment(self, temp=None, wind=None):
         """
         Set temperature and wind speed of the air in the room.
@@ -1107,6 +1108,7 @@ class Room:
         :rtype: float
         """
         return self.target_temp
+
     def set_thermo(self, temp):
         """
         Set the thermostat temperature (``t_set``) in the room
@@ -1122,6 +1124,7 @@ class Room:
         :rtype: float
         """
         return self.target_power
+
     def set_throttle(self, percent):
         """
         Set the heating throttle for the room, in percent.
@@ -1162,7 +1165,7 @@ class Room:
         # calculate heating power needed to maintain target temperature
         if not np.isnan(self.target_temp):
             # if heatings is temperature regulated:
-            # pwer to compensate heat loss by fluxes
+            # power to compensate heat loss by fluxes
             self.power = -P_external
             # power needed to heat up
             if self.temp < self.target_temp:
@@ -1910,7 +1913,7 @@ def run_building_model(bldg: Building,
                        slabout=False,
                        flush=True,
                        radiation=True
-                       ):
+                       ) -> pd.DataFrame:
     """
     Run a time dependent simulation of the building heating.
 
@@ -2232,22 +2235,54 @@ def main(args):
                      float_format="%12.5f")
 
     # convert into emissions and write them into file
-    energy = model_out['power'] * model_out['seconds']  # J
-    emission_factors = {
-        'xx': 2100.E-9,  # g/J
-        'nox': 50.E-9,  # g/J
-        'pm-u': 20.E-9,  # g/J
-        'odor': 6 * 168000.E-9,  # GE/J
-        'wood_kg': 1 / 4.04E6,  # kg/J
-        'kWh': 1 / 3600000,  # kWh
+    report = []
+    hline = "-" * 72
+    energy: pd.Series = model_out['power'] * model_out['seconds']  # J
+    heating_factors = {
+        'wood': 1 / 4.04E6,  # kg/J
+        'pellets': 1/ 18.3E6,  # kg/J
+        'briquets': 1 / 20.3E6,  # kg/J
+        'coal': 1 / 29.5E6,  # kg/j
+        'natgas': 1 / 38.E6,  # kg/J
+        'fueloil': 1 / 42.6E6,  # kg/J
     }
-    res = pd.DataFrame({'energy': energy})
-    for k, v in emission_factors.items():
-        res[k] = res['energy'] * v
-    print(res)
-    res.to_csv("heating_devel_emissions.csv", quoting=csv.QUOTE_NONE,
-               float_format="%12.5f")
-    print(res.sum(axis=0))
+    volumes = {
+        'wood': 1 / 0.419,  # l/kg
+        'pellets': 1 / 0.66,  # l/kg
+        'briquets': 1 / 1.1,  # l/kg
+        'coal': 1 / 1.3,  # l/kg
+        'natgas': 1 / 0.423,  # l/kg
+        'fueloil': 1 / 0.83,  # l/kg
+    }
+    res = energy.sum()
+    report.append(hline)
+    report.append("annual consuption of differnet fuels:")
+    report.append(hline)
+    for k, v in heating_factors.items():
+        report.append(
+            " - %10s : %11.3e kg  or %11.3e l" %
+            (k, res * v,volumes[k] * v * res)
+        )
+    report.append(hline)
+    kwh: pd.Series = energy / 3600000.
+    report.append("hourly energy consumption quartiles:")
+    report.append(" ".join(["%3i%%: %7.2f" %
+                            (x,np.percentile(kwh,x))
+                             for x in [0, 25, 50, 75, 100]])
+                  )
+    report.append(hline)
+    kwhd = kwh.resample('1d').sum()
+    report.append("hourly energy consumption quartiles:")
+    report.append(" ".join(["%3i%%: %7.2f" %
+                            (x,np.percentile(kwhd, x))
+                             for x in [0, 25, 50, 75, 100]])
+                  )
+    report.append(hline)
+
+    with open("heating_report.txt", "w") as f:
+        for l in report:
+            print(l)
+            f.write(l + "\n")
 
 # -------------------------------------------------------------------------
 
