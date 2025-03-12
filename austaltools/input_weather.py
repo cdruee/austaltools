@@ -426,6 +426,9 @@ def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
     ds = _datasets.dataset_get(
         _datasets.name_yearly("ERA5", year)
     )
+    if not ds.available:
+        sys.tracebacklimit = 0
+        raise ValueError(f"Dataset not available: {ds.name}")
     if datafile is None:
         datafile = os.path.join(ds.path, ds.file_data)
     logging.info('reading data from; %s' % datafile)
@@ -670,6 +673,9 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
     ds = _datasets.dataset_get(
         _datasets.name_yearly("CERRA", year)
     )
+    if not ds.available:
+        sys.tracebacklimit = 0
+        raise ValueError(f"Dataset not available: {ds.name}")
     if datafile is None:
         datafile = os.path.join(ds.path, ds.file_data)
     logging.info('reading data from; %s' % datafile)
@@ -745,6 +751,9 @@ def get_dwd_weather(lat: float, lon: float, year:int,
     :rtype: (pd.DataFrame, float)
     """
     ds = _datasets.dataset_get("DWD")
+    if not ds.available:
+        sys.tracebacklimit = 0
+        raise ValueError(f"Dataset not available: {ds.name}")
     if datafile is None:
         datafile = os.path.join(ds.path, ds.file_data)
     logging.info('reading data from; %s' % datafile)
