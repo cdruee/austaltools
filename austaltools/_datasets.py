@@ -360,7 +360,7 @@ def update_available():
     by scanning storrage locations
     """
     _init_datasets()
-    logger.debug("re-scanning available datasets")
+    logger.info("re-scanning available datasets")
     available_datasets = _available_scan()
     logger.debug("setting available flags")
     _datasets_set_available(DATASETS, available_datasets)
@@ -427,7 +427,9 @@ def _available_scan(locs : list = None) -> dict:
         raise ValueError("No locations available")
     available_datasets = {}
     for ds in DATASETS:
+        logger.debug(f"scanning for dataset: {ds.name}")
         for loc in reversed(loc_avail):
+            logger.debug(f"     ... in location {loc}")
             if ds.storage is None:
                 raise ValueError(f'storage not defined in: {ds.name}')
             if _storage.location_has_storage(loc, ds.storage):
@@ -435,6 +437,9 @@ def _available_scan(locs : list = None) -> dict:
                 datafile = os.path.join(path, ds.file_data)
                 if os.path.exists(datafile):
                     available_datasets[ds.name] =  path
+                    logger.debug(f"                      {path}")
+                else:
+                    logger.debug(f"                      ---")
 
     return available_datasets
 
@@ -470,13 +475,16 @@ def _datasets_set_available(
     :return:  list of all known datasets
     :rtype: list[DataSet]
     """
-    for k, v in avail.items():
-        for ds in datasets:
-            if k == ds.name:
-                ds.available = True
-                ds.path = v
-                break
+    for ds in datasets:
+        v = avail.pop(ds.name, None)
+        logger.debug(f"dataset {ds.name} path: {v}")
+        if v is not None:
+            ds.available = True
         else:
+            ds.available = False
+        ds.path = v
+    if len(avail) > 0:
+        for k, v in avail.items():
             logger.warning(f"found unknown dataset: {k}")
 
     return datasets
