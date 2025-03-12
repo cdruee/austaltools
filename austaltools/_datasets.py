@@ -143,10 +143,10 @@ def import_lib(lib):
         mod = LIB2IMPORT[lib]
         if mod == lib:
             # ``import mod``
-            importlib.import_module(LIB2IMPORT[lib])
+            globals()[lib] = importlib.import_module(LIB2IMPORT[lib])
         else:
             # ``from mod import lib``
-            importlib.import_module('.'+lib, mod)
+            globals()[lib] = importlib.import_module('.'+lib, mod)
     else:
         raise ValueError(f"Unknown library '{lib}'")
 NO_LIB_HELP = {k: (f"The {v} library does not appear to be installed. "
@@ -886,9 +886,10 @@ def assemble_GLO_30(path, name = "GLO_30",
     def gettile_aws(lat, lon):
         location = ("http://copernicus-dem-30m.s3.amazonaws.com/")
         path_fmt = "Copernicus_DSM_COG_10_N%02i_00_E%03i_00_DEM/"
-        file_fmt = "Copernicus_DSM_10_N%02i_00_E%03i_00.tif"
+        file_fmt = "Copernicus_DSM_COG_10_N%02i_00_E%03i_00_DEM.tif"
         url = location + path_fmt % (lat, lon) + file_fmt % (lat, lon)
         logger.debug("downloading ... %s" % url)
+        _tools.download(url, os.path.basename(url))
 
     target = os.path.join(path, DEM_FMT % name)
     if not _ass_clear_target(target, replace):
@@ -1055,7 +1056,7 @@ def provide_terrain(source: str, path: str = None,
         elif lic_src == 'file':
             if lic_id in [None, '']:
                 lic_aux = os.path.join(str(
-                    _storage.DIST_AUX_FILES), lic_file)
+                    _storage.DIST_AUX_FILES), dataset.file_license)
             else:
                 lic_aux = os.path.join(str(
                     _storage.DIST_AUX_FILES), lic_id)

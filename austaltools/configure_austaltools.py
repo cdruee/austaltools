@@ -305,16 +305,21 @@ def cli_parser():
                         )
 
 
+
+    more_epilog = ""
     if not DS.have_lib('cdo') or not DS.have_lib('cdsapi'):
-        parser.epilog += f"Source CERRA cannot be assembled. "
+        more_epilog += f"Source CERRA cannot be assembled. "
     if not DS.have_lib('cdsapi'):
-        parser.epilog += f"Source ERA cannot be assembled. "
+        more_epilog += f"Source ERA cannot be assembled. "
     if not DS.have_lib('gdal'):
-        parser.epilog += f"Terrain sources cannot be assembled. "
+        more_epilog += f"Terrain sources cannot be assembled. "
     for x in DS.LIB2IMPORT.keys():
         if not DS.have_lib(x):
-            parser.epilog += DS.NO_LIB_HELP[x]
-
+            more_epilog += DS.NO_LIB_HELP[x]
+    if parser.epilog is None:
+        parser.epilog = more_epilog
+    else:
+        parser.epilog = more_epilog
 
 
 
@@ -339,9 +344,9 @@ def main():
     # set logging level
     if args['verb'] is not None:
         logger.setLevel(args['verb'])
+        logger.warning('level = %s' % logger.getEffectiveLevel())
     else:
         logger.setLevel(logging.WARNING)
-    logger.warning('level = %s' % logger.getEffectiveLevel())
 
     if logger.getEffectiveLevel() <= logging.DEBUG:
         global PROCS
