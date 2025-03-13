@@ -428,9 +428,11 @@ def _available_scan(locs : list = None) -> dict:
     if len(loc_avail) == 0:
         raise ValueError("No locations available")
     available_datasets = {}
+    sp = _tools.Spinner()
     for ds in DATASETS:
         logger.debug(f"scanning for dataset: {ds.name}")
         for loc in reversed(loc_avail):
+            sp.spin()
             logger.debug(f"     ... in location {loc}")
             if ds.storage is None:
                 raise ValueError(f'storage not defined in: {ds.name}')
@@ -442,6 +444,7 @@ def _available_scan(locs : list = None) -> dict:
                     logger.debug(f"                      {path}")
                 else:
                     logger.debug(f"                      ---")
+    sp.end()
 
     return available_datasets
 
@@ -1035,7 +1038,8 @@ def assebmle_srtm(path: str, name="SRTM",
         file_fmt = "N%02iE%03i.SRTMGL1_NC.nc"
         url = download_dir + file_fmt % (lat, lon)
         logger.debug("downloading ... %s" % url)
-        _tools.download(url, os.path.basename(url), usr=usr, pwd=pwd)
+        _tools.download_earthdata(url, os.path.basename(url),
+                                  usr=usr, pwd=pwd)
 
     target = os.path.join(path, DEM_FMT % name)
     if not _ass_clear_target(target, replace):
