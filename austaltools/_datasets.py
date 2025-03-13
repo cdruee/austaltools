@@ -25,6 +25,7 @@ datasets that serve as input for austaltools
       and en on `.tif`
 
 """
+import getpass
 import glob
 import gzip
 import importlib.util
@@ -40,6 +41,7 @@ import tarfile
 import tempfile
 import time
 import zipfile
+from getpass import getpass
 from pathlib import PurePath
 
 import numpy as np
@@ -597,7 +599,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
 
     base_url = '/'.join((args['host'], args['path']))
     if 'check_cert' in args:
-        verify = args['check_cert']
+        verify = _tools.str2bool(args['check_cert'])
     else:
         verify = True
     filelist = args['filelist']
@@ -994,6 +996,66 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
     merge_tiles(target, tile_files)
 
     return
+
+
+# -------------------------------------------------------------------------
+def assebmle_srtm(path: str, name="SRTM",
+                     replace=False, args: dict = {}):
+    """
+    Special function to assemble the SRTM V3 digital elevation model (DEM)
+    from USGS.gov.
+
+    .. note::
+        To run this funtion successfully,
+        the user must have an active EarthData Login account that can be
+        obtained at the NASA earthdata website:
+        <https://urs.earthdata.nasa.gov/users/new>
+
+    :param path:  Path where to generate the file
+    :type path: str
+    :param name: name (code) of the dataset to assemble
+    :type name: str
+    :param replace: If True, an existing file is overwritten.
+        If False, an error is raises if the file already exists.
+    :type replace: bool
+    :param args: Optionally accepted for compatiblity with the
+        general asseble funtion call. Is not evaluated.
+    :type args: dict
+    :return: Success (True) of Failure (False)
+    :rtype: bool
+    """
+    usr = str(input("EarthData username: "))
+    logger.debug(usr)
+    pwd = str(getpass("EarthData password: "))
+    logger.debug(pwd)
+
+    def gettile_usgs(lat, lon):
+        download_dir = ("https://e4ftl01.cr.usgs.gov/"
+                        "MEASURES/SRTMGL1_NC.003/2000.02.11/")
+        file_fmt = "N%02iE%03i.SRTMGL1_NC.nc"
+        url = download_dir + file_fmt % (lat, lon)
+        logger.debug("downloading ... %s" % url)
+        _tools.download(url, os.path.basename(url), usr=usr, pwd=pwd)
+
+    target = os.path.join(path, DEM_FMT % name)
+    if not _ass_clear_target(target, replace):
+        logger.info("skipping because dataset exists: %s" % name)
+        return False
+
+    for lat in range(47, 54):
+        for lon in range(5, 16):
+            ## worked until DEC 2024:
+            # gettile_eu(lat, lon)
+            # working MAR 2025
+            gettile_usgs(lat, lon)
+
+    # merge the GeoTiff Files from all tiles into one file
+    target = os.path.join(path, DEM_FMT % "SRTM")
+    tile_files = glob.glob("*.SRTMGL1_NC.nc")
+    merge_tiles(target, tile_files)
+
+    return
+
 
 
 # -------------------------------------------------------------------------
@@ -2427,7 +2489,7 @@ def process_input(args):
     localstore = provider.get('localstore', None)
     out_res = provider.get('resolution', 25)
     srcsrs = provider.get('CRS', None)
-    if provider.get('utm_remove_zone', 'true') in ['True', 'true', 'yes']:
+    if _tools.str2bool(provider.get('utm_remove_zone', 'true')):
         utm_remove_zone = True
     else:
         utm_remove_zone = False

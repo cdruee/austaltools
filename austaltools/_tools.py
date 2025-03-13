@@ -521,7 +521,7 @@ def str2bool(inp):
 
 # -------------------------------------------------------------------------
 
-def download(url, file):
+def download(url, file, usr=None, pwd=None):
     """
     Downloads a file from a specified URL and saves it
     to a given local file path.
@@ -551,7 +551,19 @@ def download(url, file):
         >>>     print(str(e))
 
     """
-    with requests.get(url, allow_redirects=True) as req:
+    # prepare requests.get parameters
+    params = {
+        'url': url,
+        'allow_redirects': True,
+    }
+    # add basic auth if needed
+    if usr is not None:
+        if pwd is None:
+            raise ValueError("must give pwd if usr is given")
+        params['auth'] = (usr, pwd)
+    # send requests.get
+    logger.debug(str(params))
+    with requests.get(**params) as req:
         if req.status_code == 200:
             with open(file, 'wb') as f:
                 f.write(req.content)

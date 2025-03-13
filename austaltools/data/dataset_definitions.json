@@ -376,6 +376,12 @@
     "license": "spdx:CC-BY-4.0",
     "notice": "How to Cite this Dataset:\nEarth Resources Observation and Science Center/U.S. Geological Survey/U.S. Department of the Interior, 1997: USGS 30 ARC-second Global Elevation Data, GTOPO30. Research Data Archive at the National Center for Atmospheric Research, Computational and Information Systems Laboratory, accessed dd mmm yyyy, https://doi.org/10.5065/A1Z4-EE71.\n"
   },
+  "SRTM": {
+    "storage": "terrain",
+    "assemble": "assebmle_srtm",
+    "license": "spdx:CC0-1.0",
+    "notice": "How to Cite this Dataset:\nNASA JPL (2013). NASA Shuttle Radar Topography Mission Global 1 arc second [Data set]. NASA EOSDIS Land Processes Distributed Active Archive Center. Accessed yyyy-mm-dd from https://doi.org/10.5067/MEaSUREs/SRTM/SRTMGL1.003\n"
+  },
   "ERA5": {
     "split": "years",
     "storage": "weather",
