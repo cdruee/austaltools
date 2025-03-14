@@ -258,8 +258,18 @@ def expand_sequence(string):
             res.append(x)
             x = x + step
     return res
+
 # -------------------------------------------------------------------------
 
+def overlap(first: tuple[int|float,int|float],
+            second: tuple[int|float,int|float]) -> bool:
+    wid =  min(first[1], second[1]) - max(first[0], second[0])
+    if wid > 0.:
+        return True
+    else:
+        return False
+
+# -------------------------------------------------------------------------
 
 def get_buildings(conf):
     """
