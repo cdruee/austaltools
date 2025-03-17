@@ -382,6 +382,12 @@
     "license": "spdx:CC0-1.0",
     "notice": "How to Cite this Dataset:\nNASA JPL (2013). NASA Shuttle Radar Topography Mission Global 1 arc second [Data set]. NASA EOSDIS Land Processes Distributed Active Archive Center. Accessed yyyy-mm-dd from https://doi.org/10.5067/MEaSUREs/SRTM/SRTMGL1.003\n"
   },
+  "AW3D30": {
+    "storage": "terrain",
+    "assemble": "assebmle_aw3d30",
+    "license": "spdx:CC0-1.0",
+    "notice": "The data used for this paper have been provided by the Earth Observation Research Center (EORC) of the Japan Aerospace Exploration Agency (JAXA)."
+  },
   "ERA5": {
     "split": "years",
     "storage": "weather",

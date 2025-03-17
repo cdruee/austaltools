@@ -1131,6 +1131,112 @@ def assebmle_srtm(path: str, name="SRTM",
     return
 
 
+# -------------------------------------------------------------------------
+def assebmle_aw3d30(path: str, name="SRTM",
+                  replace=False, args=None):
+    """
+    Special function to assemble the ALOS Global Digital Surface Model
+    "ALOS World 3D - 30m (AW3D30)" JAXA.
+
+    .. note::
+        To run this funtion successfully,
+        the user must have an active user account can be obtained at the
+        Earth Observation Research Center (EORC) website of the
+        Japan Aerospace Exploration Agency (JAXA):
+        <https://www.eorc.jaxa.jp/ALOS/en/dataset/aw3d30/registration.htm>
+
+    :param path:  Path where to generate the file
+    :type path: str
+    :param name: name (code) of the dataset to assemble
+    :type name: str
+    :param replace: If True, an existing file is overwritten.
+        If False, an error is raises if the file already exists.
+    :type replace: bool
+    :param args: Optionally accepted for compatiblity with the
+        general asseble funtion call. Is not evaluated.
+    :type args: dict
+    :return: Success (True) of Failure (False)
+    :rtype: bool
+    """
+    if args is None:
+        args = {}
+    usr = str(input("eorc.jaxa.jp username: "))
+    logger.debug(usr)
+    pwd = str(getpass("eorc.jaxa.jp password: "))
+    logger.debug(pwd)
+
+    def sig_str(ilat, ilon):
+        ilat = int(ilat)
+        ilon = int(ilon)
+        res = ""
+        if 0 <= ilat <= 90:
+            res += "N{:03d}".format(ilat)
+        elif 0 > ilat >= -90:
+            res += "S{:03d}".format(-ilat)
+        else:
+            raise ValueError("lat outside of valid range -90..90")
+        if 180 < ilon < 360:
+            res += "W{:03d}".format(360 - ilon)
+        elif 0 <= ilon <= 180:
+            res += "E{:03d}".format(ilon)
+        elif -180 <= ilon < 0:
+            res += "W{:03d}".format(-ilon)
+        else:
+            raise ValueError("lon outside of valid range -180..360")
+        return res
+
+    def gettile_jaxa(lat, lon):
+        """
+        helper function to get a tile from usgs servers
+
+        :param lat: latitude of lower left corner of the tile
+        :type lat: int
+        :param lon: longitude of lower left corner of the tile
+        :type lon: int
+        """
+        download_dir = ("https://www.eorc.jaxa.jp/ALOS/aw3d30/data/release_v2404/")
+        file_fmt = "%8s/%8s.zip"
+        lat5 = 5. * np.floor(lat / 5.)
+        lon5 = 5. * np.floor(lon / 5.)
+        ll_str = sig_str(lat, lon)
+        l5_str = sig_str(lat5, lon5)
+        url = download_dir + file_fmt % (l5_str, ll_str)
+        logger.debug("downloading ... %s" % url)
+        dldfile = _tools.download(url, os.path.basename(url),
+                                  usr=usr, pwd=pwd)
+        tifname = "%8s/ALPSMLC30_%8s_DSM.tif" % (ll_str, ll_str)
+        with zipfile.ZipFile(dldfile) as z:
+            logger.debug(z.filelist)
+            # z.extract(tifname, '.')
+            zip_info = z.getinfo(tifname)
+            zip_info.filename = os.path.basename(tifname)
+            z.extract(zip_info, '.')
+
+    target = os.path.join(path, DEM_FMT % name)
+    if not _ass_clear_target(target, replace):
+        logger.info("skipping because dataset exists: %s" % name)
+        return False
+
+    # get lower left corners of the 1 degree tiles
+    latmin = int(np.floor(DEM_WINDOW[0]))
+    latmax = int(np.floor(DEM_WINDOW[1] - 0.00001))
+    lonmin = int(np.floor(DEM_WINDOW[2]))
+    lonmax = int(np.floor(DEM_WINDOW[3] + 0.00001))
+    # for lat in range(latmin, latmax):
+    #     for lon in range(lonmin, lonmax):
+    for lati, long in _tools.progress(list(
+            itertools.product(range(latmin, latmax),
+                              range(lonmin, lonmax)))):
+            gettile_jaxa(lati, long)
+
+    # merge the GeoTiff Files from all tiles into one file
+    target = os.path.join(path, DEM_FMT % "AW3D30")
+    tile_files = glob.glob("*.tif")
+    merge_tiles(target, tile_files)
+
+    return
+
+
 
 # -------------------------------------------------------------------------
 def provide_terrain(source: str, path: str = None,

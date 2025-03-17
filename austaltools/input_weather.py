@@ -199,6 +199,37 @@ def grid_surrounding_nodes(lat: float, lon: float, dims: dict) \
 
 # ----------------------------------------------------
 
+def cloud_type_from_cover(tcc: pd.Series, lmcc: pd.Series) -> pd.Series:
+    """
+    Estimate dominant cloud type from total and low/middle cloud cover
+
+    :param tcc: total cloud cover in 1
+    :type tcc: pd.Series[float]
+    :param lmcc: low/middle cloud cover in 1
+    :type lmcc: pd.Series[float]
+    :return: cloud type
+    :rtype: pd.Series[str]
+    """
+    ratio = lmcc/tcc
+    cty=pd.Series("", index=tcc.index, dtype=str)
+    for i in cty.index:
+        if tcc[i] == 0:
+            # no clouds
+            pass
+        elif tcc[i] <= 0.1:
+            # low clouds not reported < 0.1
+            cty[i] = 'CI'
+        elif ratio[i] > 0.80:
+            # majority of the energy from low clouds
+            cty[i] = 'CU'
+        else:
+            # mainority of the energy from low clouds
+            cty[i] = 'CI'
+    return cty
+
+
+# ----------------------------------------------------
+
 def grid_calulate_weights(pos: list, inter_variant=None) -> list[float]:
     """
     calculate the weights for barycentrict averaging of the
@@ -955,9 +986,15 @@ def austal_weather(args):
     if all([x in obs.columns for x in ['v10', 'tcc', 'lmcc']]):
         logger.info('Method: kms')
         methods_available.append('kms')
+        if 'cty' in obs:
+            cty = obs['cty']
+        elif 'lmcc' in obs and 'tcc' in obs:
+            cty = cloud_type_from_cover(tcc=obs['tcc'], lmcc=obs['lmcc'])
+        else:
+            cty = None
         obs['kms'] = dis.klug_manier_scheme_2017(
             obs.index, obs['v10'], obs['tcc'],
-            lat, lon, ele, obs['lmcc']
+            lat, lon, ele, cty=cty
         )
     #
     # kmo -----------------------------

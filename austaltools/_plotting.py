@@ -2,6 +2,7 @@ import argparse
 import importlib.util
 import logging
 import os
+import sys
 
 import pandas as pd
 
@@ -31,24 +32,32 @@ def have_matplotlib():
     else:
       return True
 # ----------------------------------------------------
-have_display = False
 matplotlib = None
+colors = None
+patches = None
 plt = None
 def import_matplotlib():
+    """ import a libray that is installed
+    :param lib: name of libray
+    :type lib: str
+    """
     try:
-        import matplotlib
+        globals()['matplotlib'] = importlib.import_module('matplotlib')
         if os.name == 'posix' and "DISPLAY" not in os.environ:
             matplotlib.use('Agg')
             have_display = False
         else:
             have_display = True
-        import matplotlib.colors
-        import matplotlib.patches
-        import matplotlib.pyplot as plt
-        return True
+        for k,v in {'colors': 'matplotlib.colors',
+                    'patches': 'matplotlib.patches',
+                    'plt': 'matplotlib.pyplot'}.items():
+            globals()[k] = importlib.import_module(v)
+        logger.debug("importing matplotlib")
     except ImportError:
-        return False
-
+        sys.tracebacklimit = 0
+        raise EnvironmentError(f"matplotlib not found. "
+                               f"Run `pip install matplotlib` to install.")
+    return have_display
 
 # -------------------------------------------------------------------------
 
@@ -313,8 +322,10 @@ def common_plot(args: dict,
 
 
     """
-    if not have_matplotlib:
+    logger.debug(f"Found matplotlib: {have_matplotlib()}")
+    if not have_matplotlib():
         raise EnvironmentError('matplotlib not available, cannot plot')
+    have_display = import_matplotlib()
     if args["plot"] == "__show__" and not have_display:
         raise EnvironmentError('no display, cannot show plot')
 
@@ -376,7 +387,7 @@ def common_plot(args: dict,
                            levels=levels,
                            cmap=cmap,
                            extend='both',
-                           norm=matplotlib.colors.PowerNorm(.66)
+                           norm=colors.PowerNorm(.66)
                            )
         plt.colorbar(img, label=unit, extend='both')
     elif args['kind'] == "grid":
@@ -384,7 +395,7 @@ def common_plot(args: dict,
                          datz.T,
                          shading="nearest",
                          cmap=cmap,
-                         norm=matplotlib.colors.PowerNorm(.66)
+                         norm=colors.PowerNorm(.66)
                          )
         plt.colorbar(img, label=unit, extend='both', boundaries=levels)
     else:
@@ -433,7 +444,7 @@ def common_plot(args: dict,
     if buildings is not None:
         for bb in buildings:
             ax.add_patch(
-                matplotlib.patches.Rectangle(
+                patches.Rectangle(
                     xy=(bb.x, bb.y),
                     width=bb.a,
                     height=bb.b,
