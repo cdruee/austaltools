@@ -1966,6 +1966,62 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
                                           mode='w'))
 
 # -------------------------------------------------------------------------
+def assemble_try(path: str, name="TRY", years: list = None,
+                 replace : bool = False, args=None):
+    """
+    Downloads, extracts, and merges DWD-TRY dataset reanalysis for specified
+    years into single NetCDF files per year.
+
+    :param path: The path where the final merged NetCDF files
+      will be stored.
+    :type path: str
+    :param name: name (code) of the dataset to assemble
+    :type name: str
+    :param years: A list of years (integer) for which DWD data should
+      be downloaded and processed.
+    :type years: list
+    :param replace: If True, an existing file is overwritten.
+        If False, an error is raises if the file already exists.
+    :type replace: bool
+    :param args: Optionally accepted for compatiblity with the
+        general asseble funtion call. Is not evaluated.
+    :type args: dict
+
+    :raises ValueError: If any of the years specified is outside the
+      valid range (1940 to the current year).
+
+    - This function assumes that a global `_tools.TEMP` variable is defined and
+      points to a valid temporary directory for intermediate files.
+
+    """
+    # check years
+    if args is None:
+        args = {}
+    if years is None:
+        if 'years' in args:
+            years = args['years']
+        else:
+            raise ValueError(f"years is required for TRY dataset")
+    # check database
+    target = os.path.join(path, OBS_FMT % name)
+    if not _ass_clear_target(target, replace):
+        logger.info("skipping because dataset exists: %s" % name)
+        return False
+
+
+    logger.info("fetching data")
+    for station in _tools.progress(station_numbers):
+        dat_in, meta_in =_fetch_dwd_obs.fetch_station(station,
+                                                      store=False)
+        df = _fetch_dwd_obs.build_table(dat_in, meta_in, years)
+
+        with zipfile.ZipFile(target,
+                             mode='a',
+                             compression=zipfile.ZIP_DEFLATED) as zf:
+            df.to_csv(path_or_buf=zf.open("%05i.csv" % station,
+                                          mode='w'))
+
+# -------------------------------------------------------------------------
 def provide_weather(source: str, path: str = None,
                     years: list = None,
                     force: bool = False, method: str = 'download'):
