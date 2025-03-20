@@ -46,6 +46,15 @@ storage directories that hold data inside the storage locations
 """
 TEMP = tempfile.gettempdir()
 """ default path for temp files/dierctories """
+SIMPLE_DEFAULT_WEATHER = 'CERRA'
+""" default weather source in austaltools simple """
+SIMPLE_DEFAULT_YEAR = 2003
+""" default weather year in austaltools simple """
+SIMPLE_DEFAULT_TERRAIN = 'DGM25-DE'
+""" default terrain source in austaltools simple """
+SIMPLE_DEFAULT_EXTENT = 10.
+""" default terrain extent in austaltools simple """
+
 
 # =========================================================================
 
