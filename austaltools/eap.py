@@ -17,13 +17,13 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 from time import sleep
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
     import pandas as pd
-    from scipy import ndimage
 
     import meteolib
 
@@ -106,7 +106,89 @@ def same_sense_rotation(val, ref):
 
 
 # -------------------------------------------------------------------------
+def contiguous_areas(array: np.array) -> np.array:
+    """
+    Identify and label contiguous areas in a 2D binary array.
 
+    This function takes a binary (boolean) 2D NumPy array as input and
+    assigns a unique label to each contiguous region of adjacent 'True'
+    values (considering 4-connectivity: top, bottom, left, right). The
+    function returns a labeled array where each contiguous region has a
+    unique integer label and the total number of unique contiguous areas.
+
+    :param array: A 2D NumPy array of boolean values. Each 'True' or '1'
+      in the array represents a part of a contiguous region, while 'False'
+      or '0' represents the background.
+    :type array: np.array
+    :return: A tuple containing:
+      - A 2D array of integers of the same shape as the input where each
+        contiguous region of 'True' values is labeled with a unique
+        integer.
+      - The number of unique contiguous labeled areas in the input array.
+    :rtype: Tuple[np.array, int]
+
+    :notes: The function uses the union-find algorithm with path
+      compression for efficient region labeling. The `getroot` helper
+      function finds the root label of a given label to ensure each part
+      of a contiguous area is assigned the same label.
+
+    :examples:
+
+        >>> import numpy as np
+        >>> array = np.array([[1, 0, 0], [1, 1, 0], [0, 1, 1]])
+        >>> contiguous_areas(array)
+        (array([[0, -1, -1], [0, 0, -1], [-1, 0, 0]]), 1)
+    """
+    nx, ny = array.shape
+    # initialize labels as with -1 = not an area
+    labels = np.full((nx, ny), -1, dtype=int)
+    # parents dictionary
+    parent = {}
+    # starting value = 0
+    next_label = 0
+
+    def getroot (parent, label):
+        # find the root of the label
+        while parent[label] != label:
+            label = parent[label]
+        return label
+
+    # pass 1: assign preliminary labels
+    for i in range(nx):
+        for j in range(ny):
+            if array[i, j]:
+                # check the neighbors up and left
+                neighbors = []
+                if i > 0 and array[i-1, j]:
+                    neighbors.append(labels[i-1, j])
+                if j > 0 and array[i, j-1]:
+                    neighbors.append(labels[i, j-1])
+
+                if not neighbors:
+                    # next area label
+                    labels[i, j] = next_label
+                    parent[next_label] = next_label
+                    next_label += 1
+                else:
+                    # assign point the min neigbour labels
+                    min_label = min(neighbors)
+                    labels[i, j] = min_label
+                    # make the neighbour labels uniform
+                    for n in neighbors:
+                        root_n = getroot (parent, n)
+                        root_min = getroot (parent, min_label)
+                        if root_n != root_min:
+                            parent[root_n] = root_min
+
+    # pass 1: Resolve labels to their roots
+    for i in range(nx):
+        for j in range(ny):
+            if labels[i, j] != -1:
+                labels[i, j] = getroot (parent, labels[i, j])
+
+    return labels, np.max(labels)+1
+
+# -------------------------------------------------------------------------
 
 def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
                          nedge=N_EGDE_NODES, minff=MIN_FF,
@@ -157,26 +239,26 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
     if not (nz, nstab, ndir) == np.shape(u_ref):
         raise ValueError('wind grid shape does not match wind grid shape')
 
-    # create result
+    # create empty result field
     keep = np.full((nx, ny, nz, nstab, ndir), 1.)
 
     # VDI 3783 pt 16 sct 6.1
-    # 1) Only grid points inside the largest calculation
-    # area without the three outer boundary points are
-    # considered.
+    # `1) Only grid points inside the largest calculation
+    #  area without the three outer boundary points are
+    #  considered.`
     keep[:nedge, :, :, :, :] = np.nan
     keep[:, :nedge, :, :, :] = np.nan
     keep[-nedge:, :, :, :, :] = np.nan
     keep[:, -nedge:, :, :, :] = np.nan
 
     # VDI 3783 pt 16 sct 6.1
-    # 2) All grid points are rejected at which the wind
-    # does not rotate in the same sense with every
-    # rotation of the undisturbed flow direction or at
-    # which in at least one of the wind fields the wind
-    # speed is below 0,5 m · s–1. The rest of the steps
-    # are performed only for the remaining grid
-    # points.
+    # `2) All grid points are rejected at which the wind
+    #  does not rotate in the same sense with every
+    #  rotation of the undisturbed flow direction or at
+    #  which in at least one of the wind fields the wind
+    #  speed is below 0,5 m · s–1. The rest of the steps
+    #  are performed only for the remaining grid
+    #  points.`
     for ibar in _tools.progress(range(nz_eval * nstab),
                                 desc="do quality measure "):
         iz = ibar // nstab
@@ -203,10 +285,10 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
     u_keep = u_grid * keep
     v_keep = v_grid * keep
 
-    # 3) At each grid point, the quality criteria gd (for the
-    # wind direction) and gf (for the wind speed) are
-    # calculated over all undisturbed flow sectors and
-    # stability classes:
+    # `3) At each grid point, the quality criteria gd (for the
+    #  wind direction) and gf (for the wind speed) are
+    #  calculated over all undisturbed flow sectors and
+    #  stability classes:`
     u_ref3d = np.broadcast_to(u_ref, (nx, ny, nz, nstab, ndir))
     v_ref3d = np.broadcast_to(v_ref, (nx, ny, nz, nstab, ndir))
     sumw = np.sum(np.sum(u_keep + v_keep, axis=4), axis=3)
@@ -229,14 +311,14 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
 
     ff_grid = np.sqrt(u_keep ** 2 + v_keep ** 2)
     ff_ref3d = np.broadcast_to(np.sqrt(u_ref ** 2 + v_ref ** 2), np.shape(ff_grid))
-    beta_v = np.mean(np.mean(ff_grid / ff_ref3d, axis=4), axis=3)
-    gf = np.minimum(beta_v, 1 / beta_v)
+    beta_v = np.nanmean(np.nanmean(ff_grid / ff_ref3d, axis=4), axis=3)
+    gf = np.minimum(beta_v, 1. / beta_v)
 
-    # 4) The quality criteria gd and gf are combined into
-    # an overall criterion g = gd · gf. g always lies in
-    # the interval [0,1], where 0 means no agreement
-    # and 1 perfect agreement with the one-dimensional
-    # reference profiles.
+    # `4) The quality criteria gd and gf are combined into
+    #  an overall criterion g = gd · gf. g always lies in
+    #  the interval [0,1], where 0 means no agreement
+    #  and 1 perfect agreement with the one-dimensional
+    #  reference profiles.'
     g = gf * gd
 
     return g, gd, gf
@@ -278,40 +360,42 @@ def find_eap(g_lower):
         [2.4, 1.6, 1.3]
     """
     #
-    # 5) Within each individual contiguous region with
-    # the wind direction rotating in the same sense,
-    # the overall criteria g are added up to G.
-    # ones = np.prod(np.prod(keep * 1, axis=4), axis=3)
-    ones = np.isfinite(g_lower) * 1
-    label, num_features = ndimage.label(ones)
-    if num_features > 0:
-        g_upper = ndimage.labeled_comprehension(g_lower,
-                                                label,
-                                                range(1, num_features + 1),
-                                                np.nansum,
-                                                float,
-                                                0)
-
-        # In the contiguous region with the largest sum G,
-        # the grid point that exhibits the largest g is found.
-        # This location is defined as EAP.
-        # get index sort order (largest value first)
+    # `5) Within each individual contiguous region with
+    #  the wind direction rotating in the same sense,
+    #  the overall criteria g are added up to G.`
+    #
+    # make array contents boolean
+    good = np.isfinite(g_lower)
+    # get map of labels (label=area number) and number of areas
+    label, num_areas = contiguous_areas(good)
+    # if there is at least one area
+    if num_areas > 0:
+        # add up the values of every area to G(area)
+        g_upper = [np.nansum(g_lower[label == i]) for i in range(num_areas)]
+        # `In the contiguous region with the largest sum G,
+        #  the grid point that exhibits the largest g is found.
+        #  This location is defined as EAP.`
+        #
+        #  get index sort order (largest value first)
         g_upper_descending_indexes = np.argsort(g_upper)[::-1]
-        # ! maximum_position raises meaningless Index error
-        #   if nan values are in the array
-        g_notnan = g_lower
-        g_notnan[np.isnan(g_notnan)] = 0
-        # ! label is 1-based but index in g_upper_max is 0-based -> add 1
-        eap = [ndimage.maximum_position(g_notnan,
-                                        label,
-                                        x + 1)
-               for x in g_upper_descending_indexes]
+        # create sorted list of G(area)
+        g_upper_sort = [g_upper[x] for x in g_upper_descending_indexes]
+        # find max position for each label
+        # ... make copy of g_lower that has zeroes insetad of nans
+        g_lower_no_nan = g_lower
+        g_lower_no_nan[np.isnan(g_lower)] = 0.
+        # ... max location for every area EAP(area) in descending oder of G
+        eap = [
+            np.unravel_index(
+                np.multiply(g_lower_no_nan, label == x).argmax(),
+                g_lower.shape
+            ) for x in g_upper_descending_indexes
+        ]
     else:
         eap = []
-        g_upper = []
+        g_upper_sort = []
 
-    return eap, g_upper
-
+    return eap, g_upper_sort
 
 # -------------------------------------------------------------------------
 
@@ -408,7 +492,7 @@ def interpolate_wind(u_in: list, v_in: list, z_in: list, levels: list):
     v_out = []
     for ilev, lev in enumerate(levels):
         if lev in z_in:
-            i1 = z_in.index(lev)
+            i1 = list(z_in).index(lev)
             u = u_in[i1]
             v = v_in[i1]
         elif lev > 0:
@@ -420,8 +504,9 @@ def interpolate_wind(u_in: list, v_in: list, z_in: list, levels: list):
                 i1 = len(z_in) - 2
                 i2 = len(z_in) - 1
             else:
-                i1 = np.searchsorted(np.array(z_in), lev, 'left')
-                i2 = np.searchsorted(np.array(z_in), lev, 'right')
+                i2 = np.searchsorted(np.array(z_in), lev)
+                i1 = i2 - 1
+
             # convert to reference heights (index of ref dataframe)
             z1 = z_in[i1]
             z2 = z_in[i2]
@@ -635,7 +720,7 @@ def run_austal(workdir, tmproot=None):
 
     file_info = _tools.wind_files(os.path.join(tmpdir, 'lib'))
     u_tmp, v_tmp, ax_tmp = _tools.read_wind(
-        file_info, os.path.join(tmpdir, 'lib'))
+        file_info, os.path.join(tmpdir, 'lib'), centers=True)
 
     shutil.rmtree(tmpdir)
     logger.debug('removed temp directory: %s' % tmpdir)
@@ -842,7 +927,9 @@ def read_ref(file, levels, dirs):
     ref_dd.columns = ref_id
     # FIXME is that choice OK?
     # we can only safely use levels above max value of z0
-    ref_min_z_level = min(df.index[df.index > 2])
+    # ref_min_z = 2.
+    # use all:
+    ref_min_z = -9999.
 
     # shape of reference wind profiles: (nz, nstab, ndir)
     u_ref = np.full((nlev, N_CLASS, ndir), np.nan)
@@ -858,8 +945,8 @@ def read_ref(file, levels, dirs):
                 diff_dir = (((d - ref_dir[i]) + 180.) % 360.) - 180.
                 if ref_stab[i] == istab and abs(diff_dir) < abs(diff_min):
                     # this is the selected reference profile:
-                    rf = ref_ff[rid][ref_min_z_level:]
-                    rd = ref_dd[rid][ref_min_z_level:] + diff_dir
+                    rf = ref_ff[rid][ref_ff.index > ref_min_z]
+                    rd = ref_dd[rid][ref_ff.index > ref_min_z] + diff_dir
                     diff_min = diff_dir
             if diff_min == 360.:
                 raise ValueError('no reference profile for ' +
@@ -867,8 +954,15 @@ def read_ref(file, levels, dirs):
                                  _dispersion.KM2021.name(istab + 1))
             uf, vf = meteolib.wind.dir2uv(rf, rd)
 
-            u_ref[:, istab, idir], v_ref[:, istab, idir] = \
-                interpolate_wind(uf, vf, rf.index.values, levels)
+            if rf.index.values[0] <= 0.01:
+                i0 = 1
+            else:
+                i0 = 0
+            # u_ref[:, istab, idir], v_ref[:, istab, idir] = \
+            #    interpolate_wind(uf[i0:], vf[i0:],
+            #                     rf.index.values[i0:], levels)
+            u_ref[:, istab, idir] = np.interp(levels, rf.index.values, uf)
+            v_ref[:, istab, idir] = np.interp(levels, rf.index.values, vf)
     return u_ref, v_ref
 
 # -------------------------------------------------------------------------
@@ -896,6 +990,17 @@ def write_ref(file, out_levels, out_dirs, u_ref, v_ref, axes_ref):
       as out by `read_wind` and `read_grid`
     :type axes_ref: dict[numpy.ndarray]
     """
+
+    if os.path.exists(file):
+        logger.debug('file %s already exists' % file)
+        yesno = ""
+        while yesno not in ["y", "n"]:
+           yesno = _tools.prompt_timeout(
+               f'replace {file} [y]/n ?', 10 , 'n')
+        if yesno != "y":
+            logger.critical('aborting')
+            sys.exit(0)
+
     logger.debug("writing wind reference file")
     levels, stabs, dirs = axes_ref
     ndir = len(dirs)
@@ -1031,15 +1136,17 @@ def main(args):
     file_info = _tools.wind_files(lib_dir)
     directions = [float(x) * 10.
                   for x in sorted(list(set(file_info["wdir"])))]
-    u_grid, v_grid, axes = _tools.read_wind(file_info, path=lib_dir,
-                                     grid=int(args['grid']))
+    u_grid, v_grid, axes = _tools.read_wind(file_info,
+                                            path=lib_dir,
+                                            grid=int(args['grid']),
+                                            centers=True)
     #
     # get the reference profile
     #
     if args['reference'] == 'simple':
         u_ref, v_ref = calc_ref(axes['z'], directions)
     elif args['reference'] == 'file':
-        u_ref, v_ref = read_ref('/local/data/druee/software/austaltools/TAL-Anemo/Ref1d.dat', axes['z'], directions)
+        u_ref, v_ref = read_ref('Ref1d.dat', axes['z'], directions)
     elif args['reference'] == 'austal':
         u_ref, v_ref = austal_ref(working_dir, axes['z'], directions, tmproot=working_dir)
     else:
@@ -1058,10 +1165,21 @@ def main(args):
     eaps, g_upper = calc_all_eap(g, mx_lvl)
 
     #
+    # show results on screen
+    if args['report']:
+        print_report(args, g, gd, gf, eaps, g_upper, axes)
+
+
+    #
     # select level closest to height
     #
     if args['height'] is None:
-        wind_height = _tools.read_heff(working_dir)
+        try:
+            wind_height = _tools.read_heff(working_dir)
+        except IOError as e:
+            logger.error('cannot determine h_eff from cinfiguration. '
+                         'Use -z to give height manually.')
+            raise e
     else:
         wind_height = float(args['height'])
     dz_old = np.nanmax(axes['z'])
@@ -1072,11 +1190,6 @@ def main(args):
             selected_level = lvl
             dz_old = dz
     logger.info(f'selected_level: {selected_level}')
-
-    #
-    # show results on screen
-    if args['report']:
-        print_report(args, g, gd, gf, eaps, g_upper, axes)
 
     #
     # create plot
@@ -1106,7 +1219,7 @@ def main(args):
             logger.debug('select to write plot to default filename')
         else:
             logger.debug('select to write plot to custom filename')
-            _plotting.common_plot(args, dat=dat_dict, mark=pos_dict, scale=scale)
+        _plotting.common_plot(args, dat=dat_dict, mark=pos_dict, scale=scale)
     else:
         logger.info('nothing selected, skipping plot')
 
