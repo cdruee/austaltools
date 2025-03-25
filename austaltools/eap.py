@@ -22,8 +22,9 @@ import tempfile
 import warnings
 from time import sleep
 
+import numpy as np
+
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    import numpy as np
     import pandas as pd
 
     import meteolib
