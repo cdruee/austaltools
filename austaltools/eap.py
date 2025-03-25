@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import warnings
 from time import sleep
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
@@ -74,6 +75,7 @@ roughness lenght $z_0$ used for the calculation of reference wind
 profiles, corresponding to CORINE class 231 "short grass",
 according to VDI 3783 part 8 [VDI3783p8]_
 """
+
 
 # -------------------------------------------------------------------------
 
@@ -146,7 +148,7 @@ def contiguous_areas(array: np.ndarray[bool]) -> (np.ndarray[int], int):
     # starting value = 0
     next_label = 0
 
-    def getroot (mother, label):
+    def getroot(mother, label):
         """ Helper function: find the root of the label """
         while mother[label] != label:
             label = mother[label]
@@ -158,10 +160,10 @@ def contiguous_areas(array: np.ndarray[bool]) -> (np.ndarray[int], int):
             if array[i, j]:
                 # check the neighbors up and left
                 neighbors = []
-                if i > 0 and array[i-1, j]:
-                    neighbors.append(labels[i-1, j].item())
-                if j > 0 and array[i, j-1]:
-                    neighbors.append(labels[i, j-1].item())
+                if i > 0 and array[i - 1, j]:
+                    neighbors.append(labels[i - 1, j].item())
+                if j > 0 and array[i, j - 1]:
+                    neighbors.append(labels[i, j - 1].item())
 
                 if not neighbors:
                     # next area label
@@ -174,8 +176,8 @@ def contiguous_areas(array: np.ndarray[bool]) -> (np.ndarray[int], int):
                     labels[i, j] = min_label
                     # make the neighbour labels uniform
                     for n in neighbors:
-                        root_n = getroot (parent, n)
-                        root_min = getroot (parent, min_label)
+                        root_n = getroot(parent, n)
+                        root_min = getroot(parent, min_label)
                         if root_n != root_min:
                             parent[root_n] = root_min
 
@@ -183,9 +185,10 @@ def contiguous_areas(array: np.ndarray[bool]) -> (np.ndarray[int], int):
     for i in range(nx):
         for j in range(ny):
             if labels[i, j] != -1:
-                labels[i, j] = getroot (parent, labels[i, j])
+                labels[i, j] = getroot(parent, labels[i, j])
 
-    return labels, np.max(labels)+1
+    return labels, np.max(labels) + 1
+
 
 # -------------------------------------------------------------------------
 
@@ -292,7 +295,8 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
     v_ref3d = np.broadcast_to(v_ref, (nx, ny, nz, nstab, ndir))
     sumw = np.sum(np.sum(u_keep + v_keep, axis=4), axis=3)
     sumw2 = np.sum(np.sum(u_keep ** 2 + v_keep ** 2, axis=4), axis=3)
-    sumwr = np.sum(np.sum(u_keep * u_ref3d + v_keep * v_ref3d, axis=4), axis=3)
+    sumwr = np.sum(
+        np.sum(u_keep * u_ref3d + v_keep * v_ref3d, axis=4), axis=3)
     sumr = np.sum(np.sum(u_ref3d + v_ref3d, axis=4), axis=3)
     sumr2 = np.sum(np.sum(u_ref3d ** 2 + v_ref3d ** 2, axis=4), axis=3)
     korr = float(2 * nstab * ndir)
@@ -301,17 +305,23 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
         if iz <= nz_eval:
             for iy in range(ny):
                 for ix in range(nx):
-                    cov_wr = sumwr[ix, iy, iz] - (sumr[ix, iy, iz] * sumw[ix, iy, iz]) / korr
-                    var_r = sumr2[ix, iy, iz] - (sumr[ix, iy, iz] ** 2) / korr
-                    war_w = sumw2[ix, iy, iz] - (sumw[ix, iy, iz] ** 2) / korr
+                    cov_wr = sumwr[ix, iy, iz] - (
+                            sumr[ix, iy, iz] * sumw[ix, iy, iz]) / korr
+                    var_r = sumr2[ix, iy, iz] - (
+                            sumr[ix, iy, iz] ** 2) / korr
+                    war_w = sumw2[ix, iy, iz] - (
+                            sumw[ix, iy, iz] ** 2) / korr
                     gd[ix, iy, iz] = (cov_wr ** 2) / (var_r * war_w)
         else:
             gd[:, :, iz] = np.nan
 
     ff_grid = np.sqrt(u_keep ** 2 + v_keep ** 2)
-    ff_ref3d = np.broadcast_to(np.sqrt(u_ref ** 2 + v_ref ** 2), np.shape(ff_grid))
-    beta_v = np.nanmean(np.nanmean(ff_grid / ff_ref3d, axis=4), axis=3)
-    gf = np.minimum(beta_v, 1. / beta_v)
+    ff_ref3d = np.broadcast_to(np.sqrt(u_ref ** 2 + v_ref ** 2),
+                               np.shape(ff_grid))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        beta_v = np.nanmean(np.nanmean(ff_grid / ff_ref3d, axis=4), axis=3)
+        gf = np.minimum(beta_v, 1. / beta_v)
 
     # `4) The quality criteria gd and gf are combined into
     #  an overall criterion g = gd · gf. g always lies in
@@ -370,7 +380,8 @@ def find_eap(g_lower: np.ndarray[float]):
     # if there is at least one area
     if num_areas > 0:
         # add up the values of every area to G(area)
-        g_upper = [np.nansum(g_lower[label == i]) for i in range(num_areas)]
+        g_upper = [np.nansum(g_lower[label == i]) for i in
+                   range(num_areas)]
         # `In the contiguous region with the largest sum G,
         #  the grid point that exhibits the largest g is found.
         #  This location is defined as EAP.`
@@ -395,6 +406,7 @@ def find_eap(g_lower: np.ndarray[float]):
         g_upper_sort = []
 
     return eap, g_upper_sort
+
 
 # -------------------------------------------------------------------------
 
@@ -543,7 +555,8 @@ class GridASCII(object):
     """Path to the ASCII file."""
     data = None
     """ grided data """
-    _keys = ["ncols", "nrows", "xllcorner", "yllcorner", "cellsize", "NODATA_value"]
+    _keys = ["ncols", "nrows", "xllcorner", "yllcorner", "cellsize",
+             "NODATA_value"]
     header = {x: None for x in _keys}
     """Dictionary containing header information."""
 
@@ -578,7 +591,8 @@ class GridASCII(object):
                 elif k in self._keys:
                     self.header[k] = v
                 else:
-                    raise ValueError('unknown header value in file: %s' % k)
+                    raise ValueError(
+                        'unknown header value in file: %s' % k)
 
     def write(self, file=None):
         """
@@ -672,7 +686,8 @@ def run_austal(workdir, tmproot=None):
     topo.write(os.path.join(tmpdir, topo_file))
 
     # copy weather file
-    shutil.copy(os.path.join(workdir, akterm_file), os.path.join(tmpdir, akterm_file))
+    shutil.copy(os.path.join(workdir, akterm_file),
+                os.path.join(tmpdir, akterm_file))
 
     # start austal model
     austal = shutil.which('austal')
@@ -793,6 +808,7 @@ def austal_ref(workdir, levels, dirs, tmproot=None):
 
     return u_ref, v_ref
 
+
 # -------------------------------------------------------------------------
 
 def calc_ref(levels, dirs):
@@ -872,7 +888,8 @@ def calc_ref(levels, dirs):
                                         z=h_ref,
                                         zoL=h_ref / l_ob[istab])
         for idir, wdir in enumerate(dirs):
-            d_20 = d_h[istab] * 1.58 * (1. - np.exp(-1.0 * 20. / val_z_i[istab]))
+            d_20 = d_h[istab] * 1.58 * (
+                        1. - np.exp(-1.0 * 20. / val_z_i[istab]))
             for iz, z in enumerate(levels):
                 if z < (ww.z0 + ww.d):
                     ff = 0
@@ -880,7 +897,8 @@ def calc_ref(levels, dirs):
                     ff = ww.u(h_ref)
                 else:
                     ff = ww.u(z)
-                d_z = d_h[istab] * 1.58 * (1. - np.exp(-1.0 * z / val_z_i[istab]))
+                d_z = d_h[istab] * 1.58 * (
+                            1. - np.exp(-1.0 * z / val_z_i[istab]))
                 dd = wdir - d_20 + d_z
                 logger.debug(str([istab, idir, z, ff, dd]))
                 (u_ref[iz, istab, idir],
@@ -889,6 +907,7 @@ def calc_ref(levels, dirs):
     write_ref("Ref1d.dat", levels, dirs, u_ref, v_ref,
               (levels, [x for x in range(N_CLASS)], dirs))
     return u_ref, v_ref
+
 
 # -------------------------------------------------------------------------
 
@@ -958,8 +977,10 @@ def read_ref(file: str, levels: list[float], dirs: list[float],
             uf, vf = meteolib.wind.dir2uv(rf, rd)
 
             if linear_interpolation:
-                u_ref[:, istab, idir] = np.interp(levels, rf.index.values, uf)
-                v_ref[:, istab, idir] = np.interp(levels, rf.index.values, vf)
+                u_ref[:, istab, idir] = np.interp(levels, rf.index.values,
+                                                  uf)
+                v_ref[:, istab, idir] = np.interp(levels, rf.index.values,
+                                                  vf)
             else:
                 # get index of first height that is > 0
                 i0 = np.argmax(rf.index.values > 0)
@@ -968,6 +989,7 @@ def read_ref(file: str, levels: list[float], dirs: list[float],
                                      rf.index.values[i0:], levels)
 
     return u_ref, v_ref
+
 
 # -------------------------------------------------------------------------
 
@@ -1007,9 +1029,9 @@ def write_ref(file: str, out_levels: list[float] | np.ndarray,
         logger.debug('file %s already exists' % file)
         yesno = ""
         while yesno not in ["y", "n"]:
-           yesno = _tools.prompt_timeout(
-               f'replace {file} [y]/n ?', 10 , 'n')
-        if yesno != "y":
+            yesno = _tools.prompt_timeout(
+                f'replace {file} [y]/n ?', 10, 'y')
+        if yesno == "n":
             logger.critical('aborting')
             sys.exit(0)
 
@@ -1040,6 +1062,7 @@ def write_ref(file: str, out_levels: list[float] | np.ndarray,
             if levels[ilev] not in out_levels:
                 continue
             fid.write(line + "\n")
+
 
 # -------------------------------------------------------------------------
 
@@ -1132,6 +1155,7 @@ def print_report(args: dict, g: np.ndarray, gd: np.ndarray,
                   '...................................'
                   '.........................')
 
+
 # -------------------------------------------------------------------------
 
 def main(args):
@@ -1164,9 +1188,11 @@ def main(args):
         u_ref, v_ref = read_ref('Ref1d.dat', axes['z'], directions,
                                 linear_interpolation=vdi)
     elif args['reference'] == 'austal':
-        u_ref, v_ref = austal_ref(working_dir, axes['z'], directions, tmproot=working_dir)
+        u_ref, v_ref = austal_ref(working_dir, axes['z'], directions,
+                                  tmproot=working_dir)
     else:
-        raise ValueError('unknown kind of reference: %s' % args['reference'])
+        raise ValueError(
+            'unknown kind of reference: %s' % args['reference'])
     #
     # find EAPs for each level
     #
@@ -1185,16 +1211,16 @@ def main(args):
     if args['report']:
         print_report(args, g, gd, gf, eaps, g_upper, axes)
 
-
     #
     # select level closest to height
     #
     if args['height'] is None:
         try:
             wind_height = _tools.read_heff(working_dir)
-        except IOError as e:
-            logger.error('cannot determine h_eff from cinfiguration. '
+        except (IOError, FileNotFoundError) as e:
+            logger.error('cannot determine h_eff from configuration. '
                          'Use -z to give height manually.')
+            sys.tracebacklimit = 0
             raise e
     else:
         wind_height = float(args['height'])
@@ -1235,19 +1261,20 @@ def main(args):
             logger.debug('select to write plot to default filename')
         else:
             logger.debug('select to write plot to custom filename')
-        _plotting.common_plot(args, dat=dat_dict, mark=pos_dict, scale=scale)
+        _plotting.common_plot(args, dat=dat_dict, mark=pos_dict,
+                              scale=scale)
     else:
         logger.info('nothing selected, skipping plot')
+
 
 # -------------------------------------------------------------------------
 
 def add_options(subparsers):
-
     pars_eap = subparsers.add_parser(
         name='eap',
         help='find substitute anemometer position ' +
-                    'according to VDI 3783 Part 16 ' +
-                    'from a wind library generated by AUSTAL')
+             'according to VDI 3783 Part 16 ' +
+             'from a wind library generated by AUSTAL')
     pars_eap.add_argument('-g', '--grid',
                           metavar='ID',
                           nargs='?',
@@ -1273,22 +1300,22 @@ def add_options(subparsers):
                           help='show detailed results')
     pars_adv_eap = pars_eap.add_argument_group('advanced options')
     pars_adv_eap.add_argument('--edge-nodes',
-                          default=N_EGDE_NODES,
-                          nargs='?',
-                          help='number of edge nodes along each side, '
-                               'where data are exluded. ' +
-                               'Defaults to %i' % N_EGDE_NODES)
+                              default=N_EGDE_NODES,
+                              nargs='?',
+                              help='number of edge nodes along each side, '
+                                   'where data are exluded. ' +
+                                   'Defaults to %i' % N_EGDE_NODES)
     pars_adv_eap.add_argument('--max-height',
-                          default=MAX_HEIGHT,
-                          nargs='?',
-                          help='maximum height to evaluate EAP. ' +
-                               'Defaults to %f' % MAX_HEIGHT)
+                              default=MAX_HEIGHT,
+                              nargs='?',
+                              help='maximum height to evaluate EAP. ' +
+                                   'Defaults to %f' % MAX_HEIGHT)
     pars_adv_eap.add_argument('--min-ff',
-                          default=MIN_FF,
-                          nargs='?',
-                          help='minimum wind speed below which data are '
-                               'exluded. ' +
-                               'Defaults to %f' % MIN_FF)
+                              default=MIN_FF,
+                              nargs='?',
+                              help='minimum wind speed below which data are '
+                                   'exluded. ' +
+                                   'Defaults to %f' % MIN_FF)
     pars_adv_eap.add_argument('--vdi-reference',
                               dest='vdi',
                               action='store_true',
