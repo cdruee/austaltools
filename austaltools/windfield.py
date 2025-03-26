@@ -492,7 +492,3 @@ def add_options(subparsers):
                              'missing, the file name defaults to ' +
                              'the data file name with extension `png`'
                         )
-    pars_wif.add_argument('-f', '--force',
-                        action='store_true',
-                        default=False,
-                        help='force overwriting plotfile if it exists.')
