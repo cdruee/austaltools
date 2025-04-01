@@ -49,21 +49,21 @@ def main(args):
     dzdy = np.diff(topz, axis=1, prepend=np.nan) / dd
     gammax = [ x  - dd / 2 for x in topx[1:]]
     gammay = [ y  - dd / 2 for y in topy[1:]]
-    gammaz = np.sqrt(dzdx ** 2 + dzdy ** 2)[1:, 1:]
+    gammaz = np.sqrt(dzdx ** 2 + dzdy ** 2)[1:, 1:] * 100.
 
     gamma = {'x': gammax, 'y':gammay, 'z': gammaz}
     logging.info('max: 1:%f' % (1 / np.nanmax(gammaz)))
 
     dots = np.full(np.shape(gammaz), 2.5)
-    dots[gammaz > 1. / 20.] = 1.
-    dots[gammaz > 1. / 5.] = -0.5
+    dots[gammaz > 100. / 20.] = 1.
+    dots[gammaz > 100. / 5.] = -0.5
 
     if args['plot'] is None or args['plot'] == '-':
         args['plot'] = '__show__'
     elif args['plot'] == '__default__':
         args['plot'] = "steepness0%01d" % args["grid"]
 
-    _plotting.common_plot(args, gamma, unit="m/m", topo=topo_path, dots=dots)
+    _plotting.common_plot(args, gamma, unit="%", topo=topo_path, dots=dots)
 
 
 # ------------------------------------------------------------------------

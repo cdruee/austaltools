@@ -26,9 +26,14 @@ NO_MATPLOTLIB_HELP = ("The matplotlib library "
                       "or using the package manager of your choice.")
 # ----------------------------------------------------
 
-def have_matplotlib():
+def have_matplotlib(mock: bool = False):
     if not os.getenv('BUILDING_SPHINX', 'false') == 'false':
-      return importlib.util.find_spec("matplotlib") is not None
+      res = importlib.util.find_spec("matplotlib") is not None
+      if mock:
+          # dynamic import of plotting
+          raise EnvironmentError("Plotting is not possible." +
+                           NO_MATPLOTLIB_HELP)
+      return res
     else:
       return True
 # ----------------------------------------------------
@@ -54,10 +59,35 @@ def import_matplotlib():
             globals()[k] = importlib.import_module(v)
         logger.debug("importing matplotlib")
     except ImportError:
-        sys.tracebacklimit = 0
+        
         raise EnvironmentError(f"matplotlib not found. "
                                f"Run `pip install matplotlib` to install.")
+    logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
     return have_display
+
+# ----------------------------------------------------
+def import_plotlib(lib):
+    """
+    return a libray that is installed or return None
+    :param lib: name of libray
+    :type lib: str
+    """
+    known_libs = {
+        'mpl': 'matplotlib',
+        'mco': 'matplotlib.colors',
+        'mpt': 'matplotlib.patches',
+        'plt': 'matplotlib.pyplot'
+    }
+    mob = known_libs.get(lib, None)
+    if mob is None:
+        raise ValueError(f"module id {lib} not known")
+    try:
+        res = importlib.import_module(mob)
+        logger.debug(f"importing {mob}")
+    except ImportError:
+        res = None
+        logger.debug(f"failed to import {mob}")
+    return res
 
 # -------------------------------------------------------------------------
 
@@ -324,7 +354,8 @@ def common_plot(args: dict,
     """
     logger.debug(f"Found matplotlib: {have_matplotlib()}")
     if not have_matplotlib():
-        raise EnvironmentError('matplotlib not available, cannot plot')
+        raise EnvironmentError('matplotlib not available, cannot plot' +
+                               NO_MATPLOTLIB_HELP)
     have_display = import_matplotlib()
     if args["plot"] == "__show__" and not have_display:
         raise EnvironmentError('no display, cannot show plot')
@@ -387,17 +418,21 @@ def common_plot(args: dict,
                            levels=levels,
                            cmap=cmap,
                            extend='both',
-                           norm=colors.PowerNorm(.66)
                            )
-        plt.colorbar(img, label=unit, extend='both')
+        plt.colorbar(img, label=unit, format='%.2g', extend='both')
     elif args['kind'] == "grid":
-        img = plt.pcolor(datx, daty,
+        img = plt.pcolormesh(datx, daty,
                          datz.T,
                          shading="nearest",
                          cmap=cmap,
-                         norm=colors.PowerNorm(.66)
+                         norm = colors.BoundaryNorm(
+                             boundaries= levels,
+                             ncolors=len(levels),
+                             clip=False
                          )
-        plt.colorbar(img, label=unit, extend='both', boundaries=levels)
+                         )
+        plt.colorbar(img, label=unit, format='%.2g', extend='both',
+                     boundaries=levels)
     else:
         raise ValueError('argument display missing or invalid')
     logger.debug('unit: %s' % unit)
@@ -463,6 +498,7 @@ def common_plot(args: dict,
     ax.set_xlabel("x in m")
     ax.set_ylabel("y in m")
 
+    fig.tight_layout()
     if args["plot"] == "__show__":
         logger.info('showing plot')
         plt.show()

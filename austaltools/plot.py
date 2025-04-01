@@ -203,7 +203,7 @@ def main(args):
         if datz.shape != std.shape:
             raise ValueError('stdv shape does not match data shape')
         std[std == 0] = 1.E-19
-        dots = datz / (stdvs * std)
+        dots = 1. + datz / (stdvs * std)
     else:
         dots = None
 
@@ -223,12 +223,13 @@ def main(args):
     elif args['plot'] == '__default__':
         args['plot'] = os.path.splitext(os.path.basename(infile_path))[0]
 
-    scale = 10 ** (np.ceil(np.log10(np.percentile(datz, 97.5))))
+    #scale = 10 ** (np.ceil(np.log10(np.percentile(datz, 97.5))))
+    scale = float('%.2g' % np.percentile(datz, 97.5))
     # for all-zero fields or bad data, make a dummy scale
     if scale <= 0.:
         scale = 1.
     logging.debug('scale: %f' % scale)
-    levels = np.array([10, 20, 50, 100, 200, 500, 1000]
+    levels = np.array([10, 60, 120, 240, 360, 680, 1000]
                       ) / 1000 * scale
 
     dat_dict = {'x': datx, 'y': daty, 'z': datz}

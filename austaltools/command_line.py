@@ -23,6 +23,7 @@ try:
     from . import transform
     from . import plot
     from . import windfield
+    from . import windrose
 except ImportError:
     import _tools
     from _version import __version__, __title__
@@ -38,6 +39,8 @@ except ImportError:
     import transform
     import plot
     import windfield
+    import windrose
+
 # ----------------------------------------------------
 
 logging.basicConfig()
@@ -134,6 +137,10 @@ def cli_parser():
     # ----------------------------------------------------
 
     pars_wif = windfield.add_options(subparsers)
+
+    # ----------------------------------------------------
+
+    pars_wrs = windrose.add_options(subparsers)
 
     # ----------------------------------------------------
 
@@ -253,6 +260,12 @@ def main(args=None):
         logger.setLevel(args["verb"])
     else:
         logger.setLevel(logging.WARNING)
+    # reduce amount of traceback
+    if logger.getEffectiveLevel() >= logging.INFO:
+        sys.tracebacklimit = 1
+    elif logger.getEffectiveLevel() >= logging.WARNING:
+        sys.tracebacklimit = 0
+
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
 
     if args.get("working_dir", None) is None:
@@ -286,6 +299,8 @@ def main(args=None):
             input_weather.main(args)
         elif args['command'] == 'windfield':
             windfield.main(args)
+        elif args['command'] == 'windrose':
+            windrose.main(args)
         #else:
          #   raise ValueError('unknown command: %s' % args['command'])
     except UsageError as e:

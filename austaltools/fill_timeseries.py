@@ -373,7 +373,7 @@ def parse_cycle(c_id: str, c_info : dict,
                                       parse_dates=True
                                       )
             else:
-                sys.tracebacklimit = 0
+                
                 raise ValueError(f"unsupported format {tf_file_format} "
                                  f"in file: {ts_file_name}")
             if ts_data.index.tz is None:
@@ -381,7 +381,7 @@ def parse_cycle(c_id: str, c_info : dict,
                 ts_data.index = ts_data.index.tz_localize("UTC")
             ts_columns = ts_data.columns
             if not ts_var in ts_columns:
-                sys.tracebacklimit = 0
+                
                 raise ValueError(f"no var named `{ts_var}` "
                                  f"in: {ts_file_name}")
 
@@ -486,7 +486,7 @@ def parse_cycle(c_id: str, c_info : dict,
             try:
                 unit_w, unit_t = unit_info.split("/")
             except ValueError:
-                sys.tracebacklimit = 0
+                
                 raise ValueError('invalid unit info: %s' % unit_info)
             # parse mass
             if unit_w == "t":
@@ -500,7 +500,7 @@ def parse_cycle(c_id: str, c_info : dict,
             elif unit_w in ["ug", "µg"]:
                 factor_w = 1.E-6
             else:
-                sys.tracebacklimit = 0
+                
                 raise ValueError('invalid weight unit: %s' % unit_w)
             # parse time interval
             if unit_t == "total":
@@ -514,7 +514,7 @@ def parse_cycle(c_id: str, c_info : dict,
             elif unit_t in ["s", "sec"]:
                 factor_t = 1.
             else:
-                sys.tracebacklimit = 0
+                
                 raise ValueError('invalid time unit: %s' % unit_t)
         unitfactor = factor_w * factor_t
     else:
@@ -736,13 +736,13 @@ def main(args):
     elif args["action"] in ['week-5', 'week-6']:
         logger.info('filling work weeks for column: %s' % args["column_id"])
         if args["output"] is None:
-            sys.tracebacklimit = 0
+            
             raise ValueError('-o is required with -w or -W')
         if args["column_id"] not in sids:
             if len(sids) == 1:
                 args["column_id"] = sids[0]
             else:
-                sys.tracebacklimit = 0
+                
                 raise ValueError('column ID not in file: %s' % args["column_id"])
         if None in [args["hour_begin"], args["hour_end"], args["output"]]:
             raise ValueError('hour_begin, hour_end, or output is None')

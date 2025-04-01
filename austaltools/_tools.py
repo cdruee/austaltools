@@ -3,6 +3,7 @@ import os
 import re
 import shlex
 import logging
+import select
 import sys
 import unicodedata
 import urllib.parse
@@ -293,7 +294,7 @@ def get_buildings(conf):
         for par in pars:
             if par in conf:
                 if number != len(conf[par]):
-                    sys.tracebacklimit = 0
+                    
                     raise ValueError('different numbers of ' +
                                      'building-definig parameters')
                 val[par] = conf[par]
@@ -394,7 +395,7 @@ def find_austxt(wdir='.'):
             ausname = x
             break
     else:
-        sys.tracebacklimit = 0
+        
         raise IOError('austal.txt or austal2000.txt not found')
     logger.debug('austal config: %s' % ausname)
     return ausname
@@ -416,7 +417,7 @@ def get_austxt(path=None):
     # return config as dict
     conf = {}
     if not os.path.exists(path):
-        sys.tracebacklimit = 0
+        
         raise FileNotFoundError('austal.txt not found')
     with open(path, 'r') as file:
         for line in file:
@@ -431,7 +432,7 @@ def get_austxt(path=None):
             try:
                 key, val = text.split(maxsplit=1)
             except ValueError:
-                sys.tracebacklimit = 0
+                
                 raise ValueError('no keyword/value pair ' +
                                  'in line "%s"' % text)
             # make numbers numeric
@@ -981,7 +982,34 @@ def wind_files(path):
 
 # -------------------------------------------------------------------------
 
-def read_wind(file_info: dict, path: str = '.', grid: int = 0):
+def prompt_timeout(prompt, timeout, default: str = None):
+    """
+    Ask the user a question, wait timeout seconds for an answer,
+    then continue
+    :param prompt: Text to show as prompt
+    :type prompt: str
+    :param timeout: Time to weit for an answer in seconds
+    :type timeout: int
+    :param default: Default answer
+    :type default: str|None
+    :return: The answer. If the user typed in someting, it is returned,
+      else the default.
+    :rtype: str|None
+    """
+    print (prompt)
+    print ("Please answer in the next {} seconds.".format(timeout))
+    x, _, _ = select.select( [sys.stdin], [], [],
+                             timeout )
+    if x:
+        res = sys.stdin.readline().strip()
+    else:
+        res = default
+    return res
+
+# -------------------------------------------------------------------------
+
+def read_wind(file_info: dict, path: str = '.', grid: int = 0,
+              centers:bool = False):
     """
     read wind library files
 
@@ -1037,6 +1065,29 @@ def read_wind(file_info: dict, path: str = '.', grid: int = 0):
             v_grid[:, :, :, istab, idir] = dmna.data['Vy']
     axes['dir'] = [x * 10. for x in dirs]
     axes['ak'] = stabs
+    if centers:
+        for ax in ['x', 'y', 'z']:
+            axes[ax] = list(np.convolve(axes[ax],[0.5,0.5])[1:-1])
+        u_ctr= np.full((nx - 1, ny - 1, nz - 1, nstab, ndir), np.nan)
+        v_ctr = np.full((nx - 1, ny - 1, nz - 1, nstab, ndir), np.nan)
+        for ib in range(nstab):
+            for ir in range(ndir):
+                for ix in range(nx - 1):
+                    for iy in range(ny - 1):
+                        for iz in range(nz - 1):
+                            oz = iz + 1
+                            # move 1 layer lover and ...
+                            # ... mean u in x-direction
+                            u_ctr[ix, iy, iz, ib, ir] = (
+                                    u_grid[ix + 1, iy + 1, oz, ib, ir] +
+                                    u_grid[ix, iy + 1, oz, ib, ir]) / 2.
+                            # ... mean u in v-direction
+                            v_ctr[ix, iy, iz, ib, ir] = (
+                                    v_grid[ix + 1, iy, oz, ib, ir] +
+                                    v_grid[ix + 1, iy + 1, oz, ib, ir]) / 2.
+        u_grid = u_ctr
+        v_grid = v_ctr
+
     return u_grid, v_grid, axes
 
 # -------------------------------------------------------------------------
@@ -1098,11 +1149,11 @@ def read_heff(working_dir, conf=None):
     if 'az' in conf:
         az_file = conf['az'][0]
     else:
-        sys.tracebacklimit = 0
+        
         raise ValueError('no az defined, cannot read h_eff')
     z0 = read_z0(working_dir, conf)
     if z0 is None:
-        sys.tracebacklimit = 0
+        
         raise ValueError('no z0 defined, cannot read h_eff')
     z0_class = find_z0_class(z0)
     az = readmet.akterm.DataFile(file=os.path.join(working_dir, az_file))

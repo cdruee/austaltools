@@ -458,7 +458,7 @@ def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
         _datasets.name_yearly("ERA5", year)
     )
     if not ds.available:
-        sys.tracebacklimit = 0
+        
         raise ValueError(f"Dataset not available: {ds.name}")
     if datafile is None:
         datafile = os.path.join(ds.path, ds.file_data)
@@ -705,7 +705,7 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
         _datasets.name_yearly("CERRA", year)
     )
     if not ds.available:
-        sys.tracebacklimit = 0
+        
         raise ValueError(f"Dataset not available: {ds.name}")
     if datafile is None:
         datafile = os.path.join(ds.path, ds.file_data)
@@ -783,7 +783,7 @@ def get_dwd_weather(lat: float, lon: float, year:int,
     """
     ds = _datasets.dataset_get("DWD")
     if not ds.available:
-        sys.tracebacklimit = 0
+        
         raise ValueError(f"Dataset not available: {ds.name}")
     if datafile is None:
         datafile = os.path.join(ds.path, ds.file_data)
@@ -910,7 +910,7 @@ def austal_weather(args):
             obs, z0 = get_cerra_weather(lat, lon, year)
         elif source == "DWD":
             if not _datasets.dataset_get(source).available:
-                sys.tracebacklimit = 0
+                
                 raise ValueError(f"source {source} not available")
             path = _datasets.dataset_get(source).path
             obs, z0 = get_dwd_weather(lat, lon, year, stat_no, path)

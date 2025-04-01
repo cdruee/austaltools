@@ -17,13 +17,15 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
+import warnings
 from time import sleep
 
+import numpy as np
+
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    import numpy as np
     import pandas as pd
-    from scipy import ndimage
 
     import meteolib
 
@@ -75,6 +77,7 @@ profiles, corresponding to CORINE class 231 "short grass",
 according to VDI 3783 part 8 [VDI3783p8]_
 """
 
+
 # -------------------------------------------------------------------------
 
 
@@ -106,7 +109,89 @@ def same_sense_rotation(val, ref):
 
 
 # -------------------------------------------------------------------------
+def contiguous_areas(array: np.ndarray[bool]) -> (np.ndarray[int], int):
+    """
+    Identify and label contiguous areas in a 2D binary array.
 
+    This function takes a binary (boolean) 2D NumPy array as input and
+    assigns a unique label to each contiguous region of adjacent 'True'
+    values (considering 4-connectivity: top, bottom, left, right). The
+    function returns a labeled array where each contiguous region has a
+    unique integer label and the total number of unique contiguous areas.
+
+    :param array: A 2D NumPy array of boolean values. Each 'True' or '1'
+      in the array represents a part of a contiguous region, while 'False'
+      or '0' represents the background.
+    :type array: np.array
+    :return: A tuple containing:
+      - A 2D array of integers of the same shape as the input where each
+        contiguous region of 'True' values is labeled with a unique
+        integer.
+      - The number of unique contiguous labeled areas in the input array.
+    :rtype: Tuple[np.array, int]
+
+    :notes: The function uses the union-find algorithm with path
+      compression for efficient region labeling. The `getroot` helper
+      function finds the root label of a given label to ensure each part
+      of a contiguous area is assigned the same label.
+
+    :examples:
+
+        >>> arr = np.array([[1, 0, 0], [1, 1, 0], [0, 1, 1]]).astype(bool)
+        >>> contiguous_areas(arr)
+        (array([[0, -1, -1], [0, 0, -1], [-1, 0, 0]]), 1)
+    """
+    nx, ny = array.shape
+    # initialize labels as with -1 = not an area
+    labels = np.full((nx, ny), -1, dtype=int)
+    # parents dictionary
+    parent = {}
+    # starting value = 0
+    next_label = 0
+
+    def getroot(mother, label):
+        """ Helper function: find the root of the label """
+        while mother[label] != label:
+            label = mother[label]
+        return label
+
+    # pass 1: assign preliminary labels
+    for i in range(nx):
+        for j in range(ny):
+            if array[i, j]:
+                # check the neighbors up and left
+                neighbors = []
+                if i > 0 and array[i - 1, j]:
+                    neighbors.append(labels[i - 1, j].item())
+                if j > 0 and array[i, j - 1]:
+                    neighbors.append(labels[i, j - 1].item())
+
+                if not neighbors:
+                    # next area label
+                    labels[i, j] = next_label
+                    parent[next_label] = next_label
+                    next_label += 1
+                else:
+                    # assign point the min neighbour labels
+                    min_label = min(neighbors)
+                    labels[i, j] = min_label
+                    # make the neighbour labels uniform
+                    for n in neighbors:
+                        root_n = getroot(parent, n)
+                        root_min = getroot(parent, min_label)
+                        if root_n != root_min:
+                            parent[root_n] = root_min
+
+    # pass 1: Resolve labels to their roots
+    for i in range(nx):
+        for j in range(ny):
+            if labels[i, j] != -1:
+                labels[i, j] = getroot(parent, labels[i, j])
+
+    return labels, np.max(labels) + 1
+
+
+# -------------------------------------------------------------------------
 
 def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
                          nedge=N_EGDE_NODES, minff=MIN_FF,
@@ -157,26 +242,26 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
     if not (nz, nstab, ndir) == np.shape(u_ref):
         raise ValueError('wind grid shape does not match wind grid shape')
 
-    # create result
+    # create empty result field
     keep = np.full((nx, ny, nz, nstab, ndir), 1.)
 
     # VDI 3783 pt 16 sct 6.1
-    # 1) Only grid points inside the largest calculation
-    # area without the three outer boundary points are
-    # considered.
+    # `1) Only grid points inside the largest calculation
+    #  area without the three outer boundary points are
+    #  considered.`
     keep[:nedge, :, :, :, :] = np.nan
     keep[:, :nedge, :, :, :] = np.nan
     keep[-nedge:, :, :, :, :] = np.nan
     keep[:, -nedge:, :, :, :] = np.nan
 
     # VDI 3783 pt 16 sct 6.1
-    # 2) All grid points are rejected at which the wind
-    # does not rotate in the same sense with every
-    # rotation of the undisturbed flow direction or at
-    # which in at least one of the wind fields the wind
-    # speed is below 0,5 m · s–1. The rest of the steps
-    # are performed only for the remaining grid
-    # points.
+    # `2) All grid points are rejected at which the wind
+    #  does not rotate in the same sense with every
+    #  rotation of the undisturbed flow direction or at
+    #  which in at least one of the wind fields the wind
+    #  speed is below 0,5 m · s–1. The rest of the steps
+    #  are performed only for the remaining grid
+    #  points.`
     for ibar in _tools.progress(range(nz_eval * nstab),
                                 desc="do quality measure "):
         iz = ibar // nstab
@@ -203,15 +288,16 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
     u_keep = u_grid * keep
     v_keep = v_grid * keep
 
-    # 3) At each grid point, the quality criteria gd (for the
-    # wind direction) and gf (for the wind speed) are
-    # calculated over all undisturbed flow sectors and
-    # stability classes:
+    # `3) At each grid point, the quality criteria gd (for the
+    #  wind direction) and gf (for the wind speed) are
+    #  calculated over all undisturbed flow sectors and
+    #  stability classes:`
     u_ref3d = np.broadcast_to(u_ref, (nx, ny, nz, nstab, ndir))
     v_ref3d = np.broadcast_to(v_ref, (nx, ny, nz, nstab, ndir))
     sumw = np.sum(np.sum(u_keep + v_keep, axis=4), axis=3)
     sumw2 = np.sum(np.sum(u_keep ** 2 + v_keep ** 2, axis=4), axis=3)
-    sumwr = np.sum(np.sum(u_keep * u_ref3d + v_keep * v_ref3d, axis=4), axis=3)
+    sumwr = np.sum(
+        np.sum(u_keep * u_ref3d + v_keep * v_ref3d, axis=4), axis=3)
     sumr = np.sum(np.sum(u_ref3d + v_ref3d, axis=4), axis=3)
     sumr2 = np.sum(np.sum(u_ref3d ** 2 + v_ref3d ** 2, axis=4), axis=3)
     korr = float(2 * nstab * ndir)
@@ -220,23 +306,29 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
         if iz <= nz_eval:
             for iy in range(ny):
                 for ix in range(nx):
-                    cov_wr = sumwr[ix, iy, iz] - (sumr[ix, iy, iz] * sumw[ix, iy, iz]) / korr
-                    var_r = sumr2[ix, iy, iz] - (sumr[ix, iy, iz] ** 2) / korr
-                    war_w = sumw2[ix, iy, iz] - (sumw[ix, iy, iz] ** 2) / korr
+                    cov_wr = sumwr[ix, iy, iz] - (
+                            sumr[ix, iy, iz] * sumw[ix, iy, iz]) / korr
+                    var_r = sumr2[ix, iy, iz] - (
+                            sumr[ix, iy, iz] ** 2) / korr
+                    war_w = sumw2[ix, iy, iz] - (
+                            sumw[ix, iy, iz] ** 2) / korr
                     gd[ix, iy, iz] = (cov_wr ** 2) / (var_r * war_w)
         else:
             gd[:, :, iz] = np.nan
 
     ff_grid = np.sqrt(u_keep ** 2 + v_keep ** 2)
-    ff_ref3d = np.broadcast_to(np.sqrt(u_ref ** 2 + v_ref ** 2), np.shape(ff_grid))
-    beta_v = np.mean(np.mean(ff_grid / ff_ref3d, axis=4), axis=3)
-    gf = np.minimum(beta_v, 1 / beta_v)
+    ff_ref3d = np.broadcast_to(np.sqrt(u_ref ** 2 + v_ref ** 2),
+                               np.shape(ff_grid))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        beta_v = np.nanmean(np.nanmean(ff_grid / ff_ref3d, axis=4), axis=3)
+        gf = np.minimum(beta_v, 1. / beta_v)
 
-    # 4) The quality criteria gd and gf are combined into
-    # an overall criterion g = gd · gf. g always lies in
-    # the interval [0,1], where 0 means no agreement
-    # and 1 perfect agreement with the one-dimensional
-    # reference profiles.
+    # `4) The quality criteria gd and gf are combined into
+    #  an overall criterion g = gd · gf. g always lies in
+    #  the interval [0,1], where 0 means no agreement
+    #  and 1 perfect agreement with the one-dimensional
+    #  reference profiles.`
     g = gf * gd
 
     return g, gd, gf
@@ -244,7 +336,7 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
 
 # -------------------------------------------------------------------------
 
-def find_eap(g_lower):
+def find_eap(g_lower: np.ndarray[float]):
     """
     Find the anemometer-position replacement
     (german: Ersatz-AnemometerPosition, EAP) location.
@@ -270,7 +362,7 @@ def find_eap(g_lower):
     :example:
         >>> g_lower = np.array([[0.5, 0.8, 0.3],
         ...                     [0.2, 0.7, 0.9],
-        ...                     [0.4, 0.6, 0.1]])
+        ...                     [0.4, 0.6, 0.1]]).astype(float)
         >>> eap, g_upper = find_eap(g_lower)
         >>> print(eap)
         [(1, 2), (1, 1), (0, 1)]
@@ -278,39 +370,43 @@ def find_eap(g_lower):
         [2.4, 1.6, 1.3]
     """
     #
-    # 5) Within each individual contiguous region with
-    # the wind direction rotating in the same sense,
-    # the overall criteria g are added up to G.
-    # ones = np.prod(np.prod(keep * 1, axis=4), axis=3)
-    ones = np.isfinite(g_lower) * 1
-    label, num_features = ndimage.label(ones)
-    if num_features > 0:
-        g_upper = ndimage.labeled_comprehension(g_lower,
-                                                label,
-                                                range(1, num_features + 1),
-                                                np.nansum,
-                                                float,
-                                                0)
-
-        # In the contiguous region with the largest sum G,
-        # the grid point that exhibits the largest g is found.
-        # This location is defined as EAP.
-        # get index sort order (largest value first)
+    # `5) Within each individual contiguous region with
+    #  the wind direction rotating in the same sense,
+    #  the overall criteria g are added up to G.`
+    #
+    # make array contents boolean
+    good = np.isfinite(g_lower)
+    # get map of labels (label=area number) and number of areas
+    label, num_areas = contiguous_areas(good)
+    # if there is at least one area
+    if num_areas > 0:
+        # add up the values of every area to G(area)
+        g_upper = [np.nansum(g_lower[label == i]) for i in
+                   range(num_areas)]
+        # `In the contiguous region with the largest sum G,
+        #  the grid point that exhibits the largest g is found.
+        #  This location is defined as EAP.`
+        #
+        #  get index sort order (largest value first)
         g_upper_descending_indexes = np.argsort(g_upper)[::-1]
-        # ! maximum_position raises meaningless Index error
-        #   if nan values are in the array
-        g_notnan = g_lower
-        g_notnan[np.isnan(g_notnan)] = 0
-        # ! label is 1-based but index in g_upper_max is 0-based -> add 1
-        eap = [ndimage.maximum_position(g_notnan,
-                                        label,
-                                        x + 1)
-               for x in g_upper_descending_indexes]
+        # create sorted list of G(area)
+        g_upper_sort = [g_upper[x] for x in g_upper_descending_indexes]
+        # find max position for each label
+        # ... make copy of g_lower that has zeroes instead of nans
+        g_lower_no_nan = g_lower
+        g_lower_no_nan[np.isnan(g_lower)] = 0.
+        # ... max location for every area EAP(area) in descending oder of G
+        eap = [
+            np.unravel_index(
+                np.multiply(g_lower_no_nan, label == x).argmax(),
+                g_lower.shape
+            ) for x in g_upper_descending_indexes
+        ]
     else:
         eap = []
-        g_upper = []
+        g_upper_sort = []
 
-    return eap, g_upper
+    return eap, g_upper_sort
 
 
 # -------------------------------------------------------------------------
@@ -391,7 +487,7 @@ def interpolate_wind(u_in: list, v_in: list, z_in: list, levels: list):
       wind values.
     :rtype: tuple
 
-    :raises: `ValueError` if lists are not all of the same length
+    :raises: `ValueError` if lists are not all the same length
 
     :example:
 
@@ -408,7 +504,7 @@ def interpolate_wind(u_in: list, v_in: list, z_in: list, levels: list):
     v_out = []
     for ilev, lev in enumerate(levels):
         if lev in z_in:
-            i1 = z_in.index(lev)
+            i1 = list(z_in).index(lev)
             u = u_in[i1]
             v = v_in[i1]
         elif lev > 0:
@@ -420,8 +516,9 @@ def interpolate_wind(u_in: list, v_in: list, z_in: list, levels: list):
                 i1 = len(z_in) - 2
                 i2 = len(z_in) - 1
             else:
-                i1 = np.searchsorted(np.array(z_in), lev, 'left')
-                i2 = np.searchsorted(np.array(z_in), lev, 'right')
+                i2 = np.searchsorted(np.array(z_in), lev)
+                i1 = i2 - 1
+
             # convert to reference heights (index of ref dataframe)
             z1 = z_in[i1]
             z2 = z_in[i2]
@@ -459,7 +556,8 @@ class GridASCII(object):
     """Path to the ASCII file."""
     data = None
     """ grided data """
-    _keys = ["ncols", "nrows", "xllcorner", "yllcorner", "cellsize", "NODATA_value"]
+    _keys = ["ncols", "nrows", "xllcorner", "yllcorner", "cellsize",
+             "NODATA_value"]
     header = {x: None for x in _keys}
     """Dictionary containing header information."""
 
@@ -494,7 +592,8 @@ class GridASCII(object):
                 elif k in self._keys:
                     self.header[k] = v
                 else:
-                    raise ValueError('unknown header value in file: %s' % k)
+                    raise ValueError(
+                        'unknown header value in file: %s' % k)
 
     def write(self, file=None):
         """
@@ -588,7 +687,8 @@ def run_austal(workdir, tmproot=None):
     topo.write(os.path.join(tmpdir, topo_file))
 
     # copy weather file
-    shutil.copy(os.path.join(workdir, akterm_file), os.path.join(tmpdir, akterm_file))
+    shutil.copy(os.path.join(workdir, akterm_file),
+                os.path.join(tmpdir, akterm_file))
 
     # start austal model
     austal = shutil.which('austal')
@@ -635,7 +735,7 @@ def run_austal(workdir, tmproot=None):
 
     file_info = _tools.wind_files(os.path.join(tmpdir, 'lib'))
     u_tmp, v_tmp, ax_tmp = _tools.read_wind(
-        file_info, os.path.join(tmpdir, 'lib'))
+        file_info, os.path.join(tmpdir, 'lib'), centers=True)
 
     shutil.rmtree(tmpdir)
     logger.debug('removed temp directory: %s' % tmpdir)
@@ -646,7 +746,7 @@ def run_austal(workdir, tmproot=None):
 # -------------------------------------------------------------------------
 
 
-def austal_ref(workdir, levels, dirs, tmproot=None):
+def austal_ref(workdir, levels, dirs, tmproot=None, overwrite=False):
     """
     Extract the reference windprofile from the TALdia
     output generated by `run_austal`.
@@ -662,6 +762,9 @@ def austal_ref(workdir, levels, dirs, tmproot=None):
     :type dirs: list[float]
     :param tmproot: path to a directory where temporary files are stored
     :type tmproot: str
+    :param overwrite: overwrite existing refence file
+        (details see :py:func:`write_ref`)
+    :type overwrite: bool|None
     :return: reference profiles at `levels` for each stability and each
        direction in `dirs`
     :rtype: numpy.ndarray of shape
@@ -680,7 +783,8 @@ def austal_ref(workdir, levels, dirs, tmproot=None):
     iy = np.argmin(np.abs(ax_tmp['y']))
 
     write_ref("Ref1d.dat", z_tmp, d_tmp, u_tmp[ix, iy, :, :, :],
-              v_tmp[ix, iy, :, :, :], (z_tmp, s_tmp, d_tmp))
+              v_tmp[ix, iy, :, :, :], (z_tmp, s_tmp, d_tmp),
+              overwrite=overwrite)
 
     # shape of reference wind profiles: (nz, nstab, ndir)
     u_ref = np.full((len(levels), N_CLASS, len(dirs)), np.nan)
@@ -709,15 +813,19 @@ def austal_ref(workdir, levels, dirs, tmproot=None):
 
     return u_ref, v_ref
 
+
 # -------------------------------------------------------------------------
 
-def calc_ref(levels, dirs):
+def calc_ref(levels, dirs, overwite=False):
     """
     calculate reference wind profile from diabatic wind profile
     after Monin-Obukhov
 
     :param levels: desired levels to get reference winds for
     :param dirs: desired wind directions to get reference winds for
+    :param overwrite: overwrite existing refence file
+        (details see :py:func:`write_ref`)
+    :type overwrite: bool|None
     :return: u-reference wind and v-reference wind,
       dimensions (#levels, #stability classes, #wind directions)
     :rtype: numpy.ndarray, numpy.ndarray
@@ -763,7 +871,7 @@ def calc_ref(levels, dirs):
     # Obukhov-length
     l_ob = [_dispersion.KM2021.get_center(x, z0=z0)
             for x in range(N_CLASS)]
-    # turning angle at inversion height after Van Ulden & Holtslag 1985)
+    # turning angle at inversion height after Van Ulden & Holtslag (1985)
     d_h = [
         35,
         35,
@@ -788,7 +896,8 @@ def calc_ref(levels, dirs):
                                         z=h_ref,
                                         zoL=h_ref / l_ob[istab])
         for idir, wdir in enumerate(dirs):
-            D_20 = d_h[istab] * 1.58 * (1. - np.exp(-1.0 * 20. / val_z_i[istab]))
+            d_20 = d_h[istab] * 1.58 * (
+                        1. - np.exp(-1.0 * 20. / val_z_i[istab]))
             for iz, z in enumerate(levels):
                 if z < (ww.z0 + ww.d):
                     ff = 0
@@ -796,25 +905,36 @@ def calc_ref(levels, dirs):
                     ff = ww.u(h_ref)
                 else:
                     ff = ww.u(z)
-                d_z = d_h[istab] * 1.58 * (1. - np.exp(-1.0 * z / val_z_i[istab]))
-                dd = wdir - D_20 + d_z
+                d_z = d_h[istab] * 1.58 * (
+                            1. - np.exp(-1.0 * z / val_z_i[istab]))
+                dd = wdir - d_20 + d_z
                 logger.debug(str([istab, idir, z, ff, dd]))
                 (u_ref[iz, istab, idir],
-                 v_ref[iz, istab, idir]) = meteolib.wind.dir2uv(ff, dd)
+                 v_ref[iz, istab, idir]
+                 ) = meteolib.wind.dir2uv(ff, dd)
     write_ref("Ref1d.dat", levels, dirs, u_ref, v_ref,
               (levels, [x for x in range(N_CLASS)], dirs))
     return u_ref, v_ref
 
+
 # -------------------------------------------------------------------------
 
-def read_ref(file, levels, dirs):
+def read_ref(file: str, levels: list[float], dirs: list[float],
+             linear_interpolation: bool = False):
     """
     read reference wind profiles from file and interpolate / rotate
     them to the desired levels / wind directions
 
     :param file: file to read, including path
+    :type file: str
     :param levels: desired levels to get reference winds for
+    :type levels: list[float]
     :param dirs: desired wind directions to get reference winds for
+    :type dirs: list[float]
+    :param linear_interpolation: linearly interpolate wind profile
+      instead of using a log wind profile (for comparison to the VDI
+      reference implementation)
+    :type linear_interpolation: bool
     :return: u-reference wind and v-reference wind,
       dimensions: levels, stability classes, wind directions
     :rtype: numpy.ndarray, numpy.ndarray
@@ -840,9 +960,6 @@ def read_ref(file, levels, dirs):
     ref_ff.columns = ref_id
     ref_dd = df[[2 * x + 2 for x in range(len(ref_id))]]
     ref_dd.columns = ref_id
-    # FIXME is that choice OK?
-    # we can only safely use levels above max value of z0
-    ref_min_z_level = min(df.index[df.index > 2])
 
     # shape of reference wind profiles: (nz, nstab, ndir)
     u_ref = np.full((nlev, N_CLASS, ndir), np.nan)
@@ -858,8 +975,8 @@ def read_ref(file, levels, dirs):
                 diff_dir = (((d - ref_dir[i]) + 180.) % 360.) - 180.
                 if ref_stab[i] == istab and abs(diff_dir) < abs(diff_min):
                     # this is the selected reference profile:
-                    rf = ref_ff[rid][ref_min_z_level:]
-                    rd = ref_dd[rid][ref_min_z_level:] + diff_dir
+                    rf = ref_ff[rid][:]
+                    rd = ref_dd[rid][:] + diff_dir
                     diff_min = diff_dir
             if diff_min == 360.:
                 raise ValueError('no reference profile for ' +
@@ -867,13 +984,33 @@ def read_ref(file, levels, dirs):
                                  _dispersion.KM2021.name(istab + 1))
             uf, vf = meteolib.wind.dir2uv(rf, rd)
 
-            u_ref[:, istab, idir], v_ref[:, istab, idir] = \
-                interpolate_wind(uf, vf, rf.index.values, levels)
+            if linear_interpolation:
+                u_ref[:, istab, idir] = np.interp(levels, rf.index.values,
+                                                  uf)
+                v_ref[:, istab, idir] = np.interp(levels, rf.index.values,
+                                                  vf)
+            else:
+                # get index of first height that is > 0
+                i0 = np.argmax(rf.index.values > 0)
+                u_ref[:, istab, idir], v_ref[:, istab, idir] = \
+                    interpolate_wind(uf[i0:], vf[i0:],
+                                     rf.index.values[i0:], levels)
+
     return u_ref, v_ref
+
 
 # -------------------------------------------------------------------------
 
-def write_ref(file, out_levels, out_dirs, u_ref, v_ref, axes_ref):
+def write_ref(file: str, out_levels: list[float] | np.ndarray,
+              out_dirs: list[float] | np.ndarray,
+              u_ref: np.ndarray,
+              v_ref: np.ndarray,
+              axes_ref: tuple[
+                  list[float] | np.ndarray,
+                  list[float] | np.ndarray,
+                  list[float] | np.ndarray
+              ],
+              overwrite:bool|None = None):
     """
     Write a set of windprofiles (one for each stability calass and each
     wind direction) into a file in the format of the example file
@@ -895,7 +1032,31 @@ def write_ref(file, out_levels, out_dirs, u_ref, v_ref, axes_ref):
     :param axes_ref: dictionary containing axes, wind direction and stabilty classes,
       as out by `read_wind` and `read_grid`
     :type axes_ref: dict[numpy.ndarray]
+    :param overwrite: overwrite existing reference profile file.
+      If True, an existing file is overwritten, if False a FileExistsError
+      is raises, if None and the file exists, the user is prompted
+      with timeout
+      (overwrites if yes, exits if not, defaults to overwrite).
+    :type overwrite: bool|None
+
+    :raises FileExistsError: if the file exists and overwrite is False
     """
+
+    if os.path.exists(file):
+        logger.debug('file %s already exists' % file)
+        if overwrite is None:
+            yesno = ""
+            while yesno not in ["y", "n"]:
+                yesno = _tools.prompt_timeout(
+                    f'replace {file} [y]/n ?', 10, 'y')
+            if yesno == "n":
+                logger.critical('aborting')
+                sys.exit(0)
+        elif not overwrite:
+            
+            raise FileExistsError('file %s already exists'  % file)
+
+
     logger.debug("writing wind reference file")
     levels, stabs, dirs = axes_ref
     ndir = len(dirs)
@@ -924,9 +1085,12 @@ def write_ref(file, out_levels, out_dirs, u_ref, v_ref, axes_ref):
                 continue
             fid.write(line + "\n")
 
+
 # -------------------------------------------------------------------------
 
-def print_report(args, g, gd, gf, eaps, g_upper, axes):
+def print_report(args: dict, g: np.ndarray, gd: np.ndarray,
+                 gf: np.ndarray, eaps: list[list[tuple]],
+                 g_upper: [list[list[float]]], axes: dict[str, list]):
     """
     print a report that mimics the output of the reference implemetation in
     ``TAL-Anemo.zip`` wich belongs to the auxiliary material published
@@ -1004,14 +1168,15 @@ def print_report(args, g, gd, gf, eaps, g_upper, axes):
             print('                                   '
                   '   y (m) =%9.0f' % axes['y'][j])
             print('                                   '
-                  '      gd =%9.2f' % gd[i, j, lvl])
+                  '      gd =%9.2f' % gd[i, j, lvl].item())
             print('                                   '
-                  '      gf =%9.2f' % gf[i, j, lvl])
+                  '      gf =%9.2f' % gf[i, j, lvl].item())
             print('                                   '
-                  '       g =%9.2f' % g[i, j, lvl])
+                  '       g =%9.2f' % g[i, j, lvl].item())
             print('...................................'
                   '...................................'
                   '.........................')
+
 
 # -------------------------------------------------------------------------
 
@@ -1031,24 +1196,31 @@ def main(args):
     file_info = _tools.wind_files(lib_dir)
     directions = [float(x) * 10.
                   for x in sorted(list(set(file_info["wdir"])))]
-    u_grid, v_grid, axes = _tools.read_wind(file_info, path=lib_dir,
-                                     grid=int(args['grid']))
+    u_grid, v_grid, axes = _tools.read_wind(file_info,
+                                            path=lib_dir,
+                                            grid=int(args['grid']),
+                                            centers=True)
     #
     # get the reference profile
     #
+    vdi = args.get('vdi', False)
+    overwrite = args.get('overwrite', None)
     if args['reference'] == 'simple':
-        u_ref, v_ref = calc_ref(axes['z'], directions)
+        u_ref, v_ref = calc_ref(axes['z'], directions, overwite=overwrite)
     elif args['reference'] == 'file':
-        u_ref, v_ref = read_ref('/local/data/druee/software/austaltools/TAL-Anemo/Ref1d.dat', axes['z'], directions)
+        u_ref, v_ref = read_ref('Ref1d.dat', axes['z'], directions,
+                                linear_interpolation=vdi)
     elif args['reference'] == 'austal':
-        u_ref, v_ref = austal_ref(working_dir, axes['z'], directions, tmproot=working_dir)
+        u_ref, v_ref = austal_ref(working_dir, axes['z'], directions,
+                                  tmproot=working_dir, overwrite=overwrite)
     else:
-        raise ValueError('unknown kind of reference: %s' % args['reference'])
+        raise ValueError(
+            'unknown kind of reference: %s' % args['reference'])
     #
     # find EAPs for each level
     #
     mx_height = float(args['max_height'])
-    mx_lvl = np.argmax(axes['z'] * (np.array(axes['z']) <= mx_height))
+    mx_lvl = int(np.argmax(axes['z'] * (np.array(axes['z']) <= mx_height)))
     logging.info('evaluation limited to %.0fm = level %i' %
                  (mx_height, mx_lvl))
     g, gd, gf = calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
@@ -1058,10 +1230,21 @@ def main(args):
     eaps, g_upper = calc_all_eap(g, mx_lvl)
 
     #
+    # show results on screen
+    if args['report']:
+        print_report(args, g, gd, gf, eaps, g_upper, axes)
+
+    #
     # select level closest to height
     #
     if args['height'] is None:
-        wind_height = _tools.read_heff(working_dir)
+        try:
+            wind_height = _tools.read_heff(working_dir)
+        except (IOError, FileNotFoundError) as e:
+            logger.error('cannot determine h_eff from configuration. '
+                         'Use -z to give height manually.')
+            
+            raise e
     else:
         wind_height = float(args['height'])
     dz_old = np.nanmax(axes['z'])
@@ -1074,9 +1257,13 @@ def main(args):
     logger.info(f'selected_level: {selected_level}')
 
     #
-    # show results on screen
-    if args['report']:
-        print_report(args, g, gd, gf, eaps, g_upper, axes)
+    # write to austal config
+    #
+    if args['austal']:
+        _tools.put_austxt(data={
+            'xa': [axes['x'][eaps[selected_level][0][0]]],
+            'ya': [axes['y'][eaps[selected_level][0][1]]]
+        })
 
     #
     # create plot
@@ -1106,32 +1293,38 @@ def main(args):
             logger.debug('select to write plot to default filename')
         else:
             logger.debug('select to write plot to custom filename')
-            _plotting.common_plot(args, dat=dat_dict, mark=pos_dict, scale=scale)
+        _plotting.common_plot(args, dat=dat_dict, mark=pos_dict,
+                              scale=scale)
     else:
         logger.info('nothing selected, skipping plot')
+
 
 # -------------------------------------------------------------------------
 
 def add_options(subparsers):
-
     pars_eap = subparsers.add_parser(
         name='eap',
         help='find substitute anemometer position ' +
-                    'according to VDI 3783 Part 16 ' +
-                    'from a wind library generated by AUSTAL')
+             'according to VDI 3783 Part 16 ' +
+             'from a wind library generated by AUSTAL')
+    pars_eap.add_argument('-a', '--austal',
+                          action='store_true',
+                          help='write EAP as anemometer position into'
+                               'AUSTAL config file ``austal.txt``')
     pars_eap.add_argument('-g', '--grid',
                           metavar='ID',
                           nargs='?',
                           default=0,
                           help='ID (number) of the grid to evaluate. '
                                'Defaults to 0')
-    pars_eap.add_argument('-z', '--height',
-                          metavar='METERS',
-                          nargs='?',
-                          default=None,
-                          help='effective anemometer height, i.e. height '
-                               'to evaluate EAP at in m. '
-                               'Defaults to 10.0')
+    pars_eap.add_argument('-o', '--overwrite',
+                          action='store_true',
+                          default=False,
+                          help='force overwriting wind reference file '
+                               'if it exists.')
+    pars_eap.add_argument('-q', '--report',
+                          action='store_true',
+                          help='show detailed results')
     pars_eap.add_argument('-r', '--reference',
                           default='simple',
                           choices=['simple', 'file', 'austal'],
@@ -1139,26 +1332,37 @@ def add_options(subparsers):
                                '`simple` produces a log wind profile, '
                                '`file` reads reference profile from file. '
                                'Defaults to `simple`')
-    pars_eap.add_argument('-q', '--report',
-                          action='store_true',
-                          help='show detailed results')
-    pars_eap.add_argument('--edge-nodes',
-                          default=N_EGDE_NODES,
+    pars_eap.add_argument('-z', '--height',
+                          metavar='METERS',
                           nargs='?',
-                          help='number of edge nodes along each side, '
-                               'where data are exluded. ' +
-                               'Defaults to %i' % N_EGDE_NODES)
-    pars_eap.add_argument('--max-height',
-                          default=MAX_HEIGHT,
-                          nargs='?',
-                          help='maximum height to evaluate EAP. ' +
-                               'Defaults to %f' % MAX_HEIGHT)
-    pars_eap.add_argument('--min-ff',
-                          default=MIN_FF,
-                          nargs='?',
-                          help='minimum wind speed below which data are '
-                               'exluded. ' +
-                               'Defaults to %f' % MIN_FF)
+                          default=None,
+                          help='effective anemometer height, i.e. height '
+                               'to evaluate EAP at in m. '
+                               'Defaults to 10.0')
+    pars_adv_eap = pars_eap.add_argument_group('advanced options')
+    pars_adv_eap.add_argument('--edge-nodes',
+                              default=N_EGDE_NODES,
+                              nargs='?',
+                              help='number of edge nodes along each side, '
+                                   'where data are exluded. ' +
+                                   'Defaults to %i' % N_EGDE_NODES)
+    pars_adv_eap.add_argument('--max-height',
+                              default=MAX_HEIGHT,
+                              nargs='?',
+                              help='maximum height to evaluate EAP. ' +
+                                   'Defaults to %f' % MAX_HEIGHT)
+    pars_adv_eap.add_argument('--min-ff',
+                              default=MIN_FF,
+                              nargs='?',
+                              help='minimum wind speed below which data are '
+                                   'exluded. ' +
+                                   'Defaults to %f' % MIN_FF)
+    pars_adv_eap.add_argument('--vdi-reference',
+                              dest='vdi',
+                              action='store_true',
+                              help='Use linear wind profile interpolation '
+                                   'for comparison with VDI 3783 p 16 '
+                                   'reference implementation.')
     pars_eap = _plotting.add_arguents_common_plot(pars_eap)
 
     return pars_eap
