@@ -110,7 +110,7 @@ def set_austaldir(args: dict):
                         path_list.append(dirpath)
         sp.end()
         if len(path_list) == 0:
-            sys.tracebacklimit = 0
+            
             raise EnvironmentError('No austal installation found.')
         elif len(path_list) > 1:
             num = -1
@@ -169,7 +169,7 @@ def set_simple(args: dict):
     if args.get('simple_weather',None) is not None:
         weather = args.get('simple_weather')
         if weather not in DS.SOURCES_WEATHER:
-            sys.tracebacklimit = 0
+            
             raise ValueError(f"unknwon weather source {weather}")
     elif 'weather' in simple_conf:
         weather =  simple_conf.get('weather')
@@ -191,7 +191,7 @@ def set_simple(args: dict):
     if args.get('simple_terrain',None) is not None:
         terrain = args.get('simple_terrain')
         if terrain not in DS.SOURCES_TERRAIN:
-            sys.tracebacklimit = 0
+            
             raise ValueError(f"unknwon terrain source {terrain}")
     elif 'terrain' in simple_conf:
         terrain =  simple_conf.get('terrain')
@@ -514,7 +514,7 @@ def main():
     elif args['action'] in ['download', 'assemble']:
         if args['source'] in DS.SOURCES_TERRAIN:
             if DS.dataset_available(args['source']) and not args['force']:
-                sys.tracebacklimit = 0
+                
                 raise ValueError(f"dataset exists: {args['source']} ")
             DS.provide_terrain(args['source'],
                                path=args['path'],
@@ -522,7 +522,7 @@ def main():
                                method=args['action'])
         elif args['source'] in DS.SOURCES_WEATHER:
             if 'years' not in args:
-                sys.tracebacklimit = 0
+                
                 raise ValueError('-y required with dataset: %s '
                                  % args['source'])
             else:
@@ -536,14 +536,14 @@ def main():
             if args['source'] in DS.dataset_list():
                 avl = DS.dataset_available(args['source'])
                 if avl and not args['force']:
-                    sys.tracebacklimit = 0
+                    
                     raise ValueError(f"dataset exists: {args['source']} ")
             else:
                 for yr in year_list:
                     yn = DS.name_yearly(args['source'], yr)
                     avl = DS.dataset_available(yn)
                     if avl and not args['force']:
-                        sys.tracebacklimit = 0
+                        
                         raise ValueError(f"dataset exists: {yn} ")
             DS.provide_weather(args['source'],
                                path=args['path'],

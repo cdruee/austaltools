@@ -2111,7 +2111,7 @@ def provide_stationlist(source:str=None, fmt:str=None, out:str=None):
     if source == "DWD":
         stationlist_DWD(path=out, fmt=fmt)
     else:
-        sys.tracebacklimit = 0
+        
         raise ValueError(f"stationlist: unkwnown source {source}")
 
 # -------------------------------------------------------------------------

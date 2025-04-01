@@ -51,7 +51,7 @@ def model_origin(path=None):
         rx = ry = None
         rs = 'ND'
     elif xy_count > 2:
-        sys.tracebacklimit = 0
+        
         raise ValueError('error in reference coodinates in %s' %
                          os.path.basename(path))
     else:
@@ -135,15 +135,15 @@ def main(args):
     if args["xy"] is not None:
         if any([(args[x] is not None)
                 for x in ["gk", "ut", "ll", "dwd", "wmo"]]):
-            sys.tracebacklimit = 0
+            
             raise ValueError('-M is mutaually exclusive with -D, -G, -L, '
                              '-U, and -W')
         mx, my = [float(x) for x in args["xy"]]
         if rs is None:
-            sys.tracebacklimit = 0
+            
             raise ValueError('no AUSTAL configuration file')
         elif rs == 'ND':
-            sys.tracebacklimit = 0
+            
             raise ValueError('no reference position defined in '
                              'AUSTAL configuration file')
         elif rs == 'GK':
@@ -162,7 +162,7 @@ def main(args):
     if args["dwd"] is not None:
         storage_dwd = _datasets.dataset_get("DWD").path
         if storage_dwd is None:
-            sys.tracebacklimit = 0
+            
             raise ValueError("Dataset DWD is not available, "
                        "download or assemble it.")
         station = int(args["dwd"])

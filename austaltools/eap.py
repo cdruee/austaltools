@@ -1053,7 +1053,7 @@ def write_ref(file: str, out_levels: list[float] | np.ndarray,
                 logger.critical('aborting')
                 sys.exit(0)
         elif not overwrite:
-            sys.tracebacklimit = 0
+            
             raise FileExistsError('file %s already exists'  % file)
 
 
@@ -1243,7 +1243,7 @@ def main(args):
         except (IOError, FileNotFoundError) as e:
             logger.error('cannot determine h_eff from configuration. '
                          'Use -z to give height manually.')
-            sys.tracebacklimit = 0
+            
             raise e
     else:
         wind_height = float(args['height'])
