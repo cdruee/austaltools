@@ -149,13 +149,13 @@ def main(args):
         elif rs == 'GK':
             rechts = rx + mx
             hoch = ry + my
-            lat, lon, _ = _geo.gk2ll(rechts, hoch)
+            lat, lon = _geo.gk2ll(rechts, hoch)
             east, north, _ = _geo.gk2ut(rechts, hoch)
         elif rs == 'UT':
             east = rx + mx
             north = ry + my
             rechts, hoch, _ = _geo.ut2gk(east, north)
-            lat, lon, _ = _geo.ut2ll(east, north)
+            lat, lon = _geo.ut2ll(east, north)
         else:
             raise ValueError(f'internal error rs={rs}')
 
@@ -168,24 +168,24 @@ def main(args):
         station = int(args["dwd"])
         lat, lon, ele, nam = _geo.read_dwd_stationinfo(
             station, datafile=storage_dwd)
-        rechts, hoch, _ = _geo.ll2gk(lat, lon)
-        east, north, _ = _geo.ll2ut(lat, lon)
+        rechts, hoch = _geo.ll2gk(lat, lon)
+        east, north = _geo.ll2ut(lat, lon)
     elif args["wmo"] is not None:
         lat, lon, ele, nam = _wmo_metadata.wmo_stationinfo(args["wmo"])
-        rechts, hoch, _ = _geo.ll2gk(lat, lon)
-        east, north, _ = _geo.ll2ut(lat, lon)
+        rechts, hoch = _geo.ll2gk(lat, lon)
+        east, north = _geo.ll2ut(lat, lon)
     elif args["gk"] is not None:
         rechts, hoch = [float(x) for x in args['gk']]
-        lat, lon, _ = _geo.gk2ll(rechts, hoch)
-        east, north, _ = _geo.gk2ut(rechts, hoch)
+        lat, lon = _geo.gk2ll(rechts, hoch)
+        east, north = _geo.gk2ut(rechts, hoch)
     elif args["ut"] is not None:
         east, north = [float(x) for x in args['ut']]
         rechts, hoch, _ = _geo.ut2gk(east, north)
-        lat, lon, _ = _geo.ut2ll(rechts, hoch)
+        lat, lon = _geo.ut2ll(rechts, hoch)
     elif args["ll"] is not None:
         lat, lon = [float(x) for x in args['ll']]
-        rechts, hoch, _ = _geo.ll2gk(lat, lon)
-        east, north, _ = _geo.ll2ut(lat, lon)
+        rechts, hoch = _geo.ll2gk(lat, lon)
+        east, north = _geo.ll2ut(lat, lon)
 
 
 

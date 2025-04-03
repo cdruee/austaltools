@@ -27,6 +27,7 @@ try:
     from . import _corine
     from . import _datasets
     from . import _dispersion as dis
+    from . import _geo
     from . import _plotting
     from . import _storage
     from . import _tools
@@ -35,6 +36,7 @@ except ImportError:
     import _corine
     import _datasets
     import _dispersion as dis
+    import _geo
     import _plotting
     import _storage
     import _tools
@@ -155,7 +157,7 @@ def grid_surrounding_nodes(lat: float, lon: float, dims: dict) \
         grd_lon = dims['lon']
     else:
         raise ValueError('dims have unsupported shape')
-    vec_s_d = np.vectorize(austaltools._geo.spheric_distance)
+    vec_s_d = np.vectorize(_geo.spheric_distance)
     tgt_lat = np.full(np.shape(dims['lat']), lat)
     tgt_lon = np.full(np.shape(dims['lon']), lon)
     distance = vec_s_d(tgt_lat, tgt_lon, grd_lat, grd_lon)
@@ -787,6 +789,7 @@ def read_hostrada_nc(ncfile, lat, lon, wind_variant=None):
     # extract input values at positions
     pv = {}
     for val in _tools.progress(all_variables, 'extract variables'):
+        logger.debug(f"extract variable: {val}")
         pv[val] = [nc[val][:, x, y].data for x, y, _ in positions]
     # free memory
     nc.close()
@@ -794,18 +797,21 @@ def read_hostrada_nc(ncfile, lat, lon, wind_variant=None):
     # calculate weights and average the values
     weights = grid_calulate_weights(positions)
     for val in _tools.progress(pv.keys(), 'interpolating vars'):
+        logger.debug(f"interpolate variable: {val}")
         if np.ndim(pv[val]) > 1:
             logger.debug('interpolating value: %s' % val)
             values[val] = np.dot(weights, pv[val])
     #
     #  convert values
     #
-    values.rename(columns={
-        'sfcWind': 'ff',            # m/s
-        'sfcWind_direction': 'dd',  # deg
-        'ps': 'sp',                 # Pa
-        'hurs': 'r2msp',            # %
-    })
+    values.rename(
+        inplace=True,
+        columns={
+            'sfcWind': 'ff',            # m/s
+            'sfcWind_direction': 'dd',  # deg
+            'ps': 'sp',                 # Pa
+        }
+    )
     #
     # temperature to Celsius to Kelvin
     values['t2m'] = [m.temperature.CtoF(x) for x in  values['tas']]
@@ -815,8 +821,11 @@ def read_hostrada_nc(ncfile, lat, lon, wind_variant=None):
     values['tcc'] = [float(x) / 8. for x in values['clt']]
     values.drop('clt', axis=1, inplace=True)
     #
-    #
+    # relative humidity % to 1
+    values['r2m'] = [float(x) / 100. for x in values['hurs']]
+    values.drop('hurs', axis=1, inplace=True)
 
+    logger.debug("got: %s" % values.keys())
     return values
 
 # ----------------------------------------------------
@@ -867,8 +876,27 @@ def get_hostrada_weather(lat, lon, year, datafile=None) \
     v = read_hostrada_nc(datafile, lat, lon)
     v.index = v['time']
     v.sort_index(inplace=True)
-    import _windutil
-    z0 = _windutil.get_roughness_length()
+
+    # get roughness length from CORINE
+    xg, yg = _geo.ll2gk(lat, lon)
+    h = 3000.  # 3km used to construct dataset by DWD (Kräheman. 2015)
+    z0 = None
+    try:
+        z0 = _corine.roughness_austal(xg, yg, h)
+    except RuntimeError as e:
+        logger.warning(f'cannot get roughness from austal configuration: '
+                       f' {e}')
+    if z0 is None:
+        try:
+            z0 = _corine.roughness_web(xg, yg, h)
+            if z0 <= 0.:   # lookup failed
+                z0 = None
+        except Exception as e:
+            logger.warning(f'cannot get roughness online, '
+                           f'the error was: {e}')
+    if z0 is None:
+        logger.error(f'cannot get any roughness length')
+
 
     res = v.filter(['time',  # UTC
                     'ff',  # m/s
@@ -878,6 +906,7 @@ def get_hostrada_weather(lat, lon, year, datafile=None) \
                     'r2m',  # 1
                     'tcc',  # 1
                     ])
+    logger.debug("got: %s" % res.keys())
     return res, z0
 
 # ----------------------------------------------------
@@ -1053,6 +1082,11 @@ def austal_weather(args):
             obs, z0 = get_cerra_weather(lat, lon, year)
         elif source == "HOSTRADA":
             obs, z0 = get_hostrada_weather(lat, lon, year)
+            if z0 is None and args.get('z0, None') is None:
+                raise RuntimeError(f'cannot determine roughness lenght '
+                                   f'automatically.\n'
+                                   f'Use option `--z0` to provide '
+                                   f'the value.')
         elif source == "DWD":
             if not _datasets.dataset_get(source).available:
                 raise ValueError(f"source {source} not available")
@@ -1061,7 +1095,13 @@ def austal_weather(args):
         else:
             raise ValueError("source not implemented: %s" % source)
 
-    rechts, hoch, _ = _geo.ll2gk(lat, lon)
+        # override roughness length if given
+        if (user_z0 := args.get('z0, None')) is not None:
+            logger.info('Roughness length provided by the source ({z0}m) '
+                        'by user-provided value ({user_z0}m).')
+            z0 = user_z0
+
+    rechts, hoch = _geo.ll2gk(lat, lon)
     if ele is None:
         if args.get("ele", None) is not None:
             ele = float(args["ele"])
@@ -1102,11 +1142,28 @@ def austal_weather(args):
         obs['Tv'] = [m.humidity.Humidity(t=t, p=p, rh=rh).tvirt()
                      for t, p, rh in
                      zip(obs['t2m'], obs['sp'], obs['r2m'])]
+        obs['d2m'] = [m.humidity.Humidity(t=t, p=p, rh=rh).td()
+                     for t, p, rh in
+                     zip(obs['t2m'], obs['sp'], obs['r2m'])]
     elif all([x in obs.columns for x in ['sp', 't2m', 'd2m']]):
         logger.debug('Tv')
         obs['Tv'] = [m.humidity.Humidity(t, p, td).tvirt()
                      for t, p, td in
                      zip(obs['t2m'], obs['sp'], obs['d2m'])]
+    # air density
+    if 'fsr' not in obs.columns:
+        logger.debug('fill fsr')
+        obs['fsr'] = z0
+    else:
+        logger.debug('fsr ok')
+
+    # estimate cbh if do not know anything about the clouds
+    if all([x not in obs.columns for x in ['cbh', 'cty']]):
+        logger.debug('estimate cbh')
+        # Henning's Formula
+        obs['cbh'] = [(t - d) * 123.
+                      for t, d in zip(obs['t2m'], obs['d2m'])]
+
 
     # Obukhov length
     if all([x in obs.columns for x in ['ff', 'fsr', 'rho',
@@ -1127,7 +1184,7 @@ def austal_weather(args):
 
     #
     # kms -----------------------------
-    if all([x in obs.columns for x in ['v10', 'tcc', 'lmcc']]):
+    if all([x in obs.columns for x in ['v10', 'tcc']]):
         logger.info('Method: kms')
         methods_available.append('kms')
         if 'cty' in obs:
@@ -1142,20 +1199,26 @@ def austal_weather(args):
         )
     #
     # kmo -----------------------------
-    if all([x in obs.columns for x in ['v10', 'tcc', 'cty']]):
+    if all([x in obs.columns for x in ['v10', 'tcc']]):
         logger.info('Method: kmo')
         methods_available.append('kmo')
+        cty = obs['cty'] if 'cty' in obs else None
         obs['kmo'] = dis.klug_manier_scheme_1992(
             obs.index, obs['v10'], obs['tcc'],
-            lat, lon, cty=obs['cty'])
+            lat, lon, cty=cty)
+        del cty
     #
     # k2o -----------------------------
-    if all([x in obs.columns for x in ['v10', 'tcc', 'cbh', 'cty']]):
+    if (all([x in obs.columns for x in ['v10', 'tcc']]) and
+        any([x in obs.columns for x in ['cbh', 'cty']])):
         logger.info('Method: k2o')
         methods_available.append('k2o')
+        cbh = obs['cbh'] if 'cbh' in obs else None
+        cty = obs['cty'] if 'cty' in obs else None
         obs['k2o'] = dis.klug_manier_scheme_2017(
             obs.index, obs['v10'], obs['tcc'],
-            lat, lon, ele, cbh=obs['cbh'], cty=obs['cty'])
+            lat, lon, ele, cbh=cbh, cty=cty)
+        del cbh, cty
     #
     # pts -----------------------------
     if all([x in obs.columns for x in ['ff', 'tcc', 'cbh']]):
@@ -1374,7 +1437,16 @@ def add_options(subparsers):
                                 'use the ``10-m wind`` provided by the '
                                 'model\n')
                          )
-
+    adv_wea.add_argument('--z0',
+                         dest='z0',
+                         default=None,
+                         help="roughness length at the position of the "
+                              "measurement used for calculation of "
+                              "the effective anemometer height. "
+                              "Overrides the value provided by the "
+                              "data source. Ignored if value is None. "
+                              "[%(default)]"
+                         )
     return pars_wea
 
 # =========================================================================

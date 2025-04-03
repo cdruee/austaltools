@@ -111,7 +111,7 @@ def main(args: dict):
         import _geo
 
     lat, lon, ele, stat_no, stat_nam = _geo.evaluate_location_opts(args)
-    rechts, hoch, _ = _geo.ll2gk(lat, lon)
+    rechts, hoch = _geo.ll2gk(lat, lon)
 
     available_dems = _datasets.find_terrain_data()
     if available_dems is None or len(available_dems) == 0:
