@@ -941,7 +941,8 @@ def assemble_GLO_30(path, name = "GLO_30",
     #     for long in range(lonmin, lonmax):
     for lati, long in _tools.progress(list(
             itertools.product(range(latmin, latmax),
-                              range(lonmin, lonmax)))):
+                              range(lonmin, lonmax))),
+            "fetching tiles"):
             ## worked until DEC 2024:
             # gettile_eu(lat, lon)
             # working MAR 2025
@@ -1021,7 +1022,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
         support_url, os.path.basename(support_url))
     with tarfile.open(support_file) as support_tar:
         # no get every tile we want
-        for tile in _tools.progress(tiles):
+        for tile in _tools.progress(tiles, "process tiles "):
             # extract the matching supportive files
             to_extract = [x.name for x in support_tar.getmembers()
                           if tile in x.name]
@@ -1117,7 +1118,8 @@ def assebmle_srtm(path: str, name="SRTM",
     #     for lon in range(lonmin, lonmax):
     for lati, long in _tools.progress(list(
             itertools.product(range(latmin, latmax),
-                              range(lonmin, lonmax)))):
+                              range(lonmin, lonmax))),
+            "fetching tiles"):
             ## worked until DEC 2024:
             # gettile_eu(lat, lon)
             # working MAR 2025
@@ -1226,7 +1228,8 @@ def assebmle_aw3d30(path: str, name="SRTM",
     #     for lon in range(lonmin, lonmax):
     for lati, long in _tools.progress(list(
             itertools.product(range(latmin, latmax),
-                              range(lonmin, lonmax)))):
+                              range(lonmin, lonmax))),
+            "fetching tiles"):
             gettile_jaxa(lati, long)
 
     # merge the GeoTiff Files from all tiles into one file
@@ -1953,8 +1956,7 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
         sf.to_csv(path_or_buf=zf.open('stationlist.csv',
                                           mode='w'))
 
-    logger.info("fetching data")
-    for station in _tools.progress(station_numbers):
+    for station in _tools.progress(station_numbers, "fetching files"):
         dat_in, meta_in =_fetch_dwd_obs.fetch_station(station,
                                                       store=False)
         df = _fetch_dwd_obs.build_table(dat_in, meta_in, years)
@@ -1966,10 +1968,10 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
                                           mode='w'))
 
 # -------------------------------------------------------------------------
-def assemble_try(path: str, name="TRY", years: list = None,
-                 replace : bool = False, args=None):
+def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
+                      replace : bool = False, args=None):
     """
-    Downloads, extracts, and merges DWD-TRY dataset reanalysis for specified
+    Downloads, extracts, and merges DWD HOSTRADA dataset for specified
     years into single NetCDF files per year.
 
     :param path: The path where the final merged NetCDF files
@@ -1988,7 +1990,7 @@ def assemble_try(path: str, name="TRY", years: list = None,
     :type args: dict
 
     :raises ValueError: If any of the years specified is outside the
-      valid range (1940 to the current year).
+      valid range (1995 to the current year).
 
     - This function assumes that a global `_tools.TEMP` variable is defined and
       points to a valid temporary directory for intermediate files.
@@ -2001,25 +2003,157 @@ def assemble_try(path: str, name="TRY", years: list = None,
         if 'years' in args:
             years = args['years']
         else:
-            raise ValueError(f"years is required for TRY dataset")
+            raise ValueError(f"years is required for {name} dataset")
     # check database
     target = os.path.join(path, OBS_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
 
+    import netCDF4
+    srv_host = 'https://opendata.dwd.de/'
+    srv_path = 'climate_environment/CDC/grids_germany/hourly/hostrada/'
+    srv_dirs = {
+		'tas': 'air_temperature_mean',
+		'clt': 'cloud_cover',
+        # 'tdew': 'dew_point',
+        # 'mixr': 'humidity_mixing_ratio',
+		'hurs': 'humidity_relative',
+        # 'psl': 'pressure_sealevel',
+		'ps': 'pressure_surface',
+        # 'rsds': 'radiation_downwelling',
+        # 'uhi': 'urban_heat_island_intensity',
+        'sfcWind_direction': 'wind_direction',
+        'sfcWind': 'wind_speed',
+    }
+    srv_file = "%s/%s_1hr_HOSTRADA-v1-0_BE_gn_%s.nc"
+    datavars = srv_dirs.keys()
 
-    logger.info("fetching data")
-    for station in _tools.progress(station_numbers):
-        dat_in, meta_in =_fetch_dwd_obs.fetch_station(station,
-                                                      store=False)
-        df = _fetch_dwd_obs.build_table(dat_in, meta_in, years)
+    # create download list
+    logger.debug("creating file names")
+    to_download = {}
+    for year in years:
+        print(f"processing year: {year}")
 
-        with zipfile.ZipFile(target,
-                             mode='a',
-                             compression=zipfile.ZIP_DEFLATED) as zf:
-            df.to_csv(path_or_buf=zf.open("%05i.csv" % station,
-                                          mode='w'))
+        # construct time/date part of filenames
+        for i in range(12):
+            mstart = pd.Timestamp(year=year, month=i+1, day=1, hour=00)
+            mend = ((mstart
+                    + pd.tseries.offsets.MonthEnd())
+                    + pd.tseries.offsets.Hour(23))
+            srv_time = "{}-{}".format(
+                mstart.strftime("%Y%m%d%H"), mend.strftime("%Y%m%d%H")
+            )
+            for k,v in srv_dirs.items():
+                to_download[
+                    srv_host + srv_path + srv_file % (v, k, srv_time)
+                ] = f"{k}_{mstart.strftime("%Y%m%d%H")}.nc"
+
+        # download the files
+        logger.debug("files to download: %d" % len(to_download))
+        for k,v in _tools.progress(to_download.items(), "fetching files"):
+            _tools.download(k, v)
+
+        # gently move the old file out of way
+        yn = name_yearly(name, year)
+        target = os.path.join(path, WEA_FMT % yn)
+        if not _ass_clear_target(target, replace):
+            logger.info("skipping because dataset exists: %s" % yn)
+            continue
+
+        # assemble new file
+
+        with netCDF4.Dataset(target, "w", format='NETCDF4') as dst:
+            # copy fixed values from first file
+            blueprint = list(to_download.values())[0]
+            print(f"initializing output")
+            with netCDF4.Dataset(blueprint) as src:
+                print(f"initializing from {blueprint}")
+            # copy global attributes all at once via dictionary
+                dst.setncatts(src.__dict__)
+                # copy dimensions
+                nx = len(src.dimensions['X'])
+                ny = len(src.dimensions['Y'])
+                for id in ['X', 'Y', 'time']:
+                    logger.debug(f"copying dimension {id}")
+                    dimension = src.dimensions[id]
+                    # copy only if not already in dst
+                    if dimension.isunlimited():
+                        dst.createDimension(id, None)
+                    else:
+                        dst.createDimension(id, len(dimension))
+                # copy the values
+                for id in ['X', 'Y', 'time', 'lat', 'lon', 'crs']:
+                    logger.debug(f"copying variable {id}")
+                    var = src.variables[id]
+                    dst.createVariable(id, var.datatype, var.dimensions,
+                                       compression='zlib')
+                    if id != 'time':
+                        dst[id][:] = src[id][:]
+                    # copy variable attributes all at once via dictionary
+                    dst[id].setncatts(src[id].__dict__)
+
+            # create empty data fields
+            i_time = 0
+
+            # collect data
+            for ncfile in _tools.progress(list(to_download.values()),
+                                          "copying data  "):
+                with netCDF4.Dataset(ncfile) as src:
+                    logger.debug(f"reading {ncfile}")
+                    if 'time' not in dst.variables.keys():
+                        logger.debug(f"initializing time")
+                        var = src.variables['time']
+                        dst.createVariable('time',
+                                           var.datatype,
+                                           var.dimensions,
+                                           compression='zlib')
+                        dst['time'][:] = \
+                            src['time'][:]
+                    elif (src['time'][1]
+                          not in dst['time'][:]):
+                        logger.debug(f"appending time")
+                        itime = len(dst.dimensions['time'])
+                        dst['time'][:] = np.append(
+                            dst['time'][:], src['time'][:]
+                        )
+                    else:
+                        logger.debug(f"time is ok")
+                    for id in [x for x in datavars if x != 'time']:
+                        if id in src.variables.keys():
+                            if id not in dst.variables.keys():
+                                # init first time
+                                logger.debug(f"initializing {id}")
+                                var = src.variables[id]
+                                # special treatment for fill_value
+                                # https://github.com/guziy/PyNotebooks/
+                                #   blob/master/netcdf/test_copy.ipynb
+                                if hasattr(var, "_FillValue"):
+                                    fill_value = var._FillValue
+                                else:
+                                    fill_value = None
+                                dst.createVariable(id,
+                                                   var.datatype,
+                                                   var.dimensions,
+                                                   fill_value=fill_value,
+                                                   compression='zlib')
+                                dst[id][:,:,:] = \
+                                    src[id][:,:,:]
+                                dst[id].setncatts(
+                                    {x: src[id].getncattr(x)
+                                     for x in src[id].ncattrs()
+                                     if x not in ["_FillValue"]}
+                                )
+                            else:
+                                # append later
+                                logger.debug(f"appending {id}")
+                                dst[id][itime:,:,:] = src[id][:,:,:]
+
+        # clean up
+        print("removing temporary files")
+        for v in _tools.progress(to_download.values(),
+                                 "removing files"):
+            os.remove(v)
 
 # -------------------------------------------------------------------------
 def provide_weather(source: str, path: str = None,
@@ -2098,6 +2232,8 @@ def provide_weather(source: str, path: str = None,
             import_lib('cdo')
             import_lib('cdsapi')
             assemble_CERRA(path, years=years, replace=force)
+        elif source == "HOSTRADA":
+            assemble_hostrada(path, years=years, replace=force)
         elif source == "DWD":
             dataset = dataset_get(source)
             assemble_DWD(path, years=years, replace=force,

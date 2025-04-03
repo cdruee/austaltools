@@ -402,12 +402,19 @@
     "position": "grid",
     "years_available": "1985-2020"
   },
+  "HOSTRADA": {
+    "split": "years",
+    "storage": "weather",
+    "assemble": "assemble_hostrada",
+    "position": "grid",
+    "years_available": "1995-2024"
+  },
   "DWD": {
     "storage": "weather",
     "assemble": "assemble_DWD",
     "position": "station",
     "arguments": {
-      "years": "1949-2023"
+      "years": "1949-2024"
     }
   }
 }

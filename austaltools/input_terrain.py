@@ -116,7 +116,7 @@ def main(args: dict):
     available_dems = _datasets.find_terrain_data()
     if available_dems is None or len(available_dems) == 0:
         logger.warning("No available terrain data in config file,"
-                       "trying to serch terrain data. \n"
+                       "trying to search terrain data. \n"
                        "Run configure_autaltools to collect the "
                        "available terrain data infomation once.")
         available_dems = _datasets.find_weather_data()

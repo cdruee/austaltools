@@ -24,27 +24,26 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 try:
     from ._version import __version__, __title__
+    from . import _corine
+    from . import _datasets
+    from . import _dispersion as dis
     from . import _plotting
     from . import _storage
     from . import _tools
-    from . import _datasets
-    from . import _dispersion as dis
 except ImportError:
     from _version import __version__, __title__
+    import _corine
+    import _datasets
+    import _dispersion as dis
     import _plotting
     import _storage
     import _tools
-    import _datasets
-    import _dispersion as dis
 
 
 logging.basicConfig()
 logger = logging.getLogger()
 
 # ----------------------------------------------------
-KNOWN_SOURCES = ["ERA5", "CERRA", "DWD"]
-STORAGE_LOCATIONS = _storage.STORAGE_LOCATIONS
-STORAGE_DIR = "weather"
 
 # possible defaults: fixed_057 fixed_010 model_mean model_uv10 model_fsr
 DEFAULT_WIND_VARIANT = os.environ.get('WIND_VARIANT', 'model_uv10')
@@ -411,8 +410,8 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
 
     return values
 
-
 # ----------------------------------------------------
+
 def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
         -> (pd.DataFrame, float):
     """
@@ -659,9 +658,7 @@ def read_cerra_nc(ncfile, lat, lon):
                            ignore_index=True)
     return values
 
-
 # ----------------------------------------------------
-
 
 def get_cerra_weather(lat, lon, year, datafile=None) \
         -> (pd.DataFrame, float):
@@ -705,7 +702,6 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
         _datasets.name_yearly("CERRA", year)
     )
     if not ds.available:
-        
         raise ValueError(f"Dataset not available: {ds.name}")
     if datafile is None:
         datafile = os.path.join(ds.path, ds.file_data)
@@ -734,6 +730,153 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
                     'sshf', 'slhf',  # W/m²
                     'fsr',  # m
                     'tp'  # mm
+                    ])
+    return res, z0
+
+# ----------------------------------------------------
+
+def read_hostrada_nc(ncfile, lat, lon, wind_variant=None):
+    """
+    read HOSTRADA nc file and interpolate values to position (lat, lon)
+    values:
+
+    ===================  ========  ==========================
+     name                 unit      long name
+    ===================  ========  ==========================
+    'time'
+    'tas'                 °C        Near-Surface Air Temperature
+    'clt'                 octa      Total Cloud Fraction
+    'hurs'                %         Near-Surface Relative Humidity
+    'ps'                  Pa        Surface Air Pressure
+    'sfcWind_direction'   deg       Near-Surface Wind Direction
+    'sfcWind'             m s**-1   Near-Surface Wind Speed
+    ===================  ========  ==========================
+    """
+    if wind_variant is None:
+        wind_variant = DEFAULT_WIND_VARIANT
+
+    _VAR_NEEDED = ['tas', 'clt', 'hurs', 'ps',
+                   'sfcWind_direction', 'sfcWind']
+
+    import netCDF4
+
+    nc = netCDF4.Dataset(ncfile)
+
+    for x in _VAR_NEEDED:
+        if x not in nc.variables:
+            raise ValueError('needed variable not in input data: %s' % x)
+    all_variables = _VAR_NEEDED
+    #
+    # get lat lon 2-D fields
+    dims = {
+        'lon': nc['lon'][:,:],
+        'lat': nc['lat'][:,:]
+    }
+    #
+    # convert time
+    logger.info('calculating time')
+    values = pd.DataFrame()
+    epoch = dt.datetime(1900, 1, 1, 0, 0, tzinfo=dt.timezone.utc)
+    values['time'] = pd.to_datetime(
+        [epoch + dt.timedelta(hours=int(x)) for x in nc['time']])
+    #
+    # interpolate values to position
+    #
+    logger.info('calculating position')
+    positions = grid_surrounding_nodes(lat, lon, dims)
+    # extract input values at positions
+    pv = {}
+    for val in _tools.progress(all_variables, 'extract variables'):
+        pv[val] = [nc[val][:, x, y].data for x, y, _ in positions]
+    # free memory
+    nc.close()
+
+    # calculate weights and average the values
+    weights = grid_calulate_weights(positions)
+    for val in _tools.progress(pv.keys(), 'interpolating vars'):
+        if np.ndim(pv[val]) > 1:
+            logger.debug('interpolating value: %s' % val)
+            values[val] = np.dot(weights, pv[val])
+    #
+    #  convert values
+    #
+    values.rename(columns={
+        'sfcWind': 'ff',            # m/s
+        'sfcWind_direction': 'dd',  # deg
+        'ps': 'sp',                 # Pa
+        'hurs': 'r2msp',            # %
+    })
+    #
+    # temperature to Celsius to Kelvin
+    values['t2m'] = [m.temperature.CtoF(x) for x in  values['tas']]
+    values.drop('tas', axis=1, inplace=True)
+    #
+    # cloud cover octa to 1
+    values['tcc'] = [float(x) / 8. for x in values['clt']]
+    values.drop('clt', axis=1, inplace=True)
+    #
+    #
+
+    return values
+
+# ----------------------------------------------------
+
+def get_hostrada_weather(lat, lon, year, datafile=None) \
+        -> (pd.DataFrame, float):
+    """
+    Get weather timeseries for the provided position
+    from source HOSTRADA by DWD for the year provided and calulate
+    cloud cover of non-high clouds (`lmcc`) and roughness
+    length `z0` from "forecast surface roughness"
+
+    :param lat: position latitude in degrees
+    :type lat: float
+    :param lon: position laongitude  in degrees
+    :type lon: float
+    :param year: get data from this calendar year
+    :type year: int
+    :param datafile: (optional) read from this HOSTRADA data file
+    :type datafile: str | None
+    :return: weather timeseries as dataframe and surface roughness in m.
+        The index of the dataframe is the measurement time as `datetime64`,
+        the columns are:
+
+        ======  ========= =============================
+        column   unit     comment
+        ======  ========= =============================
+        'time'   UTC
+        'ff'     m/s      wind speed at 10m height
+        'dd'     degrees  wind direction
+        'sp'     Pa       surface air pressure (QFE)
+        't2m'    K        air temperature at 2 m height
+        'r2m'    %        relative humidity at 2 m height
+        'tcc'    1        total cloud cover
+        ======  ========= =============================
+
+    :rtype: (pd.DataFrame, float)
+    """
+    ds = _datasets.dataset_get(
+        _datasets.name_yearly("HOSTRADA", year)
+    )
+    if not ds.available:
+        raise ValueError(f"Dataset not available: {ds.name}")
+    if datafile is None:
+        datafile = os.path.join(ds.path, ds.file_data)
+    logging.info('reading data from; %s' % datafile)
+
+    v = read_hostrada_nc(datafile, lat, lon)
+    v.index = v['time']
+    v.sort_index(inplace=True)
+    import _windutil
+    z0 = _windutil.get_roughness_length()
+
+    res = v.filter(['time',  # UTC
+                    'ff',  # m/s
+                    'dd',  # deg
+                    'sp',  # Pa
+                    't2m',  # K
+                    'r2m',  # 1
+                    'tcc',  # 1
                     ])
     return res, z0
 
@@ -908,14 +1051,15 @@ def austal_weather(args):
             obs, z0 = get_era5_weather(lat, lon, year, wind_variant)
         elif source == "CERRA":
             obs, z0 = get_cerra_weather(lat, lon, year)
+        elif source == "HOSTRADA":
+            obs, z0 = get_hostrada_weather(lat, lon, year)
         elif source == "DWD":
             if not _datasets.dataset_get(source).available:
-                
                 raise ValueError(f"source {source} not available")
             path = _datasets.dataset_get(source).path
             obs, z0 = get_dwd_weather(lat, lon, year, stat_no, path)
         else:
-            raise ValueError("unknown source: %s" % source)
+            raise ValueError("source not implemented: %s" % source)
 
     rechts, hoch, _ = _geo.ll2gk(lat, lon)
     if ele is None:
@@ -1098,6 +1242,8 @@ def austal_weather(args):
 def add_options(subparsers):
 
     default_year = 2003
+    known_sources = _datasets.SOURCES_WEATHER
+
     #
     # command line args
     #
@@ -1114,13 +1260,13 @@ def add_options(subparsers):
     pars_wea.add_argument('-s', '--source',
                         metavar="CODE",
                         nargs=None,
-                        choices=KNOWN_SOURCES,
-                        default=KNOWN_SOURCES[0],
+                        choices=known_sources,
+                        default=known_sources[0],
                         help='select the source for the weather data. ' +
                              'Known ``CODE`` values are ' +
-                             ' '.join(KNOWN_SOURCES) +
+                             ' '.join(known_sources) +
                              ' Defaults to ' +
-                             KNOWN_SOURCES[0])
+                             known_sources[0])
     pars_wea.add_argument('-y', '--year', dest='year',
                         metavar='YEAR',
                         nargs=None,
@@ -1266,7 +1412,7 @@ def main(args):
     available_weather = _datasets.find_weather_data()
     if available_weather is None or len(available_weather) == 0:
         logger.warning("No available weather data in config file,"
-                       "trying to serch weather data. \n"
+                       "trying to search weather data. \n"
                        "Run configure_autaltools to collect the "
                        "available weather data infomation once.")
         available_weather = _datasets.find_weather_data()
