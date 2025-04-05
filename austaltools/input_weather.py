@@ -59,7 +59,6 @@ DEFAULT_CLASS_SCHEME = os.environ.get('CLASS_SCHEME', 'all')
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     kappa = m.constants.kappa
     gn = m.constants.gn
-    _check = m._utils._check
 
 # ----------------------------------------------------
 
@@ -552,7 +551,7 @@ def read_cerra_nc(ncfile, lat, lon):
     values = pd.DataFrame()
     time_unit_string = nc.variables['time'].units
     time_unit, _, base_date = time_unit_string.split(maxsplit=2)
-    epoch = pd.to_datetime(base_date)
+    epoch = pd.to_datetime(base_date, utc=True)
     values['time'] = [epoch + pd.Timedelta(x, unit=time_unit)
                       for x in nc.variables['time'][:].data]
     #
@@ -1440,12 +1439,12 @@ def add_options(subparsers):
     adv_wea.add_argument('--z0',
                          dest='z0',
                          default=None,
-                         help="roughness length at the position of the "
-                              "measurement used for calculation of "
-                              "the effective anemometer height. "
-                              "Overrides the value provided by the "
-                              "data source. Ignored if value is None. "
-                              "[%(default)]"
+                         help=f"roughness length at the position of the "
+                              f"measurement used for calculation of "
+                              f"the effective anemometer height. "
+                              f"Overrides the value provided by the "
+                              f"data source. Ignored if value is None. "
+                              f"[%(default)s]"
                          )
     return pars_wea
 
