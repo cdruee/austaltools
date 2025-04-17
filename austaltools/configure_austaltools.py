@@ -66,7 +66,31 @@ def list_datasets(only='all', state='known', long=False):
 # -------------------------------------------------------------------------
 
 def set_austaldir(args: dict):
+    """
+    Set the Austal directory path based on user input or search criteria.
 
+    This function sets the directory path for Austal based on
+    user-provided arguments. It can either use a direct path given by the
+    user or search within a directory tree for specific AUSTAL related
+    files to determine the path. If no arguments are provided,
+    it displays the current setting.
+
+    :param args: The dictionary containing parsed command line arguments:
+                 - 'path': A direct path provided by the user.
+                 - 'find': A directory path to search within for AUSTAL.
+
+    :type args: dict
+
+    :raises EnvironmentError:
+      If no Austal installation is found during the search.
+    :raises ValueError: If the provided or chosen path does not exist.
+
+    If a path is provided via 'path', it will be used directly. If 'find'
+    is specified, a search for Austal's executable or related files is
+    performed within the directory tree, and the user may be prompted to
+    select the correct path if multiple candidates are found. The function
+    saves the new setting if a valid path is determined.
+    """
     conf = _storage.read_config()
 
     if args.get('path', None) is not None:
@@ -111,6 +135,97 @@ def set_austaldir(args: dict):
         raise ValueError(f"Path does not exist: {path}")
     conf['austaldir'] = path
     _storage.write_config(conf)
+
+
+# -------------------------------------------------------------------------
+
+def set_simple(args: dict):
+    """
+    Set configuration for austaltools simple.
+
+    This function updates the weather, year, terrain, and extent settings
+    by checking the provided `args` dictionary. If the values are not
+    assigned new values in `args`, and if not present in the config file,
+    pre-defined defaults are used.
+
+    :param args: The dictionary containing parsed command line arguments:
+                 - 'simple_weather':
+                   Desired weather source (must be in `DS.SOURCES_WEATHER`).
+                 - 'simple_year':
+                   Desired year for the weather source.
+                 - 'simple_terrain':
+                   Desired terrain source (must be in `DS.SOURCES_TERRAIN`).
+                 - 'simple_extent':
+                   Desired extent for the terrain source.
+
+    :type args: dict
+
+    :raises ValueError: If 'simple_weather' or 'simple_terrain'
+        in `args` is not recognized.
+    """
+    conf = _storage.read_config()
+    simple_conf = conf.get('simple', {})
+
+    if args.get('simple_weather',None) is not None:
+        weather = args.get('simple_weather')
+        if weather not in DS.SOURCES_WEATHER:
+            sys.tracebacklimit = 0
+            raise ValueError(f"unknwon weather source {weather}")
+    elif 'weather' in simple_conf:
+        weather =  simple_conf.get('weather')
+    else:
+        weather = _storage.SIMPLE_DEFAULT_WEATHER
+
+    if args.get('simple_year',None) is not None:
+        year = args.get('simple_year')
+    elif 'year' in simple_conf:
+        year = simple_conf.get('year')
+    else:
+        year = _storage.SIMPLE_DEFAULT_YEAR
+    sourcename = DS.name_yearly(weather, year)
+
+    if not DS.dataset_available(sourcename):
+        logger.error(f"selected weather source {sourcename} "
+                     f"is not available")
+
+    if args.get('simple_terrain',None) is not None:
+        terrain = args.get('simple_terrain')
+        if terrain not in DS.SOURCES_TERRAIN:
+            sys.tracebacklimit = 0
+            raise ValueError(f"unknwon terrain source {terrain}")
+    elif 'terrain' in simple_conf:
+        terrain =  simple_conf.get('terrain')
+    else:
+        terrain = _storage.SIMPLE_DEFAULT_TERRAIN
+
+    if not DS.dataset_available(terrain):
+        logger.error(f"selected terrain source {terrain} "
+                     f"is not available")
+
+    if args.get('simple_extent',None) is not None:
+        extent = args.get('simple_extent')
+    elif 'extent' in simple_conf:
+        extent =  simple_conf.get('extent')
+    else:
+        extent = _storage.SIMPLE_DEFAULT_EXTENT
+
+    if all([args.get(f'simple_{x}', None) is None
+                for x in ['weather', 'year', 'terrain', 'extent']]):
+        # show current setting
+        print("weather source: %s" % weather)
+        print("weather year  : %s" % str(year))
+        print("terrain source: %s" % terrain)
+        print("terrain extent: %s" % str(extent))
+
+    else:
+        # save setting
+        if not 'simple' in conf:
+            conf['simple'] = {}
+        conf['simple']['weather'] = weather
+        conf['simple']['year'] = year
+        conf['simple']['terrain'] = terrain
+        conf['simple']['extent'] = extent
+        _storage.write_config(conf)
 
 
 # -------------------------------------------------------------------------
@@ -273,6 +388,28 @@ def cli_parser():
                                           'show availability and '
                                           'storage locations')
 
+    sub_smpl = subparsers.add_parser('simple',
+                                   help="change settings for austaltools "
+                                        "simple / austal-input. "
+                                        "If called without options, "
+                                        "the current sinngs are shown.")
+    sub_smpl.add_argument('--weather',
+                          metavar="CODE",
+                          dest='simple_weather',
+                          help="select weather source")
+    sub_smpl.add_argument('--year',
+                          metavar="CODE",
+                          dest='simple_year',
+                          help="select weather year")
+    sub_smpl.add_argument('--terrain',
+                          metavar="CODE",
+                          dest='simple_terrain',
+                          help="select terrain source")
+    sub_smpl.add_argument('--extent',
+                          metavar="CODE",
+                          dest='simple_extent',
+                          help="select terrain source")
+
     sub_sl = subparsers.add_parser('stationlist',
                                    help="generate new stationlist for "
                                         "one of the weather sources")
@@ -306,8 +443,6 @@ def cli_parser():
                         default=None,
                         help='custom location for temp files [/tmp]'
                         )
-
-
 
     more_epilog = ""
     if not DS.have_lib('cdo') or not DS.have_lib('cdsapi'):
@@ -420,9 +555,12 @@ def main():
             raise ValueError("Source not recognized: %s "
                              % args['source'])
 
+    elif args['action'] == 'simple':
+        set_simple(args)
+
     else:
         raise ValueError("Action not recognized: %s "
-                         % args['source'])
+                         % args['action'])
 
 # -------------------------------------------------------------------------
 # initialize and call main routine

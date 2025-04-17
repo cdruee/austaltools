@@ -157,6 +157,19 @@ def cli_parser():
 def simple(args):
     print(os.path.basename(__file__) + ' version: ' + __version__)
     #
+    # get customized defaults from config
+    #
+    conf = _storage.read_config()
+    simple_conf = conf.get('simple', {})
+    w_source = simple_conf.get(
+        'weather', _storage.SIMPLE_DEFAULT_TERRAIN)
+    w_year = int(simple_conf.get(
+        'year', _storage.SIMPLE_DEFAULT_YEAR))
+    t_source = simple_conf.get(
+        'terrain', _storage.SIMPLE_DEFAULT_TERRAIN)
+    t_extent = float(simple_conf.get(
+        'extent', _storage.SIMPLE_DEFAULT_EXTENT))
+    #
     args['ele'] = _tools.estimate_elevation(args['lat'], args['lon'])
     #
     # call weather
@@ -169,8 +182,8 @@ def simple(args):
         w_args[x] = None
     w_args['ll'] = [args['lat'], args['lon']]
     w_args['ele'] = args['ele']
-    w_args['source'] = 'CERRA'
-    w_args['year'] = 2003
+    w_args['source'] = w_source
+    w_args['year'] = w_year
     w_args['prec'] = False
     w_args['station'] = None
     # call program
@@ -195,8 +208,8 @@ def simple(args):
     for x in ['gk', 'ut', 'sources', 'ele']:
         t_args[x] = None
     t_args['ll'] = [args['lat'], args['lon']]
-    t_args['source'] = "DGM25-DE"
-    t_args['extent'] = 6.
+    t_args['source'] = t_source
+    t_args['extent'] = t_extent
     # call program
     input_terrain.main(t_args)
     # remove confusing extra files

@@ -3,6 +3,7 @@ import os
 import re
 import shlex
 import logging
+import select
 import sys
 import unicodedata
 import urllib.parse
@@ -981,7 +982,34 @@ def wind_files(path):
 
 # -------------------------------------------------------------------------
 
-def read_wind(file_info: dict, path: str = '.', grid: int = 0):
+def prompt_timeout(prompt, timeout, default: str = None):
+    """
+    Ask the user a question, wait timeout seconds for an answer,
+    then continue
+    :param prompt: Text to show as prompt
+    :type prompt: str
+    :param timeout: Time to weit for an answer in seconds
+    :type timeout: int
+    :param default: Default answer
+    :type default: str|None
+    :return: The answer. If the user typed in someting, it is returned,
+      else the default.
+    :rtype: str|None
+    """
+    print (prompt)
+    print ("Please answer in the next {} seconds.".format(timeout))
+    x, _, _ = select.select( [sys.stdin], [], [],
+                             timeout )
+    if x:
+        res = sys.stdin.readline().strip()
+    else:
+        res = default
+    return res
+
+# -------------------------------------------------------------------------
+
+def read_wind(file_info: dict, path: str = '.', grid: int = 0,
+              centers:bool = False):
     """
     read wind library files
 
@@ -1037,6 +1065,30 @@ def read_wind(file_info: dict, path: str = '.', grid: int = 0):
             v_grid[:, :, :, istab, idir] = dmna.data['Vy']
     axes['dir'] = [x * 10. for x in dirs]
     axes['ak'] = stabs
+    if centers:
+        for ax in ['x', 'y', 'z']:
+            axes[ax] = list(np.convolve(axes[ax],[0.5,0.5])[1:-1]
+                            + axes[ax][0])
+        u_ctr= np.full((nx - 1, ny - 1, nz - 1, nstab, ndir), np.nan)
+        v_ctr = np.full((nx - 1, ny - 1, nz - 1, nstab, ndir), np.nan)
+        for ib in range(nstab):
+            for ir in range(ndir):
+                for ix in range(nx - 1):
+                    for iy in range(ny - 1):
+                        for iz in range(nz - 1):
+                            oz = iz + 1
+                            # move 1 layer lover and ...
+                            # ... mean u in x-direction
+                            u_ctr[ix, iy, iz, ib, ir] = (
+                                    u_grid[ix + 1, iy + 1, oz, ib, ir] +
+                                    u_grid[ix, iy + 1, oz, ib, ir]) / 2.
+                            # ... mean u in v-direction
+                            v_ctr[ix, iy, iz, ib, ir] = (
+                                    v_grid[ix + 1, iy, oz, ib, ir] +
+                                    v_grid[ix + 1, iy + 1, oz, ib, ir]) / 2.
+        u_grid = u_ctr
+        v_grid = v_ctr
+
     return u_grid, v_grid, axes
 
 # -------------------------------------------------------------------------
