@@ -122,6 +122,7 @@ merge_github:
    - git remote add -t github github "ssh://git@github.com/$GITHUB_USER/$CI_PROJECT_NAME.git"
    - git branch -avv
    # first synch repo and from github.com branches
+   - git fetch origin github || echo "nothing to fetch !?"
    - git fetch --refetch -f github github || echo "nothing to fetch !?"
    - git branch -avv
    - git checkout github
