@@ -122,7 +122,7 @@ merge_github:
    - git remote add -t github github "ssh://git@github.com/$GITHUB_USER/$CI_PROJECT_NAME.git"
    - git branch -avv
    # first synch repo and from github.com branches
-   - git fetch --refetch -f github github
+   - git fetch --refetch -f github github || echo "nothing to fetch !?"
    - git branch -avv
    - git checkout github
    - git branch -avv
@@ -260,14 +260,14 @@ deploy_deb:
       done
     - echo "Ende"
 
-#deploy_pypi:
-#  image: python:latest
-#  stage: deploy
-#  needs:
-#    - job: build_deb
-#    - job: build_sdist
-#      artifacts: true
-#  script:
-#    - pip install twine
-#    - twine check dist/*tar.gz
-#    - twine upload --repository-url https://upload.pypi.org/legacy/ --username __token__ --password $PYPI_ID_TOKEN dist/*tar.gz
+deploy_pypi:
+  image: python:latest
+  stage: deploy
+  needs:
+    - job: build_deb
+    - job: build_sdist
+      artifacts: true
+  script:
+    - pip install twine
+    - twine check dist/*tar.gz
+    - twine upload --repository-url https://upload.pypi.org/legacy/ --username __token__ --password $PYPI_ID_TOKEN dist/*tar.gz
