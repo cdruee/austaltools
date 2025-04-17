@@ -1,0 +1,11 @@
+[build-system]
+requires = [
+    "setuptools",
+    "sphinx",
+    "sphinx-argparse",
+    "numpy",
+    "pandas",
+    "scipy",
+    "gdal"
+]
+build-backend = "setuptools.build_meta"

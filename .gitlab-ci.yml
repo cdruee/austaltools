@@ -1,0 +1,143 @@
+# template: helloworld 1.0.1
+
+workflow:
+  rules: # Run pipeline only if a tag is pushed by "git push --tags"
+    - if: $CI_COMMIT_TAG
+
+stages:
+  - build
+  - test
+  - deploy
+
+build_sdist:
+  image: python:latest
+  stage: build
+  script:
+    - python setup.py sdist
+    - echo 'ls dist/*tar.gz'
+    - ls dist/*tar.gz
+    - echo 'cd dist && ls *tar.gz'
+    - echo "$( cd dist && ls *tar.gz )"
+    - echo "BUILD_VERSION=$( cd dist && ls *tar.gz )" >> build.env
+    - echo "BUILD_JOB=${CI_JOB_ID}" >> build.env
+  artifacts:
+    paths:
+      - dist
+    reports:
+      dotenv: build.env
+
+build_bdist_deb:
+  image: ubuntu:focal
+  stage: build
+  needs:
+    - job: build_sdist
+      artifacts: true
+  script:
+    - export DEBIAN_FRONTEND=noninteractive
+    - apt update
+    - apt-get -y install dh-python debhelper
+    - apt-get -y install python-all
+    - apt-get -y install python3-numpy python3-pandas
+    - apt-get -y install python3-setuptools python3-all python3-stdeb
+    - export DEB_BUILD_OPTIONS=nocheck
+    - python3 setup.py bdist_deb
+    - rm -r deb_dist/*/
+    - echo "BUILD_DEB_VERSION=$( cd deb_dist && ls *deb )" >> build.env
+    - echo "BUILD_DEB_JOB=${CI_JOB_ID}" >> build.env
+  artifacts:
+    paths:
+      - deb_dist
+    reports:
+      dotenv: build.env
+
+build_pages:
+  image: python:latest
+  stage: build
+  script:
+    - pip install sphinx sphinx-argparse
+    - pip install numpy pandas
+    - BUILDING_SPHINX=true sphinx-build -b html docs build/sphinx/html
+    - mv build/sphinx/html/ public/
+  artifacts:
+    paths:
+    - public
+
+#TODO make this work
+test_latest:
+  image: python:latest
+  stage: test
+  script:
+    - echo pip install tox numpy pandas flake8
+    - echo tox
+
+pages:
+  image: python:latest
+  stage: deploy
+  rules:   # Run if tag is v0.00.00.. indicating a release
+    - if: $CI_COMMIT_TAG =~ /^[0-9]*\.[0-9]*\.[0-9]*.*/
+  needs:
+    - job: build_pages
+      artifacts: true
+    - job: test_latest
+  script:
+    - touch public
+  artifacts:
+    paths:
+    - public
+
+
+release:
+  image: registry.gitlab.com/gitlab-org/release-cli:latest
+  stage: deploy
+  rules:   # Run if tag is v0.00.00.. indicating a release
+    - if: $CI_COMMIT_TAG =~ /^[0-9]*\.[0-9]*\.[0-9]*.*/
+  script:
+    - echo "Running the release job."
+  needs:
+    - job: build_sdist
+      artifacts: true
+    - job: build_bdist_deb
+      artifacts: true
+    - job: test_latest
+  release:      # See https://docs.gitlab.com/ee/ci/yaml/#release for available properties
+     name: '$CI_COMMIT_TAG'
+     description: '$CI_COMMIT_DESCRIPTION'
+     tag_name: '$CI_COMMIT_TAG'
+     ref: '$CI_COMMIT_TAG'
+     assets:
+       links:
+         - name: "Python install package: ${BUILD_VERSION}"
+           type: 'package'
+           url: '${CI_PROJECT_URL}/-/jobs/${BUILD_JOB}/artifacts/raw/dist/${BUILD_VERSION}'
+         - name: "Debian/ubuntu package: ${BUILD_DEB_VERSION}"
+           type: 'package'
+           url: '${CI_PROJECT_URL}/-/jobs/${BUILD_DEB_JOB}/artifacts/raw/deb_dist/${BUILD_DEB_VERSION}'
+
+deploy_deb:
+  image: ubuntu:latest
+  stage: deploy
+  needs:
+    - job: build_sdist
+      artifacts: true
+    - job: build_bdist_deb
+      artifacts: true
+    - job: test_latest
+  before_script:
+    - 'command -v ssh-agent >/dev/null || ( apt-get update -y && apt-get install openssh-client -y )'
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    - eval $(ssh-agent -s)
+    - ssh-add ~/.ssh/id_rsa
+    - apt install -y curl
+    - curl ifconfig.me
+    - ssh-keyscan -H 'uwmhub.uni-trier.de' >> ~/.ssh/known_hosts
+  script:
+    - export DISTRIBUTIONS="jammy focal buster bookworm"
+    - ls -l
+    - export RESDIR="deb_dist"
+    - ls -l $RESDIR
+    - sed -i s/Distribution:\ unstable/Distribution:\ "${DISTRIBUTIONS}"/ $RESDIR/*.changes
+
+    - for X in deb changes buildinfo ; do ls $RESDIR/*$X; scp $RESDIR/*$X reprepro@uwmhub.uni-trier.de:~/incoming ; done
