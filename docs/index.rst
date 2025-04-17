@@ -26,29 +26,14 @@ Command-line scripts:
 
 The module contains the following scripts
 
-:doc:`austal-buildings-geojson`
-    Read buildings from a Geojson file and put them into ``austal.txt``
+:doc:`austaltools`
+    The main comand that provides all user-facing functionality.
 
-:doc:`austal-eap`
-    Determine EAP ("Ersatz-AnemometerPosition") accoring to VDI norm
+:doc:`configure-austaltools`
+    Download dataset for use with austaltools (or assemble them from the original sources)
 
 `austal-input`_
     Convenience command for easy creation of AUSTAL input data
-
-:doc:`austal-fill-time-series`
-    Fill source-strength columns in "zeitreihe.dmna"
-
-:doc:`austal-steepness`
-    Determine steepness of the model area
-
-:doc:`austal-terrain`
-    Extract surface topography for AUSTAL from various sources
-
-:doc:`austal-plot`
-    Simple baseline data plot
-
-:doc:`austal-weather`
-    Extract amospheric time series for AUSTAL from various sources
 
 Licenses
 --------
@@ -56,20 +41,39 @@ Licenses
 This package is licensed under the EUROPEAN UNION PUBLIC LICENCE v. 1.2.
 See `LICENSE` for the license text or navugate to https://eupl.eu/1.2/en/
 
-The topography data that can be downloaded are licensed under
-various other licenses:
+The topography data that can be downloaded are licensed by the original providers
+under various other licenses:
 
-+----------+-----------------------------------------------------------------------------------+
-| code     | license                                                                           |
-+==========+===================================================================================+
-| GLO-30   | Licence for Copernicus DEM instance COP-DEM-GLO-30-F Global 30m Full, Free & Open |
-+----------+-----------------------------------------------------------------------------------+
-| GTOPO30  | Creative Commons Attribution 4.0 International License.                           |
-+----------+-----------------------------------------------------------------------------------+
-| DGM25-RP | Datenlizenz Deutschland – Namensnennung – Version 2.0                             |
-+----------+-----------------------------------------------------------------------------------+
-| DGM25-NW | Datenlizenz Deutschland – Zero – Version 2.0                                      |
-+----------+-----------------------------------------------------------------------------------+
++------------+-----------------------------------------------------------------------------------+
+| code       | license                                                                           |
++============+===================================================================================+
+| GLO-30     | Licence for Copernicus DEM instance COP-DEM-GLO-30-F Global 30m Full, Free & Open |
++------------+-----------------------------------------------------------------------------------+
+| GTOPO30    | Creative Commons Attribution 4.0 International License.                           |
++------------+-----------------------------------------------------------------------------------+
+| DGM25-RP   | Datenlizenz Deutschland – Namensnennung – Version 2.0                             |
++------------+-----------------------------------------------------------------------------------+
+| DGM10-BB   | Datenlizenz Deutschland – Namensnennung – Version 2.0                             |
+| DGM10-BE   |                                                                                   |
+| DGM10-BW   |                                                                                   |
+| DGM10-RP   |                                                                                   |
+| DGM10-SL   |                                                                                   |
+| DGM10-SN   |                                                                                   |
+| DGM10-ST   |                                                                                   |
+| DGM10-TH   |                                                                                   |
++------------+-----------------------------------------------------------------------------------+
+| DGM10-BY   | Creative Commons Attribution 4.0 International License.                           |
+| DGM10-HB   |                                                                                   |
+| DGM10-MV   |                                                                                   |
+| DGM10-NI   |                                                                                   |
+| DGM10-SH   |                                                                                   |
++------------+-----------------------------------------------------------------------------------+
+| DGM10-HE   | Public domain (no explicit licencse)                                              |
++------------+-----------------------------------------------------------------------------------+
+| DGM10-HH   | Creative Commons zero 1.0                                                         |
++------------+-----------------------------------------------------------------------------------+
+| DGM10-NW   | Datenlizenz Deutschland – Zero – Version 2.0                                      |
++------------+-----------------------------------------------------------------------------------+
 
 See files containing `LICENSE.*` for the individual licence texts.
 

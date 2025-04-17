@@ -1,0 +1,59 @@
+Nutzungsbestimmungen:
+
+Hessisches Gesetz über das öffentliche Vermessungs- und Geoinformationswesen
+(Hessisches Vermessungs- und Geoinformationsgesetz - HVGG)
+
+Vom 6. September 2007
+Gesamtausgabe in der Gültigkeit vom 01.01.2023 bis 31.12.2028
+Stand: 	letzte berücksichtigte Änderung: zuletzt geändert durch Artikel 1
+des Gesetzes vom 30. September 2021 (GVBl. S. 602)
+
+§ 18 Nr. 1
+
+Jede Nutzung der Geobasisdaten und zugehörigen Metadaten ist ohne
+Einschränkung oder Bedingung erlaubt. Die bereitgestellten
+Geobasisdaten und Metadaten dürfen für die kommerzielle und
+nicht kommerzielle Nutzung insbesondere
+1. vervielfältigt, ausgedruckt, präsentiert, verändert, bearbeitet
+    sowie an Dritte übermittelt werden,
+2. mit eigenen Daten und Daten anderer zusammengeführt und zu
+    selbstständigen neuen Datensätzen verbunden werden,
+3. in interne und externe Geschäftsprozesse, Produkte und Anwendungen
+    inöffentlichen und nicht öffentlichen elektronischen Netzwerken
+    eingebunden werden.
+
+Wird bei der Nutzung der Geobasisdaten oder Metadaten ein Quellenvermerk
+beigegeben, ist in diesem auf Veränderungen, Bearbeitungen, neue
+Gestaltungen oder sonstige Abwandlungen der Geobasisdaten oder Metadaten
+hinzuweisen.
+
+---------------(inofficial translation follows)---------------
+
+Terms of use
+
+Hessian law on the public surveying and geoinformation system
+(Hessian Surveying and Geoinformation Act - HVGG)
+
+From September 6, 2007
+Complete edition valid from 01.01.2023 to 31.12.2028
+Status: last amendment taken into account: last amended by Article 1
+of the Act of September 30, 2021 (GVBl. p. 602)
+
+section 18 clause 1
+
+Any use of the official geodata and associated metadata is permitted
+without restriction or condition. The official geodata and metadata
+provided may be used for commercial and non-commercial purposes,
+in particular
+1. reproduced, printed, presented, modified, processed and
+    transmitted to third parties,
+2. be merged with own data and data of others and combined to form
+    independent new data sets,
+3. integrated into internal and external business processes, products
+    and applications in public and non-public electronic networks.
+
+If a source note is attached to the use of the official geodata or
+metadata, it must indicate any changes, edits, new designs or other
+modifications to the official geodata or metadata. must be indicated.
+
+Translated with DeepL.com (free version)
