@@ -11,13 +11,17 @@ import logging
 import os
 import sys
 
+import austaltools._geo
+
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
 
 try:
     from . import _tools
+    from . import _plotting
 except ImportError:
     import _tools
+    import _plotting
 
 try:
     from ._version import __version__
@@ -533,7 +537,7 @@ def deduplicate(points, tolerance=None):
 def plot_building_shapes(args: dict, polygons: list[tuple],
                          buildings: list[_tools.Building],
                          topo: str = None):
-    """
+    r"""
     Plot buildings and polygon shapes from geojson file
 
     :param args: command line arguments
@@ -690,7 +694,7 @@ def main(args):
         gx = austxt['gx'][0]
         gy = austxt['gy'][0]
     elif 'ux' in austxt and 'uy' in austxt:
-        gx, gy = _tools.ut2gk(austxt['ux'][0], austxt['uy'][0])
+        gx, gy = austaltools._geo.ut2gk(austxt['ux'][0], austxt['uy'][0])
     else:
         raise ValueError('neither GaussKrueger nor UTM in config')
     origin = np.array((gx, gy))
@@ -699,6 +703,8 @@ def main(args):
         buildings_file = args['file']
     else:
         buildings_file = os.path.join(args['working_dir'], args['file'])
+    if not os.path.exists(buildings_file):
+        raise IOError(f"file not found: {buildings_file}")
     logger.info('reading: %s' % buildings_file)
     with open(buildings_file) as f:
         data = json.load(f)
@@ -794,6 +800,6 @@ def add_options(subparsers):
                         default=DEFAULT_ZVALUE)
     pars_bldg_hgt.add_argument('-Z', '--height',
                         help='height of all buildings')
-    pars_bldg = _tools.add_arguents_common_plot(pars_bldg)
+    pars_bldg = _plotting.add_arguents_common_plot(pars_bldg)
 
     return pars_bldg

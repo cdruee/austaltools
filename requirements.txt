@@ -1,0 +1,13 @@
+austaltools
+numpy
+pandas
+matplotlib
+setuptools
+requests
+meteolib
+SciPy
+GDAL
+readmet
+tqdm
+PyYAML
+urllib3

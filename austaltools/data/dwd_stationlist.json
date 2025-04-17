@@ -1,0 +1,1602 @@
+{
+    "3": {
+        "start": 809913600000,
+        "end": 1301529600000,
+        "elevation": 202.0,
+        "latitude": 50.7827,
+        "longitude": 6.0941,
+        "name": "Aachen"
+    },
+    "44": {
+        "start": 1175385600000,
+        "end": 817689600000,
+        "elevation": 44.0,
+        "latitude": 52.9336,
+        "longitude": 8.237,
+        "name": "Gro\u00dfenkneten"
+    },
+    "96": {
+        "start": 1554854400000,
+        "end": 1740096000000,
+        "elevation": 50.0,
+        "latitude": 52.9437,
+        "longitude": 12.8518,
+        "name": "Neuruppin-Alt Ruppin"
+    },
+    "125": {
+        "start": 1695600000000,
+        "end": 1695686400000,
+        "elevation": 739.0,
+        "latitude": 47.8342,
+        "longitude": 10.8667,
+        "name": "Altenstadt"
+    },
+    "161": {
+        "start": 1314835200000,
+        "end": 1740096000000,
+        "elevation": 75.0,
+        "latitude": 50.4237,
+        "longitude": 7.4202,
+        "name": "Andernach"
+    },
+    "164": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 54.0,
+        "latitude": 53.0316,
+        "longitude": 13.9908,
+        "name": "Angerm\u00fcnde"
+    },
+    "183": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 42.0,
+        "latitude": 54.6791,
+        "longitude": 13.4344,
+        "name": "Arkona"
+    },
+    "198": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 164.0,
+        "latitude": 51.3744,
+        "longitude": 11.292,
+        "name": "Artern"
+    },
+    "222": {
+        "start": 809913600000,
+        "end": 1214870400000,
+        "elevation": 393.0,
+        "latitude": 50.5908,
+        "longitude": 12.7139,
+        "name": "Aue"
+    },
+    "232": {
+        "start": 847324800000,
+        "end": 1740096000000,
+        "elevation": 462.0,
+        "latitude": 48.4253,
+        "longitude": 10.9417,
+        "name": "Augsburg"
+    },
+    "282": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 240.0,
+        "latitude": 49.8743,
+        "longitude": 10.9206,
+        "name": "Bamberg"
+    },
+    "298": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 3.0,
+        "latitude": 54.3405,
+        "longitude": 12.7108,
+        "name": "Barth"
+    },
+    "303": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 55.0,
+        "latitude": 52.0613,
+        "longitude": 13.4997,
+        "name": "Baruth"
+    },
+    "342": {
+        "start": 1291161600000,
+        "end": 1740096000000,
+        "elevation": 103.0,
+        "latitude": 52.317,
+        "longitude": 8.1694,
+        "name": "Belm"
+    },
+    "348": {
+        "start": 809913600000,
+        "end": 1314835200000,
+        "elevation": 127.0,
+        "latitude": 50.4135,
+        "longitude": 7.5886,
+        "name": "Bendorf"
+    },
+    "427": {
+        "start": 809913600000,
+        "end": 1659312000000,
+        "elevation": 46.0,
+        "latitude": 52.3807,
+        "longitude": 13.5306,
+        "name": "Berlin Brandenburg"
+    },
+    "430": {
+        "start": 809913600000,
+        "end": 1620086400000,
+        "elevation": 36.0,
+        "latitude": 52.5644,
+        "longitude": 13.3088,
+        "name": "Berlin-Tegel"
+    },
+    "433": {
+        "start": 809913600000,
+        "end": 1739750400000,
+        "elevation": 48.0,
+        "latitude": 52.4676,
+        "longitude": 13.402,
+        "name": "Berlin-Tempelhof"
+    },
+    "460": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 362.0,
+        "latitude": 49.2641,
+        "longitude": 6.6868,
+        "name": "Berus"
+    },
+    "554": {
+        "start": 809913600000,
+        "end": 1141084800000,
+        "elevation": 23.0,
+        "latitude": 51.8293,
+        "longitude": 6.5365,
+        "name": "Bocholt-Liedern (Wasserwerk)"
+    },
+    "591": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 45.0,
+        "latitude": 53.3911,
+        "longitude": 10.6878,
+        "name": "Boizenburg"
+    },
+    "596": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 15.0,
+        "latitude": 54.0027,
+        "longitude": 11.1908,
+        "name": "Boltenhagen"
+    },
+    "599": {
+        "start": 809913600000,
+        "end": 880934400000,
+        "elevation": 62.0,
+        "latitude": 50.7055,
+        "longitude": 7.1467,
+        "name": "Bonn-Friesdorf"
+    },
+    "603": {
+        "start": 986256000000,
+        "end": 1740096000000,
+        "elevation": 147.0,
+        "latitude": 50.7293,
+        "longitude": 7.204,
+        "name": "K\u00f6nigswinter-Heiderhof"
+    },
+    "656": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 607.0,
+        "latitude": 51.7234,
+        "longitude": 10.6021,
+        "name": "Braunlage"
+    },
+    "662": {
+        "start": 877478400000,
+        "end": 1740096000000,
+        "elevation": 81.0,
+        "latitude": 52.2915,
+        "longitude": 10.4464,
+        "name": "Braunschweig"
+    },
+    "691": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 4.0,
+        "latitude": 53.0451,
+        "longitude": 8.7981,
+        "name": "Bremen"
+    },
+    "701": {
+        "start": 897436800000,
+        "end": 1740096000000,
+        "elevation": 7.0,
+        "latitude": 53.5332,
+        "longitude": 8.5761,
+        "name": "Bremerhaven"
+    },
+    "704": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 11.0,
+        "latitude": 53.4451,
+        "longitude": 9.139,
+        "name": "Bremerv\u00f6rde"
+    },
+    "840": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 895.0,
+        "latitude": 50.4313,
+        "longitude": 12.6114,
+        "name": "Carlsfeld"
+    },
+    "853": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 416.0,
+        "latitude": 50.7913,
+        "longitude": 12.872,
+        "name": "Chemnitz"
+    },
+    "856": {
+        "start": 1041379200000,
+        "end": 1740096000000,
+        "elevation": 551.0,
+        "latitude": 47.8843,
+        "longitude": 12.5404,
+        "name": "Chieming"
+    },
+    "867": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 344.0,
+        "latitude": 50.3066,
+        "longitude": 10.9679,
+        "name": "Lautertal-Oberlauter"
+    },
+    "880": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 69.0,
+        "latitude": 51.7759,
+        "longitude": 14.3168,
+        "name": "Cottbus"
+    },
+    "891": {
+        "start": 957916800000,
+        "end": 1740096000000,
+        "elevation": 5.0,
+        "latitude": 53.8713,
+        "longitude": 8.706,
+        "name": "Cuxhaven"
+    },
+    "953": {
+        "start": 881712000000,
+        "end": 1740096000000,
+        "elevation": 481.0,
+        "latitude": 49.7619,
+        "longitude": 7.0542,
+        "name": "Deuselbach"
+    },
+    "963": {
+        "start": 833760000000,
+        "end": 1740096000000,
+        "elevation": 38.0,
+        "latitude": 52.5881,
+        "longitude": 8.3424,
+        "name": "Diepholz"
+    },
+    "1001": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 97.0,
+        "latitude": 51.6451,
+        "longitude": 13.5747,
+        "name": "Doberlug-Kirchhain"
+    },
+    "1048": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 228.0,
+        "latitude": 51.1278,
+        "longitude": 13.7543,
+        "name": "Dresden-Klotzsche"
+    },
+    "1078": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 37.0,
+        "latitude": 51.296,
+        "longitude": 6.7686,
+        "name": "D\u00fcsseldorf"
+    },
+    "1130": {
+        "start": 1246406400000,
+        "end": 1078012800000,
+        "elevation": 18.0,
+        "latitude": 54.6282,
+        "longitude": 9.3649,
+        "name": "Eggebek"
+    },
+    "1200": {
+        "start": 1195516800000,
+        "end": 1740096000000,
+        "elevation": 3.0,
+        "latitude": 54.0691,
+        "longitude": 9.0105,
+        "name": "Elpersb\u00fcttel"
+    },
+    "1219": {
+        "start": 809913600000,
+        "end": 867628800000,
+        "elevation": 5.0,
+        "latitude": 53.3449,
+        "longitude": 7.1909,
+        "name": "Emden-Nesserland"
+    },
+    "1262": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 446.0,
+        "latitude": 48.3477,
+        "longitude": 11.8134,
+        "name": "M\u00fcnchen-Flughafen"
+    },
+    "1270": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 316.0,
+        "latitude": 50.9829,
+        "longitude": 10.9608,
+        "name": "Erfurt-Weimar"
+    },
+    "1303": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 150.0,
+        "latitude": 51.4041,
+        "longitude": 6.9677,
+        "name": "Essen-Bredeney"
+    },
+    "1346": {
+        "start": 1228262400000,
+        "end": 1740096000000,
+        "elevation": 1486.0,
+        "latitude": 47.8748,
+        "longitude": 8.0038,
+        "name": "Feldberg/Schwarzwald"
+    },
+    "1358": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 1213.0,
+        "latitude": 50.4283,
+        "longitude": 12.9536,
+        "name": "Fichtelberg"
+    },
+    "1420": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 100.0,
+        "latitude": 50.0259,
+        "longitude": 8.5213,
+        "name": "Frankfurt/Main"
+    },
+    "1443": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 237.0,
+        "latitude": 48.0232,
+        "longitude": 7.8343,
+        "name": "Freiburg"
+    },
+    "1468": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 797.0,
+        "latitude": 48.4538,
+        "longitude": 8.409,
+        "name": "Freudenstadt"
+    },
+    "1503": {
+        "start": 1349049600000,
+        "end": 1740096000000,
+        "elevation": 6.0,
+        "latitude": 53.0643,
+        "longitude": 7.902,
+        "name": "Friesoythe-Altenoythe"
+    },
+    "1544": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 47.0,
+        "latitude": 52.5129,
+        "longitude": 11.3942,
+        "name": "Gardelegen"
+    },
+    "1550": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 719.0,
+        "latitude": 47.483,
+        "longitude": 11.0621,
+        "name": "Garmisch-Partenkirchen"
+    },
+    "1572": {
+        "start": 1708905600000,
+        "end": 1104451200000,
+        "elevation": 80.0,
+        "latitude": 50.9593,
+        "longitude": 6.0392,
+        "name": "Geilenkirchen-Neutevern"
+    },
+    "1580": {
+        "start": 1164931200000,
+        "end": 1740096000000,
+        "elevation": 111.0,
+        "latitude": 49.9859,
+        "longitude": 7.9548,
+        "name": "Geisenheim"
+    },
+    "1587": {
+        "start": 1071014400000,
+        "end": 1740096000000,
+        "elevation": 536.0,
+        "latitude": 48.9481,
+        "longitude": 11.4289,
+        "name": "Gelbelsee"
+    },
+    "1605": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 35.0,
+        "latitude": 52.3875,
+        "longitude": 12.1602,
+        "name": "Genthin"
+    },
+    "1612": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 311.0,
+        "latitude": 50.8812,
+        "longitude": 12.1289,
+        "name": "Gera-Leumnitz"
+    },
+    "1639": {
+        "start": 858816000000,
+        "end": 1740096000000,
+        "elevation": 203.0,
+        "latitude": 50.6017,
+        "longitude": 8.6439,
+        "name": "Gie\u00dfen/Wettenberg"
+    },
+    "1684": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 239.0,
+        "latitude": 51.1621,
+        "longitude": 14.9506,
+        "name": "G\u00f6rlitz"
+    },
+    "1691": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 167.0,
+        "latitude": 51.5002,
+        "longitude": 9.9507,
+        "name": "G\u00f6ttingen"
+    },
+    "1694": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 59.0,
+        "latitude": 53.6058,
+        "longitude": 12.1034,
+        "name": "Goldberg"
+    },
+    "1757": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 2.0,
+        "latitude": 54.0967,
+        "longitude": 13.4056,
+        "name": "Greifswald"
+    },
+    "1759": {
+        "start": 979689600000,
+        "end": 1740096000000,
+        "elevation": 12.0,
+        "latitude": 54.2437,
+        "longitude": 13.9102,
+        "name": "Greifswalder Oie"
+    },
+    "1766": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 48.0,
+        "latitude": 52.1344,
+        "longitude": 7.6969,
+        "name": "M\u00fcnster/Osnabr\u00fcck"
+    },
+    "1869": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 56.0,
+        "latitude": 53.3154,
+        "longitude": 13.9339,
+        "name": "Gr\u00fcnow"
+    },
+    "1957": {
+        "start": 809913600000,
+        "end": 1427068800000,
+        "elevation": 93.0,
+        "latitude": 51.5138,
+        "longitude": 11.9499,
+        "name": "Halle-Kr\u00f6llwitz"
+    },
+    "1975": {
+        "start": 810259200000,
+        "end": 1740096000000,
+        "elevation": 11.0,
+        "latitude": 53.6332,
+        "longitude": 9.9881,
+        "name": "Hamburg-Fuhlsb\u00fcttel"
+    },
+    "2014": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 55.0,
+        "latitude": 52.4644,
+        "longitude": 9.6779,
+        "name": "Hannover"
+    },
+    "2023": {
+        "start": 1037145600000,
+        "end": 1740096000000,
+        "elevation": 501.0,
+        "latitude": 48.7918,
+        "longitude": 10.7062,
+        "name": "Harburg"
+    },
+    "2044": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 404.0,
+        "latitude": 51.652,
+        "longitude": 11.1366,
+        "name": "Harzgerode"
+    },
+    "2171": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 272.0,
+        "latitude": 50.852,
+        "longitude": 9.7377,
+        "name": "Hersfeld, Bad"
+    },
+    "2261": {
+        "start": 944092800000,
+        "end": 1740096000000,
+        "elevation": 565.0,
+        "latitude": 50.3123,
+        "longitude": 11.876,
+        "name": "Hof"
+    },
+    "2290": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 977.0,
+        "latitude": 47.8009,
+        "longitude": 11.0108,
+        "name": "Hohenpei\u00dfenberg"
+    },
+    "2410": {
+        "start": 1525996800000,
+        "end": 1525996800000,
+        "elevation": 364.0,
+        "latitude": 48.7111,
+        "longitude": 11.5363,
+        "name": "Ingolstadt-Manching"
+    },
+    "2429": {
+        "start": 1056585600000,
+        "end": 1740096000000,
+        "elevation": 20.0,
+        "latitude": 53.9897,
+        "longitude": 9.5697,
+        "name": "Itzehoe"
+    },
+    "2483": {
+        "start": 813456000000,
+        "end": 1740096000000,
+        "elevation": 839.0,
+        "latitude": 51.1803,
+        "longitude": 8.4891,
+        "name": "Kahler Asten"
+    },
+    "2485": {
+        "start": 1304294400000,
+        "end": 1740096000000,
+        "elevation": 489.0,
+        "latitude": 48.917,
+        "longitude": 9.6871,
+        "name": "Kaisersbach-Cronh\u00fctte"
+    },
+    "2503": {
+        "start": 809913600000,
+        "end": 1051833600000,
+        "elevation": 487.0,
+        "latitude": 50.6266,
+        "longitude": 10.1455,
+        "name": "Kaltennordheim"
+    },
+    "2522": {
+        "start": 822787200000,
+        "end": 1225411200000,
+        "elevation": 112.0,
+        "latitude": 49.0382,
+        "longitude": 8.3641,
+        "name": "Karlsruhe"
+    },
+    "2532": {
+        "start": 956102400000,
+        "end": 1383091200000,
+        "elevation": 231.0,
+        "latitude": 51.2963,
+        "longitude": 9.4424,
+        "name": "Kassel"
+    },
+    "2559": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 705.0,
+        "latitude": 47.7233,
+        "longitude": 10.3348,
+        "name": "Kempten"
+    },
+    "2564": {
+        "start": 1279065600000,
+        "end": 1740096000000,
+        "elevation": 28.0,
+        "latitude": 54.3776,
+        "longitude": 10.1424,
+        "name": "Kiel-Holtenau"
+    },
+    "2597": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 282.0,
+        "latitude": 50.224,
+        "longitude": 10.0792,
+        "name": "Kissingen, Bad"
+    },
+    "2601": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 822.0,
+        "latitude": 50.2218,
+        "longitude": 8.4469,
+        "name": "Kleiner Feldberg/Taunus"
+    },
+    "2638": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 974.0,
+        "latitude": 48.1054,
+        "longitude": 8.7548,
+        "name": "Klippeneck"
+    },
+    "2667": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 91.0,
+        "latitude": 50.8645,
+        "longitude": 7.1575,
+        "name": "K\u00f6ln/Bonn"
+    },
+    "2712": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 428.0,
+        "latitude": 47.6952,
+        "longitude": 9.1307,
+        "name": "Konstanz"
+    },
+    "2794": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 40.0,
+        "latitude": 52.9362,
+        "longitude": 12.4093,
+        "name": "Kyritz"
+    },
+    "2812": {
+        "start": 827884800000,
+        "end": 1740096000000,
+        "elevation": 156.0,
+        "latitude": 48.3647,
+        "longitude": 7.828,
+        "name": "Lahr"
+    },
+    "2907": {
+        "start": 917827200000,
+        "end": 1740096000000,
+        "elevation": 7.0,
+        "latitude": 54.7903,
+        "longitude": 8.9514,
+        "name": "Leck"
+    },
+    "2925": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 356.0,
+        "latitude": 51.3932,
+        "longitude": 10.3123,
+        "name": "Leinefelde"
+    },
+    "2928": {
+        "start": 860716800000,
+        "end": 1740096000000,
+        "elevation": 138.0,
+        "latitude": 51.3151,
+        "longitude": 12.4462,
+        "name": "Leipzig-Holzhausen"
+    },
+    "2932": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 131.0,
+        "latitude": 51.4347,
+        "longitude": 12.2396,
+        "name": "Leipzig/Halle"
+    },
+    "2985": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 321.0,
+        "latitude": 50.9383,
+        "longitude": 14.2094,
+        "name": "Lichtenhain-Mittelndorf"
+    },
+    "3015": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 98.0,
+        "latitude": 52.2085,
+        "longitude": 14.118,
+        "name": "Lindenberg"
+    },
+    "3023": {
+        "start": 809913600000,
+        "end": 1412035200000,
+        "elevation": 22.0,
+        "latitude": 52.5181,
+        "longitude": 7.3081,
+        "name": "Lingen"
+    },
+    "3028": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 157.0,
+        "latitude": 51.7854,
+        "longitude": 8.8388,
+        "name": "Lippspringe, Bad"
+    },
+    "3032": {
+        "start": 1258588800000,
+        "end": 1740096000000,
+        "elevation": 25.0,
+        "latitude": 55.011,
+        "longitude": 8.4125,
+        "name": "List auf Sylt"
+    },
+    "3086": {
+        "start": 835747200000,
+        "end": 1740096000000,
+        "elevation": 15.0,
+        "latitude": 53.8025,
+        "longitude": 10.6989,
+        "name": "L\u00fcbeck-Blankensee"
+    },
+    "3093": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 16.0,
+        "latitude": 52.9724,
+        "longitude": 11.1374,
+        "name": "L\u00fcchow"
+    },
+    "3098": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 387.0,
+        "latitude": 51.2452,
+        "longitude": 7.6425,
+        "name": "L\u00fcdenscheid"
+    },
+    "3126": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 79.0,
+        "latitude": 52.1029,
+        "longitude": 11.5827,
+        "name": "Magdeburg"
+    },
+    "3158": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 12.0,
+        "latitude": 52.5468,
+        "longitude": 14.5453,
+        "name": "Manschnow"
+    },
+    "3166": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 639.0,
+        "latitude": 50.6511,
+        "longitude": 13.1469,
+        "name": "Marienberg"
+    },
+    "3167": {
+        "start": 927763200000,
+        "end": 1740096000000,
+        "elevation": 547.0,
+        "latitude": 50.6621,
+        "longitude": 7.9603,
+        "name": "Marienberg, Bad"
+    },
+    "3196": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 81.0,
+        "latitude": 53.3222,
+        "longitude": 11.9321,
+        "name": "Marnitz"
+    },
+    "3231": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 450.0,
+        "latitude": 50.5611,
+        "longitude": 10.3771,
+        "name": "Meiningen"
+    },
+    "3268": {
+        "start": 1381190400000,
+        "end": 1740096000000,
+        "elevation": 900.0,
+        "latitude": 48.1694,
+        "longitude": 8.9433,
+        "name": "Me\u00dfstetten-Appental"
+    },
+    "3287": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 453.0,
+        "latitude": 49.7177,
+        "longitude": 9.0997,
+        "name": "Michelstadt-Vielbrunn"
+    },
+    "3362": {
+        "start": 1151712000000,
+        "end": 1740096000000,
+        "elevation": 243.0,
+        "latitude": 48.9721,
+        "longitude": 8.8735,
+        "name": "M\u00fchlacker"
+    },
+    "3366": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 406.0,
+        "latitude": 48.279,
+        "longitude": 12.5024,
+        "name": "M\u00fchldorf"
+    },
+    "3379": {
+        "start": 868320000000,
+        "end": 1740096000000,
+        "elevation": 515.0,
+        "latitude": 48.1632,
+        "longitude": 11.5429,
+        "name": "M\u00fcnchen-Stadt"
+    },
+    "3478": {
+        "start": 809913600000,
+        "end": 1124150400000,
+        "elevation": 81.0,
+        "latitude": 53.5468,
+        "longitude": 13.1914,
+        "name": "Neubrandenburg"
+    },
+    "3513": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 845.0,
+        "latitude": 50.5003,
+        "longitude": 11.1345,
+        "name": "Neuhaus am Rennweg"
+    },
+    "3552": {
+        "start": 809913600000,
+        "end": 1554681600000,
+        "elevation": 38.0,
+        "latitude": 52.9037,
+        "longitude": 12.8071,
+        "name": "Neuruppin"
+    },
+    "3631": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 12.0,
+        "latitude": 53.7123,
+        "longitude": 7.1519,
+        "name": "Norderney"
+    },
+    "3660": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 485.0,
+        "latitude": 50.3602,
+        "longitude": 6.8697,
+        "name": "N\u00fcrburg-Barweiler"
+    },
+    "3668": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 314.0,
+        "latitude": 49.503,
+        "longitude": 11.0549,
+        "name": "N\u00fcrnberg"
+    },
+    "3730": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 806.0,
+        "latitude": 47.3984,
+        "longitude": 10.2759,
+        "name": "Oberstdorf"
+    },
+    "3761": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 276.0,
+        "latitude": 49.207,
+        "longitude": 9.5176,
+        "name": "\u00d6hringen"
+    },
+    "3791": {
+        "start": 907113600000,
+        "end": 1349049600000,
+        "elevation": 11.0,
+        "latitude": 53.1763,
+        "longitude": 8.1824,
+        "name": "Oldenburg"
+    },
+    "3811": {
+        "start": 809913600000,
+        "end": 1716940800000,
+        "elevation": 150.0,
+        "latitude": 51.296,
+        "longitude": 13.0928,
+        "name": "Oschatz"
+    },
+    "3815": {
+        "start": 809913600000,
+        "end": 1291075200000,
+        "elevation": 95.0,
+        "latitude": 52.2553,
+        "longitude": 8.0534,
+        "name": "Osnabr\u00fcck"
+    },
+    "3821": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 244.0,
+        "latitude": 51.0872,
+        "longitude": 11.9293,
+        "name": "Osterfeld"
+    },
+    "3897": {
+        "start": 1155859200000,
+        "end": 1740096000000,
+        "elevation": 2.0,
+        "latitude": 54.0893,
+        "longitude": 10.8773,
+        "name": "Pelzerhaken"
+    },
+    "3946": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 387.0,
+        "latitude": 50.4818,
+        "longitude": 12.13,
+        "name": "Plauen"
+    },
+    "3987": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 81.0,
+        "latitude": 52.3812,
+        "longitude": 13.0622,
+        "name": "Potsdam"
+    },
+    "4024": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 40.0,
+        "latitude": 54.3643,
+        "longitude": 13.4771,
+        "name": "Putbus"
+    },
+    "4039": {
+        "start": 828489600000,
+        "end": 1740096000000,
+        "elevation": 11.0,
+        "latitude": 53.7331,
+        "longitude": 9.8776,
+        "name": "Quickborn"
+    },
+    "4104": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 365.0,
+        "latitude": 49.0425,
+        "longitude": 12.1019,
+        "name": "Regensburg"
+    },
+    "4177": {
+        "start": 1225497600000,
+        "end": 1740096000000,
+        "elevation": 116.0,
+        "latitude": 48.9726,
+        "longitude": 8.3301,
+        "name": "Rheinstetten"
+    },
+    "4271": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 5.0,
+        "latitude": 54.1803,
+        "longitude": 12.0808,
+        "name": "Rostock-Warnem\u00fcnde"
+    },
+    "4280": {
+        "start": 1278547200000,
+        "end": 1740096000000,
+        "elevation": 386.0,
+        "latitude": 49.2162,
+        "longitude": 11.1035,
+        "name": "Roth"
+    },
+    "4336": {
+        "start": 835228800000,
+        "end": 1740096000000,
+        "elevation": 319.0,
+        "latitude": 49.2128,
+        "longitude": 7.1077,
+        "name": "Saarbr\u00fccken-Ensheim"
+    },
+    "4371": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 135.0,
+        "latitude": 52.1042,
+        "longitude": 8.7521,
+        "name": "Salzuflen, Bad"
+    },
+    "4393": {
+        "start": 944006400000,
+        "end": 1740096000000,
+        "elevation": 5.0,
+        "latitude": 54.3279,
+        "longitude": 8.6031,
+        "name": "Sankt Peter-Ording"
+    },
+    "4445": {
+        "start": 1093996800000,
+        "end": 680745600000,
+        "elevation": 613.0,
+        "latitude": 51.7658,
+        "longitude": 10.6533,
+        "name": "Wernigerode-Schierke"
+    },
+    "4464": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 501.0,
+        "latitude": 50.5679,
+        "longitude": 11.8041,
+        "name": "Schleiz"
+    },
+    "4466": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 43.0,
+        "latitude": 54.5275,
+        "longitude": 9.5487,
+        "name": "Schleswig"
+    },
+    "4501": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 938.0,
+        "latitude": 50.6545,
+        "longitude": 10.7696,
+        "name": "Schm\u00fccke"
+    },
+    "4625": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 59.0,
+        "latitude": 53.6424,
+        "longitude": 11.3871,
+        "name": "Schwerin"
+    },
+    "4642": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 21.0,
+        "latitude": 52.8911,
+        "longitude": 11.7297,
+        "name": "Seehausen"
+    },
+    "4745": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 75.0,
+        "latitude": 52.9604,
+        "longitude": 9.793,
+        "name": "Soltau"
+    },
+    "4752": {
+        "start": 809913600000,
+        "end": 1214784000000,
+        "elevation": 626.0,
+        "latitude": 50.3746,
+        "longitude": 11.1828,
+        "name": "Sonneberg-Neufang"
+    },
+    "4887": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 734.0,
+        "latitude": 48.6656,
+        "longitude": 9.8648,
+        "name": "St\u00f6tten"
+    },
+    "4911": {
+        "start": 846115200000,
+        "end": 1740096000000,
+        "elevation": 351.0,
+        "latitude": 48.8275,
+        "longitude": 12.5597,
+        "name": "Straubing"
+    },
+    "4928": {
+        "start": 896659200000,
+        "end": 1740096000000,
+        "elevation": 314.0,
+        "latitude": 48.8281,
+        "longitude": 9.2,
+        "name": "Stuttgart (Schnarrenberg)"
+    },
+    "4931": {
+        "start": 812764800000,
+        "end": 1740096000000,
+        "elevation": 371.0,
+        "latitude": 48.6883,
+        "longitude": 9.2235,
+        "name": "Stuttgart-Echterdingen"
+    },
+    "5009": {
+        "start": 809913600000,
+        "end": 1088553600000,
+        "elevation": 37.0,
+        "latitude": 53.761,
+        "longitude": 12.5574,
+        "name": "Teterow"
+    },
+    "5029": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 387.0,
+        "latitude": 49.4737,
+        "longitude": 7.0385,
+        "name": "Tholey"
+    },
+    "5100": {
+        "start": 986083200000,
+        "end": 1740096000000,
+        "elevation": 261.0,
+        "latitude": 49.7479,
+        "longitude": 6.6583,
+        "name": "Trier-Petrisberg"
+    },
+    "5109": {
+        "start": 1380585600000,
+        "end": 1380499200000,
+        "elevation": 68.0,
+        "latitude": 53.5998,
+        "longitude": 13.3039,
+        "name": "Trollenhagen"
+    },
+    "5142": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 1.0,
+        "latitude": 53.7445,
+        "longitude": 14.0698,
+        "name": "Ueckerm\u00fcnde"
+    },
+    "5155": {
+        "start": 809913600000,
+        "end": 1409443200000,
+        "elevation": 567.0,
+        "latitude": 48.3837,
+        "longitude": 9.9524,
+        "name": "Ulm"
+    },
+    "5158": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 159.0,
+        "latitude": 52.1601,
+        "longitude": 11.1759,
+        "name": "Ummendorf"
+    },
+    "5347": {
+        "start": 1038700800000,
+        "end": 1740096000000,
+        "elevation": 236.0,
+        "latitude": 51.5039,
+        "longitude": 9.1118,
+        "name": "Warburg"
+    },
+    "5349": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 73.0,
+        "latitude": 53.5196,
+        "longitude": 12.6654,
+        "name": "Waren (M\u00fcritz)"
+    },
+    "5371": {
+        "start": 921888000000,
+        "end": 1740096000000,
+        "elevation": 920.0,
+        "latitude": 50.4973,
+        "longitude": 9.9427,
+        "name": "Wasserkuppe"
+    },
+    "5397": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 440.0,
+        "latitude": 49.6662,
+        "longitude": 12.1844,
+        "name": "Weiden"
+    },
+    "5404": {
+        "start": 1227484800000,
+        "end": 1740096000000,
+        "elevation": 477.0,
+        "latitude": 48.4024,
+        "longitude": 11.6946,
+        "name": "Weihenstephan-D\u00fcrnast"
+    },
+    "5426": {
+        "start": 1241049600000,
+        "end": 1740096000000,
+        "elevation": 553.0,
+        "latitude": 49.3758,
+        "longitude": 8.1212,
+        "name": "Weinbiet"
+    },
+    "5440": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 439.0,
+        "latitude": 49.0115,
+        "longitude": 10.9308,
+        "name": "Wei\u00dfenburg-Emetzheim"
+    },
+    "5480": {
+        "start": 1063152000000,
+        "end": 1740096000000,
+        "elevation": 85.0,
+        "latitude": 51.5763,
+        "longitude": 7.8879,
+        "name": "Werl"
+    },
+    "13674": {
+        "start": 1185926400000,
+        "end": 1740096000000,
+        "elevation": 237.0,
+        "latitude": 49.2943,
+        "longitude": 8.9053,
+        "name": "Waibstadt"
+    },
+    "5490": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 233.0,
+        "latitude": 51.8454,
+        "longitude": 10.7686,
+        "name": "Wernigerode"
+    },
+    "5516": {
+        "start": 835660800000,
+        "end": 1740096000000,
+        "elevation": 3.0,
+        "latitude": 54.5283,
+        "longitude": 11.0606,
+        "name": "Fehmarn"
+    },
+    "5546": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 187.0,
+        "latitude": 52.1206,
+        "longitude": 12.4586,
+        "name": "Wiesenburg"
+    },
+    "5629": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 105.0,
+        "latitude": 51.8891,
+        "longitude": 12.6446,
+        "name": "Wittenberg"
+    },
+    "5663": {
+        "start": 809913600000,
+        "end": 820368000000,
+        "elevation": 118.0,
+        "latitude": 53.4618,
+        "longitude": 13.6099,
+        "name": "Woldegk"
+    },
+    "5705": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 268.0,
+        "latitude": 49.7704,
+        "longitude": 9.9576,
+        "name": "W\u00fcrzburg"
+    },
+    "5779": {
+        "start": 973728000000,
+        "end": 1740096000000,
+        "elevation": 877.0,
+        "latitude": 50.7313,
+        "longitude": 13.7516,
+        "name": "Zinnwald-Georgenfeld"
+    },
+    "5800": {
+        "start": 1152576000000,
+        "end": 1740096000000,
+        "elevation": 615.0,
+        "latitude": 49.028,
+        "longitude": 13.2385,
+        "name": "Zwiesel"
+    },
+    "5839": {
+        "start": 869270400000,
+        "end": 1731628800000,
+        "elevation": 0.0,
+        "latitude": 53.3881,
+        "longitude": 7.2287,
+        "name": "Emden"
+    },
+    "5856": {
+        "start": 855187200000,
+        "end": 1740096000000,
+        "elevation": 476.0,
+        "latitude": 48.5451,
+        "longitude": 13.3532,
+        "name": "F\u00fcrstenzell"
+    },
+    "5871": {
+        "start": 909878400000,
+        "end": 1475280000000,
+        "elevation": 497.0,
+        "latitude": 49.9463,
+        "longitude": 7.2645,
+        "name": "Hahn"
+    },
+    "5906": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 98.0,
+        "latitude": 49.5063,
+        "longitude": 8.5584,
+        "name": "Mannheim"
+    },
+    "5930": {
+        "start": 809913600000,
+        "end": 1740096000000,
+        "elevation": 1.0,
+        "latitude": 54.641,
+        "longitude": 10.0238,
+        "name": "Sch\u00f6nhagen (Ostseebad)"
+    },
+    "6163": {
+        "start": 1038700800000,
+        "end": 1740096000000,
+        "elevation": 27.0,
+        "latitude": 54.1654,
+        "longitude": 10.3519,
+        "name": "D\u00f6rnick"
+    },
+    "6197": {
+        "start": 1038700800000,
+        "end": 1740009600000,
+        "elevation": 258.0,
+        "latitude": 51.8664,
+        "longitude": 9.271,
+        "name": "L\u00fcgde-Paenbruch"
+    },
+    "15000": {
+        "start": 1301616000000,
+        "end": 1740096000000,
+        "elevation": 231.0,
+        "latitude": 50.7983,
+        "longitude": 6.0244,
+        "name": "Aachen-Orsbach"
+    },
+    "15207": {
+        "start": 1383264000000,
+        "end": 1740096000000,
+        "elevation": 317.0,
+        "latitude": 51.2835,
+        "longitude": 9.359,
+        "name": "Schauenburg-Elgershausen"
+    },
+    "7244": {
+        "start": 809913600000,
+        "end": 1096329600000,
+        "elevation": 62.0,
+        "latitude": 53.1424,
+        "longitude": 13.0319,
+        "name": "Neuglobsow (HM)"
+    },
+    "15444": {
+        "start": 1409529600000,
+        "end": 1740096000000,
+        "elevation": 593.0,
+        "latitude": 48.4418,
+        "longitude": 9.9216,
+        "name": "Ulm-M\u00e4hringen"
+    },
+    "7341": {
+        "start": 1122854400000,
+        "end": 1740096000000,
+        "elevation": 119.0,
+        "latitude": 50.09,
+        "longitude": 8.7862,
+        "name": "Offenbach-Wetterpark"
+    },
+    "7351": {
+        "start": 1126137600000,
+        "end": 1740096000000,
+        "elevation": 115.0,
+        "latitude": 53.3176,
+        "longitude": 13.4175,
+        "name": "Feldberg/Mecklenburg"
+    },
+    "7367": {
+        "start": 1196467200000,
+        "end": 1740096000000,
+        "elevation": 144.0,
+        "latitude": 51.9643,
+        "longitude": 9.8072,
+        "name": "Alfeld"
+    },
+    "7368": {
+        "start": 1193875200000,
+        "end": 1740096000000,
+        "elevation": 312.0,
+        "latitude": 51.0007,
+        "longitude": 10.3621,
+        "name": "Eisenach"
+    },
+    "7369": {
+        "start": 1193875200000,
+        "end": 1740096000000,
+        "elevation": 475.0,
+        "latitude": 49.1623,
+        "longitude": 10.3661,
+        "name": "Feuchtwangen-Heilbronn"
+    },
+    "7370": {
+        "start": 1165795200000,
+        "end": 1740096000000,
+        "elevation": 499.0,
+        "latitude": 49.391,
+        "longitude": 12.6838,
+        "name": "Waldm\u00fcnchen"
+    },
+    "7374": {
+        "start": 1141171200000,
+        "end": 1740096000000,
+        "elevation": 46.0,
+        "latitude": 52.0813,
+        "longitude": 6.9409,
+        "name": "Ahaus"
+    },
+    "7393": {
+        "start": 1262304000000,
+        "end": 1740096000000,
+        "elevation": 116.0,
+        "latitude": 51.4492,
+        "longitude": 14.2533,
+        "name": "Hoyerswerda"
+    },
+    "7394": {
+        "start": 1149120000000,
+        "end": 1740096000000,
+        "elevation": 622.0,
+        "latitude": 50.0315,
+        "longitude": 11.9745,
+        "name": "Wunsiedel-Sch\u00f6nbrunn"
+    },
+    "7395": {
+        "start": 1196467200000,
+        "end": 1740096000000,
+        "elevation": 351.0,
+        "latitude": 48.6595,
+        "longitude": 12.5388,
+        "name": "Gottfrieding"
+    },
+    "7396": {
+        "start": 1209600000000,
+        "end": 1740096000000,
+        "elevation": 740.0,
+        "latitude": 50.5084,
+        "longitude": 9.2246,
+        "name": "Hoherodskopf/Vogelsberg"
+    },
+    "7403": {
+        "start": 1175472000000,
+        "end": 1740096000000,
+        "elevation": 672.0,
+        "latitude": 47.7955,
+        "longitude": 10.0325,
+        "name": "Leutkirch-Herlazhofen"
+    },
+    "7410": {
+        "start": 1296518400000,
+        "end": 1740096000000,
+        "elevation": 350.0,
+        "latitude": 50.7513,
+        "longitude": 9.0224,
+        "name": "Neu-Ulrichstein"
+    },
+    "7412": {
+        "start": 1159660800000,
+        "end": 1740096000000,
+        "elevation": 340.0,
+        "latitude": 50.0083,
+        "longitude": 9.4238,
+        "name": "Neuh\u00fctten/Spessart"
+    },
+    "15813": {
+        "start": 1646092800000,
+        "end": 1740096000000,
+        "elevation": 40.0,
+        "latitude": 52.5126,
+        "longitude": 7.4131,
+        "name": "Lingen-Baccum"
+    }
+}

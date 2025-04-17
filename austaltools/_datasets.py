@@ -27,6 +27,7 @@ datasets that serve as input for austaltools
 """
 import glob
 import gzip
+import importlib.util
 import itertools
 import json
 import logging
@@ -37,42 +38,29 @@ import shutil
 import sys
 import tarfile
 import tempfile
+import time
 import zipfile
+from pathlib import PurePath
 
-
+import numpy as np
 import pandas as pd
-import pip
 import requests
 from urllib3 import disable_warnings, exceptions
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import multiprocessing as mp
     import concurrent.futures as mpf
-    from osgeo import gdal
-    import cdo
-
-try:
-    import cdsapi
-except ImportError:
-    pip.main(['install', 'cdsapi'])
-    import cdsapi
-
-try:
-    import cdo
-except ImportError:
-    pip.main(['install', 'cdo'])
-    import cdo
 
 try:
     from ._version import __version__, __title__
+    from . import _storage
     from . import _tools
     from . import _fetch_dwd_obs
-    from . import _fetch_dgm_od
 except ImportError:
     from _version import __version__, __title__
+    import _storage
     import _tools
     import _fetch_dwd_obs
-    import _fetch_dgm_od
 
 disable_warnings(exceptions.InsecureRequestWarning)
 logger = logging.getLogger()
@@ -81,16 +69,93 @@ logger = logging.getLogger()
 CDSAPI_LIMIT_PARALLEL = 2
 """ Copernicus per-user limit for parallel queries """
 
-with (_tools.DIST_AUX_FILES / 'dataset_definitions.json').open() as f:
+with (_storage.DIST_AUX_FILES / 'dataset_definitions.json').open() as f:
     DATASET_DEFINITIONS = json.load(f)
 
 SOURCES_TERRAIN = [k for k, v in DATASET_DEFINITIONS.items()
-                   if v['storage'] == _tools.STORAGE_TERRAIN]
+                   if v['storage'] == _storage.STORAGE_TERRAIN]
 """ list of known terrain data sources """
 SOURCES_WEATHER = [k for k, v in DATASET_DEFINITIONS.items()
-                 if v['storage'] == _tools.STORAGE_WAETHER]
+                   if v['storage'] == _storage.STORAGE_WAETHER]
 """ list of known weather data sources """
+DEM_FMT = '%s.elevation.nc'  # % NAME
+""" terrain database file name template"""
+DEM_CRS = "EPSG:5677"
+""" terrain data projection (GAUSS-KRÜGER zone 3)"""
+WEA_FMT = '%s.ak-input.nc'
+""" weather model database file name template"""
+OBS_FMT = '%s.obs.zip'
+""" weather observation database file name template"""
+PROCS = None
+""" Number of parallel processes to run downlading data or  
+    `None` (then the number of processor cores in the system is used). """
+DATASETS: list = None
+"""
+All known datasets as :py:class:`DataSet` instances. 
+Filled on demand.
 
+:meta hide-value:
+"""
+
+# -------------------------------------------------------------------------
+# make optional imports defined:
+cdsapi = None
+cdo = None
+gdal = None
+gdal_merge = None
+osr = None
+# link libraries used to libraries imported
+LIB2IMPORT = {
+    'cdo': 'cdo',
+    'cdsapi': 'cdsapi',
+    'gdal': 'osgeo',
+    'osr': 'osgeo',
+    'gdal_merge': 'osgeo_utils'
+}
+# link libraries used to their poular names
+LIB2NAME = {
+    'cdo': 'CDO',
+    'cdsapi': 'CSDapi',
+    'gdal': 'GDAL',
+    'osr': 'OSR',
+    'gdal_merge': 'GDAL merge'
+}
+def have_lib(lib):
+    """ ask if a libray is installed
+    :param lib: name of libray to be installed
+    :type lib: str
+    :return: True if installed
+    :rtype: bool
+    """
+    if lib in LIB2IMPORT.keys():
+        if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+            return importlib.util.find_spec(LIB2IMPORT[lib])
+        else:
+            return True
+    else:
+        raise ValueError(f"Unknown library '{lib}'")
+def import_lib(lib):
+    """ import a libray that is installed
+    :param lib: name of libray
+    :type lib: str
+    """
+    if lib in LIB2IMPORT.keys():
+        mod = LIB2IMPORT[lib]
+        if mod == lib:
+            # ``import mod``
+            globals()[lib] = importlib.import_module(LIB2IMPORT[lib])
+        else:
+            # ``from mod import lib``
+            globals()[lib] = importlib.import_module('.'+lib, mod)
+    else:
+        raise ValueError(f"Unknown library '{lib}'")
+NO_LIB_HELP = {k: (f"The {v} library does not appear to be installed. "
+                   f"You can install it by running "
+                   f"`pip install {LIB2IMPORT[k]}` "
+                   f"or using the package manager of your choice.")
+               for k,v in LIB2IMPORT.items()}
+""" help message to be displayed if library is not installed 
+:meta hide-value: """
 
 # =========================================================================
 
@@ -223,55 +288,37 @@ class DataSet:
             self.file_notice = f"{self.name}.NOTICE.txt"
         if self.file_data is None:
             if self.storage == 'terrain':
-                self.file_data = _tools.DEM_FMT % self.name
+                self.file_data = DEM_FMT % self.name
             elif self.storage == 'weather':
                 pos = kwargs.get('position', None)
                 if pos == 'station':
-                    self.file_data = _tools.OBS_FMT % self.name
+                    self.file_data = OBS_FMT % self.name
                 elif pos in ['grid', None]:
-                    self.file_data = _tools.WEA_FMT % self.name
+                    self.file_data = WEA_FMT % self.name
                 else:
                     raise ValueError(f"unkown position: {pos}")
 
 
 # =========================================================================
 
+def dataset_list():
+    """
+    Get list of datasets
+    :return: the requested dataset object
+    :rtype: dict[dict]
 
-def locations_available(locs):
+    :raises ValueError: if the dataset does not exist
     """
-    Check whether locations exist
-    :param locs: paths of storage location directories
-    :type locs: list[str]
-    :return: True if locations exist, False otherwise
-    :rtype: bool
-    """
-    return [x for x in locs if os.path.isdir(x)]
-
-
-# -------------------------------------------------------------------------
-def locations_writable(locs):
-    """
-    Check whether locations are writable
-    :param locs: paths of storage location directories
-    :type locs: list[str]
-    :return: True if locations are writable, False otherwise
-    :rtype: bool
-    """
-    return [x for x in locs if os.access(x, os.W_OK)]
-
-
-# -------------------------------------------------------------------------
-def location_has_storage(location, storage):
-    """
-    Check if location has storage
-    :param location: path to storage location
-    :type location: str
-    :param storage: name of storage
-    :type storage: str
-    :return: True if location has storage
-    :rtype: bool
-    """
-    return os.path.exists(os.path.join(location, storage))
+    _init_datasets()
+    res = {}
+    for ds in DATASETS:
+        res[ds.name] = {
+            'storage': ds.storage,
+            'available': ds.available,
+            'uri': ds.uri,
+            'path': ds.path
+        }
+    return res
 
 
 # -------------------------------------------------------------------------
@@ -285,6 +332,7 @@ def dataset_get(name):
 
     :raises ValueError: if the dataset does not exist
     """
+    _init_datasets()
     for x in DATASETS:
         if x.name == name:
             return x
@@ -304,76 +352,159 @@ def dataset_available(name):
     """
     return dataset_get(name).available
 
+# -------------------------------------------------------------------------
+
+def update_available():
+    """
+    update availability of datasets stored in conf
+    by scanning storrage locations
+    """
+    _init_datasets()
+    logger.info("re-scanning available datasets")
+    available_datasets = _available_scan()
+    logger.debug("setting available flags")
+    _datasets_set_available(DATASETS, available_datasets)
+    logger.debug("writing available datasest to config")
+    _available_write(DATASETS)
 
 # -------------------------------------------------------------------------
-def dataset_scan(locs : list = None):
+
+def _available_read() -> dict:
     """
-    Scan for datasets available on the system.
-    Set the :py:attr:`DataSet.available` attribute
-    in the global list :py:const:`DATASETS` accordingly.
+    Read datasets available on the system from the config.
 
     :param locs: list of possible storage loactions
     :type locs: list[str]
     """
-    if locs is None:
-        locs = _tools.STORAGE_LOCATIONS
-    loc_avail = locations_available(locs)
-    if len(loc_avail) == 0:
-        raise ValueError("No locations available")
-    for ds in DATASETS:
-        for loc in reversed(loc_avail):
-            if ds.storage is None:
-                raise ValueError(f'storage not defined in: {ds.name}')
-            if location_has_storage(loc, ds.storage):
-                path = os.path.join(loc, str(ds.storage))
-                datafile = os.path.join(path, ds.file_data)
-                if os.path.exists(datafile):
-                    ds.available = True
-                    ds.path = path
+    conf = _storage.read_config()
+    available_datasets = {}
+
+    # if conf has an entry `available`
+    if (c_avail := conf.get("available", None)) is not None:
+        # if `available' has a sub-enty st
+        for st in _storage.STORAGES:
+            if (st_avail := c_avail.get(st, None)) is not None:
+                # append any item to the dict
+                for k,v in st_avail.items():
+                    available_datasets[k] = v
+    return available_datasets
 
 
 # -------------------------------------------------------------------------
-def find_writeable_storage(locs: str = None,
-                           stor: str = None) -> str or None:
-    """
-    Finds a viable data storage directory and returns its path.
-    If `storage_path` is provided, only this path is checked
-    for existance.
 
-    :param locs: Candidate locations
-    :type locs: str
-    :param stor: Storage directory expected at location
-    :type stor: str
-    :return: path to a writable data storage directory
-    :rtype: str
+def _available_write(datasets: list[DataSet]):
+
+    # read config
+    conf = _storage.read_config()
+
+    # assemble availability tree
+    c_avail = {}
+    for st in _storage.STORAGES:
+        st_avail = {}
+        for ds in datasets:
+            if ds.available:
+                st_avail[ds.name] = ds.path
+        c_avail[st] = st_avail
+    conf['available'] = c_avail
+
+    # write config
+    _storage.write_config(conf)
+
+# -------------------------------------------------------------------------
+
+def _available_scan(locs : list = None) -> dict:
     """
-    if stor is None:
-        raise ValueError('stor must be provided')
+    Scan for datasets available on the system.
+
+    :param locs: list of possible storage loactions
+    :type locs: list[str]
+    """
+    _init_datasets()
     if locs is None:
-        locs = _tools.STORAGE_LOCATIONS
-    loc_exist = locations_available(locs)
-    if len(loc_exist) == 0:
-        return None
-    loc_write = locations_writable(loc_exist)
-    if len(loc_write) == 0:
-        return None
-    for loc in loc_write:
-        if location_has_storage(loc, stor):
-            location = loc
-            break
-    else:
-        for loc in loc_write:
-            try:
-                os.makedirs(os.path.join(loc, stor))
-            except IOError:
-                continue
-            if os.path.isdir(os.path.join(loc, stor)):
-                location = loc
-                break
-        else:
-            raise Exception('Could not create data storage directory')
-    return os.path.join(location, stor)
+        locs = _storage.STORAGE_LOCATIONS
+    loc_avail = _storage.locations_available(locs)
+    if len(loc_avail) == 0:
+        raise ValueError("No locations available")
+    available_datasets = {}
+    for ds in DATASETS:
+        logger.debug(f"scanning for dataset: {ds.name}")
+        for loc in reversed(loc_avail):
+            logger.debug(f"     ... in location {loc}")
+            if ds.storage is None:
+                raise ValueError(f'storage not defined in: {ds.name}')
+            if _storage.location_has_storage(loc, ds.storage):
+                path = os.path.join(loc, str(ds.storage))
+                datafile = os.path.join(path, ds.file_data)
+                if os.path.exists(datafile):
+                    available_datasets[ds.name] =  path
+                    logger.debug(f"                      {path}")
+                else:
+                    logger.debug(f"                      ---")
 
+    return available_datasets
+
+# -------------------------------------------------------------------------
+
+def _datasets_expand(defs: dict) -> list[DataSet]:
+    datasets = []
+    for k,v in defs.items():
+        if "split" in v.keys():
+            if v["split"] == "years":
+                years_available = _tools.expand_sequence(
+                    v["years_available"])
+                for ya in years_available:
+                    name = name_yearly(k, ya)
+                    vy = v.copy()
+                    if 'uri' in v and isinstance(v['uri'], dict):
+                        vy['uri'] = v['uri'][str(ya)]
+                    datasets.append(DataSet(name=name, **vy))
+            else:
+                raise ValueError(f"unkown split type {v['split']}")
+        else:
+            datasets.append(DataSet(name=k, **v))
+    return datasets
+
+# -------------------------------------------------------------------------
+
+def _datasets_set_available(
+        datasets: list[DataSet], avail: dict) -> list[DataSet]:
+    """
+    Set the :py:attr:`DataSet.available` attribute
+    in the global list `datasets` accordingly.
+
+    :return:  list of all known datasets
+    :rtype: list[DataSet]
+    """
+    for ds in datasets:
+        v = avail.pop(ds.name, None)
+        logger.debug(f"dataset {ds.name} path: {v}")
+        if v is not None:
+            ds.available = True
+        else:
+            ds.available = False
+        ds.path = v
+    if len(avail) > 0:
+        for k, v in avail.items():
+            logger.warning(f"found unknown dataset: {k}")
+
+    return datasets
+
+# -------------------------------------------------------------------------
+
+def _init_datasets():
+    """
+    initialize datsets and retrieve storage patths from config
+
+    :return:  list of all known datasets
+    :rtype: list[DataSet]
+    """
+    global DATASETS
+    if DATASETS is not None:
+        return
+    datasets = _datasets_expand(DATASET_DEFINITIONS)
+    available = _available_read()
+    datasets = _datasets_set_available(datasets, available)
+    DATASETS = datasets
 
 # -------------------------------------------------------------------------
 
@@ -459,7 +590,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, _tools.DEM_FMT % name)
+    target = os.path.join(path, DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -487,7 +618,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
             filelist = [filelist]
     input_files = []
     for string in filelist:
-        x = _fetch_dgm_od.expand_filelist_string(
+        x = expand_filelist_string(
             string, base_url, verify,
             args.get('xmlpath', None),
             args.get('jsonpath', None),
@@ -509,7 +640,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         i = 0
         with mp.Pool(pp) as pool:
             for tfs in _tools.progress(pool.imap_unordered(
-                    _fetch_dgm_od.process_input, thread_args),
+                    process_input, thread_args),
                     total=len(thread_args)):
                 i = i + 1
                 logger.debug("file %5d / %5d" % (i, len(thread_args)))
@@ -518,7 +649,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         raise ValueError(f'method {method} not implemented')
 
     # merge the GeoTiff Files from all tiles into one file
-    _fetch_dgm_od.merge_tiles(target, tile_files)
+    merge_tiles(target, tile_files)
     logger.info(f"data file written: {target}")
 
     return True
@@ -546,7 +677,7 @@ def assemble_DGM_SH(path, name, replace, args: dict):
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, _tools.DEM_FMT % name)
+    target = os.path.join(path, DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -559,12 +690,12 @@ def assemble_DGM_SH(path, name, replace, args: dict):
     tile_files = []
     with mp.Pool(PROCS) as pool:
         for tf in _tools.progress(
-                pool.imap_unordered(_fetch_dgm_od.dgm1_sh_getfid, args),
+                pool.imap_unordered(dgm1_sh_getfid, args),
                 total=len(args)
         ):
             tile_files += tf
 
-    _fetch_dgm_od.merge_tiles(target, tile_files)
+    merge_tiles(target, tile_files)
 
     return True
 
@@ -594,7 +725,7 @@ def assemble_DGM25_RP(path, name="DGM25-RP",
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, _tools.DEM_FMT % name)
+    target = os.path.join(path, DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -617,7 +748,7 @@ def assemble_DGM25_RP(path, name="DGM25-RP",
             logger.error(str(e))
     # merge the GeoTiff Files from all tiles into one file
     tile_files = glob.glob("DGM25_*.tif")
-    _fetch_dgm_od.merge_tiles(target, tile_files)
+    merge_tiles(target, tile_files)
 
     return True
 
@@ -646,7 +777,7 @@ def assemble_DGM_composit(path: str, name: str,
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, _tools.DEM_FMT % name)
+    target = os.path.join(path, DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -689,18 +820,18 @@ def assemble_DGM_composit(path: str, name: str,
         res_opts = {}
 
     # tip from https://gis.stackexchange.com/a/385864
-    with (tempfile.TemporaryDirectory(dir=_tools.TEMP) as tmp):
+    with (tempfile.TemporaryDirectory(dir=_storage.TEMP) as tmp):
         logger.debug("build virtual dataset")
         gdal.BuildVRT(os.path.join(tmp, vrt_name), members)
         logger.debug("writing data file %s" % target)
-        if _tools.DEM_FMT.endswith('.tif'):
+        if DEM_FMT.endswith('.tif'):
             gdal.Translate(destName=target,
                            srcDS=os.path.join(tmp, vrt_name),
                            format="GTiff",
                            creationOptions=["BIGTIFF=YES"],
                            **res_opts
                            )
-        elif _tools.DEM_FMT.endswith('.nc'):
+        elif DEM_FMT.endswith('.nc'):
             gdal.Translate(destName=target,
                            srcDS=os.path.join(tmp, vrt_name),
                            format="netCDF",
@@ -711,7 +842,7 @@ def assemble_DGM_composit(path: str, name: str,
                            **res_opts
                            )
         else:
-            raise Exception(f'cannot handle _tools.DEM_FMT: {_tools.DEM_FMT}')
+            raise Exception(f'cannot handle _tools.DEM_FMT: {DEM_FMT}')
     return True
 
 
@@ -741,35 +872,49 @@ def assemble_GLO_30(path, name = "GLO_30",
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    target = os.path.join(path, _tools.DEM_FMT % name)
+    def gettile_eu(lat, lon):
+        download_dir = ("https://prism-dem-open.copernicus.eu/" +
+                        "pd-desk-open-access/prismDownload/" +
+                        "COP-DEM_GLO-30-DGED__2022_1/")
+        file_fmt = "Copernicus_DSM_10_N%02i_00_E%03i_00.tar"
+        url = download_dir + file_fmt % (lat, lon)
+        logger.debug("downloading ... %s" % url)
+        tar_file = _tools.download(url, os.path.basename(url))
+        name_root = tar_file.replace(".tar", "")
+        with tarfile.open(tar_file) as tf:
+            to_extract = [x for x in tf.getmembers()
+                          if name_root + "/DEM/" in x.name]
+            for x in to_extract:
+                # remove path from name of tar member to extract
+                x.name = os.path.basename(x.name)
+                logger.debug("... extracting %s" % x.name)
+                # now extract tar member to current dir
+                tf.extract(x, '.')
+
+    def gettile_aws(lat, lon):
+        location = ("http://copernicus-dem-30m.s3.amazonaws.com/")
+        path_fmt = "Copernicus_DSM_COG_10_N%02i_00_E%03i_00_DEM/"
+        file_fmt = "Copernicus_DSM_COG_10_N%02i_00_E%03i_00_DEM.tif"
+        url = location + path_fmt % (lat, lon) + file_fmt % (lat, lon)
+        logger.debug("downloading ... %s" % url)
+        _tools.download(url, os.path.basename(url))
+
+    target = os.path.join(path, DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
 
-    download_dir = ("https://prism-dem-open.copernicus.eu/" +
-                    "pd-desk-open-access/prismDownload/" +
-                    "COP-DEM_GLO-30-DGED__2022_1/")
-    file_fmt = "Copernicus_DSM_10_N%02i_00_E%03i_00.tar"
-
     for lat in range(47, 54):
         for lon in range(5, 16):
-            url = download_dir + file_fmt % (lat, lon)
-            logger.debug("downloading ... %s" % url)
-            tar_file, _ = _tools.download(url, os.path.basename(url))
-            name_root = tar_file.replace(".tar", "")
-            with tarfile.open(tar_file) as tf:
-                to_extract = [x for x in tf.getmembers()
-                              if name_root + "/DEM/" in x.name]
-                for x in to_extract:
-                    # remove path from name of tar member to extract
-                    x.name = os.path.basename(x.name)
-                    logger.debug("... extracting %s" % x.name)
-                    # now extract tar member to current dir
-                    tf.extract(x, '.')
+            ## worked until DEC 2024:
+            # gettile_eu(lat, lon)
+            # working MAR 2025
+            gettile_aws(lat, lon)
+
     # merge the GeoTiff Files from all tiles into one file
-    target = os.path.join(path, _tools.DEM_FMT % "GLO-30")
+    target = os.path.join(path, DEM_FMT % "GLO-30")
     tile_files = glob.glob("Copernicus_*.tif")
-    _fetch_dgm_od.merge_tiles(target, tile_files)
+    merge_tiles(target, tile_files)
 
     return
 
@@ -801,7 +946,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
     """
     support_url = ("https://data.rda.ucar.edu/d758000/support/"
                    + "GTOPO30support.tar.gz")
-    download_fmt = ("https://data.rda.ucar.edu/ds758000/elevtiles/" +
+    download_fmt = ("https://data.rda.ucar.edu/d758000/elevtiles/" +
                     "%s.DEM.gz")
     tiles = ["W020N90"]
     # known_tiles = \
@@ -812,13 +957,13 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
     # "E120S60 ".split()
     # get the single archive that holds the supportive
     # files for all tiles
-    target = os.path.join(path, _tools.DEM_FMT % "GTOPO30")
+    target = os.path.join(path, DEM_FMT % "GTOPO30")
     logger.debug(f'data file path: {target}')
     if os.path.exists(target) and not replace:
         logger.info("dataset exists ... %s" % name)
         return False
     logger.debug("downloading ... %s" % support_url)
-    support_file, _ = _tools.download(
+    support_file = _tools.download(
         support_url, os.path.basename(support_url))
     with tarfile.open(support_file) as support_tar:
         # no get every tile we want
@@ -830,7 +975,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
             # now download the actual data file for the tile
             download_url = download_fmt % tile
             logger.debug("downloading ... %s" % download_url)
-            tile_file, _ = _tools.download(
+            tile_file = _tools.download(
                 download_url, os.path.basename(download_url))
             # expand the terrain data holding file *.DEM
             # and convert it to a GeoTiff file
@@ -846,7 +991,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
                       format="GTiff")
     # merge the GeoTiff Files from all tiles into one file
     tile_files = glob.glob("*.tif")
-    _fetch_dgm_od.merge_tiles(target, tile_files)
+    merge_tiles(target, tile_files)
 
     return
 
@@ -881,7 +1026,8 @@ def provide_terrain(source: str, path: str = None,
     :raises ValueError: if `method` is not one of the allowed values.
     """
     if path is None:
-        path = find_writeable_storage(path, _tools.STORAGE_TERRAIN)
+        path = _storage.find_writeable_storage(path,
+                                      _storage.STORAGE_TERRAIN)
     dataset = dataset_get(source)
     logger.info("providing terrain source %s" % source)
     if method == 'download':
@@ -889,9 +1035,13 @@ def provide_terrain(source: str, path: str = None,
             raise Exception("Dataset has no download uri, assemble it.")
         dataset.download(path)
     elif method == 'assemble':
+        # load libraries
+        import_lib('gdal')
+        import_lib('gdal_merge')
+        import_lib('osr')
         # change to temp directory
         pwd = os.getcwd()
-        with tempfile.TemporaryDirectory(dir=_tools.TEMP) as temp_dir:
+        with tempfile.TemporaryDirectory(dir=_storage.TEMP) as temp_dir:
             os.chdir(temp_dir)
             logger.debug('calling %s' % str(dataset.assemble))
             dataset.assemble(path, source, force, dataset.arguments)
@@ -913,17 +1063,130 @@ def provide_terrain(source: str, path: str = None,
                     f.write(text.encode('utf-8'))
         elif lic_src == 'file':
             if lic_id in [None, '']:
-                lic_aux = os.path.join(str(_tools.DIST_AUX_FILES), lic_file)
+                lic_aux = os.path.join(str(
+                    _storage.DIST_AUX_FILES), dataset.file_license)
             else:
-                lic_aux = os.path.join(str(_tools.DIST_AUX_FILES), lic_id)
+                lic_aux = os.path.join(str(
+                    _storage.DIST_AUX_FILES), lic_id)
             shutil.copy(lic_aux, lic_file)
     if dataset.notice is not None:
+        if "dd mmm yyyy" in dataset.notice:
+            acc_txt = pd.Timestamp.now().strftime("%d %m %Y")
+            not_txt = dataset.notice.replace("dd mmm yyyy", acc_txt)
+        else:
+            not_txt = dataset.notice
         not_file = os.path.join(path, dataset.file_notice)
         with open(not_file, 'w') as f:
-            f.write(dataset.notice)
+            f.write(not_txt)
     return
 
+# -------------------------------------------------------------------------
+def merge_zipped_nc(source, destination):
+    """
+    Merge multiple netcdf files contained in a zip archive
+    into one nc file.
 
+    :param source: path of the archive file to read
+    :type source: str
+    :param destination: path of the destination file to create
+    :type destination: str
+    """
+    import netCDF4
+    source_file = os.path.abspath(source)
+    logger.info("unpacking downloaded zip archive %s" % source_file)
+    destination_file = os.path.abspath(destination)
+    with tempfile.TemporaryDirectory(dir=_storage.TEMP) as td:
+        with zipfile.ZipFile(source_file, 'r') as zf:
+            zf.extractall(td)
+        ncfiles = glob.glob(os.path.join(td, '*.nc'))
+        if len(ncfiles) == 0:
+            raise IOError("No files found in %s" % source)
+        sources = [netCDF4.Dataset(x, 'r') for x in ncfiles]
+
+
+        # create new file/dataset
+        compression = 'zlib'
+        stime = 'valid_time'
+        dtime = 'time'
+        logger.debug("creating netcdf file %s" % destination_file)
+        if os.path.exists(destination_file):
+            os.remove(destination_file)
+        dst = netCDF4.Dataset(destination_file, "w")
+
+        logger.debug(f"... reading old time values")
+        stimevar = sources[0][stime]
+        numtime = netCDF4.num2date(stimevar, stimevar.units)
+        logger.debug(f"creating new time variable {dtime}")
+        dst.createDimension(dtime, stimevar.size) # copy size
+        # dst.createDimension(dtime, size=None) # UNLIMITED
+        dst.createVariable(dtime,
+                           datatype='d',
+                           dimensions=(dtime),
+                           compression=compression,
+                           )
+        dunit = 'hours since 1900-01-01'
+        logger.debug(f"... setting attributes")
+        dst.variables[dtime].setncattr('long_name', dtime)
+        dst.variables[dtime].setncattr('standard_name', dtime)
+        dst.variables[dtime].setncattr('units', dunit)
+        dst.variables[dtime].setncattr('calendar', 'proleptic_gregorian')
+        logger.debug(f"... setting new time values")
+        dst.variables[dtime][:] = netCDF4.date2num(numtime, dunit)
+
+        # copy attributes
+        attributes = {}
+        for src in sources:
+            for a in src.ncattrs():
+                if a not in attributes:
+                    attributes[a] = src.getncattr(a)
+        for a in attributes:
+            dst.setncattr(a, attributes[a])
+        # copy dimensions:
+        for src in sources:
+            for k,v in src.dimensions.items():
+                if k not in dst.dimensions and k != stime:
+                    dst.createDimension(k, size=v.size)
+        # copy variables:
+        for src in sources:
+            for k,v  in src.variables.items():
+                logger.debug(f"copy variable {k} ({v.datatype})")
+                if k not in dst.variables and k != stime:
+                    if isinstance(v.datatype,
+                                  (netCDF4.VLType, netCDF4.CompoundType)):
+                        cmpr = None
+                    else:
+                        cmpr = compression
+                    if '_FillValue' in v.ncattrs():
+                        fill = v.getncattr('_FillValue')
+                    else:
+                        fill = None
+                    logger.debug(f" ... fill value {fill}")
+                    dims = (x if x != stime else dtime
+                            for x in v.dimensions)
+                    # copy variable definition
+                    dst.createVariable(k,
+                                       v.datatype,
+                                       dims,
+                                       compression=cmpr,
+                                       fill_value=fill)
+                    # copy variable attributes
+                    for a in src.variables[k].ncattrs():
+                        if a in ['_FillValue']:
+                            continue # skip
+                        logger.debug(f" ... attribute: {a}")
+                        string = src.variables[k].getncattr(a)
+                        if a == 'coordinates':
+                            string = string.replace(stime, dtime)
+                        else:
+                            pass
+                        dst.variables[k].setncattr(a, string)
+                    # copy variable values
+                    dst[k][:] = src[k][:]
+
+        for src in sources:
+            src.close()
+        dst.close()
+    logger.debug("finished writing netcdf file %s" % destination_file)
 # -------------------------------------------------------------------------
 def show_notice(storage_path, source):
     """
@@ -936,11 +1199,17 @@ def show_notice(storage_path, source):
     :type source: str
 
     """
-    print('data copyright notice:')
-    with open(os.path.join(storage_path,
-                           "%s.NOTICE.txt" % source), "r") as f:
-        for x in f.readlines():
-            print(x)
+    def show_notice(storage_path, source):
+        noticefile = os.path.join(storage_path,
+                                  "%s.NOTICE.txt" % source)
+        logger.debug('noticefile: %s' % noticefile)
+        if os.path.exists(noticefile):
+            print('IMPORTANT: data copyright notice:')
+            with open(noticefile, "r") as f:
+                for x in f.readlines():
+                    print(x)
+        else:
+            logger.debug('(no noticefile)')
 
 
 # -------------------------------------------------------------------------
@@ -1038,8 +1307,8 @@ def _ass_era5_getyear(year):
 
 
 # -------------------------------------------------------------------------
-def assemble_ERA5(path: str, name="ERA5", years: list =[],
-                  replace : bool = False, args : dict ={}):
+def assemble_ERA5(path: str, name="ERA5", years:list=None,
+                  replace : bool = False, args:dict=None):
     """
     Downloads and assembles ERA5 reanalysis data for a list of specified
     years, saving the data to a designated path.
@@ -1091,6 +1360,13 @@ def assemble_ERA5(path: str, name="ERA5", years: list =[],
     """
 
     # create option tuples
+    if args is None:
+        args = {}
+    if years is None:
+        years = []
+    _init_datasets()
+    logger.debug(f"assemble_ERA5: path={path}, name={name}, "
+                 f"years={years}, replace={replace}, args={args}")
     combi = []
     for year in years:
         yn = name_yearly(name, year)
@@ -1102,18 +1378,26 @@ def assemble_ERA5(path: str, name="ERA5", years: list =[],
                 continue
         combi.append(year)
     # get data in parallel directly to storage
+    downloaded = []
     with mp.Pool(PROCS) as pool:
-        for dld in pool.map(_ass_era5_getyear, combi):
-            year, ncname = dld
-            yn = name_yearly(name, year)
-            target = os.path.join(path, _tools.WEA_FMT % yn)
-            # gently move the old file out of way
-            if not _ass_clear_target(target, replace):
-                logger.info("skipping because dataset exists: %s" % name)
-                os.remove(ncname)
-                continue
-            shutil.move(ncname, target)
+        for ncname in pool.map(_ass_era5_getyear, combi):
+            downloaded.append(ncname)
 
+    for c in zip(combi, downloaded):
+        year, ncname = c
+        yn = name_yearly(name, year)
+        target = os.path.join(path, WEA_FMT % yn)
+        # gently move the old file out of way
+        if not _ass_clear_target(target, replace):
+            logger.info("skipping because dataset exists: %s" % name)
+            os.remove(ncname)
+            continue
+        if zipfile.is_zipfile(ncname):
+            # new output format as of Jan 2024
+            merge_zipped_nc(ncname, target)
+        else:
+            # old output format as of Jan 2024
+            shutil.move(ncname, target)
 # -------------------------------------------------------------------------
 def _cerraname(y, lt=None):
     """
@@ -1258,8 +1542,8 @@ def _ass_cerra_getyear(opts):
 
 
 # -------------------------------------------------------------------------
-def assemble_CERRA(path: str, name="CERRA", years: list = [],
-                   replace : bool = False, args : dict ={}):
+def assemble_CERRA(path: str, name="CERRA", years=None,
+                   replace : bool = False, args=None):
     """
     Downloads, extracts, and merges CERRA dataset forecasts for specified
     years into single NetCDF files per year.
@@ -1312,7 +1596,14 @@ def assemble_CERRA(path: str, name="CERRA", years: list = [],
       points to a valid temporary directory for intermediate files.
 
     """
-    temp_path = _tools.TEMP
+    if args is None:
+        args = {}
+    if years is None:
+        years = []
+    _init_datasets()
+    logger.debug(f"assemble_CERRA: path={path}, name={name}, "
+                 f"years={years}, replace={replace}, args={args}")
+    temp_path = _storage.TEMP
     logger.debug(f"looking for cdo ...{temp_path}")
     data = cdo.Cdo(tempdir=temp_path)
     logger.debug("python-cdo version: %s" % cdo.__version__)
@@ -1348,7 +1639,7 @@ def assemble_CERRA(path: str, name="CERRA", years: list = [],
         lts = set([y for x, y in combi if x == year])
         infiles = [_cerraname(year, lt) + '.nc' for lt in lts]
         yn = name_yearly(name, year)
-        target = os.path.join(path, _tools.WEA_FMT % yn)
+        target = os.path.join(path, WEA_FMT % yn)
         # gently move the old file out of way
         if not _ass_clear_target(target, replace):
             logger.info("skipping because dataset exists: %s" % name)
@@ -1403,7 +1694,7 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
         else:
             raise ValueError(f"years is required for DWD dataset")
     # check database
-    target = os.path.join(path, _tools.OBS_FMT % name)
+    target = os.path.join(path, OBS_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
@@ -1496,18 +1787,21 @@ def provide_weather(source: str, path: str = None,
 
     # param method is implemented for future use
     if path is None:
-        path = find_writeable_storage(path, _tools.STORAGE_WAETHER)
+        path = _storage.find_writeable_storage(path,
+                                      _storage.STORAGE_WAETHER)
     #dataset = dataset_get(source)
     logger.info("downloading weather source %s" % source)
     success = True
     pwd = os.getcwd()
-    with tempfile.TemporaryDirectory(dir=_tools.TEMP) as temp_dir:
+    with tempfile.TemporaryDirectory(dir=_storage.TEMP) as temp_dir:
         os.chdir(temp_dir)
-#        try:
         success = True
         if source == "ERA5":
+            import_lib('cdsapi')
             assemble_ERA5(path, years=years)
         elif source == "CERRA":
+            import_lib('cdo')
+            import_lib('cdsapi')
             assemble_CERRA(path, years=years, replace=force)
         elif source == "DWD":
             dataset = dataset_get(source)
@@ -1516,50 +1810,703 @@ def provide_weather(source: str, path: str = None,
         else:
             logger.error("unknown dataset to download %s" % source)
             success = False
-        # except Exception as e:
-        #     logger.error(str(e))
-        #     success = False
     # return before clean up
     os.chdir(pwd)
     return success
 
 
 # -------------------------------------------------------------------------
+def stationlist_DWD(path: str = None, fmt: str = None):
+    """
+    Downloads, extracts, and merges DWD station lists.
+
+    :param path: The path where the final merged file
+      will be stored.
+    :type path: str
+    :param fmt: file format or generate
+    :type name: str
+
+    - This function assumes that a global `_tools.TEMP` variable is defined and
+      points to a valid temporary directory for intermediate files.
+
+    """
+    if fmt is None:
+        fmt = 'csv'
+    # get list of stations
+    logger.info("fetching stationlists")
+    # get list without date checking
+    stations = _fetch_dwd_obs.fetch_stationlist(years=None)
+    station_numbers = stations.keys()
+    sf = pd.DataFrame.from_dict(stations, orient='index')
+
+    logger.info("writing stationlist")
+    if path is None:
+        fid = sys.stdout
+    else:
+        fid = open(path, mode="w")
+    if fmt == 'csv':
+        sf.to_csv(fid)
+    elif fmt == 'json':
+        ugly = sf.to_json(orient="index")
+        pretty = json.dumps(json.loads(ugly), indent=4)
+        fid.write(pretty)
+    if path is not None:
+        fid.close()
+
+# -------------------------------------------------------------------------
+
+def provide_stationlist(source:str=None, fmt:str=None, out:str=None):
+    logging.debug(f"provide_stationlist -> {source}")
+    if source is None:
+        raise ValueError("provide_stationlist() requires a source")
+    if source == "DWD":
+        stationlist_DWD(path=out, fmt=fmt)
+    else:
+        sys.tracebacklimit = 0
+        raise ValueError(f"stationlist: unkwnown source {source}")
+
+# -------------------------------------------------------------------------
 def name_yearly(name, year):
     return '%s-%04i' % (name, year)
 
 # -------------------------------------------------------------------------
-def expand_datasets(defs: dict):
-    datasets = []
-    for k,v in defs.items():
-        if "split" in v.keys():
-            if v["split"] == "years":
-                years_available = _tools.expand_sequence(
-                    v["years_available"])
-                for ya in years_available:
-                    name = name_yearly(k, ya)
-                    vy = v.copy()
-                    if 'uri' in v and isinstance(v['uri'], dict):
-                        vy['uri'] = v['uri'][str(ya)]
-                    datasets.append(DataSet(name=name, **vy))
-            else:
-                raise ValueError(f"unkown split type {v['split']}")
-        else:
-            datasets.append(DataSet(name=k, **v))
+
+def find_weather_data():
+    """
+    Searches all known storage locations for the known terrain datasets
+    and yields a list of the datasets available locally.
+
+    :return: dataset IDs of the locally available datasets
+    :rtype: list[str]
+    """
+    _init_datasets()
+    datasets = {}
+    for ds in DATASETS:
+        # is ds a terrain dataset?
+        if ds.storage == 'weather':
+            # is it locally available (i.e. downloaded already?):
+            if ds.available:
+                datasets[ds.name] = ds.path
     return datasets
 
 # -------------------------------------------------------------------------
-# initialize
-DATASETS = expand_datasets(DATASET_DEFINITIONS)
-"""
-All known datasets as :py:class:`DataSet` instances.
 
-:meta hide-value:
-"""
-PROCS = None
-"""
-Number of parallel processes to run downlading data or  
-`None`. If `None` the number of processor cores in the system is used.
-"""
-dataset_scan()
+def find_terrain_data():
+    """
+    Searches all known storage locations for the known terrain datasets
+    and yields a list of the datasets available locally.
 
+    :return: dataset IDs of the locally available datasets
+    :rtype: list[str]
+    """
+    _init_datasets()
+    datasets = {}
+    for ds in DATASETS:
+        # is ds a terrain dataset?
+        if ds.storage == 'terrain':
+            # is it locally available (i.e. downloaded already?):
+            if ds.available:
+                datasets[ds.name] = ds.path
+    return datasets
+
+# -------------------------------------------------------------------------
+
+""" terrain data `noddata` value """
+NODATA = 9.96920996838686905e+36
+
+# -------------------------------------------------------------------------
+
+def xyz2csv(inputfile, output, utm_remove_zone=False):
+    """
+    Clean the xyz flies downloaded in a way that gdal accepts them as csv
+
+    :param inputfile: input file
+    :type inputfile: str
+    :param output: output file
+    :type output: str
+    :param utm_remove_zone: Some providers prefix UTM easting with the
+      zone numer, which results in easting values exceeding 1000km.
+      Remove the leading digits to keep easting in the allowed range
+      0m < easting < 1000000 m. defaults to False.
+    :type utm_remove_zone: bool
+    :return: True if successful, False otherwise
+    :rtype: bool
+    """
+    # test if file has a header line
+    with open(inputfile, 'r') as fd:
+        line1 = fd.readline()
+    if bool(re.search('[a-zA-Z]', line1)) > 0:
+        header = 0
+    else:
+        header = None
+    df = pd.read_csv(inputfile,
+                     sep=r'\s+', header=header, names=['x', 'y', 'z'])
+    if len(df.index) < 4:
+        # skip empty files
+        return False
+
+    if utm_remove_zone:
+        df['x'] = np.sign(df['x']) * (np.abs(df['x']) % 1000000)
+    # get full grid axes
+    try:
+        x_res = np.median(np.diff(sorted(set(df['x']))))
+        x_vals = set(
+            np.arange(df['x'].min(), df['x'].max() + x_res, x_res))
+        y_res = np.median(np.diff(sorted(set(df['y']))))
+        y_vals = set(
+            np.arange(df['y'].min(), df['y'].max() + y_res, y_res))
+    except ValueError:
+        # skip all-NaN files etc.
+        return False
+    # create full dataframe
+    ff = pd.DataFrame.from_records(itertools.product(x_vals, y_vals),
+                                   columns=['x', 'y'])
+    of = pd.merge(ff, df, how='left', left_on=['x', 'y'],
+                  right_on=['x', 'y'])
+    del [ff, df]
+    of = of.replace(np.nan, -9999.)
+
+    # sort it so gdal doesnt complain
+    of = of.sort_values(['y', 'x'])
+
+    of.to_csv(output, index=False, header=False)
+
+    return True
+
+# -------------------------------------------------------------------------
+
+def get_dataset_crs(filename):
+    """
+    Query the projection of a geo data file.
+
+    :param filename: name of the file (optionally with leading path)
+    :type filename: str
+    :return: Projection of the geo data file ind the form "EPSG:xxxx"
+    :rtype: str
+    """
+    # with ... does not work with gda.Open()
+    ds = gdal.Open(filename, gdal.GA_ReadOnly)
+    prj = ds.GetProjection()
+    # make sure file is closed
+    del ds
+    srs = osr.SpatialReference(wkt=prj)
+    jsrs = srs.ExportToPROJJSON()
+    srsid = json.loads(jsrs)['id']
+    epsg = '%s:%i:' % (srsid['authority'], srsid['code'])
+    return epsg
+
+# -------------------------------------------------------------------------
+
+def get_dataset_driver(filename):
+    """
+    Query the driver (i.e. fiel format) of a geo data file
+
+    :param filename: name of the file (optionally with leading path)
+    :type filename: str
+    :return: Projection of the geo data file ind the form "EPSG:xxxx"
+    :rtype: str
+    """
+    # with ... does not work with gda.Open()
+    ds = gdal.Open(filename, gdal.GA_ReadOnly)
+    drv = ds.GetDriver().ShortName
+    # make sure file is closed
+    del ds
+    return drv
+
+# -------------------------------------------------------------------------
+
+def get_dataset_nodata(filename):
+    """
+    Query the NODATA value of a geo data file
+
+    :param filename: name of the file (optionally with leading path)
+    :type filename: str
+    :return: nodata value
+    :rtype: float
+    """
+    # with ... does not work with gda.Open()
+    ds = gdal.Open(filename, gdal.GA_ReadOnly)
+    rc = ds.RasterCount
+    if rc != 1:
+        logger.warning(f'multiple Bands, returning Band1 of: {filename}')
+    nodata = ds.GetRasterBand(1).GetNoDataValue()
+    # make sure file is closed
+    del ds
+    return nodata
+
+# -------------------------------------------------------------------------
+
+def xyz2tif(inputfile, srcsrs, utm_remove_zone=False):
+    """
+    convert xyz file (via csv) to GeoTiff
+
+    :param inputfile: input file
+    :type inputfile: str
+    :param srcsrs: SRS of the input file (as "EPSG:xxxxx")
+    :type srcsrs: str
+    :param utm_remove_zone: Some providers prefix UTM easting with the
+      zone numer, which results in easting values exceeding 1000km.
+      Remove the leading digits to keep easting in the allowed range
+      0m < easting < 1000000 m. defaults to False.
+    :type utm_remove_zone: bool
+    :return: output file name (GeoTiff)
+    :rtype: str
+    """
+    if os.stat(inputfile).st_size == 0:
+        logger.debug(f"skipping empty  ... {inputfile}")
+        os.remove(inputfile)
+        return None
+    tf1 = re.sub(r'\.xyz$', '.tif', inputfile)
+    logger.debug(f"converting tile ... {inputfile} -> {tf1}")
+    # returns a tuple containing file handle and the abs pathname!
+    csvhdl, csvfile = tempfile.mkstemp(
+        prefix='dgm', suffix='.csv', dir=_storage.TEMP)
+    got_csv = xyz2csv(inputfile, csvfile,
+                      utm_remove_zone=utm_remove_zone)
+    os.remove(inputfile)
+    if not got_csv:
+        logger.warning(f"did not convert ... {inputfile}")
+        os.close(csvhdl)
+        os.remove(csvfile)
+        return None
+    gdal.Translate(destName=tf1,
+                   srcDS=csvfile,
+                   outputSRS=srcsrs,
+                   noData=-9999,
+                   )
+    os.close(csvhdl)
+    os.remove(csvfile)
+    return tf1
+
+# -------------------------------------------------------------------------
+
+def reduce_tile(tf1, out_res, overwrite=True):
+    """
+    Resamples a tile (or any file that can be autodetected by gdal)
+    to a differen (only lower makse sense) resolution and saves ist as
+    GeoTiff
+
+    :param tf1: name (and optionally path) of the input file
+    :type tf1: str
+    :param out_res: output resolution (i.e. pixel width) in km
+    :type out_res: float
+    :param overwrite: overwrite existing output file
+    :type overwrite: bool
+    :return: name (and path if supplied in `tf1`) of the output file
+      or empty stringif no file is written
+    :rtype: str
+    """
+    tfxx = os.path.splitext(tf1)[0] + ".reduced.tif"
+    if os.path.exists(tfxx) and not overwrite:
+        # reduced file exist and shall be kept
+        return ''
+    logger.debug(f"resampling tile ... {tf1} -> {tfxx}")
+    try:
+        gdal.Warp(destNameOrDestDS=tfxx,
+                  xRes=out_res,
+                  yRes=out_res,
+                  srcDSOrSrcDSTab=tf1,
+                  format="GTiff")
+    except Exception as e:
+        logger.error(str(e))
+    os.remove(tf1)
+    return tfxx
+
+# -------------------------------------------------------------------------
+
+def unpack_file(dl_file, unpack):
+    """
+    Unpack files from an archive
+
+    :param dl_file: filename, otionally incl. path, of the archive (downloadad file)
+    :type dl_file: str
+    :param unpack: string describing what to unpack
+    :type unpack: str
+    :return: names of the files extracted
+    :rtype: list[str]
+    :raises ValeError: if `unpack` string is invalid
+    """
+    inputfiles = []
+    if unpack in [None, '', 'tif', 'false']:
+        inputfiles = [dl_file]
+    elif unpack.startswith(('zip', 'unzip')):
+        try:
+            with zipfile.ZipFile(dl_file, 'r') as zf:
+                pattern = re.sub('^(un|)zip://', '', unpack)
+                unpack_files = [x for x in zf.namelist()
+                                if PurePath(x).match(pattern)]
+                inputfiles = []
+                for un in unpack_files:
+                    if not os.path.exists(os.path.basename(un)):
+                        # in case of overlapping archives
+                        # do not overwrite existing files
+                        # leave the processing to the other thread
+                        with zf.open(un) as fz:
+                            with open(os.path.basename(un), 'wb') as fu:
+                                fu.write(fz.read())
+                        inputfiles.append(os.path.basename(un))
+        except Exception as e:
+            raise IOError(f'zip file error processing {dl_file}')
+    else:
+        raise IOError(f"dont know how to handle download: {dl_file}")
+
+    if len(inputfiles) == 0:
+        logger.warning(f"no data unpacked from {dl_file}")
+    return inputfiles
+
+# -------------------------------------------------------------------------
+
+def merge_tiles(target, tile_files):
+    """
+    merge the GeoTiff Files from all tiles into one file
+
+    :param target: name, optionally including path) of the file to generate
+    :type target:  str
+    :param tile_files: Input files to merge
+    :type tile_files: list[str]
+    :raises Exception: if gdal_merge aborts with error
+
+    """
+    if os.path.exists(target):
+        logger.info("removing old source file")
+        os.remove(target)
+    logger.debug("merging tiles ...")
+    # handling of nodata: see https://gis.stackexchange.com/a/304202
+    in_nodata = get_dataset_nodata(tile_files[0])
+    if in_nodata is None:
+        n_option = []
+    else:
+        n_option = ['-n', str(in_nodata)]
+    tile_drvs = [get_dataset_driver(x) for x in tile_files]
+    drivers = sorted(set(tile_drvs), key = lambda x: tile_drvs.count(x))
+    if len(drivers) > 1:
+        logger.warning("merging mixed-format tiles")
+    driver = drivers.pop()
+    if driver == "GTiff":
+        merged_file = 'merged.tif'
+        co_opts = [
+            "-co", "compress=lzw",
+            "-co", "bigtiff=yes",
+        ]
+    elif driver == "netCDF":
+        merged_file = 'merged.nc'
+        co_opts = [
+            "-co", "FORMAT=NC4C",
+            "-co", "COMPRESS=DEFLATE",
+            "-co", "ZLEVEL=9"
+        ]
+    else:
+        raise ValueError(f"unsopported driver {driver}")
+    gdal_merge_options = ["",
+                     "-init", str(NODATA),
+                     "-a_nodata", str(NODATA)
+                     ] + n_option + co_opts + [
+                     "-o", merged_file,
+                     ] + tile_files
+    gdal_merge.main(gdal_merge_options)
+    s_srs = get_dataset_crs(merged_file)
+    if DEM_FMT.endswith('.tif'):
+        if s_srs == DEM_CRS:
+            # we already have the wanted product
+            shutil.move(merged_file, target)
+        else:
+            logger.debug(f"reprojecting to target projection "
+                         f"{DEM_CRS}")
+            gdal.Warp(destNameOrDestDS=target,
+                      dstSRS=DEM_CRS,
+                      srcDSOrSrcDSTab=merged_file,
+                      format="GTiff",
+                      creationOptions=["BIGTIFF=YES"]
+                      )
+    elif DEM_FMT.endswith('.nc'):
+        logger.debug(f"converting and reprojecting to {DEM_CRS}")
+        gdal.Warp(srcDSOrSrcDSTab=merged_file,
+                  destNameOrDestDS=target,
+                  dstSRS=DEM_CRS,
+                  format="netCDF",
+                  creationOptions=[
+                      "FORMAT=NC4C",
+                      "COMPRESS=DEFLATE",
+                      "ZLEVEL=9"]
+                  )
+    else:
+        raise Exception(f'cannot handle _tools.DEM_FMT: {DEM_FMT}')
+    logger.debug(f"... written {target}")
+
+# -------------------------------------------------------------------------
+
+def expand_filelist_string(string, base_url, verify,
+                           xmlp, jsonp, linkp):
+
+    list_name = re.sub(r'::.*$', '', string)
+    url = '/'.join((base_url, list_name))
+    if string.endswith(('xml', 'meta4')):
+        # xml
+        if xmlp in ["",None]:
+            ValueError("xmlpath needed but not defined")
+        logger.debug("downloading xml metadata: %s" % url)
+        with requests.get(url, allow_redirects=True,
+                          verify=verify) as rsp:
+            input_files = _tools.xmlpath(xml=rsp.content.decode(),
+                                  path=xmlp)
+    elif string.endswith(('json', 'geojson')):
+        # json
+        if jsonp in ["",None]:
+            ValueError("jsonpath needed but not defined")
+        logger.debug("downloading json metadata: %s" % url)
+        with requests.get(url, allow_redirects=True,
+                          verify=verify) as rsp:
+            input_files = _tools.jsonpath(json_obj=rsp.json(),
+                                   path=jsonp)
+    elif string.endswith(('html')):
+        # html
+        if linkp in ["",None]:
+            ValueError("links pattern needed but not defined")
+        logger.debug("downloading html metadata: %s" % url)
+        with requests.get(url, allow_redirects=True,
+                          verify=verify) as rsp:
+            text = rsp.content.decode()
+            links = [x for x in re.findall(r'href="(.+?)"', text)]
+            input_files = [x for x in links if bool(re.match(linkp, x))]
+            method = 'http'
+    elif '::' in string:
+        # type specified but not known
+        raise ValueError(f'unknown filelist type in: {string}')
+    else:
+        # no expansion
+        input_files = [string]
+    return input_files
+
+# -------------------------------------------------------------------------
+
+def dgm1_sh_getfid(args):
+    """
+    get individual file for DGM1-SH
+
+    :param args: download number, total no of downloads, file-id, args
+    :type args: tupe[int, int, int, dict]
+    :return: names of extracted files
+    :rtype: list[str]
+    """
+    i, ni, fid, provider = args
+    baseurl = ('https://geodaten.schleswig-holstein.de/'
+               'gaialight-sh/_apps/dladownload')
+
+    localstore = provider.get('localstore', '.')
+    localname = os.path.join(localstore, "id-%06d.zip" % fid)
+
+    if os.path.exists(localname):
+        shutil.copy(localname, '.')
+        logger.debug('locally avalable fid: %s' % fid)
+        dl_file = os.path.basename(localname)
+    else:
+        for ntry in range(_tools.MAX_RETRY):
+            try:
+                session = requests.Session()
+                _ = session.get(baseurl + 'dl-dgm1.html',
+                                verify=False)
+                request = session.get(baseurl + '/_ajax/details.php?' +
+                                      f'type=dgm1&id={str(fid)}')
+                response = request.json()
+                if 'object' not in response:
+                    print(f"problem with fid {fid}: {str(response)}")
+                    return
+
+                tilename = response['object']['kachelname']
+                filename = tilename + '.xyz'
+
+                if os.path.exists(filename):
+                    logger.debug(
+                        "-- %5d/%5d -- exists   %s " % (i, ni, tilename))
+                    return
+                else:
+                    logger.debug(
+                        "-- %5d/%5d -- download %s " % (i, ni, tilename))
+
+                timestr = time.strftime('%s', time.gmtime())
+                start = session.get(
+                    baseurl + '/multi.php?' +
+                    f'url={filename}&buttonClass=file1&id={str(fid)}&'
+                    f'type=dgm1&action=start&_={timestr}',
+                    verify=False)
+                response = start.json()
+                if response['success']:
+                    job_id = response['id']
+                else:
+                    if response['message'] == ('1 Datei konnte nicht '
+                                               'gefunden werden'):
+                        logger.debug("                  file not found")
+                        return
+                    else:
+                        raise Exception(response['message'])
+                running = True
+                downloadurl = None
+                while running:
+                    request = session.get(
+                        baseurl + f'/multi.php?action=status&job={job_id}',
+                        verify=False)
+                    response = request.json()
+                    logger.debug(response)
+                    if response.get('status', '') in ['wait', 'work']:
+                        # wait
+                        time.sleep(2)
+                    elif response.get('msg', '') == 'Interner Fehler':
+                        # next ty
+                        continue
+                    else:
+                        # proceed to download
+                        downloadurl = response['downloadUrl']
+                        break
+                request = session.get(downloadurl, verify=False)
+                dl_file = tilename + '.zip'
+                with open(dl_file, 'wb') as fn:
+                    fn.write(request.content)
+                break
+            except (requests.exceptions.ConnectionError,
+                    exceptions.ProtocolError) as e:
+                logger.error("exception downloading %s; %s" % (fid, e))
+
+            ntry = ntry + 1
+        else:
+            raise IOError("downloading failed %s times: fid %s" %
+                          (_tools.MAX_RETRY, fid))
+
+        if localstore is not None:
+            shutil.copy(dl_file, localname)
+
+    unpack = provider.get('unpack', None)
+    out_res = provider.get('resolution', 25)
+    inputfiles = unpack_file(dl_file, unpack)
+    srcsrs = provider['CRS']
+    utm_remove_zone = provider.get('UTM_ZONE', False)
+    tilefiles = []
+    for tile_xyz in inputfiles:
+        logger.debug("converting tile ... %s" % tile_xyz)
+        tf1 = xyz2tif(tile_xyz, srcsrs, utm_remove_zone)
+        if tf1 is not None:
+            tfxx = reduce_tile(tf1, out_res)
+            if tfxx != "":
+                tilefiles.append(tfxx)
+
+    if os.path.exists(dl_file): os.remove(dl_file)
+    return tilefiles
+
+# -------------------------------------------------------------------------
+
+def process_input(args):
+    """
+    Worker funtion to process a downloaded file into one or more
+    data (tile) file(s) of the desired resolution and projection
+
+    :param args: tuple containg the arguments:
+
+        - inp: location of the input file. Either file and path or URL
+        - base_url: base url to prepend to inp, omitted if inp is a URL
+        - verify: enable (True) or disable (False) server certificate check
+        - provider: dict containing the processing arguments
+            - provider['localstore']: (str, optional)
+              path where local copies of the download files are stored.
+              Files that exist in this directory are copied from there and not downloaded.
+              Successfully downloaded files are copied to this location.
+            - provider['missing']: (str, optional)
+              if 'ok', 'ignore', an empty list is returned,
+              if the URL download fails with error 404 (not found)
+            - provider["unpack"]: (str, optional)
+              the description, what to unpack.
+            - provider["CRS"]: (str, optional)
+              the referecnce system of the input data (in the form "EPSG:xxxx")
+            - provider["utm_remove_zone"]: (str, optional)
+              If 'True', 'true', 'yes', True is passed
+              to :py:func:`_ass_reduce`
+    :type args: tuple[str, str, bool, dict]
+    :return: list of the generated files
+    :rtype: list[str]
+    """
+    inp, base_url, verify, provider = args
+    unpack = provider.get('unpack', None)
+    localstore = provider.get('localstore', None)
+    out_res = provider.get('resolution', 25)
+    srcsrs = provider.get('CRS', None)
+    if provider.get('utm_remove_zone', 'true') in ['True', 'true', 'yes']:
+        utm_remove_zone = True
+    else:
+        utm_remove_zone = False
+    dl_file = os.path.basename(inp)
+
+    url = None
+    if localstore is not None:
+        # 1st priority: get a locally stored file
+        localfile = os.path.join(localstore, dl_file)
+        if os.path.exists(localfile):
+            url = 'file://' + os.path.abspath(localfile)
+    if url is None:
+        # 2nd priority: download the file
+        if re.match('^http[s]*://', inp):
+            url = inp
+        else:
+            url = f"{base_url}/{inp}"
+
+    failure_ok = False
+    if re.match('^http[s]*://', url):
+        logger.debug(f"downloading ... {url}")
+        for i in range(_tools.MAX_RETRY):
+            with requests.get(url, verify=verify, stream=True) as req:
+                if req.status_code == requests.codes.ok:
+                    with open(dl_file, 'wb') as f:
+                        for chunk in req.iter_content(chunk_size=4096):
+                            if chunk:
+                                f.write(chunk)
+                elif req.status_code == 404:
+                    missing = provider.get('missing', None)
+                    if missing in ['ok', 'ignore']:
+                        failure_ok = True
+                        logger.info(f"ignoring failed download: {url}")
+                        # break retry loop
+                        break
+                    elif missing == 'wait':
+                        logger.info(f"wait after failed download: {url}")
+                        time.sleep(30)
+                        # netx try
+                        continue
+                try:
+                    inputfiles = unpack_file(dl_file, unpack)
+                    if localstore is not None:
+                        shutil.move(dl_file, localstore)
+                    # no retry if unpack successful
+                    break
+                except IOError as e:
+                    logger.error(f"retry download after error "
+                                 f"unpacking {dl_file}")
+        else:
+            raise Exception(f"failed to download: {url}")
+    elif re.match('^file://', url):
+        logger.debug(f"copying file... {url}")
+        url = re.sub('^file:/+', '/', url)
+        try:
+            shutil.copy(url, dl_file)
+        except IOError:
+            if ('missing' in provider and
+                    provider['missing'] in ['ok', 'ignore']):
+                logger.info(f"ignoring missing file: {url}")
+                failure_ok = True
+        inputfiles = unpack_file(dl_file, unpack)
+
+    tile_files = []
+    if not failure_ok:
+        for inputfile in inputfiles:
+            if inputfile.endswith('tif'):
+                tf1 = inputfile
+            elif inputfile.endswith('xyz'):
+                tf1 = xyz2tif(inputfile, srcsrs, utm_remove_zone)
+            else:
+                raise Exception(f'cannot handle {inputfile}')
+            if tf1 is not None:
+                tfxx = reduce_tile(tf1, out_res, overwrite=False)
+                if tfxx != "":
+                    tile_files.append(tfxx)
+
+    if os.path.exists(dl_file):
+        os.remove(dl_file)
+    return tile_files
+
+# -------------------------------------------------------------------------

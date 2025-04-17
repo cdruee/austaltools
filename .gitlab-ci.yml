@@ -200,8 +200,22 @@ deploy_deb:
           sed -i s/Distribution:\ .\*/Distribution:\ "${X}"/ $Y   
           cat $Y
           dupload -f --nomail -t uwmhub $Y
-          sleep 30
+          sleep 60
         done
         popd
       done
     - echo "Ende"
+
+#deploy_pypi:
+#  image: python:latest
+#  stage: deploy
+#  needs:
+#    - job: build_sdist
+#      artifacts: true
+#    - job: build_bdist_deb
+#      artifacts: true
+#    - job: test_latest
+#  script:
+#    - pip install twine
+#    - twine check dist/*tar.gz
+#    - twine upload --repository-url https://upload.pypi.org/legacy/ --username __token__ dist/*tar.gz

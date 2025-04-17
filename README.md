@@ -5,7 +5,7 @@ This module conatins tools for use with Langrangian dispersion model AUSLTA (AUS
 
 ### Requirements:
 
-    pip install numpy pandas meteolib
+    pip install numpy pandas meteolib readmet 
 
 ### Installation:
 
@@ -17,31 +17,15 @@ https://druee.gitlab-pages.uni-trier.de/austaltools/
 ### The module contains the following scripts : 
 ===============================================
 
-## Time dependent simulation
+``austaltools``
+    The main application. I suports subcommands like
+    ``eap``, ``fill-timeseries``, 
 
-``austal-buildings-geojson``
-    Read buildings from a Geojson file and put them into ``austal.txt``
-
-``austal-eap``
-    Determine EAP ("Ersatz-AnemometerPosition") accoring to VDI norm
+``configure-austaltools``
+    Application to prepare local datasources for ``austaltools``.
 
 ``austal-input``
     Convenience command for easy creation of AUSTAL input data
-
-``austal-fill-time-series``
-    Fill source-strength columns in "zeitreihe.dmna"
-
-``austal-steepness``
-    Determine steepness of the model area
-
-``austal-terrain``
-    Extract surface topography for AUSTAL from various sources
-
-``austal-plot``
-    Simple baseline data plot
-
-``austal-weather``
-    Extract amospheric time series for AUSTAL from various sources
 
 Licenses
 ========
@@ -52,10 +36,11 @@ See ``LICENSE`` for the license text or navigate to https://eupl.eu/1.2/en/
 Some auxiliary files in the folder ``data`` are licensed under
 various other licenses:
 
-| file                 | provider                                                                        | license               |
-|----------------------|---------------------------------------------------------------------------------|-----------------------|
-| DGM10-HE.LICENSE.txt | Hessian state law (https://www.rv.hessenrecht.hessen.de/perma?a=VermGeoInfG_HE) | none (PD)             |
-| wmo_stationlist.json | World Meteorological Organization (WMO) and its members                         | CC BY 4.0             |
+| file                  | provider                                                                        | license               |
+|-----------------------|---------------------------------------------------------------------------------|-----------------------|
+| DGM10-HE.LICENSE.txt  | Hessian state law (https://www.rv.hessenrecht.hessen.de/perma?a=VermGeoInfG_HE) | none (PD)             |
+| dwd_stationlist.json  | Deutscher Wetterdienst (DWD) open data portal                                   | CC BY 4.0             |
+| wmo_stationlist.json  | World Meteorological Organization (WMO) and its members                         | CC BY 4.0             |
 
 
 <!-- note to self: &#8209; = non-breaking hyphen -->

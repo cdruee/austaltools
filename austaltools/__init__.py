@@ -2,11 +2,6 @@ from ._version import __title__, __description__, __url__, __version__
 from ._version import __author__, __author_email__
 from ._version import __license__, __copyright__
 
-from . import _tools
-from . import _corine
-from . import _fetch_dwd_obs
-from . import _fetch_dgm_od
-
 from . import import_buildings
 from . import eap
 from . import fill_timeseries
@@ -16,4 +11,3 @@ from . import steepness
 from . import transform
 from . import input_terrain
 from . import input_weather
-from . import wmo_metadata

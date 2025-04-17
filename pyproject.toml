@@ -6,6 +6,10 @@ requires = [
     "numpy",
     "pandas",
     "scipy",
-    "gdal"
+    "gdal",
+    "requests",
+    "tqdm",
+    "pyyaml",
+    "urllib3"
 ]
 build-backend = "setuptools.build_meta"

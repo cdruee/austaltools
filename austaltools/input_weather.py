@@ -11,11 +11,12 @@ import logging
 import os
 import sys
 import zipfile
+
 import numpy as np
 import pandas as pd
 
+import austaltools._geo
 import austaltools._tools
-#from ._dwd_observations import download_DWD_weather
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import meteolib as m
@@ -23,18 +24,18 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 try:
     from ._version import __version__, __title__
+    from . import _plotting
+    from . import _storage
     from . import _tools
     from . import _datasets
-    from . import _fetch_dwd_obs
     from . import _dispersion as dis
-    from . import wmo_metadata
 except ImportError:
     from _version import __version__, __title__
+    import _plotting
+    import _storage
     import _tools
     import _datasets
-    import _fetch_dwd_obs
     import _dispersion as dis
-    import wmo_metadata
 
 
 logging.basicConfig()
@@ -42,18 +43,15 @@ logger = logging.getLogger()
 
 # ----------------------------------------------------
 KNOWN_SOURCES = ["ERA5", "CERRA", "DWD"]
-STORAGE_LOCATIONS = _tools.STORAGE_LOCATIONS
+STORAGE_LOCATIONS = _storage.STORAGE_LOCATIONS
 STORAGE_DIR = "weather"
-STORAGE_PATH = None  # will be filled lazy
 
 # possible defaults: fixed_057 fixed_010 model_mean model_uv10 model_fsr
-WIND_VARIANT = os.environ.get('WIND_VARIANT', 'model_uv10')
+DEFAULT_WIND_VARIANT = os.environ.get('WIND_VARIANT', 'model_uv10')
 # possible defaults: weighted nearest mean
-INTER_VARIANT = os.environ.get('INTER_VARIANT', 'weighted')
-# possible values: empty or non-empty string:
-OUTPUT_RAW = os.environ.get('OUTPUT_RAW', '')
+DEFAULT_INTER_VARIANT = os.environ.get('INTER_VARIANT', 'weighted')
 # possible values: all kms kmc pts pgc empty or non-empty string:
-CLASS_SCHEME = os.environ.get('CLASS_SCHEME', 'all')
+DEFAULT_CLASS_SCHEME = os.environ.get('CLASS_SCHEME', 'all')
 
 # ----------------------------------------------------
 
@@ -92,6 +90,7 @@ def h_eff(has: float, z0s: float) -> list:
 def area_of_triangle(abc: list[tuple[float, float]]) -> float:
     """
     calculate area of the triangle spanned by the corners `abc`
+
     :param abc: corner positions of the triangle
     :type abc: list[tuple[float, float]]
     :return: area of the triangle. Positive if triangle node
@@ -135,9 +134,10 @@ def point_in_triangle(p: tuple[float, float],
 # ----------------------------------------------------
 
 def grid_surrounding_nodes(lat: float, lon: float, dims: dict) \
-        -> list[tuple[float]]:
+        -> list[tuple[float, float, float]]:
     """
     get the three nodes from dims that surround position lat / lon
+
     :param lat: point position latitude
     :type lat: float
     :param lon: point position longitude
@@ -156,7 +156,7 @@ def grid_surrounding_nodes(lat: float, lon: float, dims: dict) \
         grd_lon = dims['lon']
     else:
         raise ValueError('dims have unsupported shape')
-    vec_s_d = np.vectorize(_tools.spheric_distance)
+    vec_s_d = np.vectorize(austaltools._geo.spheric_distance)
     tgt_lat = np.full(np.shape(dims['lat']), lat)
     tgt_lon = np.full(np.shape(dims['lon']), lon)
     distance = vec_s_d(tgt_lat, tgt_lon, grd_lat, grd_lon)
@@ -199,30 +199,44 @@ def grid_surrounding_nodes(lat: float, lon: float, dims: dict) \
 
 # ----------------------------------------------------
 
-def grid_calulate_weights(pos: list) -> list[float]:
-    logging.info('interpolation variant: %s' % INTER_VARIANT)
+def grid_calulate_weights(pos: list, inter_variant=None) -> list[float]:
+    """
+    calculate the weights for barycentrict averaging of the
+    sourrounding values
+
+    :param pos: the three grid node positions and distances
+      as tuple (x,y,d)
+    :type pos: list[tuple[float, float, float]]
+    :param inter_variant: method user for interpolation
+    :type inter_variant: str
+    :return: weights
+    :rtype: list[float]
+    """
+    if inter_variant is None:
+        inter_variant = DEFAULT_INTER_VARIANT
+    logging.info('interpolation variant: %s' % inter_variant)
     w = [None, None, None]
-    if INTER_VARIANT == 'weighted':
+    if inter_variant == 'weighted':
         a = [1. / d if d > 0. else 1. for _, _, d in pos[0:3]]
         b = np.sum(a)
         w = [x / b for x in a]
-    elif INTER_VARIANT == 'mean':
+    elif inter_variant == 'mean':
         w[0] = 1. / 3.
         w[1] = 1. / 3.
         w[2] = 1. / 3.
-    elif INTER_VARIANT == 'nearest':
+    elif inter_variant == 'nearest':
         w[0] = 1.
         w[1] = 0.
         w[2] = 0.
     else:
         raise ValueError('unknown interpolation variant: %s' %
-                         INTER_VARIANT)
+                         inter_variant)
     logger.debug('w: %s' % w)
     return w
 
 # ----------------------------------------------------
 
-def read_era5_nc(ncfile, lat, lon):
+def read_era5_nc(ncfile, lat, lon, wind_variant=None):
     """
     read ERA5 nc file and interpolate values to position (lat, lon)
     and recalculate 10 wind speed and direction (ff/dd) using
@@ -252,12 +266,15 @@ def read_era5_nc(ncfile, lat, lon):
     'tp'    m           total_precipitation         tp
     ======  ========    ==========================  ======
     """
-    import netCDF4
+    if wind_variant is None:
+        wind_variant = DEFAULT_WIND_VARIANT
 
     _VAR_NEEDED = ['u10', 'v10', 'sp', 'zust', 'fsr',
                    't2m', 'd2m', 'cbh', 'sshf', 'slhf',
                    'lcc', 'tcc']
     _VAR_OPTIONAL = ['mcc', 'tp']
+
+    import netCDF4
 
     nc = netCDF4.Dataset(ncfile)
 
@@ -333,31 +350,31 @@ def read_era5_nc(ncfile, lat, lon):
     #   https://confluence.ecmwf.int/display/FUG/Section+9.3+Surface+Wind
     #
     #   Therefore: u10 = u*/k * ln(z/z0)
-    if WIND_VARIANT == 'fixed_057':
+    if wind_variant == 'fixed_057':
         z0 = 0.57  # m
         values['fsr'] = z0  # m
         values['ff'] = (values['zust'] / kappa *
                         np.log((10. + 7. * z0) / z0))  # m/s
-    elif WIND_VARIANT == 'fixed_010':
+    elif wind_variant == 'fixed_010':
         z0 = 0.10  # m
         values['fsr'] = z0  # m
         values['ff'] = (values['zust'] / kappa *
                         np.log((10. + 7. * z0) / z0))  # m/s
-    elif WIND_VARIANT == 'model_mean':
-        z0 = np.nanmean(values['zust'])  # m
+    elif wind_variant == 'model_mean':
+        z0 = np.nanmean(values['fsr'])  # m
         values['fsr'] = z0  # m
         values['ff'] = (values['zust'] / kappa *
                         np.log((10. + 7. * z0) / z0))  # m/s
-    elif WIND_VARIANT == 'model_uv10':
+    elif wind_variant == 'model_uv10':
         values['ff'] = np.sqrt(values['u10'] ** 2 +
                                values['v10'] ** 2)  # m/s
-    elif WIND_VARIANT == 'model_fsr':
+    elif wind_variant == 'model_fsr':
         values['ff'] = (values['zust'] / kappa *
                         np.log((10. + 7. * values['fsr']) /
                                values['fsr']))  # m/s
     else:
-        raise ValueError('unknown wind variant: %s' % WIND_VARIANT)
-    logging.info('wind variant: %s' % WIND_VARIANT)
+        raise ValueError('unknown wind variant: %s' % wind_variant)
+    logging.info('wind variant: %s' % wind_variant)
     values['dd'] = np.rad2deg(np.arctan2((-values['u10']),
                                          (-values['v10'])))  # deg
 
@@ -365,7 +382,7 @@ def read_era5_nc(ncfile, lat, lon):
 
 
 # ----------------------------------------------------
-def get_era5_weather(lat, lon, year, datafile=None) \
+def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
         -> (pd.DataFrame, float):
     """
     Get weather timeseries for the provided position
@@ -374,9 +391,16 @@ def get_era5_weather(lat, lon, year, datafile=None) \
     length `z0` from "forecast surface roughness"
 
     :param lat: position latitude in degrees
+    :type lat: float
     :param lon: position laongitude  in degrees
+    :type lon: float
     :param year: get data from this calendar year
-    :param storage_path: (optional) expect ERA5 data in this directory
+    :type year: int
+    :param wind_variant: (optional) select the variant how the wind
+      at 10 m height is caclulated from the ERA5 data
+    :type wind_variant: str | None
+    :param datafile: (optional) read from this ERA5 data file
+    :type datafile: str | None
     :return: weather timeseries as dataframe and surface roughness in m.
         The index of the dataframe is the measurement time as `datetime64`,
         the columns are:
@@ -402,11 +426,14 @@ def get_era5_weather(lat, lon, year, datafile=None) \
     ds = _datasets.dataset_get(
         _datasets.name_yearly("ERA5", year)
     )
+    if not ds.available:
+        sys.tracebacklimit = 0
+        raise ValueError(f"Dataset not available: {ds.name}")
     if datafile is None:
         datafile = os.path.join(ds.path, ds.file_data)
     logging.info('reading data from; %s' % datafile)
 
-    v = read_era5_nc(datafile, lat, lon)
+    v = read_era5_nc(datafile, lat, lon, wind_variant)
     v.index = v['time']
     v.sort_index(inplace=True)
 
@@ -528,13 +555,13 @@ def read_cerra_nc(ncfile, lat, lon):
         '2r': 'r2m',
     }, axis=1, inplace=True)
     #
-    #  un-accumulate the cummulative values
+    #  un-accumulate the cumulative values
     #  model run starts at 00, 03, 06,
     #  forcast values are accumulated, i.e.
     #  start time +01:00 is 1-h mean
     #  start time +02:00 is 2-h mean
     #  start time +03:00 is 3-h mean
-    #  substract +02:00-values from +03:00 values to get 1-h mean
+    #  subtract +02:00-values from +03:00 values to get 1-h mean
     #  from +02:00 to +03:00, ...
     hours_total = [int((x - epoch) / pd.Timedelta('1 hour'))
                    for x in values['time']]
@@ -570,7 +597,7 @@ def read_cerra_nc(ncfile, lat, lon):
         # (westward) direction. It is an accumulated (time-integrated)
         # parameter meaning that it is accumulated from the beginning
         # of the forecast. The parameter is given in N m-2 s.
-        # i.e. after un-accumulating we have a hourly summation here:
+        # i.e. after un-accumulating we have an hourly summation here:
         if val in all_variables:
             values[val] = values[val] / 3600.  # N/m² s -> N/m²
     rho = m.thermodyn.gas_rho(p=values['sp'], T=values['t2m'],
@@ -614,9 +641,13 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
     length `z0` from "forecast surface roughness"
 
     :param lat: position latitude in degrees
+    :type lat: float
     :param lon: position laongitude  in degrees
+    :type lon: float
     :param year: get data from this calendar year
-    :param storage_path: (optional) expect CERRA data in this directory
+    :type year: int
+    :param datafile: (optional) read from this CERRA data file
+    :type datafile: str | None
     :return: weather timeseries as dataframe and surface roughness in m.
         The index of the dataframe is the measurement time as `datetime64`,
         the columns are:
@@ -642,6 +673,9 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
     ds = _datasets.dataset_get(
         _datasets.name_yearly("CERRA", year)
     )
+    if not ds.available:
+        sys.tracebacklimit = 0
+        raise ValueError(f"Dataset not available: {ds.name}")
     if datafile is None:
         datafile = os.path.join(ds.path, ds.file_data)
     logging.info('reading data from; %s' % datafile)
@@ -674,47 +708,9 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
 
 # ----------------------------------------------------
 
-def read_dwd_stationinfo(station, pos_lat=None, pos_lon=None,
-                         datafile=None):
-    if station is not None:
-        if pos_lat is not None and pos_lon is not None:
-            raise ValueError('lat and lon must be None ' +
-                             'unless station is None')
-    else:
-        sstr = None
-    ds = _datasets.dataset_get("DWD")
-    if datafile is None:
-        datafile = os.path.join(ds.path, ds.file_data)
-    logging.info('reading data from; %s' % datafile)
-    with zipfile.ZipFile(datafile,
-                         mode='r') as zf:
-        sf = pd.read_csv(filepath_or_buffer=zf.open(
-            'stationlist.csv', mode='r'))
-
-    srow = None
-    if station is not None:
-        srow = sf.index[sf.index == station]
-    else:
-        sf['sdist'] = _tools.spheric_distance(
-            sf['latitude'], sf['longitude'], pos_lat, pos_lon)
-        srow = sf['sdist'].argmin()
-
-    if srow is None:
-        raise ValueError('station not found: %s' % station)
-    lat = sf['latitude'][srow]
-    lon = sf['longitude'][srow]
-    ele = sf['elevation'][srow]
-    nam = sf['name'][srow]
-    logger.debug("station name: %s" % nam)
-    if station is None:
-        return lat, lon, ele, nam, int(srow)
-    else:
-        return lat, lon, ele, nam
-
-# ----------------------------------------------------
-
-def get_dwd_weather(lat, lon, year, station=None, datafile=None) \
-        -> (pd.DataFrame, float):
+def get_dwd_weather(lat: float, lon: float, year:int,
+                    station: int = None, datafile:str = None
+                    ) -> (pd.DataFrame, float):
     """
     Get weather timeseries for the provided position
     from source DWD for the year provided.
@@ -723,10 +719,15 @@ def get_dwd_weather(lat, lon, year, station=None, datafile=None) \
     length `z0` from "forecast surface roughness"
 
     :param lat: position latitude in degrees
+    :type lat: float
     :param lon: position laongitude  in degrees
+    :type lon: float
     :param year: get data from this calendar year
-    :param station: number of the station you are looking for
-    :param storage_path: (optional) expect DWD data in this directory
+    :type year: int
+    :param station: (optional) DWD station number
+    :type station: int
+    :param datafile: (optional) read from this data file
+    :type datafile: str | None
     :return: weather timeseries as dataframe and surface roughness in m.
         The index of the dataframe is the measurement time as `datetime64`,
         the columns are:
@@ -750,15 +751,18 @@ def get_dwd_weather(lat, lon, year, station=None, datafile=None) \
     :rtype: (pd.DataFrame, float)
     """
     ds = _datasets.dataset_get("DWD")
+    if not ds.available:
+        sys.tracebacklimit = 0
+        raise ValueError(f"Dataset not available: {ds.name}")
     if datafile is None:
         datafile = os.path.join(ds.path, ds.file_data)
     logging.info('reading data from; %s' % datafile)
     if station is None:
-        lat, lon, ele, nam, station = read_dwd_stationinfo(
+        _, _, _, nam, station = austaltools._geo.read_dwd_stationinfo(
             station=None, pos_lat=lat, pos_lon=lon, datafile=datafile)
         logger.info(f"selected nearest station {nam}")
     else:
-        lat, lon, ele, nam = read_dwd_stationinfo(
+        _, _, _, nam = austaltools._geo.read_dwd_stationinfo(
             station, datafile=datafile)
     with zipfile.ZipFile(datafile,
                          mode='r') as zf:
@@ -841,14 +845,48 @@ def austal_weather(args):
         - prec (bool): Flag indicating whether precipitation data should be included.
 
     :raises ValueError: If an unknown source is provided.
-    :return: None
-    :rtype: None
     """
     logger.debug("args: %s" % format(args))
 
-    lat, lon, ele, stat_no, stat_nam = _tools.evaluate_location_opts(args)
-    rechts, hoch, _ = _tools.ll2gk(lat, lon)
+    # sub-command-specific imports
+    try:
+        from . import _geo
+    except ImportError:
+        import _geo
 
+    if args.get('read-extracted', None) is not None:
+        csv_name = args['read-extracted']
+        lat, lon, ele, z0, source, stat_nam, obs = \
+            _plotting.read_extracted_weather(csv_name)
+
+        year = obs.index.year[0]
+        logger.debug("year: %s" % year)
+
+    else:
+        lat, lon, ele, stat_no, stat_nam = (
+            _geo.evaluate_location_opts(args))
+        logging.info('selected position: %.2f %.2f (%s)' %
+                     (lat, lon, format(stat_nam)))
+
+        year = int(args['year'])
+        logger.debug("year: %s" % year)
+
+        source = args['source']
+        if source == "ERA5":
+            wind_variant = args.get('wind-variant', None)
+            obs, z0 = get_era5_weather(lat, lon, year, wind_variant)
+        elif source == "CERRA":
+            obs, z0 = get_cerra_weather(lat, lon, year)
+        elif source == "DWD":
+            if not _datasets.dataset_get(source).available:
+                sys.tracebacklimit = 0
+                raise ValueError(f"source {source} not available")
+            path = _datasets.dataset_get(source).path
+            obs, z0 = get_dwd_weather(lat, lon, year, stat_no, path)
+        else:
+            raise ValueError("unknown source: %s" % source)
+
+    rechts, hoch, _ = _geo.ll2gk(lat, lon)
     if ele is None:
         if args.get("ele", None) is not None:
             ele = float(args["ele"])
@@ -856,40 +894,27 @@ def austal_weather(args):
             logger.warning('no elevation info. Assuming sea level. ' +
                            'You should consider providing -e')
             ele = 0.
+
     nam = args['output']
     logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
     logger.debug("lat: %s, lon: %s" % (lat, lon))
-    logging.info('selected position: %.2f %.2f %.0f (%s)' %
-                 (lat, lon, ele, format(nam)))
-    year = int(args['year'])
-    logger.debug("year: %s" % year)
+    logger.debug("elevation: %s" % (ele))
 
-    source = args['source']
-    if source == "ERA5":
-        obs, z0 = get_era5_weather(lat, lon, year)
-    elif source == "CERRA":
-        obs, z0 = get_cerra_weather(lat, lon, year)
-    elif source == "DWD":
-        if not _datasets.dataset_get(source).available:
-            sys.tracebacklimit = 0
-            raise ValueError(f"source {source} not available")
-        path = _datasets.dataset_get(source).path
-        obs, z0 = get_dwd_weather(lat, lon, year, station, path)
-    else:
-        raise ValueError("unknown source: %s" % source)
-
-    if OUTPUT_RAW != '':
-        raw_name = 'extracted_{:05d}_{:04d}.csv'.format(nam, year)
-        logger.info('writing raw data to: %s' % raw_name)
-        obs.to_csv(raw_name, float_format='%.2f', index=False, na_rep='-999')
+    if args.get('write-extracted', False):
+        csv_name = 'extracted_weather.csv'
+        logger.info('writing raw weather data to: %s' % csv_name)
+        with open(csv_name, 'w') as f:
+            f.write('# %.4f %.4f %.1f %.3f %s, %s\n' %
+                    (lat, lon, ele, z0, source, format(stat_nam)))
+            obs.to_csv(f, float_format='%.2f', index=False, na_rep='-999')
 
     methods_available = []
 
     # 10-m wind speed for the correct roughness length
     logger.debug('v10')
     obs['v10'] = dis.vdi_3872_6_standard_wind(obs['ff'],
-                                                      hap=10.0 + 7. * z0,
-                                                      z0p=z0)
+                                              hap=10.0 + 7. * z0,
+                                              z0p=z0)
 
     # air density
     if all([x in obs.columns for x in ['sp', 't2m']]):
@@ -920,10 +945,10 @@ def austal_weather(args):
         obs['Lo'] = dis.obukhov_length(
             ust=obs['ust'], rho=obs['rho'], Tv=obs['Tv'],
             H=obs['sshf'], E=obs['slhf'])
-        if OUTPUT_RAW != '':
-            obs[['time', 'v10', 'rho', 'Tv', 'Lo', 'ust']].to_csv(
-                'calculated_L_%05i_%04i.csv' % (station, year),
-                float_format='%.2f', index=False, na_rep='-999')
+        #  if ...:
+        #     obs[['time', 'v10', 'rho', 'Tv', 'Lo', 'ust']].to_csv(
+        #         'calculated_L_%05i_%04i.csv' % (stat_no, year),
+        #         float_format='%.2f', index=False, na_rep='-999')
 
     #
     # kms -----------------------------
@@ -1002,14 +1027,15 @@ def austal_weather(args):
     #                      margins = True))
     #
     #    print(skm.classification_report(data['kmc'], data['pgc']))
-
-    for x in methods_available:
-        if x in CLASS_SCHEME or CLASS_SCHEME == 'all':
-            logger.debug('generating output for: ' + x)
+    logger.debug("methods_available: %s" % methods_available)
+    for method in methods_available:
+        if args.get('class-scheme',
+                    DEFAULT_CLASS_SCHEME) in [method, 'all']:
+            logger.debug('generating output for: ' + method)
             if args['prec']:
                 df = pd.DataFrame({'FF': data['ff'],
                                    'DD': data['dd'],
-                                   'KM': data[x],
+                                   'KM': data[method],
                                    'PP': data['tp']},
                                   index=data.index)
                 ak = readmet.akterm.DataFile(data=df, z0=z0,
@@ -1017,13 +1043,13 @@ def austal_weather(args):
             else:
                 df = pd.DataFrame({'FF': data['ff'],
                                    'DD': data['dd'],
-                                   'KM': data[x]},
+                                   'KM': data[method]},
                                   index=data.index)
                 ak = readmet.akterm.DataFile(data=df, z0=z0)
             outname = ('{:s}_{:s}_{:04d}_'.format(
-                austaltools._tools.slugify(source),
-                austaltools._tools.slugify(nam), year) +
-                       x + '.akterm')
+                _tools.slugify(source),
+                _tools.slugify(nam), year) +
+                       method + '.akterm')
             logger.info('writing output file: %s' % outname)
             ak.write(outname)
     #
@@ -1031,6 +1057,7 @@ def austal_weather(args):
 
 # -------------------------------------------------------------------------
 
+# noinspection PyMissingOrEmptyDocstring
 def add_options(subparsers):
 
     default_year = 2003
@@ -1040,12 +1067,13 @@ def add_options(subparsers):
     pars_wea = subparsers.add_parser(
         name='weather',
         help='Extract atmospheric time series for AUSTAL ' +
-             'from various sources'
+             'from various sources',
+        formatter_class=_tools.SmartFormatter,
     )
     pars_wea.add_argument(dest="output", metavar="NAME", nargs='?',
                           help="file name to store data in."
                           )
-    pars_wea = _tools.add_location_opts(pars_wea, stations=True)
+    pars_wea = _plotting.add_location_opts(pars_wea, stations=True)
     pars_wea.add_argument('-s', '--source',
                         metavar="CODE",
                         nargs=None,
@@ -1059,49 +1087,114 @@ def add_options(subparsers):
     pars_wea.add_argument('-y', '--year', dest='year',
                         metavar='YEAR',
                         nargs=None,
-                          required=True,
                         help='year of interest [%04i]' % default_year)
 
     pars_wea.add_argument('-e', '--elevation', dest='ele',
                         metavar='METERS',
-                        help='surface elevation. ' +
+                        help='surface elevation. '
+                             'An approximate value is sufficient' +
                              'only allowed with -L, -G, -U.')
 
-    # pars_wea.add_argument('-w', '--station', dest='station',
-    #                     metavar='ID',
-    #                     default=None,
-    #                     help='weather station ID. ' +
-    #                          'only allowed with -D, -W.')
-
     pars_wea.add_argument('-p', '--precip', dest='prec',
-                        action='store_true',
-                        help='add precipitation columns to output file')
+                          action='store_true',
+                          help='add precipitation columns to output file')
+
+    adv_wea = pars_wea.add_argument_group('advanced options')
+    adv_wea.add_argument('--class-scheme',
+                         dest='class-scheme',
+                         choices=['all', 'kms', 'kmo', 'k2o', 'pts',
+                                  'kmc', 'pgc'],
+                         default=DEFAULT_CLASS_SCHEME,
+                         help='Choose the method how stability classes'
+                              'are derived from the weather data.'
+                              'Possible values: %(choices)s. '
+                              '[%(default)s]\n'
+                              '  - kms: Klug/Manier scheme (after VDI 3782'
+                              ' Part 6, issued Apr 2017) calculated from '
+                              'date, time, wind speed, total cloud cover, '
+                              'and cloud type of the lowest cloud layer\n'
+                              '  - kmo: Klug/Manier scheme (after VDI 3782'
+                              ' Part 1, issued 1992) calculated from '
+                              'date, time, wind speed, total cloud cover,'
+                              'and cloud type of the lowest cloud layer\n'
+                              '  - k2o: Klug/Manier scheme (after VDI 3782'
+                              ' Part 6, issued Apr 2017) calculated from '
+                              'date, time, wind speed, total cloud cover,'
+                              'and cloud base height (alternatively'
+                              'cloud type of the lowest cloud layer)\n'
+                              '  - pts: Pasquill/Turner scheme (after '
+                              'EPA-454/R-99-005, issued 2000) calculated '
+                              'from date, time, wind speed, '
+                              'total cloud cover, '
+                              'and cloud type of lowest cloud layer\n'
+                              '  - kmc: classify the model-derived Obukhov'
+                              'length into stability classes using the '
+                              'class boundaries of the Klug/Manier scheme '
+                              '(after TA-Luft, 2021 issued 1992)\n'
+                              '  - pgc: classify the model-derived Obukhov'
+                              'length into stability classes using the '
+                              'class boundaries of the Pasquill/Gifford '
+                              'stability classes '
+                              '(scraped from Golder, 1972)\n'
+                              )
+    adv_wea.add_argument('--inter-variant',
+                         dest='inter-variant',
+                         choices=['weighted', 'nearest', 'mean'],
+                         default=DEFAULT_INTER_VARIANT,
+                         help='Controls the interpolation of gridded data '
+                              'to the position specified. '
+                              'Possible values: %(choices)s. '
+                              '[%(default)s]\n'
+                              '  - nearest: take model values from nearest'
+                              'grid point\n'
+                              '  - mean: arithmetic mean of the model '
+                              'values at the three nearest grid poinst\n'
+                              '  - weighted: barycentric mean (weighted '
+                              'by distance) of the model '
+                              'values at the three nearest grid poinst\n')
+    adv_wea.add_argument('--read-extracted',
+                         dest='read-extracted',
+                         metavar="FILE",
+                         help='Save time by re-reading extracted weather '
+                              'data form a saved file. '
+                              )
+    adv_wea.add_argument('-x', '--write-extracted',
+                          dest='write-extracted',
+                          action='store_true',
+                          help='write full extracted weather data '
+                               'to an extra file')
+    adv_wea.add_argument('--wind-variant',
+                          dest=DEFAULT_WIND_VARIANT,
+                          choices=['fixed_057', 'fixed_010', 'model_mean',
+                                   'model_uv10', 'model_fsr'],
+                          default='model_uv10',
+                          help=('Controls how the 10-m wind is calculated'
+                                'from ERA5 reanaysis data.'
+                                'possible values: %(choices)s. '
+                                '[%(default)s]\n'
+                                '  - fixed_057: '
+                                'from friction velocity using a fixed '
+                                'roughness length :math:`z_0` = 0.57 m\n'
+                                '  - fixed_010: '
+                                'from friction velocity using a fixed '
+                                'roughness length :math:`z_0` = 0.10 m\n'
+                                ' - model_fsr: '
+                                'from friction velocity using the instant '
+                                '``forecast surface roughness`` '
+                                'from the model for each hour\n'
+                                ' - model_mean: '
+                                'from friction velocity using the mean '
+                                '``forecast surface roughness`` '
+                                'from the model, averaged '
+                                'over the whole data period\n'
+                                ' - model_uv10: '
+                                'use the ``10-m wind`` provided by the '
+                                'model\n')
+                         )
 
     return pars_wea
 
 # =========================================================================
-
-def find_weather_data():
-    """
-    Searches all known storage locations for the known terrain datasets
-    and yields a list of the datasets available locally.
-
-    :return: dataset IDs of the locally available datasets
-    :rtype: list[str]
-    """
-    datasets = {}
-    for ds in _datasets.DATASETS:
-        # is ds a terrain dataset?
-        if ds.storage == 'weather':
-            # is it locally available (i.e. downloaded already?):
-            if ds.available:
-                datasets[ds.name] = ds.path
-    return datasets
-
-
-
-# -------------------------------------------------------------------------
-
 
 def main(args):
     """
@@ -1122,10 +1215,10 @@ def main(args):
 
         logger.critical("options -D and -W are mutually exclusive with -e")
         sys.exit(1)
-    if ((args['dwd'] is None and args['wmo'] is None)
-            and args['station'] is not None):
-        logger.critical("options -w is only valid with -D or -W")
-        sys.exit(1)
+    # if ((args['dwd'] is None and args['wmo'] is None)
+    #         and args['station'] is not None):
+    #     logger.critical("options -w is only valid with -D or -W")
+    #     sys.exit(1)
     if args['year'] is None:
         logger.critical("options -y is required with -L, -G, -U, -D or -W")
         sys.exit(1)
@@ -1133,8 +1226,19 @@ def main(args):
         logger.critical("options NAME is required with -L, -G, -U, -D or -W")
         sys.exit(1)
 
-    ds_name = _datasets.name_yearly(args['source'], args['year'])
-    if not ds_name in AVAILABLE_WEATHER:
+    available_weather = _datasets.find_weather_data()
+    if available_weather is None or len(available_weather) == 0:
+        logger.warning("No available weather data in config file,"
+                       "trying to serch weather data. \n"
+                       "Run configure_autaltools to collect the "
+                       "available weather data infomation once.")
+        available_weather = _datasets.find_weather_data()
+        if len(available_weather) == 0:
+            logger.error("No available weather data found.")
+            sys.exit(1)
+
+    ds_name = _datasets.name_yearly(args['source'], int(args['year']))
+    if not ds_name in available_weather:
         logger.critical(f"dataset not available: {ds_name}")
         sys.exit(1)
 
@@ -1145,11 +1249,3 @@ def main(args):
     austal_weather(args)
 
 # =========================================================================
-# init at import:
-
-AVAILABLE_WEATHER = find_weather_data()
-"""
-List of locally available DEMs (filled upon imorting the module)
-
-:meta hide-value:
-"""

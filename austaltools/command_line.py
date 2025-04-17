@@ -6,14 +6,17 @@ import logging
 import os
 import sys
 
+import austaltools._geo
+
 try:
     from . import _tools
     from ._version import __version__, __title__
     from . import _corine
-    from . import _datasets
+    from . import _storage
     from . import import_buildings
     from . import eap
     from . import fill_timeseries
+    from . import heating
     from . import input_terrain
     from . import input_weather
     from . import steepness
@@ -23,11 +26,12 @@ try:
 except ImportError:
     import _tools
     from _version import __version__, __title__
-    import _datasets
     import _corine
+    import _storage
     import import_buildings
     import eap
     import fill_timeseries
+    import heating
     import input_terrain
     import input_weather
     import steepness
@@ -84,6 +88,10 @@ def cli_parser():
 
     # ----------------------------------------------------
 
+    pars_htg = heating.add_options(subparsers)
+
+    # ----------------------------------------------------
+
     pars_plot = plot.add_options(subparsers)
 
     # ----------------------------------------------------
@@ -129,7 +137,7 @@ def cli_parser():
 
     # ----------------------------------------------------
 
-    parser.add_argument('-w','--working-dir',
+    parser.add_argument('-d','--working-dir',
                         dest='working_dir',
                         metavar='PATH',
                         help='woking directory '
@@ -187,7 +195,7 @@ def simple(args):
     for x in ['gk', 'ut', 'sources', 'ele']:
         t_args[x] = None
     t_args['ll'] = [args['lat'], args['lon']]
-    t_args['source'] = "DGM25-RP"
+    t_args['source'] = "DGM25-DE"
     t_args['extent'] = 6.
     # call program
     input_terrain.main(t_args)
@@ -202,11 +210,16 @@ def simple(args):
     with open(args['output'] + '.txt', 'w') as f:
         lat, lon = float(args['lat']), float(args['lon'])
         f.write('%s %s : Reference Position\n' % (lat, lon))
-        x, y, _ = _tools.ll2gk(lat, lon)
+        x, y, _ = austaltools._geo.ll2gk(lat, lon)
         f.write('%.0f %.0f : Gauss-Krueger Coordinates\n' % (x, y))
-        z0 = _corine.mean_roughness(x, y, 20.)
+
+        print('getting averaged surface roughness')
+        z0 = _corine.roughness_austal(x, y, 20.)
+        if z0 is None:
+            z0 = _corine.roughness_web(x, y, 20.)
         f.write('%.1f : z0 at position of wind measurement\n' % z0)
 
+    print('done.')
 
 # ----------------------------------------------------
 
@@ -217,6 +230,8 @@ def main(args=None):
     if args is None:
         parser = cli_parser()
         args = vars(parser.parse_args())
+    else:
+        parser = None
     logger.debug('args: %s' % args)
     #
     # logging level
@@ -227,29 +242,23 @@ def main(args=None):
         logger.setLevel(logging.WARNING)
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
 
-    if (int(_tools.gdalVersion()) >= 3080400 and
-            int(_tools.gdalVersion()) < 3090200):
-        logger.warning('NOTE: The messages '
-              '"swig/python detected a memory leak of type ...", '
-              'result from \n                   '
-              'a bug in the imported gdal library. '
-              'You can safely ignore them.')
-
-    if args["working_dir"] is None:
+    if args.get("working_dir", None) is None:
         raise ValueError('PATH not given')
 
     logger.debug('args: %s' % args)
 
-    if args["temp_dir"] is not None:
-        _tools.TEMP = args["temp_dir"]
+    if args.get("temp_dir",None) is not None:
+        _storage.TEMP = args["temp_dir"]
 
     try:
-        if args['command'] in ['buildings-geojson', 'bg']:
+        if args['command'] in ['import-buildings', 'bg']:
             import_buildings.main(args)
         elif args['command'] == 'eap':
             eap.main(args)
         elif args['command'] in ['fill-timeseries', 'ft']:
             fill_timeseries.main(args)
+        elif args['command'] == 'heating':
+            heating.main(args)
         elif args['command'] == 'plot':
             plot.main(args)
         elif args['command'] == 'simple':
@@ -267,7 +276,8 @@ def main(args=None):
         #else:
          #   raise ValueError('unknown command: %s' % args['command'])
     except UsageError as e:
-        parser.print_usage()
+        if parser is not None:
+            parser.print_usage()
         print(str(e))
         sys.exit(2)
 
