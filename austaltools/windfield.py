@@ -6,6 +6,7 @@ This module ...
 import itertools
 import logging
 import os
+import sys
 
 import numpy as np
 import pandas as pd
@@ -24,6 +25,7 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
         else:
             have_display = True
         import matplotlib.pyplot as plt
+        import matplotlib.colors as mco
     except ImportError:
         have_matplotlib = False
         have_display = False
@@ -33,10 +35,12 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 try:
     from . import _tools
     from ._version import __version__
+    from . import _corine
     from . import _dispersion
 except ImportError:
     import _tools
     from _version import __version__
+    import _corine
     import _dispersion
 
 logger = logging.getLogger()
@@ -44,6 +48,11 @@ logger = logging.getLogger()
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     logging.getLogger('readmet.dmna').setLevel(logging.ERROR)
 
+# -------------------------------------------------------------------------
+
+DEFAULT_WIF_COLORMAP = 'plasma'
+
+# -------------------------------------------------------------------------
 
 def load_topo(topo_path: str) -> (list, list, np.ndarray):
     logger.info('reading topography from %s' % topo_path)
@@ -92,7 +101,7 @@ def load_weather(working_dir: str, conf: dict = None) -> pd.DataFrame:
         res = pd.DataFrame(index=pd.to_datetime(zr['te']))
         res['FF'] = zr['ua'].values
         res['DD'] = zr['ra'].values
-        z0 = _tools.read_z0(working_dir, conf)
+        z0 = get_roughness_length(working_dir=working_dir, conf=conf)
         res['KM'] = [_dispersion.KM2021.get_index(z0,x) for x in zr['ra']]
     else:
         if 'az' in conf:
@@ -135,6 +144,36 @@ def superpose(u_grid:np.ndarray, v_grid:np.ndarray, axes:dict, dirs,
 
 # -------------------------------------------------------------------------
 
+def get_roughness_length(working_dir=None, conf=None):
+    if working_dir is None:
+        working_dir = _tools.DEFAULT_WORKING_DIR
+    z0 = _tools.read_z0(working_dir, conf)
+    if z0 is None:
+        logger.info("no z0 defined, calculating mean z0")
+        if conf is None:
+            austxt = _tools.find_austxt(working_dir)
+            conf = _tools.get_austxt(austxt)
+        if 'xg' in conf and 'yg' in conf:
+            xg = conf['xg']
+            yg = conf['yg']
+        elif 'xu' in conf and 'yu' in conf:
+            xu = conf['xu']
+            yu = conf['yu']
+            xg, yg = _tools.ut2gk(xu, yu)
+        else:
+            sys.tracebacklimit = 0
+            raise ValueError("neither z0 nor position defined, "
+                             "cannot determine z0")
+        if 'hq' in conf:
+            hq = conf['hq']
+        else:
+            logger.warning("no source height defined, assuming 10m")
+            hq = 10.
+        z0 = _corine.mean_roughness(xg, yg, hq)
+    return z0
+
+# -------------------------------------------------------------------------
+
 def main(args):
     """
     This is the main working function
@@ -166,6 +205,8 @@ def main(args):
         dd = az['DD'][time]
         ak = az['KM'][time]
         u, v = meteolib.wind.dir2uv(ff, dd)
+    else:
+        raise ValueError('no wind reference value defined')
 
     ak = int(ak)
     logger.debug(f"wind: {u}, {v}, stability class: {ak}")
@@ -256,7 +297,16 @@ def main(args):
     fig, ax = plt.subplots()
     fig.set_size_inches(11, 8)
     if view == 'top':
-        con = plt.contour(topx, topy, topz.T, origin='lower',
+        if args.get('shade', False):
+            ls = mco.LightSource(azdeg=315, altdeg=45)
+            ax.imshow(ls.hillshade(topz.t_slab),
+                      cmap='gray',
+                      extent=(min(topx), max(topx), min(topy), max(topy)),
+                      origin='lower',
+                      alpha=0.25,
+                      )
+
+        con = plt.contour(topx, topy, topz.t_slab, origin='lower',
                           colors='black',
                           linewidths=0.75
                           )
@@ -275,8 +325,8 @@ def main(args):
                           density=1.5)
         elif style == 'stream-color':
             sp = ax.streamplot(h_ccord, v_ccord, u_slice.T, v_slice.T,
-                          color=spd_slice.T, cmap=cmap,
-                          density=1.5)
+                               color=spd_slice.T, cmap=cmap,
+                               density=1.5)
             fig.colorbar(sp.lines, ax=ax, label='m/s')
         elif style == 'arrows':
             st = int(u_slice.shape[0]/30)
@@ -329,3 +379,92 @@ def main(args):
             outname = outname + '.png'
         logger.info('writing plot: %s' % outname)
         plt.savefig(outname, dpi=180)
+
+# ----------------------------------------------------
+
+def add_options(subparsers):
+
+    pars_wif = subparsers.add_parser(
+        name='windfield',
+        help='Plot wind field'
+    )
+    pars_wif.add_argument(dest='style',
+                          choices=['stream', 'stream-color',
+                                   'arrows', 'arrows-color',
+                                   'barbs', 'barbs-color',],
+                          help='style of wind field plot')
+    pars_wif.add_argument('-c', '--colormap',
+                         default=DEFAULT_WIF_COLORMAP,
+                         help='name of colormap to use. '
+                              'Defaults to "%s"' %
+                              DEFAULT_WIF_COLORMAP)
+    pars_wif.add_argument('-s', '--shade',
+                          dest='shade',
+                          action='store_true',
+                          help='add hillshading in background')
+    pars_wif.add_argument('-g', '--grid',
+                         default=0,
+                         help='number of grid to plot. '
+                              'Defaults to 0')
+    slice = pars_wif.add_mutually_exclusive_group(required=True)
+    slice.add_argument('-a', '--altitude',
+                       dest='alt',
+                       metavar='ASL',
+                       default=None,
+                       help='display horizontal slice at ``ASL`` meters '
+                            'above sea level. '
+                            'Defaults to `None`')
+    slice.add_argument('-z', '--height',
+                       dest='hgt',
+                       metavar='AGL',
+                       default=None,
+                       help='display horizontal slice at height ``AGT`` '
+                            'above ground level. '
+                            'Defaults to `None`')
+    slice.add_argument('-l', '--level',
+                       dest='lvl',
+                       metavar='NUMBER',
+                       default=None,
+                       help='display horizontal slice at model level '
+                            'NUMBER (0-based). '
+                            'Defaults to `None`')
+    wval = pars_wif.add_mutually_exclusive_group(required=True)
+    wval.add_argument('-t', '--time',
+                      dest='time',
+                      metavar='"YYY-MM-DD HH:MM:SS"',
+                      default=None,
+                      help='display windfield corresponding '
+                           'to the wind and stability from akterm '
+                           'for the time given by ``YYY-MM-DD HH:MM:SS``. '
+                           'Defaults to `None`')
+    wval.add_argument('-w', '--wind',
+                      dest='wind',
+                      metavar='SPEED DIR AK',
+                      nargs=3,
+                      default=None,
+                      help='display windfield corresponding '
+                           'to the wind `SPEED`, `DIR`ection and '
+                           'stability class `AK`. '
+                           'Defaults to `None`')
+    wval.add_argument('-W', '--wind-vector',
+                      dest='vector',
+                      metavar='U V AK',
+                      nargs=3,
+                      default=None,
+                      help='display windfield corresponding '
+                           'to the wind vector (`U`, `V`) and '
+                           'stability class `AK`. '
+                           'Defaults to `None`')
+    pars_wif.add_argument('-p', '--plot',
+                        metavar="FILE",
+                        nargs='?',
+                        const='__default__',
+                        help='save plot to a file. If `FILE` is "-" ' +
+                             'the plot is shown on screen. If `FILE` is ' +
+                             'missing, the file name defaults to ' +
+                             'the data file name with extension `png`'
+                        )
+    pars_wif.add_argument('-f', '--force',
+                        action='store_true',
+                        default=False,
+                        help='force overwriting plotfile if it exists.')

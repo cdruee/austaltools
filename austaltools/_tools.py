@@ -6,13 +6,20 @@ import logging
 import tempfile
 import sys
 import unicodedata
+import warnings
 from importlib import resources
 from xml.etree import ElementTree
 
 import requests
 
+
 if os.getenv('BUILDING_SPHINX', 'false') == 'false':
+    from osgeo.gdal import VersionInfo as gdalVersion
     import osgeo.osr as osr
+    try:
+        osr.UseExceptions()
+    except:
+        pass
     import numpy as np
     import pandas as pd
 
@@ -525,6 +532,7 @@ def spheric_distance(lat1, lon1, lat2, lon2):
 
     return km
 
+# -------------------------------------------------------------------------
 
 def find_z0_class(z0):
     """
@@ -557,6 +565,7 @@ def find_austxt(wdir='.'):
     logger.debug('austal config: %s' % ausname)
     return ausname
 
+# -------------------------------------------------------------------------
 
 def get_austxt(path=None):
     """
@@ -611,6 +620,7 @@ def get_austxt(path=None):
     # liste zurückgeben
     return conf
 
+# -------------------------------------------------------------------------
 
 def put_austxt(path="austal.txt", data=None):
     """
@@ -679,6 +689,7 @@ def put_austxt(path="austal.txt", data=None):
                          (os.path.basename(path), line.strip()))
             file.write(line)
 
+# -------------------------------------------------------------------------
 
 def add_arguents_common_plot(parser: argparse.ArgumentParser
                              ) -> argparse.ArgumentParser:
@@ -728,6 +739,92 @@ def add_arguents_common_plot(parser: argparse.ArgumentParser
                         help='force overwriting plotfile if it exists.')
     return parser
 
+# -------------------------------------------------------------------------
+
+def add_location_opts(parser,
+                      stations=False,
+                      required=True):
+    loc_opt = parser.add_mutually_exclusive_group(required=required)
+    loc_opt.add_argument('-L', '--ll',
+                         metavar=("LAT", "LON"),
+                         dest="ll",
+                         nargs=2,
+                         default=None,
+                         help='Center position given as Latitude and ' +
+                              'Longitude, respectively. ' +
+                              'This is the default.')
+    loc_opt.add_argument('-G', '--gk',
+                         metavar=("X", "Y"),
+                         dest="gk",
+                         nargs=2,
+                         default=None,
+                         help='Center position given in Gauß-Krüger zone 3' +
+                              'coordinates: X = `Rechtswert`, ' +
+                              'Y = `Hochwert`. ')
+    loc_opt.add_argument('-U', '--utm',
+                         metavar=("X", "Y"),
+                         dest="ut",
+                         nargs=2,
+                         default=None,
+                         help='Center position given in UTM Zone 32N' +
+                              'coordinates: X = `easting`, ' +
+                              'Y = `northing`.')
+    if stations:
+        loc_opt.add_argument('-D', '--dwd',
+                             metavar="NUMBER",
+                             dest="dwd",
+                             help='Weather station position with ' +
+                                  'German weather service (DWD) ID `NUMBER`')
+        loc_opt.add_argument('-W', '--wmo',
+                             metavar="NUMBER",
+                             dest="wmo",
+                             help='Postion of weather station with ' +
+                                  'World Meteorological Organization (WMO)' +
+                                  'station ID `NUMBER`')
+
+    return parser
+
+# -------------------------------------------------------------------------
+def evaluate_location_opts(args: dict):
+    """
+    get position from the command-line location options and
+    if applicable the WMO station number of this position
+    :param args: parsed arguments
+    :type args: dict
+    :return: position as lat, lon (WGS84) and
+      rechts, hoch (Gauss-Krüger Band 3)
+      and WMO station number of this position (0 if not applicable)
+    :rtype: float, float, float, float, int
+    """
+    station = 0
+    ele = None
+    nam = None
+    if args.get("dwd", None) is not None:
+        storage_dwd = _datasets.dataset_get("DWD").path
+        if storage_dwd is None:
+            sys.tracebacklimit = 0
+            raise ValueError("Dataset DWD is not available, "
+                       "download or assemble it.")
+        station = int(pd.to_numeric(args["dwd"]))
+        lat, lon, ele, nam = read_dwd_stationinfo(
+            station, datafile=storage_dwd)
+        rechts, hoch, _ = _tools.ll2gk(lat, lon)
+    elif args.get("wmo", None) is not None:
+        lat, lon, ele, nam = wmo_metadata.wmo_stationinfo(args["wmo"])
+    elif args.get("gk", None) is not None:
+        rechts, hoch = [float(x) for x in args['gk']]
+        lat, lon, _ = _tools.gk2ll(rechts, hoch)
+    elif args.get("ut", None) is not None:
+        rechts, hoch, _ = _tools.ut2gk(*[float(x) for x in args['ut']])
+        lat, lon, _ = _tools.gk2ll(rechts, hoch)
+    elif args.get("ll", None) is not None:
+        lat, lon = [float(x) for x in args['ll']]
+    else:
+        lat, lon = None
+    return lat, lon, ele, station, nam
+
+# -------------------------------------------------------------------------
+
 def plot_add_mark(ax, mark):
     pf = pd.DataFrame(mark)
     for i, p in pf.iterrows():
@@ -762,12 +859,13 @@ def plot_add_topo(ax, topo, working_dir='.'):
     else:
         raise ValueError('topo must be dict of filename')
     con = ax.contour(topx, topy, topz.T, origin="lower",
-                      colors='black',
-                      linewidths=0.75
-                      )
+                     colors='black',
+                     linewidths=0.75
+                     )
     ax.clabel(con, con.levels, inline=True, fontsize=10)
     return con
 
+# -------------------------------------------------------------------------
 
 def common_plot(args: dict,
                 dat: dict,
@@ -990,6 +1088,7 @@ def common_plot(args: dict,
         logger.info('writing plot: %s' % outname)
         plt.savefig(outname, dpi=180)
 
+# -------------------------------------------------------------------------
 
 def slugify(value, allow_unicode=False):
     """
@@ -1009,6 +1108,7 @@ def slugify(value, allow_unicode=False):
     value = re.sub(r'[^\w\s-]', '', value.lower())
     return re.sub(r'[-\s]+', '-', value).strip('-_')
 
+# -------------------------------------------------------------------------
 
 def download(url, file):
     """
@@ -1410,10 +1510,7 @@ def read_wind(file_info: dict, path: str = '.', grid: int = 0):
 
 def read_z0(working_dir, conf=None):
     """
-    get effective anemometer height from
-    z0 defined in austal.txt and the heights
-    given in the akterm file (weather timeseries) given
-    as parameter 'az'
+    get roughness length z0 defined in austal.txt
 
     :param working_dir: the working directoty of austal(2000),
       where austal.txt resides
@@ -1435,7 +1532,8 @@ def read_z0(working_dir, conf=None):
     if 'z0' in conf:
         z0 = float(conf['z0'][0])
     else:
-        raise ValueError('no z0 defined, cannot read h_eff')
+        logger.error("no z0 defined")
+        z0 = None
     return z0
 
 # -------------------------------------------------------------------------
@@ -1469,6 +1567,8 @@ def read_heff(working_dir, conf=None):
     else:
         raise ValueError('no az defined, cannot read h_eff')
     z0 = read_z0(working_dir, conf)
+    if z0 is None:
+        raise ValueError('no z0 defined, cannot read h_eff')
     z0_class = find_z0_class(z0)
     az = readmet.akterm.DataFile(file=os.path.join(working_dir, az_file))
     heff = float(az.heights[z0_class])
