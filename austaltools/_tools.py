@@ -1067,8 +1067,7 @@ def read_wind(file_info: dict, path: str = '.', grid: int = 0,
     axes['ak'] = stabs
     if centers:
         for ax in ['x', 'y', 'z']:
-            axes[ax] = list(np.convolve(axes[ax],[0.5,0.5])[1:-1]
-                            + axes[ax][0])
+            axes[ax] = list(np.convolve(axes[ax],[0.5,0.5])[1:-1])
         u_ctr= np.full((nx - 1, ny - 1, nz - 1, nstab, ndir), np.nan)
         v_ctr = np.full((nx - 1, ny - 1, nz - 1, nstab, ndir), np.nan)
         for ib in range(nstab):
