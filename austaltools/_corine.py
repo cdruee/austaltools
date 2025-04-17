@@ -100,7 +100,7 @@ def corine_file_load():
     conf = _storage.read_config()
     austaldir = conf.get('austaldir', '')
     if austaldir in [None, '']:
-        sys.tracebacklimit = 0
+        
         corine_file_help()
         raise RuntimeError(f"`austaldir` not defined in config.")
     corine_file = os.path.join(austaldir, 'z0-gk.dmna')

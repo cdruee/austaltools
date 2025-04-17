@@ -6,12 +6,9 @@ This module ...
 import itertools
 import logging
 import os
-import sys
 
 import numpy as np
 import pandas as pd
-
-import austaltools._geo
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
@@ -24,12 +21,14 @@ try:
     from . import _corine
     from . import _dispersion
     from . import _plotting
+    from . import _windutil
 except ImportError:
     import _tools
     from _version import __version__
     import _corine
     import _dispersion
     import _plotting
+    import _windutil
 
 logger = logging.getLogger()
 
@@ -57,57 +56,6 @@ def load_topo(topo_path: str) -> (list, list, np.ndarray):
     topx = topofile.axes(ax="x")
     topy = topofile.axes(ax="y")
     return topx, topy, topz
-
-# -------------------------------------------------------------------------
-
-def load_weather(working_dir: str, conf: dict = None) -> pd.DataFrame:
-    """
-    Get the weather time series height `working_dir`.
-    Files are evaluated in the same order as by AUSTAL:
-    `zeitreihe.dmna` or `timeseries.dmna` are tried to read first,
-    then the AKTERM file spezified in the config file under
-    parameter 'az'
-
-    :param working_dir: the working directoty of austal(2000),
-      where austal.txt resides
-    :type working_dir: str
-    :param conf: (optional) configuration file contents as dict
-    :type conf: dict
-
-    :return: effective anemometer height
-    :rtype: float
-
-    If `conf` is provided, this configuration is evaluated,
-    else the configuration file from `working_dir` is read.
-    This option is indended for situation in which `conf`
-    has already been read into memory for other purposes.
-    """
-    if conf is None:
-        austxt = _tools.find_austxt(working_dir)
-        conf = _tools.get_austxt(austxt)
-    working_dir_files = os.listdir(working_dir)
-    for x in ['zeitreihe.dmna', 'timeseries.dmna']:
-        if x in working_dir_files:
-            ts_file=os.path.join(working_dir, x)
-            break
-    else:
-        ts_file=None
-    if ts_file:
-        zr = readmet.dmna.DataFile(os.path.join(working_dir,ts_file)).data
-        res = pd.DataFrame(index=pd.to_datetime(zr['te']))
-        res['FF'] = zr['ua'].values
-        res['DD'] = zr['ra'].values
-        z0 = get_roughness_length(working_dir=working_dir, conf=conf)
-        res['KM'] = [_dispersion.KM2021.get_index(z0,x) for x in zr['ra']]
-    else:
-        if 'az' in conf:
-            az_file = conf['az'][0]
-        else:
-            raise ValueError('no az defined, cannot read h_eff')
-        az = readmet.akterm.DataFile(file=os.path.join(working_dir,
-                                                       az_file))
-        res = az.data[['FF', 'DD', 'KM']]
-    return res
 
 # -------------------------------------------------------------------------
 
@@ -200,42 +148,6 @@ def superpose(u_grid:np.ndarray, v_grid:np.ndarray, axes:dict,
 
 # -------------------------------------------------------------------------
 
-def get_roughness_length(working_dir=None, conf=None):
-    if working_dir is None:
-        working_dir = _tools.DEFAULT_WORKING_DIR
-    z0 = _tools.read_z0(working_dir, conf)
-    if z0 is None:
-        logger.info("no z0 defined, calculating mean z0")
-        if conf is None:
-            austxt = _tools.find_austxt(working_dir)
-            conf = _tools.get_austxt(austxt)
-        if 'xg' in conf and 'yg' in conf:
-            xg = conf['xg']
-            yg = conf['yg']
-        elif 'xu' in conf and 'yu' in conf:
-            xu = conf['xu']
-            yu = conf['yu']
-            xg, yg = austaltools._geo.ut2gk(xu, yu)
-        else:
-            sys.tracebacklimit = 0
-            raise ValueError("neither z0 nor position defined, "
-                             "cannot determine z0")
-        if 'hq' in conf:
-            hq = conf['hq']
-        else:
-            logger.warning("no source height defined, assuming 10m")
-            hq = 10.
-        logger.debug('averaging z0 from local corine inventory')
-        z0 = _corine.roughness_austal(xg, yg, hq)
-        if z0 is None:
-            logger.debug('averaging z0 from EEA Web API')
-            z0 = _corine.roughness_web(xg, yg, hq)
-        logger.info(f"z0 at position of wind measurement: {z0}")
-
-    return z0
-
-# -------------------------------------------------------------------------
-
 def main(args):
     """
     This is the main working function
@@ -283,7 +195,7 @@ def main(args):
         u, v = meteolib.wind.dir2uv(ff, dd)
     elif args['time']:
         timestamp = pd.to_datetime(args['time'])
-        az = load_weather(working_dir, conf)
+        az = _windutil.load_weather(working_dir, conf)
         time = az.index[(
                 az.index - timestamp).to_series().abs().argsort()[0]]
         if abs(time -timestamp) > pd.Timedelta('1H'):

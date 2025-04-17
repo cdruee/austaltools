@@ -2139,7 +2139,7 @@ def main(args):
             try:
                 slabs = [float(x) for x in slabs.split(',')]
             except:
-                sys.tracebacklimit = 0
+                
                 raise ValueError("--slabs: non-numeric values in list.")
         else:
             # is it a number? Test by converting it.
@@ -2157,7 +2157,7 @@ def main(args):
         try:
             timestep = float(timestep)
         except ValueError:
-            sys.tracebacklimit = 0
+            
             raise ValueError(f"timestep is not a floating point number: "
                              f"{timestep}")
         global TIMESTEP

@@ -294,7 +294,7 @@ def get_buildings(conf):
         for par in pars:
             if par in conf:
                 if number != len(conf[par]):
-                    sys.tracebacklimit = 0
+                    
                     raise ValueError('different numbers of ' +
                                      'building-definig parameters')
                 val[par] = conf[par]
@@ -395,7 +395,7 @@ def find_austxt(wdir='.'):
             ausname = x
             break
     else:
-        sys.tracebacklimit = 0
+        
         raise IOError('austal.txt or austal2000.txt not found')
     logger.debug('austal config: %s' % ausname)
     return ausname
@@ -417,7 +417,7 @@ def get_austxt(path=None):
     # return config as dict
     conf = {}
     if not os.path.exists(path):
-        sys.tracebacklimit = 0
+        
         raise FileNotFoundError('austal.txt not found')
     with open(path, 'r') as file:
         for line in file:
@@ -432,7 +432,7 @@ def get_austxt(path=None):
             try:
                 key, val = text.split(maxsplit=1)
             except ValueError:
-                sys.tracebacklimit = 0
+                
                 raise ValueError('no keyword/value pair ' +
                                  'in line "%s"' % text)
             # make numbers numeric
@@ -1149,11 +1149,11 @@ def read_heff(working_dir, conf=None):
     if 'az' in conf:
         az_file = conf['az'][0]
     else:
-        sys.tracebacklimit = 0
+        
         raise ValueError('no az defined, cannot read h_eff')
     z0 = read_z0(working_dir, conf)
     if z0 is None:
-        sys.tracebacklimit = 0
+        
         raise ValueError('no z0 defined, cannot read h_eff')
     z0_class = find_z0_class(z0)
     az = readmet.akterm.DataFile(file=os.path.join(working_dir, az_file))

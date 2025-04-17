@@ -741,7 +741,7 @@ def main(args):
         if height is not None:
             build.c = float(height)
         if build.c < 0:
-            sys.tracebacklimit = 0
+            
             raise ValueError('no height information for ' +
                              'feature #%i Polygon %i is ' % (i, j))
         #
