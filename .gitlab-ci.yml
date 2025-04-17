@@ -7,6 +7,7 @@ workflow:
 
 variables:
   DISTRIBUTIONS: ""
+  GITHUB_USER: "cdruee"
 
 stages:
   - build
@@ -47,7 +48,7 @@ build_pages:
     - mv build/sphinx/html/ public/
   artifacts:
     paths:
-    - public
+      - public
 
 #TODO make this work
 test_latest:
@@ -63,6 +64,7 @@ build_deb:
   needs:
     - job: build_sdist
       artifacts: true
+    - job: test_latest
   script:
     - export DEBIAN_FRONTEND=noninteractive
     - apt update
@@ -91,19 +93,73 @@ build_deb:
           - bullseye
           - bookworm
 
-pages:
+merge_github:
+  stage: package
+  image: alpine
+  before_script:
+    # install ssh-agent if not already installed
+    - command -v ssh-agent >/dev/null || apk add --update openssh-client
+    # create the .ssh directory and set permissions
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - cp $SSH_PRIVATE_KEY ~/.ssh/id_rsa
+    - chmod 400 ~/.ssh/id_rsa
+    - cp $SSH_PUBLIC_KEY ~/.ssh/id_rsa.pub
+    - chmod 444 ~/.ssh/id_rsa.pub
+  script:
+   - apk add --update git
+   - git config --global user.email "$GITLAB_USER_EMAIL"
+   - git config --global user.name "$GITLAB_USER_NAME"
+   - echo remote set-url origin "https://ci_access_token:$CI_ACCESS_TOKEN@$CI_SERVER_HOST/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME.git"
+   - git remote set-url origin "https://ci_access_token:$CI_ACCESS_TOKEN@$CI_SERVER_HOST/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME.git"
+   - git branch -avv
+   - git pull --rebase origin main
+   # prepare access to github
+   - ssh-keygen -lf ~/.ssh/id_rsa
+   - ssh-keygen -lf ~/.ssh/id_rsa.pub
+   - ssh-keyscan -H github.com >> ~/.ssh/known_hosts
+   - ssh -T git@github.com || echo "no shell access is OK"
+   - git remote add -t github github "ssh://git@github.com/$GITHUB_USER/$CI_PROJECT_NAME.git"
+   - git branch -avv
+   # first synch repo and from github.com branches
+   - git fetch origin github || echo "nothing to fetch !?"
+   - git fetch --refetch -f github github || echo "nothing to fetch !?"
+   - git branch -avv
+   - git checkout github
+   - git branch -avv
+   - git pull --rebase origin  github
+   - git branch -avv
+   # puch synched branches
+   - git push origin github
+   - git push github github
+   - git branch -avv
+   # then merge repo main branch into local working dir (github branch)
+   - git merge --squash origin/main -X theirs --allow-unrelated-histories | 2>&1 tee git.out
+   - git branch -avv
+   # if there was nothing new, exit graceful
+   - if grep -q "Already up to date" git.out ; then exit 0 ; else rm git.out; fi
+   # check if something is to commit (diff-index non-zero exit), commit if there is
+   - git diff-index --quiet --cached HEAD || git commit -a -m "Squash merge main into github"
+   - git branch -avv
+   # push working dir back into repo github branch
+   - git push origin github
+   # push working dir also to github.com
+   - git push github github
+   - if ! [[ "x$CI_COMMIT_TAG" == "x" ]]; then git push origin $CI_COMMIT_TAG; fi
+
+
+deploy_pages:
   image: python:latest
   stage: deploy
   needs:
     - job: build_pages
       artifacts: true
-    - job: test_latest
+    - job: build_deb
   script:
     - touch public
   artifacts:
     paths:
     - public
-
 
 release:
   image: ubuntu:latest
@@ -146,11 +202,11 @@ release:
         ASSET_ARGS="$ASSET_ARGS, $asset_info"
       done
       ASSET_ARGS=$ASSET_ARGS']'
-    - echo ""
-    - 'echo $ASSET_ARGS'
-    - echo ""
+    - echo "..."
     - 'jq . <<< $ASSET_ARGS'
-    - echo ""
+    - echo "..."
+    - if [[ "$CI_COMMIT_TAG" == "" ]]; then echo "CI_COMMIT_TAG is empty"; exit 0; fi
+    - echo "..."
     - 'echo release-cli create --name "$CI_COMMIT_TAG" --tag-name "$CI_COMMIT_TAG" --description "$CI_COMMIT_MESSAGE" --ref "$CI_COMMIT_TAG" --assets-link "$( jq -c . <<< $ASSET_ARGS )"'
     - 'release-cli create --name "$CI_COMMIT_TAG" --tag-name "$CI_COMMIT_TAG" --description "$CI_COMMIT_MESSAGE" --ref "$CI_COMMIT_TAG" --assets-link "$( jq -c . <<< $ASSET_ARGS )"'
 
@@ -162,12 +218,11 @@ deploy_deb:
       artifacts: true
     - job: build_deb
       artifacts: true
-    - job: test_latest
   before_script:
     - 'command -v ssh-agent >/dev/null || ( apt-get update -y && apt-get install openssh-client -y )'
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
-    - echo "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/id_rsa
+    - cp $SSH_PRIVATE_KEY ~/.ssh/id_rsa
     - chmod 600 ~/.ssh/id_rsa
     - eval $(ssh-agent -s)
     - ssh-add ~/.ssh/id_rsa
@@ -206,16 +261,14 @@ deploy_deb:
       done
     - echo "Ende"
 
-#deploy_pypi:
-#  image: python:latest
-#  stage: deploy
-#  needs:
-#    - job: build_sdist
-#      artifacts: true
-#    - job: build_bdist_deb
-#      artifacts: true
-#    - job: test_latest
-#  script:
-#    - pip install twine
-#    - twine check dist/*tar.gz
-#    - twine upload --repository-url https://upload.pypi.org/legacy/ --username __token__ dist/*tar.gz
+deploy_pypi:
+  image: python:latest
+  stage: deploy
+  needs:
+    - job: build_deb
+    - job: build_sdist
+      artifacts: true
+  script:
+    - pip install twine
+    - twine check dist/*tar.gz
+    - twine upload --repository-url https://upload.pypi.org/legacy/ --username __token__ --password $PYPI_ID_TOKEN dist/*tar.gz
