@@ -152,19 +152,25 @@ def write_config(config: dict, locs: str = None) -> bool:
         locs = STORAGE_LOCATIONS
     loc_to_write = None
     for loc in locs:
-        if os.path.exists(os.path.join(loc, CONFIG_FILE)):
-            logger.debug(f"found writable config at {loc}")
-            loc_to_write = loc
-            break
+        # if dir is writable:
         if os.access(loc, os.W_OK):
-            loc_to_write = loc
-    if loc_to_write is not None:
-        try:
-            with open(os.path.join(loc_to_write, CONFIG_FILE), 'w') as f:
-                yaml.safe_dump(config, f)
-            logger.debug(f"wrote config file at {loc_to_write}")
-        except IOError:
-            logger.warning(f"writing config file failed at {loc_to_write}")
-    else:
+            # remember highest-level writable dir
+            if loc_to_write is None:
+                loc_to_write = loc
+            # if there is config a lower-level dir
+            # (that overrides config in higher level dirs)
+            # remember its location
+            if os.path.exists(os.path.join(loc, CONFIG_FILE)):
+                logger.debug(f"found existing writable config at {loc}")
+                loc_to_write = loc
+    # raise in case we did not find any location to write
+    if loc_to_write is None:
         raise RuntimeError(f"could not write config file")
+    # no try to (over) write the config
+    try:
+        with open(os.path.join(loc_to_write, CONFIG_FILE), 'w') as f:
+            yaml.safe_dump(config, f)
+        logger.debug(f"wrote config file at {loc_to_write}")
+    except IOError:
+        logger.warning(f"writing config file failed at {loc_to_write}")
     return True

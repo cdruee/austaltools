@@ -5,6 +5,7 @@ import shlex
 import logging
 import sys
 import unicodedata
+import urllib.parse
 from xml.etree import ElementTree
 
 import requests
@@ -257,8 +258,18 @@ def expand_sequence(string):
             res.append(x)
             x = x + step
     return res
+
 # -------------------------------------------------------------------------
 
+def overlap(first: tuple[int|float,int|float],
+            second: tuple[int|float,int|float]) -> bool:
+    wid =  min(first[1], second[1]) - max(first[0], second[0])
+    if wid > 0.:
+        return True
+    else:
+        return False
+
+# -------------------------------------------------------------------------
 
 def get_buildings(conf):
     """
@@ -293,6 +304,40 @@ def get_buildings(conf):
     else:
         logger.debug('no buildings in config')
     return res
+
+
+# -------------------------------------------------------------------------
+
+class Spinner:
+    _pointer = 0
+    spinner = r'|/-\\'
+    step = 1
+    text = 'Working ...'
+
+    def __init__(self, text:str=None, step:int=None):
+        if text is not None:
+            self.text = text
+        if step is not None:
+            self.step = step
+        self._show()
+
+    def __del__(self):
+        if logger.getEffectiveLevel() <= logging.DEBUG:
+            return
+        print("")
+
+    def _show(self):
+        if logger.getEffectiveLevel() <= logging.DEBUG:
+            return
+        char = self.spinner[self._pointer % len(self.spinner)]
+        print ("{} {}".format(self.text, char), end='\r')
+
+    def spin(self):
+        self._pointer += 1
+        self._show()
+
+    def end(self):
+        del self
 
 
 # -------------------------------------------------------------------------
@@ -521,7 +566,7 @@ def str2bool(inp):
 
 # -------------------------------------------------------------------------
 
-def download(url, file):
+def download(url, file, usr=None, pwd=None):
     """
     Downloads a file from a specified URL and saves it
     to a given local file path.
@@ -552,6 +597,83 @@ def download(url, file):
 
     """
     with requests.get(url, allow_redirects=True) as req:
+        if req.status_code == 200:
+            with open(file, 'wb') as f:
+                f.write(req.content)
+        else:
+            raise Exception(
+                f"Download failed: status code {req.status_code}")
+    return os.path.basename(file)
+
+# -------------------------------------------------------------------------
+
+def download_earthdata(url, file, usr, pwd):
+    """
+    Downloads a file from a specified URL that needs authorization
+    from earthdata.nasa.gov and saves it to a given local file path.
+
+    :param url: The URL of the file to download.
+    :type url: str
+    :param file: The local path, including the filename,
+      where the downloaded file will be saved.
+    :type file: str
+    :param usr: The username of the user to authenticate with.
+    :type usr: str
+    :param pwd: The password of the user to authenticate with.
+    :type pwd: str
+    :returns: The name of the file saved locally.
+    :rtype: str
+    :raises Exception: An exception is raised if the download
+      fails (HTTP status code is not 200).
+
+
+    This function sends a GET request to the specified URL. If the request
+    is successful (HTTP status code 200),
+    it writes the content of the response to a file specified by
+    the 'file' parameter. If the request fails,
+    it raises an exception with information about the failure.
+
+    :example:
+
+        >>> try:
+        >>>     file_name = download('https://n5eil01u.ecs.nsidc.org/'
+        >>>                          'MOST/MOD10A1.006/2016.12.31/'
+        >>>                          'MOD10A1.A2016366.h14v03.006.'
+        >>>                          '2017002110336.hdf.xml',
+        >>>                          '/path/to/local/hdf.xml',
+        >>>                          'sampleuser', 'verysecret')
+        >>>     print(f"Downloaded file saved as {file_name}")
+        >>> except Exception as e:
+        >>>     print(str(e))
+
+    """
+    # following the example at
+    # https://urs.earthdata.nasa.gov/documentation/for_users/data_access/python
+
+    class SessionWithHeaderRedirection(requests.Session):
+        AUTH_HOST = 'urs.earthdata.nasa.gov'
+
+        def __init__(self, username, password):
+            super().__init__()
+            self.auth = (username, password)
+
+        # Overrides from the library to keep headers when redirected to or from
+        # the NASA auth host.
+        def rebuild_auth(self, prepared_request, response):
+            headers = prepared_request.headers
+            url = prepared_request.url
+            if 'Authorization' in headers:
+                original_parsed = urllib.parse.urlparse(response.request.url)
+                redirect_parsed = urllib.parse.urlparse(url)
+                if (original_parsed.hostname != redirect_parsed.hostname) and \
+                        redirect_parsed.hostname != self.AUTH_HOST and \
+                        original_parsed.hostname != self.AUTH_HOST:
+                    del headers['Authorization']
+            return
+
+    session = SessionWithHeaderRedirection(usr, pwd)
+
+    with session.get(url, allow_redirects=True) as req:
         if req.status_code == 200:
             with open(file, 'wb') as f:
                 f.write(req.content)

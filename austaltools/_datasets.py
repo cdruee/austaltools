@@ -25,6 +25,7 @@ datasets that serve as input for austaltools
       and en on `.tif`
 
 """
+import getpass
 import glob
 import gzip
 import importlib.util
@@ -40,6 +41,7 @@ import tarfile
 import tempfile
 import time
 import zipfile
+from getpass import getpass
 from pathlib import PurePath
 
 import numpy as np
@@ -81,6 +83,10 @@ SOURCES_WEATHER = [k for k, v in DATASET_DEFINITIONS.items()
 DEM_FMT = '%s.elevation.nc'  # % NAME
 """ terrain database file name template"""
 DEM_CRS = "EPSG:5677"
+""" standard lat/lon window for worldwide terrain datasets 
+    latmin, latmax, lonmin, lonmax """
+DEM_WINDOW = (47, 54, 5, 16)
+
 """ terrain data projection (GAUSS-KRÜGER zone 3)"""
 WEA_FMT = '%s.ak-input.nc'
 """ weather model database file name template"""
@@ -267,9 +273,9 @@ class DataSet:
             url = uri
         else:
             raise ValueError(f'cannot handle URI: {uri}')
-        with open(os.path.join(path, self.file_data), 'wb') as f:
+        with open(os.path.join(path, self.file_data), 'wb') as fid:
             with requests.get(url, allow_redirects=True) as req:
-                f.write(req.content)
+                fid.write(req.content)
 
     # -------------------------------------------------------------------------
     def __init__(self, **kwargs):
@@ -373,8 +379,6 @@ def _available_read() -> dict:
     """
     Read datasets available on the system from the config.
 
-    :param locs: list of possible storage loactions
-    :type locs: list[str]
     """
     conf = _storage.read_config()
     available_datasets = {}
@@ -426,9 +430,11 @@ def _available_scan(locs : list = None) -> dict:
     if len(loc_avail) == 0:
         raise ValueError("No locations available")
     available_datasets = {}
+    sp = _tools.Spinner()
     for ds in DATASETS:
         logger.debug(f"scanning for dataset: {ds.name}")
         for loc in reversed(loc_avail):
+            sp.spin()
             logger.debug(f"     ... in location {loc}")
             if ds.storage is None:
                 raise ValueError(f'storage not defined in: {ds.name}')
@@ -440,6 +446,7 @@ def _available_scan(locs : list = None) -> dict:
                     logger.debug(f"                      {path}")
                 else:
                     logger.debug(f"                      ---")
+    sp.end()
 
     return available_datasets
 
@@ -597,7 +604,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
 
     base_url = '/'.join((args['host'], args['path']))
     if 'check_cert' in args:
-        verify = args['check_cert']
+        verify = _tools.str2bool(args['check_cert'])
     else:
         verify = True
     filelist = args['filelist']
@@ -702,7 +709,7 @@ def assemble_DGM_SH(path, name, replace, args: dict):
 
 # -------------------------------------------------------------------------
 def assemble_DGM25_RP(path, name="DGM25-RP",
-                      replace=False, args: dict = {}):
+                      replace=False, args=None):
     """
     Special function to assemble the 25-m digital elevation model (DEM)
     of the German state Rheinland-Pfalz (RP) that has been
@@ -719,12 +726,13 @@ def assemble_DGM25_RP(path, name="DGM25-RP",
     :param replace: If True, an existing file is overwritten.
         If False, an error is raises if the file already exists.
     :type replace: bool
-    :param provider: Optionally accepted for compatiblity with the
-        general asseble funtion call. Is not evaluated.
-    :type provider: dict
+    :param args: Dictionary conating the command arguments.
+    :type args: dict|None
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
+    if args is None:
+        args = {}
     target = os.path.join(path, DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
@@ -755,7 +763,7 @@ def assemble_DGM25_RP(path, name="DGM25-RP",
 
 # -------------------------------------------------------------------------
 def assemble_DGM_composit(path: str, name: str,
-                          replace: bool = False, args: dict = {}):
+                          replace: bool = False, args=None):
     """
     Special function to assemble a digital elevation model (DEM)
     that is a composit of other datasets or files or a mixture thereof.
@@ -771,12 +779,13 @@ def assemble_DGM_composit(path: str, name: str,
     :param replace: If True, an existing file is overwritten.
         If False, an error is raises if the file already exists.
     :type replace: bool
-    :param provider: Optionally accepted for compatiblity with the
-        general asseble funtion call. Is not evaluated.
-    :type provider: dict
+    :param args: Dictionary conating the command arguments.
+    :type args: dict|None
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
+    if args is None:
+        args = {}
     target = os.path.join(path, DEM_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
@@ -848,7 +857,7 @@ def assemble_DGM_composit(path: str, name: str,
 
 # -------------------------------------------------------------------------
 def assemble_GLO_30(path, name = "GLO_30",
-                    replace : bool = False, args: dict = {}):
+                    replace : bool = False, args=None):
     """
     Special function to assemble the GLO_30 digital elevation model (DEM)
     from European Copernicus service.
@@ -872,7 +881,18 @@ def assemble_GLO_30(path, name = "GLO_30",
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
+    if args is None:
+        args = {}
+
     def gettile_eu(lat, lon):
+        """
+        helper function to get a tile from copernicus.eu servers
+
+        :param lat: latitude of lower left corner of the tile
+        :type lat: int
+        :param lon: longitude of lower left corner of the tile
+        :type lon: int
+        """
         download_dir = ("https://prism-dem-open.copernicus.eu/" +
                         "pd-desk-open-access/prismDownload/" +
                         "COP-DEM_GLO-30-DGED__2022_1/")
@@ -892,6 +912,14 @@ def assemble_GLO_30(path, name = "GLO_30",
                 tf.extract(x, '.')
 
     def gettile_aws(lat, lon):
+        """
+        helper function to get a tile from amazon aws
+
+        :param lat: latitude of lower left corner of the tile
+        :type lat: int
+        :param lon: longitude of lower left corner of the tile
+        :type lon: int
+        """
         location = ("http://copernicus-dem-30m.s3.amazonaws.com/")
         path_fmt = "Copernicus_DSM_COG_10_N%02i_00_E%03i_00_DEM/"
         file_fmt = "Copernicus_DSM_COG_10_N%02i_00_E%03i_00_DEM.tif"
@@ -904,12 +932,20 @@ def assemble_GLO_30(path, name = "GLO_30",
         logger.info("skipping because dataset exists: %s" % name)
         return False
 
-    for lat in range(47, 54):
-        for lon in range(5, 16):
+    # get lower left corners of the 1 degree tiles
+    latmin = int(np.floor(DEM_WINDOW[0]))
+    latmax = int(np.floor(DEM_WINDOW[1] - 0.00001))
+    lonmin = int(np.floor(DEM_WINDOW[2]))
+    lonmax = int(np.floor(DEM_WINDOW[3] + 0.00001))
+    # for lati in range(latmin, latmax - 0.00001):
+    #     for long in range(lonmin, lonmax):
+    for lati, long in _tools.progress(list(
+            itertools.product(range(latmin, latmax),
+                              range(lonmin, lonmax)))):
             ## worked until DEC 2024:
             # gettile_eu(lat, lon)
             # working MAR 2025
-            gettile_aws(lat, lon)
+            gettile_aws(lati, long)
 
     # merge the GeoTiff Files from all tiles into one file
     target = os.path.join(path, DEM_FMT % "GLO-30")
@@ -921,7 +957,7 @@ def assemble_GLO_30(path, name = "GLO_30",
 
 # -------------------------------------------------------------------------
 def assebmle_GTOPO30(path: str, name="GTOPO30",
-                     replace=False, args: dict = {}):
+                     replace=False, args=None):
     """
     Special function to assemble the GTOPO30 elevation model (DEM)
     from UCAR.edu.
@@ -944,17 +980,35 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
+    if args is None:
+        args = {}
     support_url = ("https://data.rda.ucar.edu/d758000/support/"
                    + "GTOPO30support.tar.gz")
     download_fmt = ("https://data.rda.ucar.edu/d758000/elevtiles/" +
                     "%s.DEM.gz")
-    tiles = ["W020N90"]
-    # known_tiles = \
-    # "W180N90 W140N90 W100N90 W060N90 W020N90 E020N90 E060N90 E100N90"\
-    # "E140N90 W180N40 W140N40 W100N40 W060N40 W020N40 E020N40 E060N40"\
-    # "E100N40 E140N40 W180S10 W140S10 W100S10 W060S10 W020S10 E020S10"\
-    # "E060S10 E100S10 E140S10 W180S60 W120S60 W060S60 W000S60 E060S60"\
-    # "E120S60 ".split()
+    #tiles = ["W020N90"]
+
+    known_tiles = \
+    "W180N90 W140N90 W100N90 W060N90 W020N90 E020N90 E060N90 E100N90"\
+    "E140N90 W180N40 W140N40 W100N40 W060N40 W020N40 E020N40 E060N40"\
+    "E100N40 E140N40 W180S10 W140S10 W100S10 W060S10 W020S10 E020S10"\
+    "E060S10 E100S10 E140S10 W180S60 W120S60 W060S60 W000S60 E060S60"\
+    "E120S60 ".split()
+
+    signs = {'W': '-', 'E': ' ','S': '-', 'N': ' '}
+    latmin, latmax, lonmin, lonmax = DEM_WINDOW
+    tiles = []
+    for tile in known_tiles:
+        gridstring = tile
+        for k,v in signs.items():
+            gridstring = gridstring.replace(k, v)
+        west = float(gridstring[0:4])
+        north = float(gridstring[4:7])
+        east = west + 40.
+        south = max(-90., north - 50.)
+        if (_tools.overlap((latmin, latmax), (south, north)) and
+            _tools.overlap((lonmin, lonmax), (west, east))):
+            tiles.append(tile)
     # get the single archive that holds the supportive
     # files for all tiles
     target = os.path.join(path, DEM_FMT % "GTOPO30")
@@ -967,7 +1021,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
         support_url, os.path.basename(support_url))
     with tarfile.open(support_file) as support_tar:
         # no get every tile we want
-        for tile in tiles:
+        for tile in _tools.progress(tiles):
             # extract the matching supportive files
             to_extract = [x.name for x in support_tar.getmembers()
                           if tile in x.name]
@@ -988,12 +1042,94 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
             logger.debug("... converting to %s" % tile_tif)
             gdal.Warp(destNameOrDestDS=tile_tif,
                       srcDSOrSrcDSTab=tile_dem,
-                      format="GTiff")
+                      format="GTiff",
+                      outputBounds=(lonmin,latmin,lonmax,latmax),
+                      outputBoundsSRS="epsg:4326",
+                      )
     # merge the GeoTiff Files from all tiles into one file
     tile_files = glob.glob("*.tif")
     merge_tiles(target, tile_files)
 
     return
+
+
+# -------------------------------------------------------------------------
+def assebmle_srtm(path: str, name="SRTM",
+                  replace=False, args=None):
+    """
+    Special function to assemble the SRTM V3 digital elevation model (DEM)
+    from USGS.gov.
+
+    .. note::
+        To run this funtion successfully,
+        the user must have an active EarthData Login account that can be
+        obtained at the NASA earthdata website:
+        <https://urs.earthdata.nasa.gov/users/new>
+
+    :param path:  Path where to generate the file
+    :type path: str
+    :param name: name (code) of the dataset to assemble
+    :type name: str
+    :param replace: If True, an existing file is overwritten.
+        If False, an error is raises if the file already exists.
+    :type replace: bool
+    :param args: Optionally accepted for compatiblity with the
+        general asseble funtion call. Is not evaluated.
+    :type args: dict
+    :return: Success (True) of Failure (False)
+    :rtype: bool
+    """
+    if args is None:
+        args = {}
+    usr = str(input("EarthData username: "))
+    logger.debug(usr)
+    pwd = str(getpass("EarthData password: "))
+    logger.debug(pwd)
+
+    def gettile_usgs(lat, lon):
+        """
+        helper function to get a tile from usgs servers
+
+        :param lat: latitude of lower left corner of the tile
+        :type lat: int
+        :param lon: longitude of lower left corner of the tile
+        :type lon: int
+        """
+        download_dir = ("https://e4ftl01.cr.usgs.gov/"
+                        "MEASURES/SRTMGL1_NC.003/2000.02.11/")
+        file_fmt = "N%02iE%03i.SRTMGL1_NC.nc"
+        url = download_dir + file_fmt % (lat, lon)
+        logger.debug("downloading ... %s" % url)
+        _tools.download_earthdata(url, os.path.basename(url),
+                                  usr=usr, pwd=pwd)
+
+    target = os.path.join(path, DEM_FMT % name)
+    if not _ass_clear_target(target, replace):
+        logger.info("skipping because dataset exists: %s" % name)
+        return False
+
+    # get lower left corners of the 1 degree tiles
+    latmin = int(np.floor(DEM_WINDOW[0]))
+    latmax = int(np.floor(DEM_WINDOW[1] - 0.00001))
+    lonmin = int(np.floor(DEM_WINDOW[2]))
+    lonmax = int(np.floor(DEM_WINDOW[3] + 0.00001))
+    # for lat in range(latmin, latmax):
+    #     for lon in range(lonmin, lonmax):
+    for lati, long in _tools.progress(list(
+            itertools.product(range(latmin, latmax),
+                              range(lonmin, lonmax)))):
+            ## worked until DEC 2024:
+            # gettile_eu(lat, lon)
+            # working MAR 2025
+            gettile_usgs(lati, long)
+
+    # merge the GeoTiff Files from all tiles into one file
+    target = os.path.join(path, DEM_FMT % "SRTM")
+    tile_files = glob.glob("*.SRTMGL1_NC.nc")
+    merge_tiles(target, tile_files)
+
+    return
+
 
 
 # -------------------------------------------------------------------------
@@ -1058,9 +1194,9 @@ def provide_terrain(source: str, path: str = None,
             lic_url = ("https://spdx.org/licenses/%s.json" %
                        lic_id)
             with requests.get(lic_url) as lic_json:
-                with open(lic_file, 'wb') as f:
+                with open(lic_file, 'wb') as fid:
                     text = lic_json.json()['licenseText']
-                    f.write(text.encode('utf-8'))
+                    fid.write(text.encode('utf-8'))
         elif lic_src == 'file':
             if lic_id in [None, '']:
                 lic_aux = os.path.join(str(
@@ -1076,8 +1212,8 @@ def provide_terrain(source: str, path: str = None,
         else:
             not_txt = dataset.notice
         not_file = os.path.join(path, dataset.file_notice)
-        with open(not_file, 'w') as f:
-            f.write(not_txt)
+        with open(not_file, 'w') as fid:
+            fid.write(not_txt)
     return
 
 # -------------------------------------------------------------------------
@@ -1199,17 +1335,16 @@ def show_notice(storage_path, source):
     :type source: str
 
     """
-    def show_notice(storage_path, source):
-        noticefile = os.path.join(storage_path,
-                                  "%s.NOTICE.txt" % source)
-        logger.debug('noticefile: %s' % noticefile)
-        if os.path.exists(noticefile):
-            print('IMPORTANT: data copyright notice:')
-            with open(noticefile, "r") as f:
-                for x in f.readlines():
-                    print(x)
-        else:
-            logger.debug('(no noticefile)')
+    noticefile = os.path.join(storage_path,
+                              "%s.NOTICE.txt" % source)
+    logger.debug('noticefile: %s' % noticefile)
+    if os.path.exists(noticefile):
+        print('IMPORTANT: data copyright notice:')
+        with open(noticefile, "r") as fid:
+            for x in fid.readlines():
+                print(x)
+    else:
+        logger.debug('(no noticefile)')
 
 
 # -------------------------------------------------------------------------
@@ -1227,11 +1362,8 @@ def _ass_era5_getyear(year):
     for ERA5 weather variables, saving the data in a structured format
     that's easier to work with for further analysis.
 
-    :param opts: A tuple containing two elements:
-                 - `y`: The year for which to download the data (integer).
-                 - `path`: The directory path where the NetCDF file should
-                   be saved (string).
-    :type opts: tuple
+    :param year: The year for which to download the data (integer).
+    :type year: int
 
     :returns: None. The function saves a NetCDF file to the specified
       path but does not return any value.
@@ -1239,7 +1371,7 @@ def _ass_era5_getyear(year):
     :example:
         >>> # To download ERA5 data for the year 2020 and
         >>> # save it to the specified directory
-        >>> _ass_era5_getyear((2020, '/path/to/directory'))
+        >>> _ass_era5_getyear(2020)
 
     :note:
     - The function crafts a filename based on the year, prefixing it
@@ -1453,7 +1585,7 @@ def _ass_cerra_getyear(opts):
 
         >>> # To download and process the CERRA data for the year 2023
         >>> # with a lead time of 48 hours
-        >>> cerra_getyear((2023, 48))
+        >>> _ass_cerra_getyear((2023, 48))
 
     :note:
 
@@ -1660,7 +1792,7 @@ def assemble_CERRA(path: str, name="CERRA", years=None,
 
 # -------------------------------------------------------------------------
 def assemble_DWD(path: str, name="DWD", years: list = None,
-                   replace : bool = False, args : dict ={}):
+                 replace : bool = False, args=None):
     """
     Downloads, extracts, and merges DWD dataset observations for specified
     years into single NetCDF files per year.
@@ -1688,6 +1820,8 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
 
     """
     # check years
+    if args is None:
+        args = {}
     if years is None:
         if 'years' in args:
             years = args['years']
@@ -1767,7 +1901,7 @@ def provide_weather(source: str, path: str = None,
 
         >>> # To download ERA5 data for the years 2020 and 2021
         >>> # into the default storage location
-        >>> success = provide_weather("ERA5", years=[2020, 2021])
+        >>> successful = provide_weather("ERA5", years=[2020, 2021])
         True
 
     :note:
@@ -1791,7 +1925,6 @@ def provide_weather(source: str, path: str = None,
                                       _storage.STORAGE_WAETHER)
     #dataset = dataset_get(source)
     logger.info("downloading weather source %s" % source)
-    success = True
     pwd = os.getcwd()
     with tempfile.TemporaryDirectory(dir=_storage.TEMP) as temp_dir:
         os.chdir(temp_dir)
@@ -1823,8 +1956,8 @@ def stationlist_DWD(path: str = None, fmt: str = None):
     :param path: The path where the final merged file
       will be stored.
     :type path: str
-    :param fmt: file format or generate
-    :type name: str
+    :param fmt: file format or generate (csv or json)
+    :type fmt: str
 
     - This function assumes that a global `_tools.TEMP` variable is defined and
       points to a valid temporary directory for intermediate files.
@@ -1856,6 +1989,16 @@ def stationlist_DWD(path: str = None, fmt: str = None):
 # -------------------------------------------------------------------------
 
 def provide_stationlist(source:str=None, fmt:str=None, out:str=None):
+    """
+    Extract the stationlist from a
+    :param source: code of the source dataset
+    :type source: str
+    :param fmt: file format or generate (csv or json)
+    :type fmt: str|None
+    :param out: The path where the final merged file
+      will be stored. If None, the stationlist will be sent to stdout.
+    :type out: str|None
+    """
     logging.debug(f"provide_stationlist -> {source}")
     if source is None:
         raise ValueError("provide_stationlist() requires a source")
@@ -1867,6 +2010,7 @@ def provide_stationlist(source:str=None, fmt:str=None, out:str=None):
 
 # -------------------------------------------------------------------------
 def name_yearly(name, year):
+    """ Return the year-specific code for a yearly dataset """
     return '%s-%04i' % (name, year)
 
 # -------------------------------------------------------------------------
@@ -2156,7 +2300,8 @@ def unpack_file(dl_file, unpack):
 
 # -------------------------------------------------------------------------
 
-def merge_tiles(target, tile_files):
+def merge_tiles(target: str, tile_files: list[str],
+                ullr: tuple[float,float,float,float] = None):
     """
     merge the GeoTiff Files from all tiles into one file
 
@@ -2164,6 +2309,9 @@ def merge_tiles(target, tile_files):
     :type target:  str
     :param tile_files: Input files to merge
     :type tile_files: list[str]
+    :param ullr: upper left and lower right corner of output area
+      if missing, the full area covered by the input tiles is produced
+    :type ullr: tuple[float,float,float,float]
     :raises Exception: if gdal_merge aborts with error
 
     """
@@ -2197,12 +2345,16 @@ def merge_tiles(target, tile_files):
         ]
     else:
         raise ValueError(f"unsopported driver {driver}")
-    gdal_merge_options = ["",
-                     "-init", str(NODATA),
-                     "-a_nodata", str(NODATA)
-                     ] + n_option + co_opts + [
-                     "-o", merged_file,
-                     ] + tile_files
+    gdal_merge_options = [""]
+    if ullr is not None:
+        if len(ullr) != 4:
+            raise ValueError("ulr must be a 4-tuple")
+        gdal_merge_options += ["-ul_lr"] + [str(x) for x in ullr]
+    gdal_merge_options += ["-init", str(NODATA),
+                           "-a_nodata", str(NODATA)
+                          ] + n_option + co_opts + [
+                              "-o", merged_file,
+                          ] + tile_files
     gdal_merge.main(gdal_merge_options)
     s_srs = get_dataset_crs(merged_file)
     if DEM_FMT.endswith('.tif'):
@@ -2237,7 +2389,27 @@ def merge_tiles(target, tile_files):
 
 def expand_filelist_string(string, base_url, verify,
                            xmlp, jsonp, linkp):
+    """
+    Extract the file list from a text (html, xml, meta4, json, geojson)
 
+    :param string: string describing the file to parse.
+      format: <filename>::<file-format>
+    :type string: str
+    :param base_url: the url including the directory where the
+      file is to be found
+    :type base_url: str
+    :param verify: verify (ot not) theserver certificates
+      when downloading the file via https
+    :type verify: bool
+    :param xmlp: xmp path to the file list items (when parsing xml, meta4)
+    :type xmlp: str
+    :param jsonp: jsonpath to the file list items (when parsing json)
+    :type jsonp: str
+    :param linkp: regex to match file list items
+    :type linkp: str
+    :return: file list
+    :rtype: list[str]
+    """
     list_name = re.sub(r'::.*$', '', string)
     url = '/'.join((base_url, list_name))
     if string.endswith(('xml', 'meta4')):
@@ -2258,7 +2430,7 @@ def expand_filelist_string(string, base_url, verify,
                           verify=verify) as rsp:
             input_files = _tools.jsonpath(json_obj=rsp.json(),
                                    path=jsonp)
-    elif string.endswith(('html')):
+    elif string.endswith('html'):
         # html
         if linkp in ["",None]:
             ValueError("links pattern needed but not defined")
@@ -2365,8 +2537,6 @@ def dgm1_sh_getfid(args):
             except (requests.exceptions.ConnectionError,
                     exceptions.ProtocolError) as e:
                 logger.error("exception downloading %s; %s" % (fid, e))
-
-            ntry = ntry + 1
         else:
             raise IOError("downloading failed %s times: fid %s" %
                           (_tools.MAX_RETRY, fid))
@@ -2427,7 +2597,7 @@ def process_input(args):
     localstore = provider.get('localstore', None)
     out_res = provider.get('resolution', 25)
     srcsrs = provider.get('CRS', None)
-    if provider.get('utm_remove_zone', 'true') in ['True', 'true', 'yes']:
+    if _tools.str2bool(provider.get('utm_remove_zone', 'true')):
         utm_remove_zone = True
     else:
         utm_remove_zone = False
@@ -2452,10 +2622,10 @@ def process_input(args):
         for i in range(_tools.MAX_RETRY):
             with requests.get(url, verify=verify, stream=True) as req:
                 if req.status_code == requests.codes.ok:
-                    with open(dl_file, 'wb') as f:
+                    with open(dl_file, 'wb') as fid:
                         for chunk in req.iter_content(chunk_size=4096):
                             if chunk:
-                                f.write(chunk)
+                                fid.write(chunk)
                 elif req.status_code == 404:
                     missing = provider.get('missing', None)
                     if missing in ['ok', 'ignore']:

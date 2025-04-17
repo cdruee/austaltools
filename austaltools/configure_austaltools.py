@@ -69,20 +69,24 @@ def set_austaldir(args: dict):
 
     conf = _storage.read_config()
 
-    if 'path' in args:
+    if args.get('path', None) is not None:
         # path given by user
         path = args['path']
-    elif 'find' in args:
+    elif args.get('find', None) is not None:
         # search in directory tree given by user
         path_list = []
-        for dirpath, _, filenames in os.walk(args['find']):
+        sp = _tools.Spinner(step=100)
+        for dirpath, _, filenames in list(os.walk(args['find'])):
+            sp.spin()
             for filename in filenames:
                 if filename in ['austal', 'austal.exe',
                                 'taldia', 'taldia.exe',
                                 'z0-gk.dmna', 'z0-utm.dmna']:
                     if not dirpath in path_list:
                         path_list.append(dirpath)
+        sp.end()
         if len(path_list) == 0:
+            sys.tracebacklimit = 0
             raise EnvironmentError('No austal installation found.')
         elif len(path_list) > 1:
             num = -1
@@ -90,7 +94,7 @@ def set_austaldir(args: dict):
                 print("%2i: %s" % (i, p))
             while num not in range(len(path_list)):
                 num = int(input("input the number of your "
-                                "preferred path."))
+                                "preferred path: "))
             path = path_list[num]
         else:
             path = path_list[0]
@@ -189,10 +193,9 @@ def cli_parser():
                                'is stored.')
     sub_ast_how.add_argument('-f', '--find',
                           metavar="PATH",
-                          default='.',
+                          default=None,
                           help='recursively search this directory '
-                               'for the austal executable.'
-                               'Defaults to current directory.')
+                               'for the austal executable.')
 
     sub_down = subparsers.add_parser('download',
                                      help='download pre-assembled dataset '
