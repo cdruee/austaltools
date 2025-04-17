@@ -1056,6 +1056,22 @@ def austal_weather(args):
 
 # =========================================================================
 
+def find_weather_data():
+    """
+    Searches all known storage locations for the known terrain datasets
+    and yields a list of the datasets available locally.
+
+    :return: dataset IDs of the locally available datasets
+    :rtype: list[str]
+    """
+    datasets = {}
+    for ds in _datasets.DATASETS:
+        # is ds a terrain dataset?
+        if ds.storage == 'weather':
+            # is it locally available (i.e. downloaded already?):
+            if ds.available:
+                datasets[ds.name] = ds.path
+    return datasets
 
 
 
@@ -1079,22 +1095,36 @@ def main(args):
     if ((args['dwd'] is not None or args['wmo'] is not None)
             and args['ele'] is not None):
 
-        print("ERROR: options -D and -W are mutually exclusive with -e")
+        logger.critical("options -D and -W are mutually exclusive with -e")
         sys.exit(1)
-    # if ((args['dwd'] is None and args['wmo'] is None)
-    #         and args['station'] is not None):
-    #     parser.print_help()
-    #     print("ERROR: options -w is only valid with -D or -W')
-    #     sys.exit(1)
+    if ((args['dwd'] is None and args['wmo'] is None)
+            and args['station'] is not None):
+        logger.critical("options -w is only valid with -D or -W")
+        sys.exit(1)
     if args['year'] is None:
-        print("ERROR: options -y is required with -L, -G, -U, -D or -W")
+        logger.critical("options -y is required with -L, -G, -U, -D or -W")
         sys.exit(1)
     if args['output'] is None:
-        print("ERROR: options NAME is required with -L, -G, -U, -D or -W")
+        logger.critical("options NAME is required with -L, -G, -U, -D or -W")
         sys.exit(1)
+
+    ds_name = _datasets.name_yearly(args['source'], args['year'])
+    if not ds_name in AVAILABLE_WEATHER:
+        logger.critical(f"dataset not available: {ds_name}")
+        sys.exit(1)
+
 
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)
     #
     # call the main working function
     austal_weather(args)
 
+# =========================================================================
+# init at import:
+
+AVAILABLE_WEATHER = find_weather_data()
+"""
+List of locally available DEMs (filled upon imorting the module)
+
+:meta hide-value:
+"""

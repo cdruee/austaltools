@@ -1,8 +1,11 @@
 # template: helloworld 1.0.1
 
 workflow:
-  rules:   # Run if tag is 0.00.00 indicating a release
+  # Run if tag is 0.00.00 indicating a release
+  #     or pibleine ist started manually in gitlab
+  rules:
     - if: $CI_COMMIT_TAG =~ /^[0-9]*\.[0-9]*\.[0-9]*$/
+    - if: $CI_PIPELINE_SOURCE == "web" || $CI_JOB_MANUAL == "true"
 
 stages:
   - build
@@ -13,7 +16,8 @@ build_sdist:
   image: python:latest
   stage: build
   script:
-    - python -m build
+    - pip install setuptools
+    - python setup.py sdist
     - echo 'ls dist/*tar.gz'
     - ls dist/*tar.gz
     - echo 'cd dist && ls *tar.gz'
@@ -54,6 +58,7 @@ build_pages:
   image: python:latest
   stage: build
   script:
+    - pip install setuptools
     - pip install sphinx sphinx-argparse
     - pip install numpy pandas
     - BUILDING_SPHINX=true sphinx-build -b html docs build/sphinx/html

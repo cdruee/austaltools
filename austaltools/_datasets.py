@@ -46,8 +46,9 @@ import requests
 from urllib3 import disable_warnings, exceptions
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    from osgeo import gdal
     import multiprocessing as mp
+    import concurrent.futures as mpf
+    from osgeo import gdal
     import cdo
 
 try:
@@ -185,7 +186,7 @@ class DataSet:
             logger.debug(f"resolving {doi_url}")
             for i in range(_tools.MAX_RETRY):
                 try:
-                    with requests.head(doi_url) as resolver:
+                    with requests.get(doi_url) as resolver:
                         redirect = resolver.url
                     break
                 except requests.HTTPError:
@@ -453,7 +454,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
           the referecnce system of the input data (in the form "EPSG:xxxx")
         - provider["utm_remove_zone"]: (str, optional)
           If 'True', 'true', 'yes', True is passed
-          to :py:func:`_fetch_dgm_opendata._ass_reduce_tile`
+          to :py:func:`_fetch_dgm_od._ass_reduce_tile`
     :type args: dict
     :return: Success (True) of Failure (False)
     :rtype: bool
@@ -486,7 +487,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
             filelist = [filelist]
     input_files = []
     for string in filelist:
-        x = _fetch_dgm_opendata.expand_filelist_string(
+        x = _fetch_dgm_od.expand_filelist_string(
             string, base_url, verify,
             args.get('xmlpath', None),
             args.get('jsonpath', None),
@@ -508,7 +509,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         i = 0
         with mp.Pool(pp) as pool:
             for tfs in _tools.progress(pool.imap_unordered(
-                    _fetch_dgm_opendata.process_input, thread_args),
+                    _fetch_dgm_od.process_input, thread_args),
                     total=len(thread_args)):
                 i = i + 1
                 logger.debug("file %5d / %5d" % (i, len(thread_args)))
@@ -517,7 +518,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         raise ValueError(f'method {method} not implemented')
 
     # merge the GeoTiff Files from all tiles into one file
-    _fetch_dgm_opendata.merge_tiles(target, tile_files)
+    _fetch_dgm_od.merge_tiles(target, tile_files)
     logger.info(f"data file written: {target}")
 
     return True
@@ -558,12 +559,12 @@ def assemble_DGM_SH(path, name, replace, args: dict):
     tile_files = []
     with mp.Pool(PROCS) as pool:
         for tf in _tools.progress(
-                pool.imap_unordered(dgm1_sh_getfid, args),
+                pool.imap_unordered(_fetch_dgm_od.dgm1_sh_getfid, args),
                 total=len(args)
         ):
             tile_files += tf
 
-    _fetch_dgm_opendata.merge_tiles(target, tile_files)
+    _fetch_dgm_od.merge_tiles(target, tile_files)
 
     return True
 
@@ -600,7 +601,7 @@ def assemble_DGM25_RP(path, name="DGM25-RP",
 
     url = "https://vermkv.service24.rlp.de/opendat/dgm25/dgm25.zip"
     logger.debug("downloading ... %s" % url)
-    zip_file, _ = _tools.download(url, os.path.basename(url))
+    zip_file = _tools.download(url, os.path.basename(url))
     logger.debug("extracting ... %s" % zip_file)
     shutil.unpack_archive(zip_file)
     for tile_xyz in glob.glob("*.xyz"):
@@ -616,7 +617,7 @@ def assemble_DGM25_RP(path, name="DGM25-RP",
             logger.error(str(e))
     # merge the GeoTiff Files from all tiles into one file
     tile_files = glob.glob("DGM25_*.tif")
-    _fetch_dgm_opendata.merge_tiles(target, tile_files)
+    _fetch_dgm_od.merge_tiles(target, tile_files)
 
     return True
 
@@ -768,7 +769,7 @@ def assemble_GLO_30(path, name = "GLO_30",
     # merge the GeoTiff Files from all tiles into one file
     target = os.path.join(path, _tools.DEM_FMT % "GLO-30")
     tile_files = glob.glob("Copernicus_*.tif")
-    _fetch_dgm_opendata.merge_tiles(target, tile_files)
+    _fetch_dgm_od.merge_tiles(target, tile_files)
 
     return
 
@@ -798,9 +799,9 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
     :return: Success (True) of Failure (False)
     :rtype: bool
     """
-    support_url = ("https://data.rda.ucar.edu/ds758.0/support/"
+    support_url = ("https://data.rda.ucar.edu/d758000/support/"
                    + "GTOPO30support.tar.gz")
-    download_fmt = ("https://data.rda.ucar.edu/ds758.0/elevtiles/" +
+    download_fmt = ("https://data.rda.ucar.edu/ds758000/elevtiles/" +
                     "%s.DEM.gz")
     tiles = ["W020N90"]
     # known_tiles = \
@@ -845,7 +846,7 @@ def assebmle_GTOPO30(path: str, name="GTOPO30",
                       format="GTiff")
     # merge the GeoTiff Files from all tiles into one file
     tile_files = glob.glob("*.tif")
-    _fetch_dgm_opendata.merge_tiles(target, tile_files)
+    _fetch_dgm_od.merge_tiles(target, tile_files)
 
     return
 
@@ -906,17 +907,18 @@ def provide_terrain(source: str, path: str = None,
         if lic_src == 'spdx':
             lic_url = ("https://spdx.org/licenses/%s.json" %
                        lic_id)
-            with requests.get(lic_url).json() as lic_json:
+            with requests.get(lic_url) as lic_json:
                 with open(lic_file, 'wb') as f:
-                    f.write(lic_json['licenseText'])
+                    text = lic_json.json()['licenseText']
+                    f.write(text.encode('utf-8'))
         elif lic_src == 'file':
             if lic_id in [None, '']:
-                lic_aux = os.path.join(str(DIST_AUX_FILES), lic_file)
+                lic_aux = os.path.join(str(_tools.DIST_AUX_FILES), lic_file)
             else:
-                lic_aux = os.path.join(str(DIST_AUX_FILES), lic_id)
+                lic_aux = os.path.join(str(_tools.DIST_AUX_FILES), lic_id)
             shutil.copy(lic_aux, lic_file)
     if dataset.notice is not None:
-        not_file = os.path.join(path, dataset.file_license)
+        not_file = os.path.join(path, dataset.file_notice)
         with open(not_file, 'w') as f:
             f.write(dataset.notice)
     return
@@ -1238,8 +1240,9 @@ def _ass_cerra_getyear(opts):
         c.retrieve(*opts)
         ncname = _cerraname(y, lt) + '.nc'
         logger.debug("cdo  subsetting: " + ncname)
-        print(os.getcwd())
-        oper = cdo.Cdo(os.getcwd())
+        cwd = os.getcwd()
+        logger.debug(f'cwd: {cwd}')
+        oper = cdo.Cdo(tempdir=cwd)
         print(" ".join([str(x) for x in
                        ['489,649,479,659', '-f nc',
                         gribname, ncname]]
@@ -1251,6 +1254,7 @@ def _ass_cerra_getyear(opts):
         logger.debug("done subsetting: " + ncname)
         os.remove(gribname)
     logger.debug("done job %s" % str(opts))
+    return True
 
 
 # -------------------------------------------------------------------------
@@ -1332,8 +1336,10 @@ def assemble_CERRA(path: str, name="CERRA", years: list = [],
 
 
     # get data and extract region
-    with mp.Pool(CDSAPI_LIMIT_PARALLEL) as pool:
-        _ = pool.map(_ass_cerra_getyear, combi)
+    with mpf.ThreadPoolExecutor(max_workers=CDSAPI_LIMIT_PARALLEL) as e:
+        for c in combi:
+            future = e.submit(_ass_cerra_getyear, c)
+            #_ = future.result()
 
     logger.debug("finished parallel jobs")
     # combine forecasts

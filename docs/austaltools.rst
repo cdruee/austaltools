@@ -1,6 +1,9 @@
------------------------
+:orphan:
+
+-----------
 austaltools
------------------------
+-----------
+
 
 .. |plotcontour| image:: img/plot_contour_2sigma.png
    :width: 45%

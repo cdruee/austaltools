@@ -234,7 +234,7 @@ def main():
     logger.debug(args)
 
     if args['temp'] is not None:
-        DS.TEMP = args['temp']
+        _tools.TEMP = args['temp']
 
     if args['action'] == 'list':
         list_datasets(args['only'], args['state'], args['long'])

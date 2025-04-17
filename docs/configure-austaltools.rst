@@ -2,6 +2,8 @@
 configure-austaltools
 ---------------------
 
+:orphan:
+
 .. argparse::
    :module: austaltools.configure_austaltools
    :func: cli_parser
@@ -197,8 +199,8 @@ Each dict has the follwing entries:
         If an entry is a sting of the form "<start>-<stop>/<step>",
         it is expanded into a list of values. If <step> is missing,
         a step of 1 is used.
-        Example: :json:`["1-9/2", ...]` is expanded
-        to: :json:`[[1, 3, 5, 7, 9], ...]`.
+        Example: `["1-9/2" ]` is expanded
+        to: :json:`[[1, 3, 5, 7, 9] ]`.
         After expanding strings, a (possibly long) list of possible
         combinations of the values for each field is generated and
         fed to the format. This gives the list of files to download.
