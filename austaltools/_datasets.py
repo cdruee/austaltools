@@ -846,7 +846,8 @@ def assemble_DGM_composit(path: str, name: str,
         res_opts = {}
 
     # tip from https://gis.stackexchange.com/a/385864
-    with (tempfile.TemporaryDirectory(dir=_storage.TEMP) as tmp):
+    with (tempfile.TemporaryDirectory(
+            ignore_cleanup_errors=True, dir=_storage.TEMP) as tmp):
         logger.debug("build virtual dataset")
         gdal.BuildVRT(os.path.join(tmp, vrt_name), members)
         logger.debug("writing data file %s" % target)
@@ -1300,7 +1301,8 @@ def provide_terrain(source: str, path: str = None,
         import_lib('osr')
         # change to temp directory
         pwd = os.getcwd()
-        with tempfile.TemporaryDirectory(dir=_storage.TEMP) as temp_dir:
+        with tempfile.TemporaryDirectory(
+                ignore_cleanup_errors=True, dir=_storage.TEMP) as temp_dir:
             os.chdir(temp_dir)
             logger.debug('calling %s' % str(dataset.assemble))
             dataset.assemble(path, source, force, dataset.arguments)
@@ -1354,7 +1356,8 @@ def merge_zipped_nc(source, destination):
     source_file = os.path.abspath(source)
     logger.info("unpacking downloaded zip archive %s" % source_file)
     destination_file = os.path.abspath(destination)
-    with tempfile.TemporaryDirectory(dir=_storage.TEMP) as td:
+    with tempfile.TemporaryDirectory(
+            ignore_cleanup_errors=True, dir=_storage.TEMP) as td:
         with zipfile.ZipFile(source_file, 'r') as zf:
             zf.extractall(td)
         ncfiles = glob.glob(os.path.join(td, '*.nc'))
@@ -2049,7 +2052,8 @@ def provide_weather(source: str, path: str = None,
     #dataset = dataset_get(source)
     logger.info("downloading weather source %s" % source)
     pwd = os.getcwd()
-    with tempfile.TemporaryDirectory(dir=_storage.TEMP) as temp_dir:
+    with tempfile.TemporaryDirectory(
+            ignore_cleanup_errors=True, dir=_storage.TEMP) as temp_dir:
         os.chdir(temp_dir)
         success = True
         if source == "ERA5":
@@ -2066,6 +2070,11 @@ def provide_weather(source: str, path: str = None,
         else:
             logger.error("unknown dataset to download %s" % source)
             success = False
+        try:
+            temp_dir.cleanup()
+        except PermissionError:
+            print(os.listdir(temp_dir))
+            sys.exit(1)
     # return before clean up
     os.chdir(pwd)
     return success
