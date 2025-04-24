@@ -123,14 +123,6 @@ LIB2IMPORT = {
     'osr': 'osgeo',
     'gdal_merge': 'osgeo_utils'
 }
-# link libraries used to their popular names
-LIB2NAME = {
-    'cdo': 'CDO',
-    'cdsapi': 'CSDapi',
-    'gdal': 'GDAL',
-    'osr': 'OSR',
-    'gdal_merge': 'GDAL merge'
-}
 def have_lib(lib):
     """ ask if a libray is installed
     :param lib: name of libray to be installed
@@ -150,26 +142,38 @@ def import_lib(lib):
     :param lib: name of libray
     :type lib: str
     """
-    if lib in LIB2IMPORT.keys():
-        mod = LIB2IMPORT[lib]
-        if mod == lib:
-            # ``import mod``
-            globals()[lib] = importlib.import_module(mod)
-        else:
-            # ``from mod import lib``
-            globals()[lib] = importlib.import_module('.'+lib, mod)
+    # if lib in LIB2IMPORT.keys():
+    #     mod = LIB2IMPORT[lib]
+    #     if mod == lib:
+    #         # ``import mod``
+    #         globals()[lib] = importlib.import_module(lib)
+    #     else:
+    #         # ``from mod import lib``
+    #         globals()[lib] = importlib.import_module('.'+lib, mod)
+    if lib == 'cdo':
+        import cdo
+    elif lib == 'cdsapi':
+        import cdsapi
+    elif lib == 'gdal':
+        from osgeo import gdal
+    elif lib == 'osr':
+        from osgeo import osr
+    elif lib == 'gdal_merge':
+        from osgeo_utils import gdal_merge
     else:
         raise ValueError(f"Unknown library '{lib}'")
-    if globals()[lib] is None:
-        raise ValueError(f"Import failed:'{lib}'")
     logger.debug(f"imported libray '{lib}'")
-NO_LIB_HELP = {k: (f"The {v} library does not appear to be installed. "
-                   f"You can install it by running "
-                   f"`pip install {LIB2IMPORT[k]}` "
-                   f"or using the package manager of your choice.")
-               for k,v in LIB2IMPORT.items()}
-""" help message to be displayed if library is not installed 
-:meta hide-value: """
+def no_lib_help(k):
+    """
+    help message to be displayed if library is not installed
+    :param k: library name
+    :type k: str
+    """
+    return(f"The {k} library does not appear to be installed. "
+           f"You can install it by running "
+           f"`pip install {LIB2IMPORT[k]}` "
+           f"or using the package manager of your choice.")
+
 
 # =========================================================================
 
@@ -2066,7 +2070,7 @@ def provide_weather(source: str, path: str = None,
         success = True
         if source == "ERA5":
             import_lib('cdsapi')
-            assemble_ERA5(path, years=years)
+            assemble_ERA5(path, years=years, replace=force)
         elif source == "CERRA":
             import_lib('cdo')
             import_lib('cdsapi')
@@ -2079,7 +2083,7 @@ def provide_weather(source: str, path: str = None,
             logger.error("unknown dataset to download %s" % source)
             success = False
         try:
-            temp_dir.cleanup()
+            shutil.rmtree(temp_dir)
         except PermissionError:
             logger.warning('Permission Error during cleanup')
     # return before clean up

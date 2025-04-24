@@ -453,7 +453,7 @@ def cli_parser():
         more_epilog += f"Terrain sources cannot be assembled. "
     for x in DS.LIB2IMPORT.keys():
         if not DS.have_lib(x):
-            more_epilog += DS.NO_LIB_HELP[x]
+            more_epilog += DS.no_lib_help(x)
     if parser.epilog is None:
         parser.epilog = more_epilog
     else:
