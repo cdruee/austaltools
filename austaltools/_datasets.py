@@ -162,6 +162,7 @@ def import_lib(lib):
         raise ValueError(f"Unknown library '{lib}'")
     if not have_lib(lib):
         raise ValueError(f"Import failed:'{lib}'")
+    logger.debug(f"imported libray '{lib}'")
 NO_LIB_HELP = {k: (f"The {v} library does not appear to be installed. "
                    f"You can install it by running "
                    f"`pip install {LIB2IMPORT[k]}` "
