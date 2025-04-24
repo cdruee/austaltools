@@ -154,13 +154,13 @@ def import_lib(lib):
         mod = LIB2IMPORT[lib]
         if mod == lib:
             # ``import mod``
-            globals()[lib] = importlib.import_module(LIB2IMPORT[lib])
+            globals()[lib] = importlib.import_module(mod)
         else:
             # ``from mod import lib``
             globals()[lib] = importlib.import_module('.'+lib, mod)
     else:
         raise ValueError(f"Unknown library '{lib}'")
-    if not have_lib(lib):
+    if globals()[lib] is None:
         raise ValueError(f"Import failed:'{lib}'")
     logger.debug(f"imported libray '{lib}'")
 NO_LIB_HELP = {k: (f"The {v} library does not appear to be installed. "
