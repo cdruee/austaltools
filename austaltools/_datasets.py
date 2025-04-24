@@ -1511,6 +1511,11 @@ def _ass_era5_getyear(year):
     """
 
     ncname = 'era5_ak_eu_{:04d}.nc'.format(int(year))
+    if cdsapi is None:
+        logger.error('library cdsapi not available')
+    import pathlib
+    if not os.path.exists(os.path.join(pathlib.Path.home(),'.cdsapirc')):
+        logger.error('file .cdsapirc not available')
     c = cdsapi.Client()
     c.retrieve(
         'reanalysis-era5-single-levels',
