@@ -123,7 +123,7 @@ LIB2IMPORT = {
     'osr': 'osgeo',
     'gdal_merge': 'osgeo_utils'
 }
-# link libraries used to their poular names
+# link libraries used to their popular names
 LIB2NAME = {
     'cdo': 'CDO',
     'cdsapi': 'CSDapi',
@@ -160,6 +160,8 @@ def import_lib(lib):
             globals()[lib] = importlib.import_module('.'+lib, mod)
     else:
         raise ValueError(f"Unknown library '{lib}'")
+    if not have_lib(lib):
+        raise ValueError(f"Import failed:'{lib}'")
 NO_LIB_HELP = {k: (f"The {v} library does not appear to be installed. "
                    f"You can install it by running "
                    f"`pip install {LIB2IMPORT[k]}` "
@@ -2073,8 +2075,7 @@ def provide_weather(source: str, path: str = None,
         try:
             temp_dir.cleanup()
         except PermissionError:
-            print(os.listdir(temp_dir))
-            sys.exit(1)
+            logger.warning('Permission Error during cleanup')
     # return before clean up
     os.chdir(pwd)
     return success
