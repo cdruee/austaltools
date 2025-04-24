@@ -71,6 +71,11 @@ logger = logging.getLogger()
 CDSAPI_LIMIT_PARALLEL = 2
 """ Copernicus per-user limit for parallel queries """
 
+RUNPARALLEL = True
+""" Use parallel processing (defaults to False on Windows Systems) """
+if CDSAPI_LIMIT_PARALLEL < 1 and os.name in ['nt']:
+    RUNPARALLEL = False
+
 with (_storage.DIST_AUX_FILES / 'dataset_definitions.json').open() as f:
     DATASET_DEFINITIONS = json.load(f)
 
@@ -645,10 +650,17 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         else:
             pp = PROCS
         i = 0
-        with mp.Pool(pp) as pool:
-            for tfs in _tools.progress(pool.imap_unordered(
-                    process_input, thread_args),
-                    total=len(thread_args)):
+        if RUNPARALLEL:
+            with mp.Pool(pp) as pool:
+                for tfs in _tools.progress(pool.imap_unordered(
+                        process_input, thread_args),
+                        total=len(thread_args)):
+                    i = i + 1
+                    logger.debug("file %5d / %5d" % (i, len(thread_args)))
+                    tile_files += tfs
+        else:
+            for args in _tools.progress(thread_args):
+                tfs = process_input(args)
                 i = i + 1
                 logger.debug("file %5d / %5d" % (i, len(thread_args)))
                 tile_files += tfs
@@ -695,11 +707,16 @@ def assemble_DGM_SH(path, name, replace, args: dict):
     random.shuffle(fids)
     args = [(i, len(fids), x, args) for i, x in enumerate(fids)]
     tile_files = []
-    with mp.Pool(PROCS) as pool:
-        for tf in _tools.progress(
-                pool.imap_unordered(dgm1_sh_getfid, args),
-                total=len(args)
-        ):
+    if RUNPARALLEL:
+        with mp.Pool(PROCS) as pool:
+            for tf in _tools.progress(
+                    pool.imap_unordered(dgm1_sh_getfid, args),
+                    total=len(args)
+            ):
+                tile_files += tf
+    else:
+        for args in _tools.progress(args):
+            tf = dgm1_sh_getfid(*args)
             tile_files += tf
 
     merge_tiles(target, tile_files)
@@ -2311,12 +2328,16 @@ def xyz2tif(inputfile, srcsrs, utm_remove_zone=False):
     # returns a tuple containing file handle and the abs pathname!
     csvhdl, csvfile = tempfile.mkstemp(
         prefix='dgm', suffix='.csv', dir=_storage.TEMP)
+    # close file handle so that file is not open an there is
+    # no permission issue when gdal tries to open it by name
+    # in contrast to tempfile.TemporaryFile this does not remove
+    # the file. we need to remove ist explicitly by os.remove!
+    os.close(csvhdl)
     got_csv = xyz2csv(inputfile, csvfile,
                       utm_remove_zone=utm_remove_zone)
     os.remove(inputfile)
     if not got_csv:
         logger.warning(f"did not convert ... {inputfile}")
-        os.close(csvhdl)
         os.remove(csvfile)
         return None
     gdal.Translate(destName=tf1,
@@ -2324,7 +2345,6 @@ def xyz2tif(inputfile, srcsrs, utm_remove_zone=False):
                    outputSRS=srcsrs,
                    noData=-9999,
                    )
-    os.close(csvhdl)
     os.remove(csvfile)
     return tf1
 

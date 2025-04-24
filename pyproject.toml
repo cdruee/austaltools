@@ -1,12 +1,11 @@
 [build-system]
-#FIXME select gdal version more intelligent matching system
+#fixme select gdal version more intelligent matching system
 requires = [
     "setuptools",
     "sphinx",
     "sphinx-argparse",
     "numpy",
     "pandas",
-    "scipy",
     "gdal<3.10",
     "requests",
     "tqdm",

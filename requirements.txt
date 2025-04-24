@@ -5,7 +5,6 @@ matplotlib
 setuptools
 requests
 meteolib
-SciPy
 GDAL
 readmet
 tqdm

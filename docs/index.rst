@@ -1,6 +1,4 @@
-.. You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
-
+.. -*- coding: utf-8 -*-
 
 *************************************
 Welcome to austaltools documentation!
@@ -13,14 +11,17 @@ Please do not expect it to be complete.
 General
 *******
 
-This module conatins tools for use with Langrangian dispersion model
+This module contains tools for use with Langrangian dispersion model
 AUSTAL (AUSbreitungsmodell nach TA Luft)
 
 Installation:
 -------------
-::
 
-    python3 setup.py install
+Austaltools can be installed by
+
+    pip install austaltools
+
+in principle. For more detailed instructions, see :doc:`install`
 
 Command-line scripts:
 ---------------------
@@ -119,6 +120,7 @@ Detailed info
 .. toctree::
    :maxdepth: 1
 
+   install
    api_commands
    api_internal
    references

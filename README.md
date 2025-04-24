@@ -1,21 +1,32 @@
 austaltools
-======
+===========
 
-This module conatins tools for use with Langrangian dispersion model AUSLTA (AUSbreitungsmodell nach TA Luft)
-
-### Requirements:
-
-    pip install numpy pandas meteolib readmet 
-
-### Installation:
-
-    python3 setup.py install
+This module conatins tools for use with Langrangian dispersion 
+model AUSTAL (AUSbreitungsmodell nach TA Luft)
 
 ### Full documentation:
 https://druee.gitlab-pages.uni-trier.de/austaltools/
 
-### The module contains the following scripts : 
-===============================================
+Installation:
+=============
+
+Essential requirements:
+
+     gdal meteolib numpy pandas readmet 
+
+Optional requirements (deneding upon intended use) 
+
+    tqdm matplotlib cdo 
+
+AustalTools can be installed from PyPi:
+
+    pip install austaltools
+
+Please find detailed instructions - in particular
+concerning Ubuntu / Debian Linux - in the full documentation.
+
+The module contains the following scripts : 
+===========================================
 
 ``austaltools``
     The main application. I suports subcommands like
