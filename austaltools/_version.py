@@ -5,7 +5,7 @@ __description__ = ('Tools for use with the Lagrangian '
                    'atmospheric pollutant dispersion model'
                    'AUSTAL (AUSbreitungsmodell nach TA-Luft).')
 __url__ = ''
-__version__ =  '2.6.2.dev7'
+__version__ =  '2.6.2.dev9'
 __author__ = u'Clemens Drüe'
 __author_email__ = 'druee@uni-trier.de'
 __license__ = 'EUPL-1.2'

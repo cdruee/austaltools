@@ -123,6 +123,8 @@ LIB2IMPORT = {
     'osr': 'osgeo',
     'gdal_merge': 'osgeo_utils'
 }
+
+
 def have_lib(lib):
     """ ask if a libray is installed
     :param lib: name of libray to be installed
@@ -137,6 +139,8 @@ def have_lib(lib):
             return True
     else:
         raise ValueError(f"Unknown library '{lib}'")
+
+
 def import_lib(lib):
     """ import a libray that is installed
     :param lib: name of libray
@@ -151,18 +155,25 @@ def import_lib(lib):
     #         # ``from mod import lib``
     #         globals()[lib] = importlib.import_module('.'+lib, mod)
     if lib == 'cdo':
+        global cdo
         import cdo
     elif lib == 'cdsapi':
+        global cdsapi
         import cdsapi
     elif lib == 'gdal':
+        global gdal
         from osgeo import gdal
     elif lib == 'osr':
+        global osr
         from osgeo import osr
     elif lib == 'gdal_merge':
+        global gdal_merge
         from osgeo_utils import gdal_merge
     else:
         raise ValueError(f"Unknown library '{lib}'")
     logger.debug(f"imported libray '{lib}'")
+
+
 def no_lib_help(k):
     """
     help message to be displayed if library is not installed
@@ -1514,15 +1525,10 @@ def _ass_era5_getyear(year):
     - The library `cdsapi` must be installed and a **valid CDS API key**
       must be configured as per the `cdsapi` package documentation.
     """
-
     ncname = 'era5_ak_eu_{:04d}.nc'.format(int(year))
     if cdsapi is None:
         logger.error('library cdsapi not available')
-    import pathlib
-    if not os.path.exists(os.path.join(pathlib.Path.home(),'.cdsapirc')):
-        logger.error('file .cdsapirc not available')
-    c = cdsapi.Client()
-    c.retrieve(
+    order_template = [
         'reanalysis-era5-single-levels',
         {
             'product_type': 'reanalysis',
@@ -1536,13 +1542,8 @@ def _ass_era5_getyear(year):
                 'low_cloud_cover', 'total_cloud_cover',
                 'cloud_base_height', 'total_precipitation',
             ],
-            'year': year,
-            'month': [
-                '01', '02', '03',
-                '04', '05', '06',
-                '07', '08', '09',
-                '10', '11', '12',
-            ],
+            'year': 'null',
+            'month': ['null'],
             'day': [
                 '01', '02', '03',
                 '04', '05', '06',
@@ -1572,7 +1573,30 @@ def _ass_era5_getyear(year):
             ],
             'format': 'netcdf',
         },
-        ncname)
+        ncname
+    ]
+    orders = []
+    for i in range(12):
+        x = 'era5_ak_eu_{:04d}-{:02d}.nc'.format(int(year), i + 1)
+        o = order_template.copy()
+        o[1]['year'] = format(year)
+        o[1]['month'] = ['{}'.format(i + 1)]
+        o[-1] = x
+        orders.append(o)
+    def getorder(order):
+        c = cdsapi.Client()
+        c.retrieve(order)
+        return order[-1]
+    if RUNPARALLEL:
+        with mp.Pool(PROCS) as pool:
+            for ncmon in pool.map(getorder, orders):
+                downloaded.append(ncmon)
+    else:
+        for o in orders:
+            x = getorder(o)
+            downloaded.append(x)
+
+
     return ncname
 
 
@@ -1637,7 +1661,7 @@ def assemble_ERA5(path: str, name="ERA5", years:list=None,
     _init_datasets()
     logger.debug(f"assemble_ERA5: path={path}, name={name}, "
                  f"years={years}, replace={replace}, args={args}")
-    combi = []
+    downloaded = []
     for year in years:
         yn = name_yearly(name, year)
         if yn not in [x.name for x in DATASETS]:
@@ -1646,12 +1670,8 @@ def assemble_ERA5(path: str, name="ERA5", years:list=None,
             if dataset_get(yn).available:
                 logger.info(f"skipping available year: {yn}")
                 continue
-        combi.append(year)
-    # get data in parallel directly to storage
-    downloaded = []
-    with mp.Pool(PROCS) as pool:
-        for ncname in pool.map(_ass_era5_getyear, combi):
-            downloaded.append(ncname)
+        ncname = _ass_era5_getyear(year)
+        downloaded.append(ncname)
 
     for c in zip(combi, downloaded):
         year, ncname = c
