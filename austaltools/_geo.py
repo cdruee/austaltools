@@ -40,7 +40,7 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 # -------------------------------------------------------------------------
 
-def gk2ll(rechts: float, hoch: float) -> (float, float, float):
+def gk2ll(rechts: float, hoch: float) -> (float, float):
     """
     Converts Gauss-Krüger rechts/hoch (east/north) coordinates
     (DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677)
@@ -54,7 +54,8 @@ def gk2ll(rechts: float, hoch: float) -> (float, float, float):
     :rtype: float, float, float
     """
     transform = osr.CoordinateTransformation(GK, LL)
-    return transform.TransformPoint(rechts, hoch)
+    lat, lon, zz = transform.TransformPoint(rechts, hoch)
+    return lat, lon
 
 # -------------------------------------------------------------------------
 
@@ -73,11 +74,12 @@ def ll2gk(lat: float, lon: float) -> (float, float):
     :rtype: float, float
     """
     transform = osr.CoordinateTransformation(LL, GK)
-    return transform.TransformPoint(lat, lon)
+    x, y, z = transform.TransformPoint(lat, lon)
+    return x, y
 
 # -------------------------------------------------------------------------
 
-def ut2ll(east: float, north:float) -> (float, float, float):
+def ut2ll(east: float, north:float) -> (float, float):
     """
     Converts UTM east/north coordinates
     (ETRS89 / UTM zone 32N, https://epsg.io/25832)
@@ -91,7 +93,8 @@ def ut2ll(east: float, north:float) -> (float, float, float):
     :rtype: float, float, float
     """
     transform = osr.CoordinateTransformation(UT, LL)
-    return transform.TransformPoint(east, north)
+    lat, lon, zz = transform.TransformPoint(east, north)
+    return lat, lon
 
 # -------------------------------------------------------------------------
 
@@ -131,7 +134,8 @@ def ut2gk(east: float, north:float) -> (float, float):
     :rtype: float, float, float
     """
     transform = osr.CoordinateTransformation(UT, GK)
-    return transform.TransformPoint(east, north)
+    rechts, hoch, zz = transform.TransformPoint(east, north)
+    return rechts, hoch
 
 # -------------------------------------------------------------------------
 
@@ -173,16 +177,16 @@ def evaluate_location_opts(args: dict):
     if args.get("dwd", None) is not None:
         station = int(pd.to_numeric(args["dwd"]))
         lat, lon, ele, nam = read_dwd_stationinfo(station)
-        rechts, hoch, _ = ll2gk(lat, lon)
+        rechts, hoch = ll2gk(lat, lon)
     elif args.get("wmo", None) is not None:
         lat, lon, ele, nam = _wmo_metadata.wmo_stationinfo(
             args["wmo"])
     elif args.get("gk", None) is not None:
         rechts, hoch = [float(x) for x in args['gk']]
-        lat, lon, _ = gk2ll(rechts, hoch)
+        lat, lon = gk2ll(rechts, hoch)
     elif args.get("ut", None) is not None:
         rechts, hoch, _ = ut2gk(*[float(x) for x in args['ut']])
-        lat, lon, _ = gk2ll(rechts, hoch)
+        lat, lon = gk2ll(rechts, hoch)
     elif args.get("ll", None) is not None:
         lat, lon = [float(x) for x in args['ll']]
     else:

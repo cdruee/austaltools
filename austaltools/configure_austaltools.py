@@ -5,7 +5,6 @@
 import argparse
 import logging
 import os
-import sys
 
 try:
     from . import _storage
@@ -38,9 +37,11 @@ def list_datasets(only='all', state='known', long=False):
     :type long: bool
     """
     if long:
-        lfmt = "| %-10s | %6s | %6s | %s"
-        print(lfmt % (' Dataset  ', 'online', 'avail.', 'path'))
-        print(lfmt % ('----------', '------', '------', '-------------'))
+        lfmt = "| %-14s | %6s | %6s | %s"
+        print(lfmt % (' Dataset      ', 'online',
+                      'avail.', 'path'))
+        print(lfmt % ('--------------', '------',
+                      '------', '-------------'))
         for name, props in DS.dataset_list().items():
             if (only in [props['storage'], 'all'] and
                     (state == 'known' or props['available'])):
