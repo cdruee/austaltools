@@ -24,27 +24,28 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 try:
     from ._version import __version__, __title__
+    from . import _corine
+    from . import _datasets
+    from . import _dispersion as dis
+    from . import _geo
     from . import _plotting
     from . import _storage
     from . import _tools
-    from . import _datasets
-    from . import _dispersion as dis
 except ImportError:
     from _version import __version__, __title__
+    import _corine
+    import _datasets
+    import _dispersion as dis
+    import _geo
     import _plotting
     import _storage
     import _tools
-    import _datasets
-    import _dispersion as dis
 
 
 logging.basicConfig()
 logger = logging.getLogger()
 
 # ----------------------------------------------------
-KNOWN_SOURCES = ["ERA5", "CERRA", "DWD"]
-STORAGE_LOCATIONS = _storage.STORAGE_LOCATIONS
-STORAGE_DIR = "weather"
 
 # possible defaults: fixed_057 fixed_010 model_mean model_uv10 model_fsr
 DEFAULT_WIND_VARIANT = os.environ.get('WIND_VARIANT', 'model_uv10')
@@ -58,7 +59,6 @@ DEFAULT_CLASS_SCHEME = os.environ.get('CLASS_SCHEME', 'all')
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     kappa = m.constants.kappa
     gn = m.constants.gn
-    _check = m._utils._check
 
 # ----------------------------------------------------
 
@@ -156,7 +156,7 @@ def grid_surrounding_nodes(lat: float, lon: float, dims: dict) \
         grd_lon = dims['lon']
     else:
         raise ValueError('dims have unsupported shape')
-    vec_s_d = np.vectorize(austaltools._geo.spheric_distance)
+    vec_s_d = np.vectorize(_geo.spheric_distance)
     tgt_lat = np.full(np.shape(dims['lat']), lat)
     tgt_lon = np.full(np.shape(dims['lon']), lon)
     distance = vec_s_d(tgt_lat, tgt_lon, grd_lat, grd_lon)
@@ -411,8 +411,8 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
 
     return values
 
-
 # ----------------------------------------------------
+
 def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
         -> (pd.DataFrame, float):
     """
@@ -551,7 +551,7 @@ def read_cerra_nc(ncfile, lat, lon):
     values = pd.DataFrame()
     time_unit_string = nc.variables['time'].units
     time_unit, _, base_date = time_unit_string.split(maxsplit=2)
-    epoch = pd.to_datetime(base_date)
+    epoch = pd.to_datetime(base_date, utc=True)
     values['time'] = [epoch + pd.Timedelta(x, unit=time_unit)
                       for x in nc.variables['time'][:].data]
     #
@@ -659,9 +659,7 @@ def read_cerra_nc(ncfile, lat, lon):
                            ignore_index=True)
     return values
 
-
 # ----------------------------------------------------
-
 
 def get_cerra_weather(lat, lon, year, datafile=None) \
         -> (pd.DataFrame, float):
@@ -705,7 +703,6 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
         _datasets.name_yearly("CERRA", year)
     )
     if not ds.available:
-        
         raise ValueError(f"Dataset not available: {ds.name}")
     if datafile is None:
         datafile = os.path.join(ds.path, ds.file_data)
@@ -735,6 +732,180 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
                     'fsr',  # m
                     'tp'  # mm
                     ])
+    return res, z0
+
+# ----------------------------------------------------
+
+def read_hostrada_nc(ncfile, lat, lon, wind_variant=None):
+    """
+    read HOSTRADA nc file and interpolate values to position (lat, lon)
+    values:
+
+    ===================  ========  ==========================
+     name                 unit      long name
+    ===================  ========  ==========================
+    'time'
+    'tas'                 °C        Near-Surface Air Temperature
+    'clt'                 octa      Total Cloud Fraction
+    'hurs'                %         Near-Surface Relative Humidity
+    'ps'                  Pa        Surface Air Pressure
+    'sfcWind_direction'   deg       Near-Surface Wind Direction
+    'sfcWind'             m s**-1   Near-Surface Wind Speed
+    ===================  ========  ==========================
+    """
+    if wind_variant is None:
+        wind_variant = DEFAULT_WIND_VARIANT
+
+    _VAR_NEEDED = ['tas', 'clt', 'hurs', 'ps',
+                   'sfcWind_direction', 'sfcWind']
+
+    import netCDF4
+
+    nc = netCDF4.Dataset(ncfile)
+
+    for x in _VAR_NEEDED:
+        if x not in nc.variables:
+            raise ValueError('needed variable not in input data: %s' % x)
+    all_variables = _VAR_NEEDED
+    #
+    # get lat lon 2-D fields
+    dims = {
+        'lon': nc['lon'][:,:],
+        'lat': nc['lat'][:,:]
+    }
+    #
+    # convert time
+    logger.info('calculating time')
+    values = pd.DataFrame()
+    epoch = dt.datetime(1900, 1, 1, 0, 0, tzinfo=dt.timezone.utc)
+    values['time'] = pd.to_datetime(
+        [epoch + dt.timedelta(hours=int(x)) for x in nc['time']])
+    #
+    # interpolate values to position
+    #
+    logger.info('calculating position')
+    positions = grid_surrounding_nodes(lat, lon, dims)
+    # extract input values at positions
+    pv = {}
+    for val in _tools.progress(all_variables, 'extract variables'):
+        logger.debug(f"extract variable: {val}")
+        pv[val] = [nc[val][:, x, y].data for x, y, _ in positions]
+    # free memory
+    nc.close()
+
+    # calculate weights and average the values
+    weights = grid_calulate_weights(positions)
+    for val in _tools.progress(pv.keys(), 'interpolating vars'):
+        logger.debug(f"interpolate variable: {val}")
+        if np.ndim(pv[val]) > 1:
+            logger.debug('interpolating value: %s' % val)
+            values[val] = np.dot(weights, pv[val])
+    #
+    #  convert values
+    #
+    values.rename(
+        inplace=True,
+        columns={
+            'sfcWind': 'ff',            # m/s
+            'sfcWind_direction': 'dd',  # deg
+            'ps': 'sp',                 # Pa
+        }
+    )
+    #
+    # temperature to Celsius to Kelvin
+    values['t2m'] = [m.temperature.CtoF(x) for x in  values['tas']]
+    values.drop('tas', axis=1, inplace=True)
+    #
+    # cloud cover octa to 1
+    values['tcc'] = [float(x) / 8. for x in values['clt']]
+    values.drop('clt', axis=1, inplace=True)
+    #
+    # relative humidity % to 1
+    values['r2m'] = [float(x) / 100. for x in values['hurs']]
+    values.drop('hurs', axis=1, inplace=True)
+
+    logger.debug("got: %s" % values.keys())
+    return values
+
+# ----------------------------------------------------
+
+def get_hostrada_weather(lat, lon, year, datafile=None) \
+        -> (pd.DataFrame, float):
+    """
+    Get weather timeseries for the provided position
+    from source HOSTRADA by DWD for the year provided and calulate
+    cloud cover of non-high clouds (`lmcc`) and roughness
+    length `z0` from "forecast surface roughness"
+
+    :param lat: position latitude in degrees
+    :type lat: float
+    :param lon: position laongitude  in degrees
+    :type lon: float
+    :param year: get data from this calendar year
+    :type year: int
+    :param datafile: (optional) read from this HOSTRADA data file
+    :type datafile: str | None
+    :return: weather timeseries as dataframe and surface roughness in m.
+        The index of the dataframe is the measurement time as `datetime64`,
+        the columns are:
+
+        ======  ========= =============================
+        column   unit     comment
+        ======  ========= =============================
+        'time'   UTC
+        'ff'     m/s      wind speed at 10m height
+        'dd'     degrees  wind direction
+        'sp'     Pa       surface air pressure (QFE)
+        't2m'    K        air temperature at 2 m height
+        'r2m'    %        relative humidity at 2 m height
+        'tcc'    1        total cloud cover
+        ======  ========= =============================
+
+    :rtype: (pd.DataFrame, float)
+    """
+    ds = _datasets.dataset_get(
+        _datasets.name_yearly("HOSTRADA", year)
+    )
+    if not ds.available:
+        raise ValueError(f"Dataset not available: {ds.name}")
+    if datafile is None:
+        datafile = os.path.join(ds.path, ds.file_data)
+    logging.info('reading data from; %s' % datafile)
+
+    v = read_hostrada_nc(datafile, lat, lon)
+    v.index = v['time']
+    v.sort_index(inplace=True)
+
+    # get roughness length from CORINE
+    xg, yg = _geo.ll2gk(lat, lon)
+    h = 3000.  # 3km used to construct dataset by DWD (Kräheman. 2015)
+    z0 = None
+    try:
+        z0 = _corine.roughness_austal(xg, yg, h)
+    except RuntimeError as e:
+        logger.warning(f'cannot get roughness from austal configuration: '
+                       f' {e}')
+    if z0 is None:
+        try:
+            z0 = _corine.roughness_web(xg, yg, h)
+            if z0 <= 0.:   # lookup failed
+                z0 = None
+        except Exception as e:
+            logger.warning(f'cannot get roughness online, '
+                           f'the error was: {e}')
+    if z0 is None:
+        logger.error(f'cannot get any roughness length')
+
+
+    res = v.filter(['time',  # UTC
+                    'ff',  # m/s
+                    'dd',  # deg
+                    'sp',  # Pa
+                    't2m',  # K
+                    'r2m',  # 1
+                    'tcc',  # 1
+                    ])
+    logger.debug("got: %s" % res.keys())
     return res, z0
 
 # ----------------------------------------------------
@@ -908,16 +1079,28 @@ def austal_weather(args):
             obs, z0 = get_era5_weather(lat, lon, year, wind_variant)
         elif source == "CERRA":
             obs, z0 = get_cerra_weather(lat, lon, year)
+        elif source == "HOSTRADA":
+            obs, z0 = get_hostrada_weather(lat, lon, year)
+            if z0 is None and args.get('z0, None') is None:
+                raise RuntimeError(f'cannot determine roughness lenght '
+                                   f'automatically.\n'
+                                   f'Use option `--z0` to provide '
+                                   f'the value.')
         elif source == "DWD":
             if not _datasets.dataset_get(source).available:
-                
                 raise ValueError(f"source {source} not available")
             path = _datasets.dataset_get(source).path
             obs, z0 = get_dwd_weather(lat, lon, year, stat_no, path)
         else:
-            raise ValueError("unknown source: %s" % source)
+            raise ValueError("source not implemented: %s" % source)
 
-    rechts, hoch, _ = _geo.ll2gk(lat, lon)
+        # override roughness length if given
+        if (user_z0 := args.get('z0, None')) is not None:
+            logger.info('Roughness length provided by the source ({z0}m) '
+                        'by user-provided value ({user_z0}m).')
+            z0 = user_z0
+
+    rechts, hoch = _geo.ll2gk(lat, lon)
     if ele is None:
         if args.get("ele", None) is not None:
             ele = float(args["ele"])
@@ -958,11 +1141,28 @@ def austal_weather(args):
         obs['Tv'] = [m.humidity.Humidity(t=t, p=p, rh=rh).tvirt()
                      for t, p, rh in
                      zip(obs['t2m'], obs['sp'], obs['r2m'])]
+        obs['d2m'] = [m.humidity.Humidity(t=t, p=p, rh=rh).td()
+                     for t, p, rh in
+                     zip(obs['t2m'], obs['sp'], obs['r2m'])]
     elif all([x in obs.columns for x in ['sp', 't2m', 'd2m']]):
         logger.debug('Tv')
         obs['Tv'] = [m.humidity.Humidity(t, p, td).tvirt()
                      for t, p, td in
                      zip(obs['t2m'], obs['sp'], obs['d2m'])]
+    # air density
+    if 'fsr' not in obs.columns:
+        logger.debug('fill fsr')
+        obs['fsr'] = z0
+    else:
+        logger.debug('fsr ok')
+
+    # estimate cbh if do not know anything about the clouds
+    if all([x not in obs.columns for x in ['cbh', 'cty']]):
+        logger.debug('estimate cbh')
+        # Henning's Formula
+        obs['cbh'] = [(t - d) * 123.
+                      for t, d in zip(obs['t2m'], obs['d2m'])]
+
 
     # Obukhov length
     if all([x in obs.columns for x in ['ff', 'fsr', 'rho',
@@ -983,7 +1183,7 @@ def austal_weather(args):
 
     #
     # kms -----------------------------
-    if all([x in obs.columns for x in ['v10', 'tcc', 'lmcc']]):
+    if all([x in obs.columns for x in ['v10', 'tcc']]):
         logger.info('Method: kms')
         methods_available.append('kms')
         if 'cty' in obs:
@@ -998,20 +1198,26 @@ def austal_weather(args):
         )
     #
     # kmo -----------------------------
-    if all([x in obs.columns for x in ['v10', 'tcc', 'cty']]):
+    if all([x in obs.columns for x in ['v10', 'tcc']]):
         logger.info('Method: kmo')
         methods_available.append('kmo')
+        cty = obs['cty'] if 'cty' in obs else None
         obs['kmo'] = dis.klug_manier_scheme_1992(
             obs.index, obs['v10'], obs['tcc'],
-            lat, lon, cty=obs['cty'])
+            lat, lon, cty=cty)
+        del cty
     #
     # k2o -----------------------------
-    if all([x in obs.columns for x in ['v10', 'tcc', 'cbh', 'cty']]):
+    if (all([x in obs.columns for x in ['v10', 'tcc']]) and
+        any([x in obs.columns for x in ['cbh', 'cty']])):
         logger.info('Method: k2o')
         methods_available.append('k2o')
+        cbh = obs['cbh'] if 'cbh' in obs else None
+        cty = obs['cty'] if 'cty' in obs else None
         obs['k2o'] = dis.klug_manier_scheme_2017(
             obs.index, obs['v10'], obs['tcc'],
-            lat, lon, ele, cbh=obs['cbh'], cty=obs['cty'])
+            lat, lon, ele, cbh=cbh, cty=cty)
+        del cbh, cty
     #
     # pts -----------------------------
     if all([x in obs.columns for x in ['ff', 'tcc', 'cbh']]):
@@ -1098,6 +1304,8 @@ def austal_weather(args):
 def add_options(subparsers):
 
     default_year = 2003
+    known_sources = _datasets.SOURCES_WEATHER
+
     #
     # command line args
     #
@@ -1114,13 +1322,13 @@ def add_options(subparsers):
     pars_wea.add_argument('-s', '--source',
                         metavar="CODE",
                         nargs=None,
-                        choices=KNOWN_SOURCES,
-                        default=KNOWN_SOURCES[0],
+                        choices=known_sources,
+                        default=known_sources[0],
                         help='select the source for the weather data. ' +
                              'Known ``CODE`` values are ' +
-                             ' '.join(KNOWN_SOURCES) +
+                             ' '.join(known_sources) +
                              ' Defaults to ' +
-                             KNOWN_SOURCES[0])
+                             known_sources[0])
     pars_wea.add_argument('-y', '--year', dest='year',
                         metavar='YEAR',
                         nargs=None,
@@ -1228,7 +1436,16 @@ def add_options(subparsers):
                                 'use the ``10-m wind`` provided by the '
                                 'model\n')
                          )
-
+    adv_wea.add_argument('--z0',
+                         dest='z0',
+                         default=None,
+                         help=f"roughness length at the position of the "
+                              f"measurement used for calculation of "
+                              f"the effective anemometer height. "
+                              f"Overrides the value provided by the "
+                              f"data source. Ignored if value is None. "
+                              f"[%(default)s]"
+                         )
     return pars_wea
 
 # =========================================================================
@@ -1266,7 +1483,7 @@ def main(args):
     available_weather = _datasets.find_weather_data()
     if available_weather is None or len(available_weather) == 0:
         logger.warning("No available weather data in config file,"
-                       "trying to serch weather data. \n"
+                       "trying to search weather data. \n"
                        "Run configure_autaltools to collect the "
                        "available weather data infomation once.")
         available_weather = _datasets.find_weather_data()
