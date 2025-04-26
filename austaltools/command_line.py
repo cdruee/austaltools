@@ -64,6 +64,10 @@ def cli_parser():
                         version=f"{parser.prog} {__version__}",
                         action="version")
     verb = parser.add_mutually_exclusive_group()
+    verb.add_argument('--insane',
+                      dest='verb',
+                      action='store_const',
+                      const=5, help=argparse.SUPPRESS)
     verb.add_argument('--debug',
                       dest='verb',
                       action='store_const',
@@ -260,10 +264,15 @@ def main(args=None):
         logger.setLevel(args["verb"])
     else:
         logger.setLevel(logging.WARNING)
-    # reduce amount of traceback
-    if logger.getEffectiveLevel() >= logging.INFO:
+    #
+    if logger.getEffectiveLevel() >= logging.DEBUG:
+        # suppress too frequend debug output unlsess --insane
+        logging.getLogger('austaltools._dispersion').setLevel(logging.INFO)
+    elif logger.getEffectiveLevel() >= logging.INFO:
+        # reduce amount of traceback
         sys.tracebacklimit = 1
     elif logger.getEffectiveLevel() >= logging.WARNING:
+        # switch off traceback
         sys.tracebacklimit = 0
 
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)

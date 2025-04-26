@@ -685,7 +685,7 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
             (np.min(lat) < 35.) or
             (np.max(lon) > 32.) or
             (np.max(lat) > 62.)):
-        logging.warning('Klug-Manier scheme is made for Central Europe, only.')
+        logger.warning('Klug-Manier scheme is made for Central Europe, only.')
 
     logger.debug('klug_manier_scheme_1992 ---> %19s ...' % (time[0]))
     # Einlesen
@@ -1129,7 +1129,7 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
             (np.min(lat) < 35.) or
             (np.max(lon) > 32.) or
             (np.max(lat) > 62.)):
-        logging.warning('Klug-Manier scheme is made ' +
+        logger.warning('Klug-Manier scheme is made ' +
                         'for Central Europe, only.')
 
     logger.debug('klug_manier_scheme_2017 ---> %19s ...' % (time[0]))
@@ -1229,7 +1229,7 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
         c1_base = [(x > h) for x, h in zip(cbh, hlim)]
 
     if cty is None and cbh is None:
-        logging.warning('both cty and chb missing: ' +
+        logger.warning('both cty and chb missing: ' +
                         'assuming clouds never Ci only.')
         ci_only = [False for x in time]
     else:
@@ -1253,7 +1253,7 @@ def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
     # mask: Where cond is False, keep the original value.
     ecc = tcc.mask(ci_only, [np.max((0., x - 0.375)) for x in tcc])
     for i, x in enumerate(time):
-        logging.debug('tcc: %f, day: %1i, ci: %1i, ecc: %f' %
+        logger.debug('tcc: %f, day: %1i, ci: %1i, ecc: %f' %
                       (tcc.iloc[i], daytime.iloc[i],
                        ci_only[i], ecc.iloc[i]))
 
@@ -1986,7 +1986,7 @@ def z0_verkaik(z, speed, gust, dirct, rose=False):
 
     # calculate "station value"
     z0 = np.nansum(z0_sec * N_sec) / np.nansum(N_sec)
-    logging.debug("mean roughness length (Verkaik): %5f" % (z0))
+    logger.debug("mean roughness length (Verkaik): %5f" % (z0))
 
     if rose:
         return z0i, N

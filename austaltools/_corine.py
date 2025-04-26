@@ -271,7 +271,7 @@ def roughness_web(xg: float, yg: float, h: float, fac=10.) -> float:
     points = sample_points(xg, yg, h, fac)
     z0_values = []
     for x, y in points:
-        lat, lon, _ = austaltools._geo.gk2ll(x, y)
+        lat, lon = austaltools._geo.gk2ll(x, y)
         code = query_corine_class(lat, lon)
         if code in LANDCOVER_CLASSES_Z0_CORINE.keys():
             z0 = LANDCOVER_CLASSES_Z0_CORINE[code]

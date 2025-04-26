@@ -65,44 +65,40 @@ class TestGk2Ll(unittest.TestCase):
     def test_gk2ll(self):
         # reference
         la, lo, z = (50.0, 9.0, 0.0)
-        (lat, lon, zz) = austaltools._geo.gk2ll(3500074.92, 5540407.23)
+        (lat, lon) = austaltools._geo.gk2ll(3500074.92, 5540407.23)
         # Assert
         self.assertAlmostEqual(lat, la, delta=0.0000001)
         self.assertAlmostEqual(lon, lo, delta=0.0000001)
-        self.assertAlmostEqual(z, zz, delta=0.00001)
 
 class TestLl2Gk(unittest.TestCase):
 
     def test_ll2gk(self):
         # reference
         r, h, z = (3500074.92, 5540407.23, 0.)
-        re, ho, zz  = austaltools._geo.ll2gk(50.0, 9.0)
+        re, ho = austaltools._geo.ll2gk(50.0, 9.0)
         # Assert
         self.assertAlmostEqual(re, r, delta=0.01)
         self.assertAlmostEqual(ho, h, delta=0.01)
-        self.assertAlmostEqual(z, zz, delta=0.00001)
 
 class TestUt2Ll(unittest.TestCase):
 
     def test_ut2ll(self):
         # reference
         la, lo, z = (50.0, 9.0, 0.0)
-        (lat, lon, zz) = austaltools._geo.ut2ll(500000, 5538630.70)
+        (lat, lon) = austaltools._geo.ut2ll(500000, 5538630.70)
         # Assert
         self.assertAlmostEqual(lat, la, delta=0.0000001)
         self.assertAlmostEqual(lon, lo, delta=0.0000001)
-        self.assertAlmostEqual(z, zz, delta=0.00001)
 
 class TestLl2Ut(unittest.TestCase):
 
     def test_ll2ut(self):
         # reference
         r, h, z = (500000, 5538630.70, 0.)
-        re, ho, zz  = austaltools._geo.ll2ut(50.0, 9.0)
+        re, ho  = austaltools._geo.ll2ut(50.0, 9.0)
         # Assert
         self.assertAlmostEqual(re, r, delta=0.01)
         self.assertAlmostEqual(ho, h, delta=0.01)
-        self.assertAlmostEqual(z, zz, delta=0.00001)
 
 class TestSphericDistance(unittest.TestCase):
 
