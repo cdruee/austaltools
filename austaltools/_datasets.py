@@ -114,14 +114,16 @@ cdsapi = None
 cdo = None
 gdal = None
 gdal_merge = None
+netCDF4 = None
 osr = None
 # link libraries used to libraries imported
 LIB2IMPORT = {
     'cdo': 'cdo',
     'cdsapi': 'cdsapi',
     'gdal': 'osgeo',
+    'gdal_merge': 'osgeo_utils',
+    'netCDF4': 'netCDF4',
     'osr': 'osgeo',
-    'gdal_merge': 'osgeo_utils'
 }
 
 
@@ -163,12 +165,15 @@ def import_lib(lib):
     elif lib == 'gdal':
         global gdal
         from osgeo import gdal
-    elif lib == 'osr':
-        global osr
-        from osgeo import osr
     elif lib == 'gdal_merge':
         global gdal_merge
         from osgeo_utils import gdal_merge
+    elif lib == 'netCDF4':
+        global netCDF4
+        import netCDF4
+    elif lib == 'osr':
+        global osr
+        from osgeo import osr
     else:
         raise ValueError(f"Unknown library '{lib}'")
     logger.debug(f"imported libray '{lib}'")
@@ -1363,7 +1368,7 @@ def provide_terrain(source: str, path: str = None,
     return
 
 # -------------------------------------------------------------------------
-def merge_zipped_nc(source, destination):
+def nc_merge_zipped(source, destination):
     """
     Merge multiple netcdf files contained in a zip archive
     into one nc file.
@@ -1373,7 +1378,6 @@ def merge_zipped_nc(source, destination):
     :param destination: path of the destination file to create
     :type destination: str
     """
-    import netCDF4
     source_file = os.path.abspath(source)
     logger.info("unpacking downloaded zip archive %s" % source_file)
     destination_file = os.path.abspath(destination)
@@ -1470,7 +1474,106 @@ def merge_zipped_nc(source, destination):
             src.close()
         dst.close()
     logger.debug("finished writing netcdf file %s" % destination_file)
+
 # -------------------------------------------------------------------------
+
+def nc_concat_time(infiles, target):
+    with netCDF4.Dataset(target, "w", format='NETCDF4') as dst:
+        # copy fixed values from first file
+        blueprint = infiles[0]
+        print(f"initializing output")
+        with netCDF4.Dataset(blueprint) as src:
+            print(f"initializing from {blueprint}")
+            # copy global attributes all at once via dictionary
+            dst.setncatts(src.__dict__)
+            # copy dimensions
+            nx = len(src.dimensions['X'])
+            ny = len(src.dimensions['Y'])
+            for id in ['X', 'Y', 'time']:
+                logger.debug(f"copying dimension {id}")
+                dimension = src.dimensions[id]
+                # copy only if not already in dst
+                if dimension.isunlimited():
+                    dst.createDimension(id, None)
+                else:
+                    dst.createDimension(id, len(dimension))
+            # copy the values
+            for id in ['X', 'Y', 'time', 'lat', 'lon', 'crs']:
+                logger.debug(f"copying variable {id}")
+                var = src.variables[id]
+                dst.createVariable(id, var.datatype, var.dimensions,
+                                   compression='zlib')
+                if id != 'time':
+                    dst[id][:] = src[id][:]
+                # copy variable attributes all at once via dictionary
+                dst[id].setncatts(src[id].__dict__)
+
+        # create empty data fields
+        i_time = 0
+
+        # collect data
+        for ncfile in _tools.progress(infiles,
+                                      "copying data  "):
+            with netCDF4.Dataset(ncfile) as src:
+                logger.debug(f"reading {ncfile}")
+                if 'time' not in dst.variables.keys():
+                    logger.debug(f"initializing time")
+                    var = src.variables['time']
+                    dst.createVariable('time',
+                                       var.datatype,
+                                       var.dimensions,
+                                       compression='zlib')
+                    dst['time'][:] = \
+                        src['time'][:]
+                elif (src['time'][1]
+                      not in dst['time'][:]):
+                    logger.debug(f"appending time")
+                    itime = len(dst.dimensions['time'])
+                    dst['time'][:] = np.append(
+                        dst['time'][:], src['time'][:]
+                    )
+                else:
+                    logger.debug(f"time is ok")
+                for id in [x for x in datavars if x != 'time']:
+                    if id in src.variables.keys():
+                        if id not in dst.variables.keys():
+                            # init first time
+                            logger.debug(f"initializing {id}")
+                            var = src.variables[id]
+                            # special treatment for fill_value
+                            # https://github.com/guziy/PyNotebooks/
+                            #   blob/master/netcdf/test_copy.ipynb
+                            if hasattr(var, "_FillValue"):
+                                fill_value = var._FillValue
+                            else:
+                                fill_value = None
+                            dst.createVariable(id,
+                                               var.datatype,
+                                               var.dimensions,
+                                               fill_value=fill_value,
+                                               compression='zlib')
+                            dst[id][:, :, :] = \
+                                src[id][:, :, :]
+                            dst[id].setncatts(
+                                {x: src[id].getncattr(x)
+                                 for x in src[id].ncattrs()
+                                 if x not in ["_FillValue"]}
+                            )
+                        else:
+                            # append later
+                            logger.debug(f"appending {id}")
+                            dst[id][itime:, :, :] = src[id][:, :, :]
+
+    # clean up
+    print("removing temporary files")
+    for v in _tools.progress(infiles,
+                             "removing files"):
+        os.remove(v)
+
+    return True
+
+# -------------------------------------------------------------------------
+
 def show_notice(storage_path, source):
     """
     Shows a notice to the user when a dataset is accessed,
@@ -1495,6 +1598,25 @@ def show_notice(storage_path, source):
 
 
 # -------------------------------------------------------------------------
+def getorder(order):
+    """
+    helper function to execute orders in parallel
+    :param order: order data structure
+    :type order: list
+    :returns: filename
+    :rtype: str
+    """
+    ncname = order[-1]
+    c = cdsapi.Client()
+    c.retrieve(order)
+    # if order return zip archive (new since 2024) combine into one nc
+    if zipfile.is_zipfile(ncname):
+        zipname = ncname + '.zip'
+        shutil.move(ncname, zipname)
+        nc_merge_zipped(zipname, ncname)
+    return ncname
+
+
 def _ass_era5_getyear(year):
     """
     Downloads ERA5 reanalysis data for a specific year and
@@ -1586,10 +1708,7 @@ def _ass_era5_getyear(year):
         o[1]['month'] = ['{}'.format(i + 1)]
         o[-1] = x
         orders.append(o)
-    def getorder(order):
-        c = cdsapi.Client()
-        c.retrieve(order)
-        return order[-1]
+    downloaded = []
     if RUNPARALLEL:
         with mp.Pool(PROCS) as pool:
             for ncmon in pool.map(getorder, orders):
@@ -1599,9 +1718,9 @@ def _ass_era5_getyear(year):
             x = getorder(o)
             downloaded.append(x)
 
+    concat_nc(downloaded, ncname)
 
     return ncname
-
 
 # -------------------------------------------------------------------------
 def assemble_ERA5(path: str, name="ERA5", years:list=None,
@@ -1687,7 +1806,7 @@ def assemble_ERA5(path: str, name="ERA5", years:list=None,
             continue
         if zipfile.is_zipfile(ncname):
             # new output format as of Jan 2024
-            merge_zipped_nc(ncname, target)
+            nc_merge_zipped(ncname, target)
         else:
             # old output format as of Jan 2024
             shutil.move(ncname, target)
