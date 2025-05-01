@@ -25,6 +25,7 @@ datasets that serve as input for austaltools
       and en on `.tif`
 
 """
+import calendar
 import getpass
 import glob
 import gzip
@@ -558,12 +559,12 @@ def _ass_clear_target(target, replace):
     logger.debug(f'data file path: {target}')
     res = True
     if os.path.exists(target):
-        if not replace:
-            logger.info("dataset exists ... %s" % target)
-            res = False
-        else:
+        if replace:
             logger.info("deleting existig : %s" % target)
             os.remove(target)
+        else:
+            logger.info("dataset exists ... %s" % target)
+            res = False
     return res
 
 # -------------------------------------------------------------------------
@@ -1450,6 +1451,9 @@ def nc_merge_zipped(source, destination):
                     logger.debug(f" ... fill value {fill}")
                     dims = (x if x != stime else dtime
                             for x in v.dimensions)
+                    logger.debug(f" ... dimensions:")
+                    logger.debug(f"     " + str(v.dimensions))
+                    logger.debug(f"     " + str(dims))
                     # copy variable definition
                     dst.createVariable(k,
                                        v.datatype,
@@ -1477,96 +1481,115 @@ def nc_merge_zipped(source, destination):
 
 # -------------------------------------------------------------------------
 
-def nc_concat_time(infiles, target):
+def nc_concat_time(infiles, target, timevar = "time", xvar="X", yvar="Y"):
+    compression = 'zlib'
+    # get sorting order:
+    in_time = []
+    for infile in infiles:
+        with netCDF4.Dataset(infile) as src:
+            in_time.append(src[timevar][:].min())
+            logger.debug(f"starting time of {infile}: {in_time[-1]}")
+    sorted_infiles = [x for _, x in sorted(zip(in_time, infiles))]
+
     with netCDF4.Dataset(target, "w", format='NETCDF4') as dst:
         # copy fixed values from first file
-        blueprint = infiles[0]
-        print(f"initializing output")
-        with netCDF4.Dataset(blueprint) as src:
-            print(f"initializing from {blueprint}")
+        logger.debug(f"initializing output")
+        with netCDF4.Dataset(sorted_infiles[0]) as src:
+            logger.debug(f"initializing from {sorted_infiles[0]}")
             # copy global attributes all at once via dictionary
             dst.setncatts(src.__dict__)
             # copy dimensions
-            nx = len(src.dimensions['X'])
-            ny = len(src.dimensions['Y'])
-            for id in ['X', 'Y', 'time']:
-                logger.debug(f"copying dimension {id}")
-                dimension = src.dimensions[id]
+            for vname in [xvar, yvar, timevar]:
+                logger.debug(f"copying dimension {vname}")
+                dimension = src.dimensions[vname]
                 # copy only if not already in dst
-                if dimension.isunlimited():
-                    dst.createDimension(id, None)
+                if vname == timevar:
+                    dst.createDimension(vname, None)
                 else:
-                    dst.createDimension(id, len(dimension))
+                    dst.createDimension(vname, len(dimension))
             # copy the values
-            for id in ['X', 'Y', 'time', 'lat', 'lon', 'crs']:
-                logger.debug(f"copying variable {id}")
-                var = src.variables[id]
-                dst.createVariable(id, var.datatype, var.dimensions,
-                                   compression='zlib')
-                if id != 'time':
-                    dst[id][:] = src[id][:]
+            for vname in [xvar, yvar, timevar]:
+                logger.debug(f"copying dimension variable {vname}")
+                var = src.variables[vname]
+                dst.createVariable(vname, var.datatype, var.dimensions,
+                                   compression=compression)
                 # copy variable attributes all at once via dictionary
-                dst[id].setncatts(src[id].__dict__)
+                dst[vname].setncatts(src[vname].__dict__)
+                dst[vname][:] = src[vname][:]
 
         # create empty data fields
         i_time = 0
 
         # collect data
-        for ncfile in _tools.progress(infiles,
-                                      "copying data  "):
+        for ncfile in _tools.progress(sorted_infiles, "copying data  "):
             with netCDF4.Dataset(ncfile) as src:
                 logger.debug(f"reading {ncfile}")
-                if 'time' not in dst.variables.keys():
-                    logger.debug(f"initializing time")
-                    var = src.variables['time']
-                    dst.createVariable('time',
-                                       var.datatype,
-                                       var.dimensions,
-                                       compression='zlib')
-                    dst['time'][:] = \
-                        src['time'][:]
-                elif (src['time'][1]
-                      not in dst['time'][:]):
-                    logger.debug(f"appending time")
-                    itime = len(dst.dimensions['time'])
-                    dst['time'][:] = np.append(
-                        dst['time'][:], src['time'][:]
-                    )
-                else:
-                    logger.debug(f"time is ok")
-                for id in [x for x in datavars if x != 'time']:
-                    if id in src.variables.keys():
-                        if id not in dst.variables.keys():
-                            # init first time
-                            logger.debug(f"initializing {id}")
-                            var = src.variables[id]
-                            # special treatment for fill_value
-                            # https://github.com/guziy/PyNotebooks/
-                            #   blob/master/netcdf/test_copy.ipynb
-                            if hasattr(var, "_FillValue"):
-                                fill_value = var._FillValue
-                            else:
-                                fill_value = None
-                            dst.createVariable(id,
-                                               var.datatype,
-                                               var.dimensions,
-                                               fill_value=fill_value,
-                                               compression='zlib')
-                            dst[id][:, :, :] = \
-                                src[id][:, :, :]
-                            dst[id].setncatts(
-                                {x: src[id].getncattr(x)
-                                 for x in src[id].ncattrs()
-                                 if x not in ["_FillValue"]}
-                            )
+                datavars = ((set(src.variables.keys()) |
+                             set(dst.variables.keys())) -
+                            set([timevar, xvar, yvar]))
+                # handle time first:
+                logger.debug(f"appending {timevar} at position {i_time}")
+                time_data = src[timevar][:]
+                if not dst.dimensions[timevar].isunlimited():
+                    dst.dimensions[timevar].size = i_time + len(time_data)
+                dst[timevar][i_time:i_time + len(time_data)] = time_data
+                # then the data
+                for vname in datavars:
+                    var = src.variables[vname]
+                    if vname not in dst.variables.keys():
+                        # init first time
+                        logger.debug(f"initializing {vname}")
+                        if isinstance(var.datatype,
+                                  (netCDF4.VLType, netCDF4.CompoundType)):
+                            cmpr = None
                         else:
-                            # append later
-                            logger.debug(f"appending {id}")
-                            dst[id][itime:, :, :] = src[id][:, :, :]
+                            cmpr = compression
+                        # special treatment for fill_value
+                        # https://github.com/guziy/PyNotebooks/
+                        #   blob/master/netcdf/test_copy.ipynb
+                        if hasattr(var, "_FillValue"):
+                            fill_value = var._FillValue
+                        else:
+                            fill_value = None
+                        dst.createVariable(vname,
+                                           var.datatype,
+                                           var.dimensions,
+                                           fill_value=fill_value,
+                                           compression=cmpr)
+                        if var.ndim <= 1:
+                            dst[vname][:] = src[vname][:]
+                        elif var.ndim == 2:
+                            dst[vname][:, :] = src[vname][:, :]
+                        elif var.ndim == 3:
+                            dst[vname][:, :, :] = src[vname][:, :, :]
+                        elif var.ndim == 4:
+                            dst[vname][:, :, :, :] = src[vname][:, :, :, :]
+                        else:
+                            raise ValueError('cannot hande > 4 dimes')
+                        dst[vname].setncatts(
+                            {x: src[vname].getncattr(x)
+                             for x in src[vname].ncattrs()
+                             if x not in ["_FillValue"]}
+                        )
+                    else:
+                        # append later
+                        logger.debug(f"appending {vname}")
+                        if var.ndim <= 1:
+                            dst[vname][i_time:] = src[vname][:]
+                        elif var.ndim == 2:
+                            dst[vname][i_time:, :] = src[vname][:, :]
+                        elif var.ndim == 3:
+                            dst[vname][i_time:, :, :] = src[vname][:, :, :]
+                        elif var.ndim == 4:
+                            dst[vname][i_time:, :, :, :] = src[vname][:, :, :, :]
+                        else:
+                            raise ValueError('cannot hande > 4 dimes')
+            # remember end position
+            i_time += len(dst[timevar][:])
 
     # clean up
     print("removing temporary files")
-    for v in _tools.progress(infiles,
+    for v in _tools.progress(sorted_infiles,
                              "removing files"):
         os.remove(v)
 
@@ -1596,28 +1619,32 @@ def show_notice(storage_path, source):
     else:
         logger.debug('(no noticefile)')
 
-
 # -------------------------------------------------------------------------
-def getorder(order):
+
+def cds_getorder(order_args: dict):
     """
     helper function to execute orders in parallel
-    :param order: order data structure
-    :type order: list
+    :param order_args: order data structure
+    :type order_args: list
     :returns: filename
     :rtype: str
     """
-    ncname = order[-1]
-    c = cdsapi.Client()
-    c.retrieve(order)
+    cds = cdsapi.Client()
+    dataset =  order_args['dataset']
+    request = order_args['request']
+    target = order_args['target']
+    cds.retrieve(dataset, request, target)
     # if order return zip archive (new since 2024) combine into one nc
-    if zipfile.is_zipfile(ncname):
-        zipname = ncname + '.zip'
-        shutil.move(ncname, zipname)
-        nc_merge_zipped(zipname, ncname)
-    return ncname
+    if zipfile.is_zipfile(target):
+        zipname = target + '.zip'
+        shutil.move(target, zipname)
+        nc_merge_zipped(zipname, target)
+        os.remove(zipname)
+    return target
 
+# -------------------------------------------------------------------------
 
-def _ass_era5_getyear(year):
+def cds_get_era5_year(year):
     """
     Downloads ERA5 reanalysis data for a specific year and
     saves it as a NetCDF file.
@@ -1640,7 +1667,7 @@ def _ass_era5_getyear(year):
     :example:
         >>> # To download ERA5 data for the year 2020 and
         >>> # save it to the specified directory
-        >>> _ass_era5_getyear(2020)
+        >>> cds_get_era5_year(2020)
 
     :note:
     - The function crafts a filename based on the year, prefixing it
@@ -1653,72 +1680,75 @@ def _ass_era5_getyear(year):
     ncname = 'era5_ak_eu_{:04d}.nc'.format(int(year))
     if cdsapi is None:
         logger.error('library cdsapi not available')
-    order_template = [
-        'reanalysis-era5-single-levels',
-        {
-            'product_type': 'reanalysis',
-            'variable': [
-                '10m_u_component_of_wind', '10m_v_component_of_wind',
-                '2m_dewpoint_temperature',
-                '2m_temperature', 'forecast_surface_roughness',
-                'friction_velocity',
-                'surface_latent_heat_flux', 'surface_pressure',
-                'surface_sensible_heat_flux',
-                'low_cloud_cover', 'total_cloud_cover',
-                'cloud_base_height', 'total_precipitation',
-            ],
-            'year': 'null',
-            'month': ['null'],
-            'day': [
-                '01', '02', '03',
-                '04', '05', '06',
-                '07', '08', '09',
-                '10', '11', '12',
-                '13', '14', '15',
-                '16', '17', '18',
-                '19', '20', '21',
-                '22', '23', '24',
-                '25', '26', '27',
-                '28', '29', '30',
-                '31',
-            ],
-            'time': [
-                '00:00', '01:00', '02:00',
-                '03:00', '04:00', '05:00',
-                '06:00', '07:00', '08:00',
-                '09:00', '10:00', '11:00',
-                '12:00', '13:00', '14:00',
-                '15:00', '16:00', '17:00',
-                '18:00', '19:00', '20:00',
-                '21:00', '22:00', '23:00',
-            ],
-            'area': [
-                71, -12, 33,
-                36,
-            ],
-            'format': 'netcdf',
-        },
-        ncname
-    ]
-    orders = []
+    order_dataset = 'reanalysis-era5-single-levels'
+    order_template = {
+        'product_type': ['reanalysis'],
+        'variable': [
+            '10m_u_component_of_wind',
+            '10m_v_component_of_wind',
+            '2m_dewpoint_temperature',
+            '2m_temperature',
+            'surface_pressure',
+            'total_precipitation',
+            'forecast_surface_roughness',
+            'friction_velocity',
+            'surface_latent_heat_flux',
+            'surface_sensible_heat_flux',
+            'low_cloud_cover',
+            'total_cloud_cover',
+            'cloud_base_height',
+        ],
+        'year': ['null'],
+        'month': ['null'],
+        'day': ['null'],
+        'time': [
+            '00:00', '01:00', '02:00',
+            '03:00', '04:00', '05:00',
+            '06:00', '07:00', '08:00',
+            '09:00', '10:00', '11:00',
+            '12:00', '13:00', '14:00',
+            '15:00', '16:00', '17:00',
+            '18:00', '19:00', '20:00',
+            '21:00', '22:00', '23:00',
+        ],
+        'data_format': 'netcdf',
+        'download_format': 'unarchived',
+        'area': [
+            71, -12, 33, 36,
+        ],
+    }
+    args_list = []
     for i in range(12):
-        x = 'era5_ak_eu_{:04d}-{:02d}.nc'.format(int(year), i + 1)
-        o = order_template.copy()
-        o[1]['year'] = format(year)
-        o[1]['month'] = ['{}'.format(i + 1)]
-        o[-1] = x
-        orders.append(o)
+        args = {
+            'dataset': order_dataset,
+            'target': 'era5_ak_eu_{:04d}-{:02d}.nc'.format(
+                int(year), i + 1),
+            'request': order_template.copy()
+        }
+        args['request']['year'] = ['{:04d}'.format(year)]
+        args['request']['month'] = ['{:02d}'.format(i + 1)]
+        args['request']['day'] = [
+            '{:02d}'.format(x + 1)
+            for x in range(calendar.monthrange(year, i + 1)[1])
+        ]
+        args_list.append(args)
+
+        print (args['request'])
+
     downloaded = []
+    logger.debug(f"RUNPARALLEL = {RUNPARALLEL}")
     if RUNPARALLEL:
         with mp.Pool(PROCS) as pool:
-            for ncmon in pool.map(getorder, orders):
-                downloaded.append(ncmon)
+            for x in pool.map(cds_getorder, args_list):
+                downloaded.append(x)
     else:
-        for o in orders:
-            x = getorder(o)
+        for args in args_list:
+            x = cds_getorder(args)
             downloaded.append(x)
 
-    concat_nc(downloaded, ncname)
+    nc_concat_time(downloaded, ncname,
+                   timevar='time', xvar='longitude', yvar='latitude')
+
 
     return ncname
 
@@ -1783,33 +1813,30 @@ def assemble_ERA5(path: str, name="ERA5", years:list=None,
     _init_datasets()
     logger.debug(f"assemble_ERA5: path={path}, name={name}, "
                  f"years={years}, replace={replace}, args={args}")
-    downloaded = []
+    downloaded = {}
     for year in years:
+        # check year
         yn = name_yearly(name, year)
         if yn not in [x.name for x in DATASETS]:
             raise ValueError(f"year is out of range: {year}")
+
+        # do not download if already available
         if not replace:
             if dataset_get(yn).available:
                 logger.info(f"skipping available year: {yn}")
                 continue
-        ncname = _ass_era5_getyear(year)
-        downloaded.append(ncname)
 
-    for c in zip(combi, downloaded):
-        year, ncname = c
-        yn = name_yearly(name, year)
-        target = os.path.join(path, WEA_FMT % yn)
         # gently move the old file out of way
+        target = os.path.join(path, WEA_FMT % yn)
         if not _ass_clear_target(target, replace):
             logger.info("skipping because dataset exists: %s" % name)
             os.remove(ncname)
             continue
-        if zipfile.is_zipfile(ncname):
-            # new output format as of Jan 2024
-            nc_merge_zipped(ncname, target)
-        else:
-            # old output format as of Jan 2024
-            shutil.move(ncname, target)
+
+        # download the year and put into place
+        ncname = cds_get_era5_year(year)
+        shutil.move(ncname, target)
+
 # -------------------------------------------------------------------------
 def _cerraname(y, lt=None):
     """
@@ -2243,8 +2270,6 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
             # copy global attributes all at once via dictionary
                 dst.setncatts(src.__dict__)
                 # copy dimensions
-                nx = len(src.dimensions['X'])
-                ny = len(src.dimensions['Y'])
                 for id in ['X', 'Y', 'time']:
                     logger.debug(f"copying dimension {id}")
                     dimension = src.dimensions[id]
@@ -2399,6 +2424,7 @@ def provide_weather(source: str, path: str = None,
         success = True
         if source == "ERA5":
             import_lib('cdsapi')
+            import_lib('netCDF4')
             assemble_ERA5(path, years=years, replace=force)
         elif source == "CERRA":
             import_lib('cdo')
@@ -2479,7 +2505,7 @@ def provide_stationlist(source:str=None, fmt:str=None, out:str=None):
     if source == "DWD":
         stationlist_DWD(path=out, fmt=fmt)
     else:
-        
+
         raise ValueError(f"stationlist: unkwnown source {source}")
 
 # -------------------------------------------------------------------------

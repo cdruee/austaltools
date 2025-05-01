@@ -444,6 +444,10 @@ def cli_parser():
                         default=None,
                         help='custom location for temp files [/tmp]'
                         )
+    parser.add_argument('--noparallel',
+                        action='store_true',
+                        help='disable parallel execution of downloads.'
+                        )
 
     more_epilog = ""
     if not DS.have_lib('cdo') or not DS.have_lib('cdsapi'):
@@ -497,6 +501,9 @@ def main():
 
     if args['temp'] is not None:
         _storage.TEMP = args['temp']
+
+    if args['noparallel'] is True:
+        DS.RUNPARALLEL = False
 
     if args['action'] == 'list':
         list_datasets(args['only'], args['state'], args['long'])
