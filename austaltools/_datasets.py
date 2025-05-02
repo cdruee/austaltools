@@ -149,14 +149,6 @@ def import_lib(lib):
     :param lib: name of libray
     :type lib: str
     """
-    # if lib in LIB2IMPORT.keys():
-    #     mod = LIB2IMPORT[lib]
-    #     if mod == lib:
-    #         # ``import mod``
-    #         globals()[lib] = importlib.import_module(lib)
-    #     else:
-    #         # ``from mod import lib``
-    #         globals()[lib] = importlib.import_module('.'+lib, mod)
     if lib == 'cdo':
         global cdo
         import cdo
@@ -2146,6 +2138,7 @@ def provide_weather(source: str, path: str = None,
             import_lib('cdsapi')
             assemble_CERRA(path, years=years, replace=force)
         elif source == "HOSTRADA":
+            import_lib('_netcdf')
             assemble_hostrada(path, years=years, replace=force)
         elif source == "DWD":
             dataset = dataset_get(source)
