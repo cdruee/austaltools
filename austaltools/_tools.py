@@ -83,9 +83,9 @@ ELEVATION_API = "https://api.open-elevation.com/api/v1/lookup"
 
 
 class SmartFormatter(argparse.HelpFormatter):
-    '''
-         Custom Help Formatter that maintains '\n' in argument help.
-    '''
+    """
+    Custom Help Formatter that maintains '\n' in argument help.
+    """
     def _split_lines(self, text, width):
         r = []
         for t in text.splitlines():
@@ -986,6 +986,7 @@ def prompt_timeout(prompt, timeout, default: str = None):
     """
     Ask the user a question, wait timeout seconds for an answer,
     then continue
+
     :param prompt: Text to show as prompt
     :type prompt: str
     :param timeout: Time to weit for an answer in seconds
@@ -995,6 +996,7 @@ def prompt_timeout(prompt, timeout, default: str = None):
     :return: The answer. If the user typed in someting, it is returned,
       else the default.
     :rtype: str|None
+
     """
     print (prompt)
     print ("Please answer in the next {} seconds.".format(timeout))

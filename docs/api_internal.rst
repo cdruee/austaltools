@@ -1,4 +1,5 @@
 :tocdepth: 3
+
 ================
 internal modules
 ================
@@ -45,6 +46,13 @@ _plotting
    :undoc-members:
    :member-order: groupwise
 
+_netcdf
+-----------
+.. automodule:: austaltools._netcdf
+   :members:
+   :undoc-members:
+   :member-order: groupwise
+
 _storage
 --------
 .. automodule:: austaltools._storage
@@ -67,7 +75,7 @@ _version
    :member-order: groupwise
 
 _wmo_metadata
---------
+-------------
 .. automodule:: austaltools._wmo_metadata
    :members:
    :undoc-members:
