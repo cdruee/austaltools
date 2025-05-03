@@ -131,7 +131,7 @@ def check_homhogenity(file_list, timevar = None, fail=False):
             }
         return variables
 
-    # helper function to get variables information
+    # helper function to get variable information
     def get_variable_attributes(dataset, var):
         return {attr: dataset.variables[var].getncattr(attr)
                      for attr in dataset.variables[var].ncattrs()}
@@ -286,6 +286,7 @@ def add_variable(dst: netCDF4.Dataset,
 
     if dname in dst.variables.keys():
         # variable already exists
+        logger.debug(f" ... already exists")
         return False
     logger.debug(f"adding variable {svar.name}")
 
@@ -611,7 +612,8 @@ def concat_time(infiles, target, timevar="time"):
         # copy fixed values from first file
         logger.debug(f"initializing output")
         with netCDF4.Dataset(sorted_infiles[0]) as src:
-            logger.debug(f"initializing from {src.name}")
+            logger.debug(f"initializing from "
+                         f"{os.path.basename(src.filepath())}")
             copy_structure(src, dst, unlimited=timevar, copy_data=True)
 
         # create empty data fields
@@ -620,13 +622,24 @@ def concat_time(infiles, target, timevar="time"):
         datavars = set(dst.variables.keys())-set(dst.dimensions.keys())
         for infile in sorted_infiles[1:]:
             with netCDF4.Dataset(infile) as src:
+                logger.debug(f"adding data from "
+                             f"{os.path.basename(src.filepath())}")
                 # handle time first:
-                logger.debug(f"appending {timevar} at position {i_time}")
+                logger.debug(f"appending values from {timevar}"
+                             f" at position {i_time}")
                 time_data = src[timevar][:]
                 dst[timevar][i_time:i_time + len(time_data)] = time_data
                 # then the data
                 for vname in datavars:
-                    dst[vname][i_time:] = src[vname][:]
+                    logger.debug(f"copying values from {vname}"
+                                 f" at position {i_time}")
+                    slices = tuple(
+                        slice(None)
+                        if x != timevar else slice(i_time, None)
+                        for x in dst.variables[vname].dimensions
+                    )
+                    logger.debug(str(slices))
+                    dst[vname][slices] = src[vname][:]
         # remember end position
         i_time += len(dst[timevar][:])
 
@@ -634,6 +647,7 @@ def concat_time(infiles, target, timevar="time"):
     print("removing temporary files")
     for v in _tools.progress(sorted_infiles,
                              "removing files"):
+        logger.debug(f" ... removing {v}")
         os.remove(v)
 
     return True

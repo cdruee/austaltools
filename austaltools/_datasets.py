@@ -1985,7 +1985,7 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
             years = args['years']
         else:
             raise ValueError(f"years is required for {name} dataset")
-    # check database
+    # check the database
     target = os.path.join(path, OBS_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
@@ -2009,7 +2009,7 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
     srv_file = "%s/%s_1hr_HOSTRADA-v1-0_BE_gn_%s.nc"
     datavars = srv_dirs.keys()
 
-    # create download list
+    # create a download list
     logger.debug("creating file names")
     to_download = {}
     for year in years:
@@ -2042,20 +2042,21 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
             logger.info("skipping because dataset exists: %s" % yn)
             continue
 
-        # assemble new file
+        # assemble the new file
         yearfiles = []
-        for k in srv_dirs.keys():
-            sources = [x for x in to_download.values() if x.startswith(k)]
+        for k in _tools.progress(srv_dirs.keys(), "aggregating data"):
+            sources = [x for x in to_download.values()
+                       if x.startswith(f"{k}_{year:04d}")]
             destination = f"{k}_year.nc"
             _netcdf.concat_time(sources, destination, timevar='time')
             yearfiles.append(destination)
         _netcdf.merge_files(yearfiles, target, compression='zlib')
 
         # clean up
-        print("removing temporary files")
+        logger.debug("removing remaining temporary files")
         for v in _tools.progress(to_download.values(),
                                  "removing files"):
-            os.remove(v)
+            if os.path.exists(v): os.remove(v)
 
     return True
 # -------------------------------------------------------------------------
