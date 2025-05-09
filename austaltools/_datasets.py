@@ -129,7 +129,9 @@ LIB2IMPORT = {
 
 
 def have_lib(lib):
-    """ ask if a libray is installed
+    """
+    ask if a libray is installed
+
     :param lib: name of libray to be installed
     :type lib: str
     :return: True if installed
@@ -145,7 +147,9 @@ def have_lib(lib):
 
 
 def import_lib(lib):
-    """ import a libray that is installed
+    """
+    import a libray that is installed
+
     :param lib: name of libray
     :type lib: str
     """
@@ -178,6 +182,7 @@ def import_lib(lib):
 def no_lib_help(k):
     """
     help message to be displayed if library is not installed
+
     :param k: library name
     :type k: str
     """
@@ -240,12 +245,16 @@ class DataSet:
         :param path: path to the storage location where the
           dataset shall reside
         :type path: str
+
         :param name: name of the dataset (short uppercase code)
         :type name: str
+
         :param replace: replace the dataset if it alread exists
         :type replace: bool
+
         :param args: arguments to the assembling funtion that generates the dataset
         :type args: dict
+
         :returns: If the assembly was successful
         :rtype: bool
         """
@@ -255,14 +264,17 @@ class DataSet:
     def download(self, path=None, uri=None):
         """
         Download assembled dataset from reopository
+
         :param path: path to the storage location where the
-        dataset shall reside. Only needed if the attribute
-        :py:attr:`DataSet.path` is not set or should be overridden.
+          dataset shall reside. Only needed if the attribute
+          :py:attr:`DataSet.path` is not set or should be overridden.
         :type path: str, optional
+
         :param uri: uri describing the location from where the assembled
-        dataset shall be downloaded. Only needed if the attribute
-        :py:attr:`DataSet.uri` is not set or should be overridden.
+          dataset shall be downloaded. Only needed if the attribute
+          :py:attr:`DataSet.uri` is not set or should be overridden.
         :type uri: str, optional
+
         """
         if uri is None:
             uri = self.uri
@@ -334,6 +346,7 @@ class DataSet:
 def dataset_list():
     """
     Get list of datasets
+
     :return: the requested dataset object
     :rtype: dict[dict]
 
@@ -355,8 +368,10 @@ def dataset_list():
 def dataset_get(name):
     """
     Yield the dataset with the given ID
+
     :param name: dataset ID
     :type name: str
+
     :return: the requested dataset object
     :rtype: Dataset
 
@@ -374,8 +389,10 @@ def dataset_get(name):
 def dataset_available(name):
     """
     Return if dataset is available
+
     :param name:  dataset id of dataset to be checked
     :type name: str
+
     :return: True if dataset is available, False otherwise
     :rtype: bool
 
@@ -388,6 +405,7 @@ def update_available():
     """
     update availability of datasets stored in conf
     by scanning storrage locations
+
     """
     _init_datasets()
     logger.info("re-scanning available datasets")
@@ -1396,13 +1414,27 @@ def show_notice(storage_path, source):
 
 # -------------------------------------------------------------------------
 
-def cds_getorder(order_args: dict):
+def cds_getorder(order_args: dict[str, str|dict]):
     """
-    helper function to execute orders in parallel
-    :param order_args: order data structure
-    :type order_args: list
+    Execute a CDS order (helper function to execute orders in parallel)
+
+    :param order_args: order data dictionary
+    :type order_args: dict
+
     :returns: filename
     :rtype: str
+
+    The order data dictionary must contain the keys:
+        - ``dataset``: Name of the cds dataset to get data from.
+        - ``request``: Body of the request, as described
+          in the `Climate Data Store API HowTo
+          <https://cds.climate.copernicus.eu/how-to-api>`_
+        - ``target``: Name of the file to produce
+    optionally may contain:
+        - ``subset``: a dictionary containing arguments to
+          :py:func:`austaltools._netcdf.subset_file`,
+          except `rsc` and `dst`
+
     """
     cds = cdsapi.Client()
     dataset =  order_args['dataset']
@@ -1416,7 +1448,15 @@ def cds_getorder(order_args: dict):
         shutil.move(target, zipname)
         _netcdf.merge_zipped(zipname, target)
         os.remove(zipname)
+
+    if order_args.get('subset', None) is not None:
+        fullname = 'full_' + target
+        shutil.move(target, fullname)
+        _netcdf.subset_file(fullname, target, **order_args['subset'])
+        os.remove(fullname)
+
     return target
+
 
 # -------------------------------------------------------------------------
 
@@ -1495,18 +1535,18 @@ def cds_get_era5_year(year):
         ],
     }
     args_list = []
-    for i in range(12):
+    for month in range(12):
         args = {
             'dataset': order_dataset,
             'target': 'era5_ak_eu_{:04d}-{:02d}.nc'.format(
-                int(year), i + 1),
+                int(year), month + 1),
             'request': order_template.copy()
         }
         args['request']['year'] = ['{:04d}'.format(year)]
-        args['request']['month'] = ['{:02d}'.format(i + 1)]
+        args['request']['month'] = ['{:02d}'.format(month + 1)]
         args['request']['day'] = [
             '{:02d}'.format(x + 1)
-            for x in range(calendar.monthrange(year, i + 1)[1])
+            for x in range(calendar.monthrange(year, month + 1)[1])
         ]
         args_list.append(args)
 
@@ -1523,8 +1563,7 @@ def cds_get_era5_year(year):
             x = cds_getorder(args)
             downloaded.append(x)
 
-    _netcdf.concat_time(downloaded, ncname,
-                   timevar='time', xvar='longitude', yvar='latitude')
+    _netcdf.concat_time(downloaded, ncname, timevar='time')
 
 
     return ncname
@@ -1635,7 +1674,7 @@ def _cerraname(y, lt=None):
 
 
 # -------------------------------------------------------------------------
-def _ass_cerra_getyear(opts):
+def cds_get_cerra_year(year, chunks=False):
     """
     Downloads and processes a year's worth of CERRA dataset as GRIB files,
     then converts them to NetCDF format for easier use.
@@ -1653,12 +1692,12 @@ def _ass_cerra_getyear(opts):
     Requires the `cdsapi` and `cdo` (Climate Data Operators) packages,
     as well as an active Copernicus account for data retrieval.
 
-    :param opts: A tuple containing two elements:
-                 - `y` (int): The year of the dataset to retrieve.
-                 - `lt` (int): The lead time in hours for the forecast data.
-    :type opts: tuple
+    :param year: The year of the dataset to retrieve.
+    :type opts: int
 
-    A sample of expected parameter format: `(2023, 48)`
+    :param chunks: Whether to retrieve omnthly chunks or yearly files
+    :type chunks: bool
+
 
     :returns: None. The function's primary purpose is file I/O
               (downloading and converting data).
@@ -1671,8 +1710,7 @@ def _ass_cerra_getyear(opts):
     :example:
 
         >>> # To download and process the CERRA data for the year 2023
-        >>> # with a lead time of 48 hours
-        >>> _ass_cerra_getyear((2023, 48))
+        >>> cds_get_cerra_year(2023)
 
     :note:
 
@@ -1685,77 +1723,126 @@ def _ass_cerra_getyear(opts):
       `.grib` or `.nc` is appended for output files.
 
     """
-    logger.debug("start job %s" % str(opts))
-    logger.debug(str(opts))
-    y, lt = opts
-    gribname = _cerraname(y, lt) + '.grib'
-    c = cdsapi.Client()
-    if not os.path.exists(gribname):
-        print("cds getting: " + gribname)
-        opts = (
-            'reanalysis-cerra-single-levels',
-            {
-                'data_type': 'reanalysis',
-                'product_type': 'forecast',
-                'variable': [
-                    '10m_wind_direction', '10m_wind_speed',
-                    '2m_relative_humidity',
-                    '2m_temperature', 'low_cloud_cover',
-                    'medium_cloud_cover',
-                    'momentum_flux_at_the_surface_u_component',
-                    'momentum_flux_at_the_surface_v_component',
-                    'surface_latent_heat_flux',
-                    'surface_pressure', 'surface_roughness',
-                    'surface_sensible_heat_flux',
-                    'total_cloud_cover', 'total_precipitation',
-                ],
-                'level_type': 'surface_or_atmosphere',
-                'year': '%04i' % y,
-                'month': [
-                    '01', '02', '03',
-                    '04', '05', '06',
-                    '07', '08', '09',
-                    '10', '11', '12',
-                ],
-                'day': [
-                    '01', '02', '03',
-                    '04', '05', '06',
-                    '07', '08', '09',
-                    '10', '11', '12',
-                    '13', '14', '15',
-                    '16', '17', '18',
-                    '19', '20', '21',
-                    '22', '23', '24',
-                    '25', '26', '27',
-                    '28', '29', '30',
-                    '31',
-                ],
-                'time': [
-                    '00:00', '03:00', '06:00',
-                    '09:00', '12:00', '15:00',
-                    '18:00', '21:00',
-                ],
-                'leadtime_hour': '%i' % lt,
-                'format': 'grib',
-            },
-            gribname
-        )
-        c.retrieve(*opts)
-        ncname = _cerraname(y, lt) + '.nc'
-        logger.debug("cdo  subsetting: " + ncname)
-        cwd = os.getcwd()
-        logger.debug(f'cwd: {cwd}')
-        oper = cdo.Cdo(tempdir=cwd)
-        print(" ".join([str(x) for x in
-                       ['489,649,479,659', '-f nc',
-                        gribname, ncname]]
-        ))
-        oper.selindexbox('489,649,479,659', options='-f nc',
-                        input=gribname, output=ncname)
-        print('piep')
-        del oper
-        logger.debug("done subsetting: " + ncname)
-        os.remove(gribname)
+    ncname = 'cerra_ak_eu_{:04d}.nc'.format(int(year))
+    if cdsapi is None:
+        logger.error('library cdsapi not available')
+    order_dataset = 'reanalysis-cerra-single-levels'
+    order_template = {
+        'variable': [
+            '10m_wind_direction',
+            '10m_wind_speed',
+            '2m_relative_humidity',
+            '2m_temperature',
+            'low_cloud_cover',
+            'medium_cloud_cover',
+            'momentum_flux_at_the_surface_u_component',
+            'momentum_flux_at_the_surface_v_component',
+            'surface_latent_heat_flux',
+            'surface_pressure',
+            'surface_roughness',
+            'surface_sensible_heat_flux',
+            'total_cloud_cover',
+            'total_precipitation'
+        ],
+        'level_type': 'surface_or_atmosphere',
+        'data_type': ['reanalysis'],
+        'product_type': 'forecast',
+        'year': ['null'],
+        'month': ['null'],
+        'day': ['null'],
+        'time': [
+            '00:00', '03:00', '06:00',
+            '09:00', '12:00', '15:00',
+            '18:00', '21:00'
+        ],
+        'leadtime_hour': ['null'],
+        'data_format': 'netcdf'
+    }
+    args_list = []
+    if chunks:
+        # one set of requests per month
+        n_mon = 12
+        l_mon = [calendar.monthrange(year, x + 1)[1] for x in range(n_mon)]
+
+    else:
+        # one set of requests per year
+        n_mon = 1
+        l_mon = [31]
+    for month in range(n_mon):
+        args = {
+            'dataset': order_dataset,
+            'request': order_template.copy()
+        }
+        args['request']['year'] = ['{:04d}'.format(year)]
+        args['request']['month'] = ['{:02d}'.format(month + 1)]
+        args['request']['day'] = [
+            '{:02d}'.format(x + 1) for x in range(l_mon[month])
+        ]
+        args['subset'] = {
+            'xmin': 489,
+            'xmax': 649,
+            'ymin': 479,
+            'ymax': 659,
+            'by_index': True
+        }
+        # one request per each lead time (1-3h)
+        for lead_time in range(1, 4):
+            args['target']= 'cerra_ak_eu_{:04d}-{:02d}+{:02d}.nc'.format(
+                int(year), month + 1, lead_time),
+            args['request']['leadtime_hour'] = ['{:d}'.format(lead_time)]
+            args_list.append(args)
+            logger.debug(json.dumps(args['request'], indent=4))
+
+    downloaded = []
+    logger.debug(f"RUNPARALLEL = {RUNPARALLEL}")
+    if RUNPARALLEL:
+        with mp.Pool(PROCS) as pool:
+            for x in pool.map(cds_getorder, args_list):
+                downloaded.append(x)
+    else:
+        for args in args_list:
+            x = cds_getorder(args)
+            downloaded.append(x)
+
+    logger.info(str(downloaded))
+    #FIXME
+    exit(0)
+
+    merged = []
+    for month in range(n_mon):
+        stem = 'cerra_ak_eu_{:04d}-{:02d}'.format(int(year), month + 1)
+        sources = glob.glob(stem + '*.nc')
+        merge_to = stem + '.nc'
+        _netcdf.merge_time(sources, merge_to, timevar='time')
+        merged.append(merge_to)
+
+    # replace time variable
+    stime_name = 'valid_time'
+    dtime_name = 'time'
+    dtime_unit = 'hours since 1900-01-01'
+
+    dtime_var = VariableSkeleton(
+        dtime_name, 'd',
+        dimensions=(dtime_name),
+        compression=compression,
+    )
+    dtime_var.setncattr('long_name', dtime_name)
+    dtime_var.setncattr('standard_name', dtime_name)
+    dtime_var.setncattr('units', dtime_unit)
+    dtime_var.setncattr('calendar', 'proleptic_gregorian')
+
+    stimeunit = sources[0][stime_name].units
+
+    def dtime_fun(x):
+        numtime = netCDF4.num2date(x, stimeunit)
+        return netCDF4.date2num(numtime, dtime_unit)
+
+    _netcdf.concat_time(merged, target,
+                        replace=replace, convert=convert)
+
+
+
+
     logger.debug("done job %s" % str(opts))
     return True
 
@@ -1830,7 +1917,7 @@ def assemble_CERRA(path: str, name="CERRA", years=None,
     data.debug = True
     data.cleanTempDir()
 
-    # get sets of bunches to retrieve
+    # get years to retrieve
     combi = []
     for year in years:
         yn = name_yearly(name, year)
@@ -1840,16 +1927,8 @@ def assemble_CERRA(path: str, name="CERRA", years=None,
             if dataset_get(yn).available:
                 logger.info(f"skipping available year: {yn}")
                 continue
-        for lt in range(1, 4):
-            combi.append((year, lt))
-    logger.debug("forking parallel jobs: "+str(combi))
 
-
-    # get data and extract region
-    with mpf.ThreadPoolExecutor(max_workers=CDSAPI_LIMIT_PARALLEL) as e:
-        for c in combi:
-            future = e.submit(_ass_cerra_getyear, c)
-            #_ = future.result()
+        cds_get_cerra_year(year)
 
     logger.debug("finished parallel jobs")
     # combine forecasts

@@ -8,8 +8,8 @@ import os
 import tempfile
 import zipfile
 
-import numpy as np
 import netCDF4
+import numpy as np
 
 try:
     from . import _storage
@@ -29,11 +29,13 @@ class VariableSkeleton():
     a :class:`netCDF4.Dataset`
     """
     ncattr = {}
+    name= None
+
     def __init__(self,
                  name: str,
                  datatype: str,
                  dimensions: tuple = (),
-                 compression: str|None = None,
+                 compression: str | None = None,
                  zlib: bool = False,
                  complevel: int = 4,
                  shuffle: bool = True,
@@ -42,11 +44,11 @@ class VariableSkeleton():
                  blosc_shuffle: int = 1,
                  fletcher32: bool = False,
                  contiguous: bool = False,
-                 chunksizes = None,
+                 chunksizes=None,
                  endian: str = 'native',
-                 least_significant_digit = None,
-                 fill_value = None,
-                 chunk_cache = None):
+                 least_significant_digit=None,
+                 fill_value=None,
+                 chunk_cache=None):
         self.__dict__.update(locals())
         pass
 
@@ -86,7 +88,80 @@ class VariableSkeleton():
         """
         return list(self.ncattr.keys())
 
-def check_homhogenity(file_list, timevar = None, fail=False):
+
+def get_dimensions(dataset: netCDF4.Dataset,
+                   timevar: str | None = None) -> dict:
+    """
+    Helper function to get dimensions of a dataset
+
+    :param dataset: dataset
+    :type dataset: netCDF4.Dataset
+    :param timevar: name of time variable (to be excluded)
+    :type timevar: str, optional
+    :return: dataset dimension names and sizes
+    :rtype: dict[str, int]
+    """
+    return {dim: (dataset.dimensions[dim].size
+                  if dim != timevar else None)
+            for dim in dataset.dimensions}
+
+
+def get_global_attributes(dataset):
+    """
+    Helper function to get file attributes of a dataset
+
+    :param dataset: dataset
+    :type dataset: netCDF4.Dataset
+    :return: dataset attribute names and values
+    :rtype: dict[str, str]
+    """
+    return {attr: dataset.getncattr(attr)
+            for attr in dataset.ncattrs()}
+
+
+def get_variables(dataset):
+    """
+    Helper function to get variables information of a dataset
+
+    :param dataset: dataset
+    :type dataset: netCDF4.Dataset
+    :return: dataset variable names and information values:
+        - dimensions: the dimensions of the variable
+        - attributes: names of the attributes of the variable
+        - dtype: data type
+    :rtype: dict[dict[str, str|dict]]
+    """
+    variables = {}
+    for var in dataset.variables:
+        # Store attributes without the value of the time-related dimension
+        variables[var] = {
+            'dimensions': dataset.variables[var].dimensions,
+            'attributes': dataset.variables[var].ncattrs(),
+            'dtype': str(dataset.variables[var].dtype),
+        }
+    return variables
+
+
+# helper function to get variable information
+def get_variable_attributes(dataset, var):
+    """
+    Helper function to get the attributes of variable of a dataset
+
+    :param dataset: dataset
+    :type dataset: netCDF4.Dataset
+    :param var: variable name
+    :type var: str
+    :return: dataset variable names and information values:
+        - dimensions: the dimensions of the variable
+        - attributes: names of the attributes of the variable
+        - dtype: data type
+    :rtype: dict[dict[str, str|dict]]
+    """
+    return {attr: dataset.variables[var].getncattr(attr)
+            for attr in dataset.variables[var].ncattrs()}
+
+
+def check_homhogenity(file_list, timevar=None, fail=False):
     """
     Check if all NetCDF datasets in the provided list have
     identical dimensions, attributes, variables,
@@ -108,36 +183,6 @@ def check_homhogenity(file_list, timevar = None, fail=False):
     :raises ValueError: If `fail` is True and inconsistency is detected.
     """
 
-    # helper function to get dimensions
-    def get_dimensions(dataset):
-        return {dim: (dataset.dimensions[dim].size
-                      if dim != timevar else None)
-                for dim in dataset.dimensions}
-
-    # helper function to get file attributes
-    def get_global_attributes(dataset):
-        return {attr: dataset.getncattr(attr)
-                for attr in dataset.ncattrs()}
-
-    # helper function to get variables information
-    def get_variables(dataset):
-        variables = {}
-        for var in dataset.variables:
-            # Store attributes without the value of the time-related dimension
-            variables[var] = {
-                'dimensions': dataset.variables[var].dimensions,
-                'attributes': dataset.variables[var].ncattrs(),
-                'dtype': str(dataset.variables[var].dtype),
-            }
-        return variables
-
-    # helper function to get variable information
-    def get_variable_attributes(dataset, var):
-        return {attr: dataset.variables[var].getncattr(attr)
-                     for attr in dataset.variables[var].ncattrs()}
-
-
-
     ref_dataset = None
     ref_dimensions = None
     ref_global_attrs = None
@@ -147,7 +192,7 @@ def check_homhogenity(file_list, timevar = None, fail=False):
     for fname in file_list:
         try:
             with netCDF4.Dataset(fname, 'r') as dataset:
-                dimensions = get_dimensions(dataset)
+                dimensions = get_dimensions(dataset, timevar)
                 global_attrs = get_global_attributes(dataset)
                 variables = get_variables(dataset)
 
@@ -190,6 +235,7 @@ def check_homhogenity(file_list, timevar = None, fail=False):
         for x in report:
             logger.debug(x)
     return True
+
 
 def copy_values(src, dst,
                 replace: dict[str, str | VariableSkeleton | None] = {},
@@ -241,8 +287,7 @@ def copy_values(src, dst,
 def add_variable(dst: netCDF4.Dataset,
                  svar: netCDF4.Variable,
                  replace: dict[str, str | VariableSkeleton | None] = {},
-                 compression: str|None = None):
-
+                 compression: str | None = None):
     """
     Add a variable to the destination NetCDF dataset,
     with support for renaming, replacing,
@@ -292,14 +337,14 @@ def add_variable(dst: netCDF4.Dataset,
 
     # get properties
     cmpr = None if isinstance(
-        svar.datatype,(netCDF4.VLType, netCDF4.CompoundType)
+        svar.datatype, (netCDF4.VLType, netCDF4.CompoundType)
     ) else compression
     logger.debug(f" ... compression {cmpr}")
     fill = (None if '_FillValue' not in svar.ncattrs()
-        else svar.getncattr('_FillValue'))
+            else svar.getncattr('_FillValue'))
     logger.debug(f" ... fill value {fill}")
     dims = tuple([x if x not in replace else replace[x].name
-            for x in svar.dimensions])
+                  for x in svar.dimensions])
     logger.debug(f" ... dimensions: {dims}")
 
     # save variable definition
@@ -331,8 +376,8 @@ def add_variable(dst: netCDF4.Dataset,
 def copy_structure(src, dst,
                    replace: dict[str, str | VariableSkeleton | None] = {},
                    convert: dict[str, collections.abc.Callable] = {},
-                   unlimited: str| None = None,
-                   compression: str|None = None,
+                   resize: dict[str, int | None] = {},
+                   compression: str | None = None,
                    copy_data: bool = False) -> None:
     """
     Copy the structure and optionally the data of a NetCDF source dataset
@@ -366,9 +411,11 @@ def copy_structure(src, dst,
       These functions are applied to variable data during the copy.
     :type convert: dict[str, collections.abc.Callable]
 
-    :param unlimited: The name of a dimension that should be set to
-      unlimited in the destination dataset.
-      If `None`, no change is made to dimension limits.
+    :param resize: Dictionary indicating if the copy should
+      have a different size for one or more dimensions.
+      To make a dimension unlimited (only one per file),
+      the lenght must be changed to `None`.
+      If empty, no change is made to dimension limits.
     :type unlimited: str | None
 
     :param compression: The compression method to apply to the copied
@@ -396,13 +443,26 @@ def copy_structure(src, dst,
         value = src.getncattr(a)
         dst.setncattr(a, value)
 
+    # check resize argument
+    for x in resize.keys():
+        if not x in src.dimensions.keys():
+            ValueError(f"resize name {x} is not a dimension")
+    sim_dim =  src.dimensions.copy()
+    for k, v in resize.items():
+        sim_dim[k] = v
+    if sum(x is None for x in sim_dim) > 1:
+        ValueError(f"resize can make onle one dimension unlimited")
+    del sim_dim
+
     # copy dimensions
     for k, v in src.dimensions.items():
         if replace.get(k, False) is None:
             raise ValueError(f"cannot exclude dimension {k}")
         logger.debug(f"copying dimension {k}")
-        # copy only if not already in dst
-        if v.isunlimited() or k == unlimited:
+        # set size
+        if k in resize.keys():
+            size = resize[k]
+        elif v.isunlimited():
             size = None
         else:
             size = v.size
@@ -417,7 +477,7 @@ def copy_structure(src, dst,
         dst.createDimension(dname, size)
 
     # add variables
-    for sname,svar in src.variables.items():
+    for sname, svar in src.variables.items():
         if replace.get(sname, False) is None:
             logger.debug(f"skipping variable {sname}")
             continue
@@ -458,7 +518,6 @@ def merge_zipped(source, destination, compression='zlib'):
         logger.debug("creating netcdf file %s" % destination_file)
         if os.path.exists(destination_file):
             os.remove(destination_file)
-        # dst = netCDF4.Dataset(destination_file, "w")
 
         # replace time variable
         stime_name = 'valid_time'
@@ -476,6 +535,7 @@ def merge_zipped(source, destination, compression='zlib'):
         dtime_var.setncattr('calendar', 'proleptic_gregorian')
 
         stimeunit = sources[0][stime_name].units
+
         def dtime_fun(x):
             numtime = netCDF4.num2date(x, stimeunit)
             return netCDF4.date2num(numtime, dtime_unit)
@@ -483,31 +543,15 @@ def merge_zipped(source, destination, compression='zlib'):
         replace = {stime_name: dtime_var}
         convert = {stime_name: dtime_fun}
 
-        merge_files(sources, destination_file,
-                    replace, convert, compression)
-
-    #     logger.debug("copying file structure")
-    #     copy_structure(sources[0], dst, replace, convert,
-    #                    compression=compression, copy_data=True)
-    #
-    #     # copy variable values
-    #     for src in sources:
-    #         for sname,svar in src.variables.items():
-    #             logger.debug(f"variable: {sname}")
-    #             add_variable(dst, svar, replace, compression)
-    #         copy_values(src, dst, replace, convert)
-    #
-    #     # clean up
-    #     for src in sources:
-    #         src.close()
-    #     dst.close()
-    # logger.debug("finished writing netcdf file %s" % destination_file)
+        merge_variables(sources, destination_file,
+                        replace, convert, compression)
 
 
-def merge_files(sources: list[str], destination: str,
-                replace: dict[str, str | VariableSkeleton | None] = {},
-                convert: dict[str, collections.abc.Callable] = {},
-                compression: str|None = None):
+def merge_variables(sources: list[str | netCDF4.Dataset],
+                    destination: str,
+                    replace: dict[str, str | VariableSkeleton | None] = {},
+                    convert: dict[str, collections.abc.Callable] = {},
+                    compression: str | None = None):
     """
     Merge multiple netcdf files contained in a zip archive
     into one nc file.
@@ -538,7 +582,13 @@ def merge_files(sources: list[str], destination: str,
     :type compression: str | None
     """
 
-    src_list = [netCDF4.Dataset(x, 'r') for x in sources]
+    if all(isinstance(x, netCDF4.Dataset) for x in sources):
+        src_list = sources
+    elif all(isinstance(x, (str, os.PathLike)) for x in sources):
+        src_list = [netCDF4.Dataset(x, 'r') for x in sources]
+    else:
+        src_list = None
+        raise ValueError(f"sources must be all str or all netCDF4.Dataset")
 
     logger.debug("creating netcdf file %s" % destination)
     if os.path.exists(destination):
@@ -551,7 +601,7 @@ def merge_files(sources: list[str], destination: str,
 
     # copy variable values
     for src in src_list[1:]:
-        for sname,svar in src.variables.items():
+        for sname, svar in src.variables.items():
             logger.debug(f"variable: {sname}")
             add_variable(dst, svar, replace, compression=compression)
         copy_values(src, dst, replace, convert)
@@ -614,12 +664,12 @@ def concat_time(infiles, target, timevar="time"):
         with netCDF4.Dataset(sorted_infiles[0]) as src:
             logger.debug(f"initializing from "
                          f"{os.path.basename(src.filepath())}")
-            copy_structure(src, dst, unlimited=timevar, copy_data=True)
+            copy_structure(src, dst, resize={timevar:None}, copy_data=True)
 
         # create empty data fields
         i_time = dst.variables[timevar].size
 
-        datavars = set(dst.variables.keys())-set(dst.dimensions.keys())
+        datavars = set(dst.variables.keys()) - set(dst.dimensions.keys())
         for infile in sorted_infiles[1:]:
             with netCDF4.Dataset(infile) as src:
                 logger.debug(f"adding data from "
@@ -640,8 +690,8 @@ def concat_time(infiles, target, timevar="time"):
                     )
                     logger.debug(str(slices))
                     dst[vname][slices] = src[vname][:]
-        # remember end position
-        i_time += len(dst[timevar][:])
+            # remember end position
+            i_time += len(time_data)
 
     # clean up
     print("removing temporary files")
@@ -651,3 +701,184 @@ def concat_time(infiles, target, timevar="time"):
         os.remove(v)
 
     return True
+
+def merge_time(infiles, target, timevar="time"):
+    compression = 'zlib'
+    # get sorting order:
+    in_time = []
+    in_fid = []
+    in_idx = []
+    for fid, infile in enumerate(infiles):
+        with netCDF4.Dataset(infile) as src:
+            in_time.append(src[timevar][:])
+            in_fid.append([fid]*len(src[timevar]))
+            in_idx.append([i for i in range(len(src[timevar]))])
+            logger.debug(f"starting time of {infile}: {in_time[0]}")
+    sorted_time, sorted_fid, sorted_idx = zip(
+        *sorted(zip(in_time, in_fid, in_idx))
+    )
+
+    with netCDF4.Dataset(target, "w", format='NETCDF4') as dst:
+        # copy fixed values from first file
+        logger.debug(f"initializing output")
+        with netCDF4.Dataset(infiles[0]) as src:
+            logger.debug(f"initializing from "
+                         f"{os.path.basename(src.filepath())}")
+            copy_structure(src, dst, resize={timevar:None}, copy_data=False)
+
+        # create empty data fields
+        dst.variables[timevar][:] = sorted_time
+
+        for fid, infile in enumerate(infiles):
+            # get positions where to put the data
+            dst_index = [i for i,j in zip(sorted_idx, sorted_fid)
+                         if j == fid]
+            # copy values over
+            with netCDF4.Dataset(infile) as src:
+                logger.debug(f"adding data from "
+                             f"{os.path.basename(src.filepath())}")
+                for vname in dst.variables.keys():
+                    logger.debug(f"copying values from {vname}")
+                    slices = tuple(
+                        slice(None) if x != timevar else dst_index
+                        for x in dst.variables[vname].dimensions
+                    )
+                    dst[vname][slices] = src[vname][:]
+
+    # clean up
+    print("removing temporary files")
+    for v in _tools.progress(infiles,
+                             "removing files"):
+        logger.debug(f" ... removing {v}")
+        os.remove(v)
+
+    return True
+
+
+def subset_xy(infile, target,
+              xmin: int | float | None, xmax: int | float | None,
+              ymin: int | float | None, ymax: int | float | None,
+              tmin: int | float | None, tmax: int | float | None,
+              xvar: str | None = None, yvar: str | None = None,
+              timevar: str | None = None,
+              by_index: bool = False,
+              replace: dict = None,
+              convert: dict = None,
+              ):
+    with (netCDF4.Dataset(infile) as src,
+          netCDF4.Dataset(target, "w", format='NETCDF4') as dst):
+        logger.debug(f"subsetting data from "
+                     f"{os.path.basename(src.filepath())}"
+                     f" to "
+                     f"{os.path.basename(dst.filepath())}")
+
+        # determine the index variables
+        dimensions = list(get_dimensions(src).keys())
+
+        if xvar is None:
+            candidates = [x for x in dimensions
+                          if x.lower() in ['x', 'lon', 'longitude']]
+            if len(candidates) > 0:
+                xvar = candidates[0]
+                logger.info(f"subsetting x variable {xvar}")
+            else:
+                raise ValueError(f"cannot determine `xvar`")
+        elif xvar not in dimensions:
+            raise ValueError(f"{xvar} not in dimensions")
+
+        if yvar is None:
+            candidates = [x for x in dimensions
+                          if x.lower() in ['y', 'lat', 'latitude']]
+            if len(candidates) > 0:
+                yvar = candidates[0]
+                logger.info(f"subsetting y variable {yvar}")
+            else:
+                raise ValueError(f"cannot determine `xvar`")
+        elif yvar not in dimensions:
+            raise ValueError(f"{yvar} not in dimensions")
+
+        if timevar is None:
+            candidates = [x for x in dimensions
+                          if x.lower() in ['time', 'valid_time']]
+            if len(candidates) > 0:
+                timevar = candidates[0]
+                logger.info(f"subsetting time variable {timevar}")
+            else:
+                raise ValueError(f"cannot determine `timevar`")
+        elif timevar not in dimensions:
+            raise ValueError(f"{timevar} not in dimensions")
+
+
+        if by_index:
+            imin = xmin if xmin is not None else 0
+            imax = xmax if xmax is not None else src[xvar].size
+            jmin = ymin if ymin is not None else 0
+            jmax = ymax if ymax is not None else src[yvar].size
+            nmin = tmin if tmin is not None else 0
+            nmax = tmax if tmax is not None else src[timevar].size
+        else:
+            imin = (min([i for i,x in enumerate(src[xvar][:])
+                         if x >= xmin])
+                    if xmin is not None else 0)
+            imax = (max([i for i,x in enumerate(src[xvar][:]) + 1
+                         if x <= xmax])
+                    if xmax is not None else src[xvar].size)
+            jmin = (min([j for j,y in enumerate(src[yvar][:])
+                         if y >= ymin])
+                    if ymin is not None else 0)
+            jmax = (max([j for j,y in enumerate(src[yvar][:]) + 1
+                         if y <= ymax])
+                    if ymax is not None else src[yvar].size)
+            nmin = (min([n for n,t in enumerate(src[timevar][:])
+                         if t >= tmin])
+                    if tmin is not None else 0)
+            nmax = (max([n for n,t in enumerate(src[timevar][:]) + 1
+                         if t <= tmax])
+                    if tmax is not None else src[timevar].size)
+
+        resize = {
+            xvar: imax - imin,
+            yvar: jmax - jmin,
+        }
+        if not src.dimensions[timevar].isunlimited():
+            resize[timevar] = nmax - nmin
+
+        logger.debug(f"copying structure ...")
+        copy_structure(src, dst, resize=resize, copy_data=False)
+
+        logger.debug(f"copying values ...")
+        # make sure dimensions are copied first
+        # this adjusts the array sizes
+        datavars = set(dst.variables.keys()) - set(dst.dimensions.keys())
+        for sname in dimensions + list(datavars):
+            logger.debug(f" ... variable {sname}")
+            # determine subset to copy
+            if sname == timevar:
+                slices = tuple([slice(nmin, nmax)])
+            elif sname == xvar:
+                slices=tuple([slice(imin,imax)])
+            elif sname == yvar:
+                slices = tuple([slice(jmin,jmax)])
+            elif sname in dimensions:
+                slices = tuple([slice(None,None)])
+            else:
+                slices = tuple([slice(None, None)]
+                               * len(src.variables[sname].dimensions))
+            # determine if var is to replace, rename or discard
+            replacement = replace.get(sname, False)
+            if replacement is None:
+                logger.debug(f" ... skipping values {sname}")
+            if replacement is False:
+                dname = sname
+            elif isinstance(replacement, VariableSkeleton):
+                dname = replacement.name
+            else:
+                dname = replacement
+            # determine if var shall be converted
+            if sname not in convert:
+                logger.debug(f" ... copying values {sname} -> {dname}")
+                dst[dname][:] = src[sname][slices]
+            else:
+                logger.debug(f" ... convert values {sname} -> {dname}")
+                converter = np.vectorize(convert[sname])
+                dst[dname][:] = converter(src[sname][slices])
