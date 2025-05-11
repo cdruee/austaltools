@@ -1432,7 +1432,7 @@ def cds_getorder(order_args: dict[str, str|dict]):
         - ``target``: Name of the file to produce
     optionally may contain:
         - ``subset``: a dictionary containing arguments to
-          :py:func:`austaltools._netcdf.subset_file`,
+          :py:func:`austaltools._netcdf.subset_xy`,
           except `rsc` and `dst`
 
     """
@@ -1452,7 +1452,7 @@ def cds_getorder(order_args: dict[str, str|dict]):
     if order_args.get('subset', None) is not None:
         fullname = 'full_' + target
         shutil.move(target, fullname)
-        _netcdf.subset_file(fullname, target, **order_args['subset'])
+        _netcdf.subset_xy(fullname, target, **order_args['subset'])
         os.remove(fullname)
 
     return target
@@ -1781,14 +1781,14 @@ def cds_get_cerra_year(year, chunks=False):
         args['subset'] = {
             'xmin': 489,
             'xmax': 649,
-            'ymin': 479,
             'ymax': 659,
+            'ymin': 479,
             'by_index': True
         }
         # one request per each lead time (1-3h)
         for lead_time in range(1, 4):
             args['target']= 'cerra_ak_eu_{:04d}-{:02d}+{:02d}.nc'.format(
-                int(year), month + 1, lead_time),
+                int(year), month + 1, lead_time)
             args['request']['leadtime_hour'] = ['{:d}'.format(lead_time)]
             args_list.append(args)
             logger.debug(json.dumps(args['request'], indent=4))
@@ -1816,30 +1816,14 @@ def cds_get_cerra_year(year, chunks=False):
         _netcdf.merge_time(sources, merge_to, timevar='time')
         merged.append(merge_to)
 
-    # replace time variable
-    stime_name = 'valid_time'
-    dtime_name = 'time'
-    dtime_unit = 'hours since 1900-01-01'
-
-    dtime_var = VariableSkeleton(
-        dtime_name, 'd',
-        dimensions=(dtime_name),
-        compression=compression,
-    )
-    dtime_var.setncattr('long_name', dtime_name)
-    dtime_var.setncattr('standard_name', dtime_name)
-    dtime_var.setncattr('units', dtime_unit)
-    dtime_var.setncattr('calendar', 'proleptic_gregorian')
-
-    stimeunit = sources[0][stime_name].units
-
-    def dtime_fun(x):
-        numtime = netCDF4.num2date(x, stimeunit)
-        return netCDF4.date2num(numtime, dtime_unit)
-
     _netcdf.concat_time(merged, target,
                         replace=replace, convert=convert)
 
+    # replace time variable
+    replace, convert = _netcdf.replace_cds_valid_time(compression)
+    shutil.move(target, 'old_' + target)
+    _netcdf.merge_variables(['old_' + target], target,
+                            replace=replace, convert=convert)
 
 
 
@@ -1910,12 +1894,12 @@ def assemble_CERRA(path: str, name="CERRA", years=None,
     logger.debug(f"assemble_CERRA: path={path}, name={name}, "
                  f"years={years}, replace={replace}, args={args}")
     temp_path = _storage.TEMP
-    logger.debug(f"looking for cdo ...{temp_path}")
-    data = cdo.Cdo(tempdir=temp_path)
-    logger.debug("python-cdo version: %s" % cdo.__version__)
-    logger.debug("cdo        version: %s" % data.version())
-    data.debug = True
-    data.cleanTempDir()
+    # logger.debug(f"looking for cdo ...{temp_path}")
+    # data = cdo.Cdo(tempdir=temp_path)
+    # logger.debug("python-cdo version: %s" % cdo.__version__)
+    # logger.debug("cdo        version: %s" % data.version())
+    # data.debug = True
+    # data.cleanTempDir()
 
     # get years to retrieve
     combi = []
@@ -1930,31 +1914,31 @@ def assemble_CERRA(path: str, name="CERRA", years=None,
 
         cds_get_cerra_year(year)
 
-    logger.debug("finished parallel jobs")
-    # combine forecasts
-    for year in set([x for x, _ in combi]):
-        logger.debug(f"processing year: {year}")
-        lts = set([y for x, y in combi if x == year])
-        infiles = [_cerraname(year, lt) + '.nc' for lt in lts]
-        yn = name_yearly(name, year)
-        target = os.path.join(path, WEA_FMT % yn)
-        # gently move the old file out of way
-        if not _ass_clear_target(target, replace):
-            logger.info("skipping because dataset exists: %s" % name)
-            continue
-        # build new file
-        data.mergetime(
-            input=" ".join([
-                data.setgridtype('curvilinear', input=x)
-                for x in infiles
-            ]),
-            output=target,
-            options='-f nc4 -z zip_6 --reduce_dim'
-        )
-        for x in infiles:
-            os.remove(x)
-        logger.debug(f"finished with: {year}")
-
+    # logger.debug("finished parallel jobs")
+    # # combine forecasts
+    # for year in set([x for x, _ in combi]):
+    #     logger.debug(f"processing year: {year}")
+    #     lts = set([y for x, y in combi if x == year])
+    #     infiles = [_cerraname(year, lt) + '.nc' for lt in lts]
+    #     yn = name_yearly(name, year)
+    #     target = os.path.join(path, WEA_FMT % yn)
+    #     # gently move the old file out of way
+    #     if not _ass_clear_target(target, replace):
+    #         logger.info("skipping because dataset exists: %s" % name)
+    #         continue
+    #     # build new file
+    #     data.mergetime(
+    #         input=" ".join([
+    #             data.setgridtype('curvilinear', input=x)
+    #             for x in infiles
+    #         ]),
+    #         output=target,
+    #         options='-f nc4 -z zip_6 --reduce_dim'
+    #     )
+    #     for x in infiles:
+    #         os.remove(x)
+    #     logger.debug(f"finished with: {year}")
+    #
 
 # -------------------------------------------------------------------------
 def assemble_DWD(path: str, name="DWD", years: list = None,
@@ -2214,7 +2198,7 @@ def provide_weather(source: str, path: str = None,
             import_lib('_netcdf')
             assemble_ERA5(path, years=years, replace=force)
         elif source == "CERRA":
-            import_lib('cdo')
+            import_lib('_netcdf')
             import_lib('cdsapi')
             assemble_CERRA(path, years=years, replace=force)
         elif source == "HOSTRADA":

@@ -372,6 +372,35 @@ def add_variable(dst: netCDF4.Dataset,
         dst.variables[dname].setncattr(a, string)
     return True
 
+def replace_cds_valid_time(compression:str):
+
+    # replace time variable
+    stime_name = 'valid_time'
+    stime_unit = 'seconds since 1970-01-01'
+    dtime_name = 'time'
+    dtime_unit = 'hours since 1900-01-01'
+
+    dtime_var = VariableSkeleton(
+        dtime_name, 'd',
+        dimensions=(dtime_name),
+        compression=compression,
+    )
+    dtime_var.setncattr('long_name', dtime_name)
+    dtime_var.setncattr('standard_name', dtime_name)
+    dtime_var.setncattr('units', dtime_unit)
+    dtime_var.setncattr('calendar', 'proleptic_gregorian')
+
+
+    def dtime_fun(x):
+        numtime = netCDF4.num2date(x, stime_unit)
+        return netCDF4.date2num(numtime, dtime_unit)
+
+
+    replace = {stime_name: dtime_var}
+    convert = {stime_name: dtime_fun}
+
+    return replace, convert
+
 
 def copy_structure(src, dst,
                    replace: dict[str, str | VariableSkeleton | None] = {},
@@ -413,10 +442,12 @@ def copy_structure(src, dst,
 
     :param resize: Dictionary indicating if the copy should
       have a different size for one or more dimensions.
+      In case a dimension also appears in `replace`, its name
+      *before* replacement must be given here.
       To make a dimension unlimited (only one per file),
       the lenght must be changed to `None`.
       If empty, no change is made to dimension limits.
-    :type unlimited: str | None
+    :type resize: dict[str, int | None]
 
     :param compression: The compression method to apply to the copied
       variables, commonly set to `zlib`. Defaults to None
@@ -519,29 +550,7 @@ def merge_zipped(source, destination, compression='zlib'):
         if os.path.exists(destination_file):
             os.remove(destination_file)
 
-        # replace time variable
-        stime_name = 'valid_time'
-        dtime_name = 'time'
-        dtime_unit = 'hours since 1900-01-01'
-
-        dtime_var = VariableSkeleton(
-            dtime_name, 'd',
-            dimensions=(dtime_name),
-            compression=compression,
-        )
-        dtime_var.setncattr('long_name', dtime_name)
-        dtime_var.setncattr('standard_name', dtime_name)
-        dtime_var.setncattr('units', dtime_unit)
-        dtime_var.setncattr('calendar', 'proleptic_gregorian')
-
-        stimeunit = sources[0][stime_name].units
-
-        def dtime_fun(x):
-            numtime = netCDF4.num2date(x, stimeunit)
-            return netCDF4.date2num(numtime, dtime_unit)
-
-        replace = {stime_name: dtime_var}
-        convert = {stime_name: dtime_fun}
+        replace, convert = replace_cds_valid_time(compression)
 
         merge_variables(sources, destination_file,
                         replace, convert, compression)
@@ -587,7 +596,6 @@ def merge_variables(sources: list[str | netCDF4.Dataset],
     elif all(isinstance(x, (str, os.PathLike)) for x in sources):
         src_list = [netCDF4.Dataset(x, 'r') for x in sources]
     else:
-        src_list = None
         raise ValueError(f"sources must be all str or all netCDF4.Dataset")
 
     logger.debug("creating netcdf file %s" % destination)
@@ -756,14 +764,17 @@ def merge_time(infiles, target, timevar="time"):
 
 
 def subset_xy(infile, target,
-              xmin: int | float | None, xmax: int | float | None,
-              ymin: int | float | None, ymax: int | float | None,
-              tmin: int | float | None, tmax: int | float | None,
+              xmin: int | float | None = None,
+              xmax: int | float | None = None,
+              ymin: int | float | None = None,
+              ymax: int | float | None = None,
+              tmin: int | float | None = None,
+              tmax: int | float | None = None,
               xvar: str | None = None, yvar: str | None = None,
               timevar: str | None = None,
               by_index: bool = False,
-              replace: dict = None,
-              convert: dict = None,
+              replace: dict = {},
+              convert: dict = {},
               ):
     with (netCDF4.Dataset(infile) as src,
           netCDF4.Dataset(target, "w", format='NETCDF4') as dst):
@@ -847,32 +858,31 @@ def subset_xy(infile, target,
         copy_structure(src, dst, resize=resize, copy_data=False)
 
         logger.debug(f"copying values ...")
+        # translate incices into slices
+        dim_slice = {d:slice(None) for d in dimensions
+                     if d not in[xvar, yvar, timevar]}
+        dim_slice[xvar] = slice(imin, imax)
+        dim_slice[yvar] = slice(jmin, jmax)
+        dim_slice[timevar] = slice(nmin, nmax)
         # make sure dimensions are copied first
         # this adjusts the array sizes
-        datavars = set(dst.variables.keys()) - set(dst.dimensions.keys())
-        for sname in dimensions + list(datavars):
+        for sname in list(dst.variables.keys()):
             logger.debug(f" ... variable {sname}")
             # determine subset to copy
-            if sname == timevar:
-                slices = tuple([slice(nmin, nmax)])
-            elif sname == xvar:
-                slices=tuple([slice(imin,imax)])
-            elif sname == yvar:
-                slices = tuple([slice(jmin,jmax)])
-            elif sname in dimensions:
-                slices = tuple([slice(None,None)])
-            else:
-                slices = tuple([slice(None, None)]
-                               * len(src.variables[sname].dimensions))
+            slices = tuple([dim_slice[d]
+                            for d in src.variables[sname].dimensions])
             # determine if var is to replace, rename or discard
             replacement = replace.get(sname, False)
             if replacement is None:
                 logger.debug(f" ... skipping values {sname}")
-            if replacement is False:
+            elif replacement is False:
+                # i.e. sname not in replace dict
                 dname = sname
             elif isinstance(replacement, VariableSkeleton):
+                # replace
                 dname = replacement.name
             else:
+                # rename
                 dname = replacement
             # determine if var shall be converted
             if sname not in convert:
