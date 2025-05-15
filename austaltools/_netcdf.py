@@ -372,6 +372,12 @@ def add_variable(dst: netCDF4.Dataset,
         dst.variables[dname].setncattr(a, string)
     return True
 
+def timeconverter(old_unit, new_unit):
+    def dtime_fun(x):
+        numtime = netCDF4.num2date(x, old_unit)
+        return netCDF4.date2num(numtime, new_unit)
+    return dtime_fun
+
 def replace_cds_valid_time(compression:str):
 
     # replace time variable
@@ -519,41 +525,6 @@ def copy_structure(src, dst,
     if copy_data:
         copy_values(src, dst, replace, convert)
 
-
-def merge_zipped(source, destination, compression='zlib'):
-    """
-    Merge the files in a zipped archive downloaded from
-    cds.climate.eu into one nc file.
-
-    :param source: path of the archive file to read
-    :type source: str
-
-    :param destination: path of the destination file to create
-    :type destination: str
-
-    :param compression: (optional) compression type, defaults to `zlib`
-    :type compression: str | None
-    """
-    source_file = os.path.abspath(source)
-    logger.info("unpacking downloaded zip archive %s" % source_file)
-    destination_file = os.path.abspath(destination)
-    with (tempfile.TemporaryDirectory(
-            ignore_cleanup_errors=True, dir=_storage.TEMP) as td):
-        with zipfile.ZipFile(source_file, 'r') as zf:
-            zf.extractall(td)
-        ncfiles = glob.glob(os.path.join(td, '*.nc'))
-        if len(ncfiles) == 0:
-            raise IOError("No files found in %s" % source)
-        sources = [netCDF4.Dataset(x, 'r') for x in ncfiles]
-
-        logger.debug("creating netcdf file %s" % destination_file)
-        if os.path.exists(destination_file):
-            os.remove(destination_file)
-
-        replace, convert = replace_cds_valid_time(compression)
-
-        merge_variables(sources, destination_file,
-                        replace, convert, compression)
 
 
 def merge_variables(sources: list[str | netCDF4.Dataset],
@@ -718,16 +689,18 @@ def merge_time(infiles, target, timevar="time"):
     in_idx = []
     for fid, infile in enumerate(infiles):
         with netCDF4.Dataset(infile) as src:
-            in_time.append(src[timevar][:])
-            in_fid.append([fid]*len(src[timevar]))
-            in_idx.append([i for i in range(len(src[timevar]))])
+            in_time += src[timevar][:].tolist()
+            in_fid += [fid]*len(src[timevar])
+            in_idx += [i + len(in_idx) for i in range(len(src[timevar]))]
             logger.debug(f"starting time of {infile}: {in_time[0]}")
     sorted_time, sorted_fid, sorted_idx = zip(
-        *sorted(zip(in_time, in_fid, in_idx))
+        *sorted(zip(
+            in_time,
+            in_fid, in_idx))
     )
 
     with netCDF4.Dataset(target, "w", format='NETCDF4') as dst:
-        # copy fixed values from first file
+        # copy fixed values from the first file
         logger.debug(f"initializing output")
         with netCDF4.Dataset(infiles[0]) as src:
             logger.debug(f"initializing from "

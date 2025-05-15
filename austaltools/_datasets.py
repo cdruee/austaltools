@@ -26,6 +26,7 @@ datasets that serve as input for austaltools
 
 """
 import calendar
+from copy import deepcopy
 import getpass
 import glob
 import gzip
@@ -71,6 +72,9 @@ logger = logging.getLogger()
 # -------------------------------------------------------------------------
 CDSAPI_LIMIT_PARALLEL = 2
 """ Copernicus per-user limit for parallel queries """
+
+COMPRESS_NETCDF = 'zlib'
+""" Standard compression method of netCDF files  """
 
 RUNPARALLEL = True
 """ Use parallel processing (defaults to False on Windows Systems) """
@@ -1383,13 +1387,6 @@ def provide_terrain(source: str, path: str = None,
 
 # -------------------------------------------------------------------------
 
-
-# -------------------------------------------------------------------------
-
-# -------------------------------------------------------------------------
-
-# -------------------------------------------------------------------------
-
 def show_notice(storage_path, source):
     """
     Shows a notice to the user when a dataset is accessed,
@@ -1440,13 +1437,18 @@ def cds_getorder(order_args: dict[str, str|dict]):
     dataset =  order_args['dataset']
     request = order_args['request']
     target = order_args['target']
+
+    logger.debug(f"dataset: {dataset}")
+    logger.debug("request: " + json.dumps(request, indent=4))
+    logger.debug(f"target: {target}")
+
     cds.retrieve(dataset, request, target)
 
     # if order return zip archive (new since 2024) combine into one nc
     if zipfile.is_zipfile(target):
         zipname = target + '.zip'
         shutil.move(target, zipname)
-        _netcdf.merge_zipped(zipname, target)
+        cds_merge_zipped(zipname, target)
         os.remove(zipname)
 
     if order_args.get('subset', None) is not None:
@@ -1457,6 +1459,82 @@ def cds_getorder(order_args: dict[str, str|dict]):
 
     return target
 
+# -------------------------------------------------------------------------
+
+def cds_merge_zipped(source, destination, compression=COMPRESS_NETCDF):
+    """
+    Merge the files in a zipped archive downloaded from
+    cds.climate.eu into one nc file.
+
+    :param source: path of the archive file to read
+    :type source: str
+
+    :param destination: path of the destination file to create
+    :type destination: str
+
+    :param compression: (optional) compression type,
+      defaults to :py:const:`COMPRESS_NETCDF`
+    :type compression: str | None
+    """
+    source_file = os.path.abspath(source)
+    logger.info("unpacking downloaded zip archive %s" % source_file)
+    destination_file = os.path.abspath(destination)
+    with (tempfile.TemporaryDirectory(
+            ignore_cleanup_errors=True, dir=_storage.TEMP) as td):
+        with zipfile.ZipFile(source_file, 'r') as zf:
+            zf.extractall(td)
+        ncfiles = glob.glob(os.path.join(td, '*.nc'))
+        if len(ncfiles) == 0:
+            raise IOError("No files found in %s" % source)
+
+        logger.debug("creating netcdf file %s" % destination_file)
+        if os.path.exists(destination_file):
+            os.remove(destination_file)
+
+        replace, convert = cds_replace_valid_time(compression)
+
+        _netcdf.merge_variables(ncfiles, destination_file,
+                                replace, convert, compression)
+
+# -------------------------------------------------------------------------
+
+def cds_replace_valid_time(compression:str|None = COMPRESS_NETCDF):
+    """
+    Replaces the variable ``valid_time`` in ECMWF products
+    (measured in seconds since 1970-01-01) by the more widely
+    used variable ``time`` (measured in hours since 1900-01-01).
+
+    :param compression: compression method for netCDF files produced.
+      Ususally 'zlib'. Default to :py:const:`COMPRESS_NETCDF`.
+    :type compression: str | None
+
+    :return: `replace` and `convert` for use with
+    function from the _netcdf module.
+    :rtype: dict, dict
+    """
+
+    # replace time variable
+    stime_name = 'valid_time'
+    stime_unit = 'seconds since 1970-01-01'
+    dtime_name = 'time'
+    dtime_unit = 'hours since 1900-01-01'
+
+    dtime_var = _netcdf.VariableSkeleton(
+        dtime_name, 'd',
+        dimensions=(dtime_name),
+        compression=compression,
+    )
+    dtime_var.setncattr('long_name', dtime_name)
+    dtime_var.setncattr('standard_name', dtime_name)
+    dtime_var.setncattr('units', dtime_unit)
+    dtime_var.setncattr('calendar', 'proleptic_gregorian')
+
+    dtime_fun = _netcdf.timeconverter(stime_unit, dtime_unit)
+
+    replace = {stime_name: dtime_var}
+    convert = {stime_name: dtime_fun}
+
+    return replace, convert
 
 # -------------------------------------------------------------------------
 
@@ -1649,28 +1727,13 @@ def assemble_ERA5(path: str, name="ERA5", years:list=None,
             continue
 
         # download the year and put into place
+        logger.info(f"getting year :{year}")
         ncname = cds_get_era5_year(year)
         shutil.move(ncname, target)
         logger.debug("wrote file: %s" % target)
 
-        logger.info("assembled dataset: %s" % name)
+    logger.info("assembled dataset: %s" % name)
 
-
-# -------------------------------------------------------------------------
-def _cerraname(y, lt=None):
-    """
-    assembles CERRA data file name from year and part
-    :param y: year
-    :type y: int
-    :param lt: part number
-    :type lt: int
-    :return:  filename
-    :rtype: str
-    """
-    name = 'cerra_ak_eu_%04i' % y
-    if lt is not None:
-        name += '_%01i' % lt
-    return name
 
 
 # -------------------------------------------------------------------------
@@ -1762,11 +1825,13 @@ def cds_get_cerra_year(year, chunks=False):
     if chunks:
         # one set of requests per month
         n_mon = 12
-        l_mon = [calendar.monthrange(year, x + 1)[1] for x in range(n_mon)]
+        mon_mon = [['{:02d}'.format(x + 1)]  for x in range(12)]
+        l_mon = [calendar.monthrange(year, x + 1)[1] for x in range(12)]
 
     else:
         # one set of requests per year
         n_mon = 1
+        mon_mon = [['{:02d}'.format(x + 1)  for x in range(12)]]
         l_mon = [31]
     for month in range(n_mon):
         args = {
@@ -1774,7 +1839,7 @@ def cds_get_cerra_year(year, chunks=False):
             'request': order_template.copy()
         }
         args['request']['year'] = ['{:04d}'.format(year)]
-        args['request']['month'] = ['{:02d}'.format(month + 1)]
+        args['request']['month'] = mon_mon[month]
         args['request']['day'] = [
             '{:02d}'.format(x + 1) for x in range(l_mon[month])
         ]
@@ -1790,45 +1855,48 @@ def cds_get_cerra_year(year, chunks=False):
             args['target']= 'cerra_ak_eu_{:04d}-{:02d}+{:02d}.nc'.format(
                 int(year), month + 1, lead_time)
             args['request']['leadtime_hour'] = ['{:d}'.format(lead_time)]
-            args_list.append(args)
-            logger.debug(json.dumps(args['request'], indent=4))
+            args_list.append(deepcopy(args))
+            logger.debug([x['request']['leadtime_hour'] for x in args_list])
 
     downloaded = []
     logger.debug(f"RUNPARALLEL = {RUNPARALLEL}")
     if RUNPARALLEL:
+        logger.info(f"running {len(args_list)} parallel jobs")
         with mp.Pool(PROCS) as pool:
             for x in pool.map(cds_getorder, args_list):
                 downloaded.append(x)
     else:
-        for args in args_list:
+        for i,args in enumerate(args_list):
+            logger.info(f"running download job ({i+1}/{len(args_list)})")
             x = cds_getorder(args)
             downloaded.append(x)
 
     logger.info(str(downloaded))
-    #FIXME
-    exit(0)
 
     merged = []
     for month in range(n_mon):
         stem = 'cerra_ak_eu_{:04d}-{:02d}'.format(int(year), month + 1)
         sources = glob.glob(stem + '*.nc')
         merge_to = stem + '.nc'
-        _netcdf.merge_time(sources, merge_to, timevar='time')
+        _netcdf.merge_time(sources, merge_to, timevar='valid_time')
         merged.append(merge_to)
 
-    _netcdf.concat_time(merged, target,
-                        replace=replace, convert=convert)
+    if len(merged) > 1:
+        _netcdf.merge_time(merged, ncname, timevar='valid_time')
+    else:
+        shutil.move(merged[0], ncname)
 
     # replace time variable
-    replace, convert = _netcdf.replace_cds_valid_time(compression)
-    shutil.move(target, 'old_' + target)
-    _netcdf.merge_variables(['old_' + target], target,
+    replace, convert = cds_replace_valid_time(
+        compression=COMPRESS_NETCDF)
+    shutil.move(ncname, 'old_' + ncname)
+    _netcdf.merge_variables(['old_' + ncname], ncname,
                             replace=replace, convert=convert)
 
 
 
-    logger.debug("done job %s" % str(opts))
-    return True
+    logger.debug(f"done getting year {year}")
+    return ncname
 
 
 # -------------------------------------------------------------------------
@@ -1912,33 +1980,19 @@ def assemble_CERRA(path: str, name="CERRA", years=None,
                 logger.info(f"skipping available year: {yn}")
                 continue
 
-        cds_get_cerra_year(year)
+        # gently move the old file out of way
+        target = os.path.join(path, WEA_FMT % yn)
+        if not _ass_clear_target(target, replace):
+            logger.info("skipping because datafile exists: %s" % name)
+            continue
 
-    # logger.debug("finished parallel jobs")
-    # # combine forecasts
-    # for year in set([x for x, _ in combi]):
-    #     logger.debug(f"processing year: {year}")
-    #     lts = set([y for x, y in combi if x == year])
-    #     infiles = [_cerraname(year, lt) + '.nc' for lt in lts]
-    #     yn = name_yearly(name, year)
-    #     target = os.path.join(path, WEA_FMT % yn)
-    #     # gently move the old file out of way
-    #     if not _ass_clear_target(target, replace):
-    #         logger.info("skipping because dataset exists: %s" % name)
-    #         continue
-    #     # build new file
-    #     data.mergetime(
-    #         input=" ".join([
-    #             data.setgridtype('curvilinear', input=x)
-    #             for x in infiles
-    #         ]),
-    #         output=target,
-    #         options='-f nc4 -z zip_6 --reduce_dim'
-    #     )
-    #     for x in infiles:
-    #         os.remove(x)
-    #     logger.debug(f"finished with: {year}")
-    #
+        # download the year and put into place
+        logger.info(f"getting year :{year}")
+        ncname = cds_get_cerra_year(year)
+        shutil.move(ncname, target)
+        logger.debug("wrote file: %s" % target)
+
+    logger.info("assembled dataset: %s" % name)
 
 # -------------------------------------------------------------------------
 def assemble_DWD(path: str, name="DWD", years: list = None,
@@ -2113,7 +2167,8 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
             destination = f"{k}_year.nc"
             _netcdf.concat_time(sources, destination, timevar='time')
             yearfiles.append(destination)
-        _netcdf.merge_files(yearfiles, target, compression='zlib')
+        _netcdf.merge_variables(yearfiles, target,
+                                compression=COMPRESS_NETCDF)
 
         # clean up
         logger.debug("removing remaining temporary files")
