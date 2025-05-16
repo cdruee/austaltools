@@ -622,11 +622,21 @@ def merge_variables(sources: list[str | netCDF4.Dataset],
     logger.debug("finished writing netcdf file %s" % destination)
 
 
-def concat_time(infiles, target, timevar="time"):
+def merge_time(infiles, target, timevar="time",
+               allow_duplicates=False):
     """
     Function that takes a list of input NetCDF files, each representing
-    temporal slices of a dataset, and concatenates them into a single
+    temporal slices of a dataset, and merges them into a single
     output file along a specified time dimension.
+
+    The time span covered by the input files can be overlpping and
+    input files do not need to be sorted but the must not contain
+    multiple entries for one time.
+
+    The check for duplicate times occuring in the input files can be
+    disabled by `allow_dulicates` but when this option is chosen,
+    it is not defined, which of the respective input records
+    appears in the output file.
 
     :param infiles: List input files to be concatenated.
       These files should contain consistent
@@ -658,61 +668,6 @@ def concat_time(infiles, target, timevar="time"):
         >>> concat_time(["file1.nc", "file2.nc"], "output.nc")
 
     """
-    compression = 'zlib'
-    # get sorting order:
-    in_time = []
-    for infile in infiles:
-        with netCDF4.Dataset(infile) as src:
-            in_time.append(src[timevar][:].min())
-            logger.debug(f"starting time of {infile}: {in_time[-1]}")
-    sorted_infiles = [x for _, x in sorted(zip(in_time, infiles))]
-
-    with netCDF4.Dataset(target, "w", format='NETCDF4') as dst:
-        # copy fixed values from first file
-        logger.debug(f"initializing output")
-        with netCDF4.Dataset(sorted_infiles[0]) as src:
-            logger.debug(f"initializing from "
-                         f"{os.path.basename(src.filepath())}")
-            copy_structure(src, dst, resize={timevar:None}, copy_data=True)
-
-        # create empty data fields
-        i_time = dst.variables[timevar].size
-
-        datavars = set(dst.variables.keys()) - set(dst.dimensions.keys())
-        for infile in sorted_infiles[1:]:
-            with netCDF4.Dataset(infile) as src:
-                logger.debug(f"adding data from "
-                             f"{os.path.basename(src.filepath())}")
-                # handle time first:
-                logger.debug(f"appending values from {timevar}"
-                             f" at position {i_time}")
-                time_data = src[timevar][:]
-                dst[timevar][i_time:i_time + len(time_data)] = time_data
-                # then the data
-                for vname in datavars:
-                    logger.debug(f"copying values from {vname}"
-                                 f" at position {i_time}")
-                    slices = tuple(
-                        slice(None)
-                        if x != timevar else slice(i_time, None)
-                        for x in dst.variables[vname].dimensions
-                    )
-                    logger.debug(str(slices))
-                    dst[vname][slices] = src[vname][:]
-            # remember end position
-            i_time += len(time_data)
-
-    # clean up
-    print("removing temporary files")
-    for v in _tools.progress(sorted_infiles,
-                             "removing files"):
-        logger.debug(f" ... removing {v}")
-        os.remove(v)
-
-    return True
-
-def merge_time(infiles, target, timevar="time"):
-    compression = 'zlib'
     # get sorting order:
     in_time = []
     in_fid = []
@@ -728,6 +683,10 @@ def merge_time(infiles, target, timevar="time"):
             in_time,
             in_fid, in_idx))
     )
+    # check for duplicate times.
+    if len(sorted_time) != len(set(sorted_time)):
+        if not allow_duplicates:
+            raise ValueError(f"duplicate times found in infiles")
 
     with netCDF4.Dataset(target, "w", format='NETCDF4') as dst:
         # copy fixed values from the first file

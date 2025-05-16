@@ -1641,7 +1641,7 @@ def cds_get_era5_year(year):
             x = cds_getorder(args)
             downloaded.append(x)
 
-    _netcdf.concat_time(downloaded, ncname, timevar='time')
+    _netcdf.merge_time(downloaded, ncname, timevar='time')
 
 
     return ncname
@@ -2165,7 +2165,7 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
             sources = [x for x in to_download.values()
                        if x.startswith(f"{k}_{year:04d}")]
             destination = f"{k}_year.nc"
-            _netcdf.concat_time(sources, destination, timevar='time')
+            _netcdf.merge_time(sources, destination, timevar='time')
             yearfiles.append(destination)
         _netcdf.merge_variables(yearfiles, target,
                                 compression=COMPRESS_NETCDF)
