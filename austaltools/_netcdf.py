@@ -277,11 +277,41 @@ def copy_values(src, dst,
             dname = replacement
         if sname not in convert:
             logger.debug(f" ... copying values {sname} -> {dname}")
-            dst[dname][:] = src[sname][:]
+            # dummy converter, does nothing
+            def convert_fun(x):
+                return x
         else:
             logger.debug(f" ... convert values {sname} -> {dname}")
-            converter = np.vectorize(convert[sname])
-            dst[dname][:] = converter(src[sname][:])
+            convert_fun = convert[sname]
+        converter = np.vectorize(convert_fun)
+
+        # copy in chunks
+        MEMORY_CAP = 1073741824 # 1GB
+        # we cannot use the numpy methods of src[sname][:]
+        # sinc this makes numpy allocate memory for the whole array
+        shape = [x.size for x in src.variables[sname].get_dims()]
+        if len(shape) == 0:
+            slices_list = [0]
+        else:
+            slices_list = []
+            longest_axis = np.argmax(shape)
+            longest_len = shape[longest_axis]
+            n_cells = int(np.prod(shape))
+            # float64 = 8 bytes
+            n_chunks = int(np.ceil((n_cells * 8) / MEMORY_CAP))
+            chunk_len = int(np.floor(longest_len / n_chunks))
+            borders = list(np.arange(0, longest_len, chunk_len))
+            for i,b_lo in enumerate(borders):
+                b_hi = (borders + [longest_len])[i + 1]
+                slices = tuple(
+                    slice(None)
+                    if axis != longest_axis else slice(b_lo, b_hi)
+                    for axis in range(len(shape))
+                )
+                slices_list.append(slices)
+        for slices in slices_list:
+            logger.debug(str(slices))
+            dst[dname][slices] = converter(src[sname][slices])
 
 
 def add_variable(dst: netCDF4.Dataset,
