@@ -73,6 +73,12 @@ logger = logging.getLogger()
 CDSAPI_LIMIT_PARALLEL = 2
 """ Copernicus per-user limit for parallel queries """
 
+CDSAPI_CERRA_CHUNKS = 4
+""" Copernicus per-request limit does not permit download of 
+    yearly files and requires splitting up donwloads. 
+    For possible values see 
+    :py:func:`austaltools._dataset.cds_get_cerra_year` """
+
 COMPRESS_NETCDF = 'zlib'
 """ Standard compression method of netCDF files  """
 
@@ -1737,7 +1743,7 @@ def assemble_ERA5(path: str, name="ERA5", years:list=None,
 
 
 # -------------------------------------------------------------------------
-def cds_get_cerra_year(year, chunks=False):
+def cds_get_cerra_year(year: int, chunks: int | bool = False):
     """
     Downloads and processes a year's worth of CERRA dataset as GRIB files,
     then converts them to NetCDF format for easier use.
@@ -1758,8 +1764,13 @@ def cds_get_cerra_year(year, chunks=False):
     :param year: The year of the dataset to retrieve.
     :type opts: int
 
-    :param chunks: Whether to retrieve omnthly chunks or yearly files
-    :type chunks: bool
+    :param chunks: Whether to retrieve omnthly chunks or yearly files.
+      If True or 12, monthly chunks  is downloaded.
+      If False or 1, the year is downloaded in one piece
+      (which exceeds current limits as of Apr 2025)
+      If 2, 3, 4, or 6, six multi-monthly chunks are downloaded
+      (wich can be faster, depending on the qeue length)
+    :type chunks: int | bool
 
 
     :returns: None. The function's primary purpose is file I/O
@@ -1822,26 +1833,33 @@ def cds_get_cerra_year(year, chunks=False):
         'data_format': 'netcdf'
     }
     args_list = []
-    if chunks:
-        # one set of requests per month
-        n_mon = 12
-        mon_mon = [['{:02d}'.format(x + 1)]  for x in range(12)]
-        l_mon = [calendar.monthrange(year, x + 1)[1] for x in range(12)]
-
+    if chunks == True:
+        chunk_count = 12
+    elif chunks == False:
+        chunk_count = 1
+    elif 12 % chunks == 0:
+        chunk_count = int(chunks)
     else:
-        # one set of requests per year
-        n_mon = 1
-        mon_mon = [['{:02d}'.format(x + 1)  for x in range(12)]]
-        l_mon = [31]
-    for month in range(n_mon):
+        raise ValueError("chunks is neither divisor of 12, True or False")
+
+    if chunk_count == 12:
+        chunks_months = [['{:02d}'.format(x + 1)]  for x in range(12)]
+        l_mon = [calendar.monthrange(year, x + 1)[1] for x in range(12)]
+    else:
+        chunks_months = [['{:02d}'.format(x + y + 1)
+                          for y in range(int(12 / chunk_count))]
+                         for x in range(0, 12, int(12 / chunk_count))]
+        l_mon = [31] * len(chunks_months)
+
+    for chunk in range(chunk_count):
         args = {
             'dataset': order_dataset,
             'request': order_template.copy()
         }
         args['request']['year'] = ['{:04d}'.format(year)]
-        args['request']['month'] = mon_mon[month]
+        args['request']['month'] = chunks_months[chunk]
         args['request']['day'] = [
-            '{:02d}'.format(x + 1) for x in range(l_mon[month])
+            '{:02d}'.format(x + 1) for x in range(l_mon[chunk])
         ]
         args['subset'] = {
             'xmin': 489,
@@ -1853,10 +1871,10 @@ def cds_get_cerra_year(year, chunks=False):
         # one request per each lead time (1-3h)
         for lead_time in range(1, 4):
             args['target']= 'cerra_ak_eu_{:04d}-{:02d}+{:02d}.nc'.format(
-                int(year), month + 1, lead_time)
+                int(year), chunk + 1, lead_time)
             args['request']['leadtime_hour'] = ['{:d}'.format(lead_time)]
             args_list.append(deepcopy(args))
-            logger.debug([x['request']['leadtime_hour'] for x in args_list])
+            # logger.debug([x['request']['leadtime_hour'] for x in args_list])
 
     downloaded = []
     logger.debug(f"RUNPARALLEL = {RUNPARALLEL}")
@@ -1874,8 +1892,8 @@ def cds_get_cerra_year(year, chunks=False):
     logger.info(str(downloaded))
 
     merged = []
-    for month in range(n_mon):
-        stem = 'cerra_ak_eu_{:04d}-{:02d}'.format(int(year), month + 1)
+    for chunk in range(chunk_count):
+        stem = 'cerra_ak_eu_{:04d}-{:02d}'.format(int(year), chunk + 1)
         sources = glob.glob(stem + '*.nc')
         merge_to = stem + '.nc'
         _netcdf.merge_time(sources, merge_to, timevar='valid_time')
@@ -1988,7 +2006,7 @@ def assemble_CERRA(path: str, name="CERRA", years=None,
 
         # download the year and put into place
         logger.info(f"getting year :{year}")
-        ncname = cds_get_cerra_year(year)
+        ncname = cds_get_cerra_year(year, CDSAPI_CERRA_CHUNKS)
         shutil.move(ncname, target)
         logger.debug("wrote file: %s" % target)
 
