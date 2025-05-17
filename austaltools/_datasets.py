@@ -1417,56 +1417,6 @@ def show_notice(storage_path, source):
 
 # -------------------------------------------------------------------------
 
-def cds_getorder(order_args: dict[str, str|dict]):
-    """
-    Execute a CDS order (helper function to execute orders in parallel)
-
-    :param order_args: order data dictionary
-    :type order_args: dict
-
-    :returns: filename
-    :rtype: str
-
-    The order data dictionary must contain the keys:
-        - ``dataset``: Name of the cds dataset to get data from.
-        - ``request``: Body of the request, as described
-          in the `Climate Data Store API HowTo
-          <https://cds.climate.copernicus.eu/how-to-api>`_
-        - ``target``: Name of the file to produce
-    optionally may contain:
-        - ``subset``: a dictionary containing arguments to
-          :py:func:`austaltools._netcdf.subset_xy`,
-          except `rsc` and `dst`
-
-    """
-    cds = cdsapi.Client()
-    dataset =  order_args['dataset']
-    request = order_args['request']
-    target = order_args['target']
-
-    logger.debug(f"dataset: {dataset}")
-    logger.debug("request: " + json.dumps(request, indent=4))
-    logger.debug(f"target: {target}")
-
-    cds.retrieve(dataset, request, target)
-
-    # if order return zip archive (new since 2024) combine into one nc
-    if zipfile.is_zipfile(target):
-        zipname = target + '.zip'
-        shutil.move(target, zipname)
-        cds_merge_zipped(zipname, target)
-        os.remove(zipname)
-
-    if order_args.get('subset', None) is not None:
-        fullname = 'full_' + target
-        shutil.move(target, fullname)
-        _netcdf.subset_xy(fullname, target, **order_args['subset'])
-        os.remove(fullname)
-
-    return target
-
-# -------------------------------------------------------------------------
-
 def cds_merge_zipped(source, destination, compression=COMPRESS_NETCDF):
     """
     Merge the files in a zipped archive downloaded from
@@ -1541,6 +1491,139 @@ def cds_replace_valid_time(compression:str|None = COMPRESS_NETCDF):
     convert = {stime_name: dtime_fun}
 
     return replace, convert
+
+# -------------------------------------------------------------------------
+
+def cds_getorder(order_args: dict[str, str|dict]) -> str:
+    """
+    Execute a CDS order (helper function to execute orders in parallel)
+
+    :param order_args: order data dictionary
+    :type order_args: dict
+
+    :returns: filename
+    :rtype: str
+
+    The order data dictionary must contain the keys:
+        - ``dataset``: Name of the cds dataset to get data from.
+        - ``request``: Body of the request, as described
+          in the `Climate Data Store API HowTo
+          <https://cds.climate.copernicus.eu/how-to-api>`_
+        - ``target``: Name of the file to produce
+
+    """
+    cds = cdsapi.Client()
+    dataset =  order_args['dataset']
+    request = order_args['request']
+    target = order_args['target']
+
+    logger.debug(f"dataset: {dataset}")
+    logger.debug("request: " + json.dumps(request, indent=4))
+    logger.debug(f"target: {target}")
+
+    cds.retrieve(dataset, request, target)
+
+    return target
+
+# -------------------------------------------------------------------------
+
+def cds_processorder(order_args: dict[str, str | dict]) -> str:
+    """
+    Preprocess a file downloaded by
+    :py:func:`austaltools:_datasets.cds_getorder`
+    by converting a dowanload file that is a zip archive containing
+    netCDF files (new since 2024) into one plain netCDF file and / or by
+    optionally subestting the data.
+
+    :param order_args: order data dictionary
+    :type order_args: dict
+       optionally may contain:
+        - ``subset``: a dictionary containing arguments to
+            :py: func:`austaltools._netcdf.subset_xy`,
+            except `rsc` and `dst`.
+            If the keyword is not contained in `order_args`,
+            no subestting is applied.
+    :returns: filename of the produced file
+    :rtype: str
+
+"""
+    if zipfile.is_zipfile(target):
+        zipname = target + '.zip'
+        shutil.move(target, zipname)
+        cds_merge_zipped(zipname, target)
+        os.remove(zipname)
+
+    if order_args.get('subset', None) is not None:
+        fullname = 'full_' + target
+        shutil.move(target, fullname)
+        _netcdf.subset_xy(fullname, target, **order_args['subset'])
+        os.remove(fullname)
+
+    return target
+
+# -------------------------------------------------------------------------
+
+def cds_get_order_list(args_list):
+    logger.debug(f"RUNPARALLEL = {RUNPARALLEL}")
+    if RUNPARALLEL:
+        logger.info(f"running parallel jobs")
+        # Queue to hold downloaded files for processing
+        download_queue = mp.Queue()
+        # Manager list to store processed results (shared across processes)
+        manager = mp.Manager()
+        processed_files = manager.list()
+
+        def download_files(args_list: list,
+                           queue: mp.Queue) -> None:
+            """
+            Executes order downloading files and puts them in the queue.
+            """
+            with mp.Pool(CDSAPI_LIMIT_PARALLEL) as pool:
+                for downloaded_file in pool.map(cds_getorder, args_list):
+                    queue.put(downloaded_file)
+            # Signal end of downloads
+            queue.put(None)
+
+        def process_files(queue: mp.Queue,
+                          result_list: list) -> None:
+            """
+            Processes files from the download queue as they become available.
+            """
+            while True:
+                downloaded_file = queue.get()
+                if downloaded_file is None:
+                    # End of downloads, exit
+                    break
+                # do preprocessing
+                processed_file = cds_processorder(downloaded_file)
+                result_list.append(processed_file)
+
+        # Create processes for downloading and processing
+        download_process = mp.Process(
+            target=download_files, args=(args_list, download_queue)
+        )
+        process_process = mp.Process(
+            target=process_files, args=(download_queue, processed_files)
+        )
+
+        # Start processes
+        download_process.start()
+        process_process.start()
+
+        # Wait for processes to complete
+        download_process.join()
+        process_process.join()
+
+        downloaded = list(processed_files)
+    else:
+        downloaded = []
+        for i,args in enumerate(args_list):
+            logger.info(f"running download job ({i+1}/{len(args_list)})")
+            downloaded_file = cds_getorder(args)
+            processed_file = cds_processorder(downloaded_file)
+            downloaded.append(processed_file)
+
+    return downloaded
 
 # -------------------------------------------------------------------------
 
@@ -1636,17 +1719,11 @@ def cds_get_era5_year(year):
 
         print (args['request'])
 
-    downloaded = []
-    logger.debug(f"RUNPARALLEL = {RUNPARALLEL}")
-    if RUNPARALLEL:
-        with mp.Pool(PROCS) as pool:
-            for x in pool.map(cds_getorder, args_list):
-                downloaded.append(x)
-    else:
-        for args in args_list:
-            x = cds_getorder(args)
-            downloaded.append(x)
+    # execute orders
+    downloaded = cds_get_order_list(args_list)
+    logger.debug(f"downloaded files: {downloaded}")
 
+    logger.info("assemling year")
     _netcdf.merge_time(downloaded, ncname, timevar='time')
 
 
@@ -1874,31 +1951,21 @@ def cds_get_cerra_year(year: int, chunks: int | bool = False):
                 int(year), chunk + 1, lead_time)
             args['request']['leadtime_hour'] = ['{:d}'.format(lead_time)]
             args_list.append(deepcopy(args))
-            # logger.debug([x['request']['leadtime_hour'] for x in args_list])
 
-    downloaded = []
-    logger.debug(f"RUNPARALLEL = {RUNPARALLEL}")
-    if RUNPARALLEL:
-        logger.info(f"running {len(args_list)} parallel jobs")
-        with mp.Pool(PROCS) as pool:
-            for x in pool.map(cds_getorder, args_list):
-                downloaded.append(x)
-    else:
-        for i,args in enumerate(args_list):
-            logger.info(f"running download job ({i+1}/{len(args_list)})")
-            x = cds_getorder(args)
-            downloaded.append(x)
+    # execute orders
+    downloaded = cds_get_order_list(args_list)
+    logger.debug(f"downloaded files: {downloaded}")
 
-    logger.info(str(downloaded))
-
+    logger.info("sorting forecast lead times")
     merged = []
-    for chunk in range(chunk_count):
+    for chunk in _tools.progress(range(chunk_count)):
         stem = 'cerra_ak_eu_{:04d}-{:02d}'.format(int(year), chunk + 1)
         sources = glob.glob(stem + '*.nc')
         merge_to = stem + '.nc'
         _netcdf.merge_time(sources, merge_to, timevar='valid_time')
         merged.append(merge_to)
 
+    logger.info("assembling year")
     if len(merged) > 1:
         _netcdf.merge_time(merged, ncname, timevar='valid_time')
     else:
@@ -1911,9 +1978,7 @@ def cds_get_cerra_year(year: int, chunks: int | bool = False):
     _netcdf.merge_variables(['old_' + ncname], ncname,
                             replace=replace, convert=convert)
 
-
-
-    logger.debug(f"done getting year {year}")
+    logger.info(f"done getting year {year}")
     return ncname
 
 
