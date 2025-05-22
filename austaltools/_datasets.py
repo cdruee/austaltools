@@ -49,6 +49,7 @@ from pathlib import PurePath
 import numpy as np
 import pandas as pd
 import requests
+from botocore import args
 from urllib3 import disable_warnings, exceptions
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
@@ -1435,8 +1436,10 @@ def cds_merge_zipped(source, destination, compression=COMPRESS_NETCDF):
     source_file = os.path.abspath(source)
     logger.info("unpacking downloaded zip archive %s" % source_file)
     destination_file = os.path.abspath(destination)
+    delete_tmp = (logger.getEffectiveLevel() > logging.DEBUG)
     with (tempfile.TemporaryDirectory(
-            ignore_cleanup_errors=True, dir=_storage.TEMP) as td):
+            ignore_cleanup_errors=True, dir=_storage.TEMP,
+            delete=delete_tmp) as td):
         with zipfile.ZipFile(source_file, 'r') as zf:
             zf.extractall(td)
         ncfiles = glob.glob(os.path.join(td, '*.nc'))
@@ -1522,12 +1525,15 @@ def cds_getorder(order_args: dict[str, str|dict]) -> str:
     logger.debug(f"target: {target}")
 
     cds.retrieve(dataset, request, target)
+    logger.info(f"copying {target} from cache")
+    os.link(f"/localdata/druee/tmp/tmpcache/{target}", f"./{target}")
 
     return target
 
 # -------------------------------------------------------------------------
 
-def cds_processorder(order_args: dict[str, str | dict]) -> str:
+def cds_processorder(order_args: dict[str, str | dict],
+                     compression: str | None = COMPRESS_NETCDF) -> str:
     """
     Preprocess a file downloaded by
     :py:func:`austaltools:_datasets.cds_getorder`
@@ -1537,6 +1543,8 @@ def cds_processorder(order_args: dict[str, str | dict]) -> str:
 
     :param order_args: order data dictionary
     :type order_args: dict
+        must contain the keys:
+        - ``target``: Name of the file to produce
        optionally may contain:
         - ``subset``: a dictionary containing arguments to
             :py: func:`austaltools._netcdf.subset_xy`,
@@ -1547,6 +1555,9 @@ def cds_processorder(order_args: dict[str, str | dict]) -> str:
     :rtype: str
 
 """
+    target = order_args.get('target',None)
+    if target is None:
+        raise ValueError("target key must be specified in oder_args")
     if zipfile.is_zipfile(target):
         zipname = target + '.zip'
         shutil.move(target, zipname)
@@ -1556,7 +1567,8 @@ def cds_processorder(order_args: dict[str, str | dict]) -> str:
     if order_args.get('subset', None) is not None:
         fullname = 'full_' + target
         shutil.move(target, fullname)
-        _netcdf.subset_xy(fullname, target, **order_args['subset'])
+        _netcdf.subset_xy(fullname, target, **order_args['subset'],
+                          compression=compression)
         os.remove(fullname)
 
     return target
@@ -1579,8 +1591,10 @@ def cds_get_order_list(args_list):
             Executes order downloading files and puts them in the queue.
             """
             with mp.Pool(CDSAPI_LIMIT_PARALLEL) as pool:
-                for downloaded_file in pool.map(cds_getorder, args_list):
-                    queue.put(downloaded_file)
+                for _,args in zip(
+                        pool.map(cds_getorder, args_list), args_list):
+                    logger.debug(f"###### DOWNLOADING {args['target']}")
+                    queue.put(args)
             # Signal end of downloads
             queue.put(None)
 
@@ -1590,12 +1604,13 @@ def cds_get_order_list(args_list):
             Processes files from the download queue as they become available.
             """
             while True:
-                downloaded_file = queue.get()
-                if downloaded_file is None:
+                args = queue.get()
+                if args is None:
                     # End of downloads, exit
                     break
                 # do preprocessing
-                processed_file = cds_processorder(downloaded_file)
+                logger.debug(f"###### PREPROCESSING {args['target']}")
+                processed_file = cds_processorder(args)
                 result_list.append(processed_file)
 
         # Create processes for downloading and processing
@@ -1620,14 +1635,14 @@ def cds_get_order_list(args_list):
         for i,args in enumerate(args_list):
             logger.info(f"running download job ({i+1}/{len(args_list)})")
             downloaded_file = cds_getorder(args)
-            processed_file = cds_processorder(downloaded_file)
+            processed_file = cds_processorder(args)
             downloaded.append(processed_file)
 
     return downloaded
 
 # -------------------------------------------------------------------------
 
-def cds_get_era5_year(year):
+def cds_get_era5_year(year: int, chunks: int | bool = False):
     """
     Downloads ERA5 reanalysis data for a specific year and
     saves it as a NetCDF file.
@@ -1643,6 +1658,14 @@ def cds_get_era5_year(year):
 
     :param year: The year for which to download the data (integer).
     :type year: int
+
+    :param chunks: Whether to retrieve omnthly chunks or yearly files.
+      If True or 12, monthly chunks  is downloaded.
+      If False or 1, the year is downloaded in one piece
+      (which exceeds current limits as of Apr 2025)
+      If 2, 3, 4, or 6, six multi-monthly chunks are downloaded
+      (wich can be faster, depending on the qeue length)
+    :type chunks: int | bool
 
     :returns: None. The function saves a NetCDF file to the specified
       path but does not return any value.
@@ -1702,30 +1725,47 @@ def cds_get_era5_year(year):
         ],
     }
     args_list = []
-    for month in range(12):
+    if chunks == True:
+        chunk_count = 12
+    elif chunks == False:
+        chunk_count = 1
+    elif 12 % chunks == 0:
+        chunk_count = int(chunks)
+    else:
+        raise ValueError("chunks is neither divisor of 12, True or False")
+
+    if chunk_count == 12:
+        chunks_months = [['{:02d}'.format(x + 1)]  for x in range(12)]
+        l_mon = [calendar.monthrange(year, x + 1)[1] for x in range(12)]
+    else:
+        chunks_months = [['{:02d}'.format(x + y + 1)
+                          for y in range(int(12 / chunk_count))]
+                         for x in range(0, 12, int(12 / chunk_count))]
+        l_mon = [31] * len(chunks_months)
+
+    for chunk in range(chunk_count):
         args = {
             'dataset': order_dataset,
-            'target': 'era5_ak_eu_{:04d}-{:02d}.nc'.format(
-                int(year), month + 1),
             'request': order_template.copy()
         }
         args['request']['year'] = ['{:04d}'.format(year)]
-        args['request']['month'] = ['{:02d}'.format(month + 1)]
+        args['request']['month'] = chunks_months[chunk]
         args['request']['day'] = [
-            '{:02d}'.format(x + 1)
-            for x in range(calendar.monthrange(year, month + 1)[1])
+            '{:02d}'.format(x + 1) for x in range(l_mon[chunk])
         ]
-        args_list.append(args)
+        args['target'] = 'era5_ak_eu_{:04d}-{:02d}.nc'.format(
+            int(year), chunk + 1),
 
-        print (args['request'])
+        args_list.append(deepcopy(args))
 
     # execute orders
+    logger.info("starting download process")
     downloaded = cds_get_order_list(args_list)
     logger.debug(f"downloaded files: {downloaded}")
 
     logger.info("assemling year")
-    _netcdf.merge_time(downloaded, ncname, timevar='time')
-
+    _netcdf.merge_time(downloaded, ncname, timevar='time',
+                       compression=COMPRESS_NETCDF)
 
     return ncname
 
@@ -1953,6 +1993,7 @@ def cds_get_cerra_year(year: int, chunks: int | bool = False):
             args_list.append(deepcopy(args))
 
     # execute orders
+    logger.info("starting download process")
     downloaded = cds_get_order_list(args_list)
     logger.debug(f"downloaded files: {downloaded}")
 
@@ -1962,12 +2003,14 @@ def cds_get_cerra_year(year: int, chunks: int | bool = False):
         stem = 'cerra_ak_eu_{:04d}-{:02d}'.format(int(year), chunk + 1)
         sources = glob.glob(stem + '*.nc')
         merge_to = stem + '.nc'
-        _netcdf.merge_time(sources, merge_to, timevar='valid_time')
+        _netcdf.merge_time(sources, merge_to, timevar='valid_time',
+                           compression=COMPRESS_NETCDF)
         merged.append(merge_to)
 
     logger.info("assembling year")
     if len(merged) > 1:
-        _netcdf.merge_time(merged, ncname, timevar='valid_time')
+        _netcdf.merge_time(merged, ncname, timevar='valid_time',
+                           compression=COMPRESS_NETCDF)
     else:
         shutil.move(merged[0], ncname)
 
@@ -1976,7 +2019,8 @@ def cds_get_cerra_year(year: int, chunks: int | bool = False):
         compression=COMPRESS_NETCDF)
     shutil.move(ncname, 'old_' + ncname)
     _netcdf.merge_variables(['old_' + ncname], ncname,
-                            replace=replace, convert=convert)
+                            replace=replace, convert=convert,
+                            compression=COMPRESS_NETCDF)
 
     logger.info(f"done getting year {year}")
     return ncname
@@ -2045,12 +2089,6 @@ def assemble_CERRA(path: str, name="CERRA", years=None,
     logger.debug(f"assemble_CERRA: path={path}, name={name}, "
                  f"years={years}, replace={replace}, args={args}")
     temp_path = _storage.TEMP
-    # logger.debug(f"looking for cdo ...{temp_path}")
-    # data = cdo.Cdo(tempdir=temp_path)
-    # logger.debug("python-cdo version: %s" % cdo.__version__)
-    # logger.debug("cdo        version: %s" % data.version())
-    # data.debug = True
-    # data.cleanTempDir()
 
     # get years to retrieve
     combi = []
@@ -2254,10 +2292,11 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
                                 compression=COMPRESS_NETCDF)
 
         # clean up
-        logger.debug("removing remaining temporary files")
-        for v in _tools.progress(to_download.values(),
-                                 "removing files"):
-            if os.path.exists(v): os.remove(v)
+        if logger.getEffectiveLevel() > logging.DEBUG:
+            logger.debug("removing remaining temporary files")
+            for v in _tools.progress(to_download.values(),
+                                     "removing files"):
+                if os.path.exists(v): os.remove(v)
 
     return True
 # -------------------------------------------------------------------------
@@ -2327,8 +2366,10 @@ def provide_weather(source: str, path: str = None,
     #dataset = dataset_get(source)
     logger.info("downloading weather source %s" % source)
     pwd = os.getcwd()
+    delete_tmp = (logger.getEffectiveLevel() > logging.DEBUG)
     with tempfile.TemporaryDirectory(
-            ignore_cleanup_errors=True, dir=_storage.TEMP) as temp_dir:
+            ignore_cleanup_errors=True, dir=_storage.TEMP,
+            delete=delete_tmp) as temp_dir:
         os.chdir(temp_dir)
         success = True
         if source == "ERA5":

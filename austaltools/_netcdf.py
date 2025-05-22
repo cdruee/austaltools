@@ -2,11 +2,9 @@
 Module that holds untilities for manipulating netCDF4 files
 """
 import collections
-import glob
+import itertools
 import logging
 import os
-import tempfile
-import zipfile
 
 import netCDF4
 import numpy as np
@@ -622,8 +620,10 @@ def merge_variables(sources: list[str | netCDF4.Dataset],
     logger.debug("finished writing netcdf file %s" % destination)
 
 
-def merge_time(infiles, target, timevar="time",
-               allow_duplicates=False):
+def merge_time(infiles: list | str, target: str,
+               timevar: str = "time",
+               compression: str | None = None,
+               allow_duplicates: bool = False):
     """
     Function that takes a list of input NetCDF files, each representing
     temporal slices of a dataset, and merges them into a single
@@ -665,7 +665,7 @@ def merge_time(infiles, target, timevar="time",
         - Removal of temporary files post-completion.
 
     :example: Usage example for three input files:
-        >>> concat_time(["file1.nc", "file2.nc"], "output.nc")
+        >>> merge_time(["file1.nc", "file2.nc"], "output.nc")
 
     """
     # get sorting order:
@@ -676,13 +676,12 @@ def merge_time(infiles, target, timevar="time",
         with netCDF4.Dataset(infile) as src:
             in_time += src[timevar][:].tolist()
             in_fid += [fid]*len(src[timevar])
-            in_idx += [i + len(in_idx) for i in range(len(src[timevar]))]
+            in_idx += [i for i in range(len(src[timevar]))]
             logger.debug(f"starting time of {infile}: {in_time[0]}")
     sorted_time, sorted_fid, sorted_idx = zip(
-        *sorted(zip(
-            in_time,
-            in_fid, in_idx))
+        *sorted(zip(in_time,in_fid, in_idx))
     )
+    sorted_out = [i for i in range(len(sorted_time))]
     # check for duplicate times.
     if len(sorted_time) != len(set(sorted_time)):
         if not allow_duplicates:
@@ -694,33 +693,67 @@ def merge_time(infiles, target, timevar="time",
         with netCDF4.Dataset(infiles[0]) as src:
             logger.debug(f"initializing from "
                          f"{os.path.basename(src.filepath())}")
-            copy_structure(src, dst, resize={timevar:None}, copy_data=False)
+            copy_structure(src, dst,
+                           resize={timevar:None},
+                           compression=compression,
+                           copy_data=False)
 
         # create empty data fields
         dst.variables[timevar][:] = sorted_time
 
         for fid, infile in enumerate(infiles):
             # get positions where to put the data
-            dst_index = [i for i,j in zip(sorted_idx, sorted_fid)
+            src_index = [i for i,j in zip(sorted_idx, sorted_fid)
+                         if j == fid]
+            dst_index = [i for i,j in zip(sorted_out, sorted_fid)
                          if j == fid]
             # copy values over
             with netCDF4.Dataset(infile) as src:
                 logger.debug(f"adding data from "
                              f"{os.path.basename(src.filepath())}")
                 for vname in dst.variables.keys():
-                    logger.debug(f"copying values from {vname}")
-                    slices = tuple(
-                        slice(None) if x != timevar else dst_index
-                        for x in dst.variables[vname].dimensions
-                    )
-                    dst[vname][slices] = src[vname][:]
+                    if not isinstance(dst.variables[vname].datatype,
+                            (netCDF4.VLType, netCDF4.CompoundType)):
+                        # closed expression for number types (faster)
+                        logger.debug(f"block-copying values from {vname}")
+                        src_slices = tuple(
+                            slice(None) if x != timevar else src_index
+                            for x in src.variables[vname].dimensions
+                        )
+                        dst_slices = tuple(
+                            slice(None) if x != timevar else dst_index
+                            for x in dst.variables[vname].dimensions
+                        )
+                        logger.debug(str(src_slices))
+                        logger.debug(str(dst_slices))
+                        dst[vname][dst_slices] = src[vname][src_slices]
+                    else:
+                        logger.debug(f"cell-copying values from {vname}")
+                        # iterate explicitly for variable-length types
+                        # way slower but does not raise error
+                        src_slices = [
+                            [i for i in range(src.dimensions[x].size)]
+                            for x in src.variables[vname].dimensions
+                        ]
+                        dst_slices = [
+                            [i for i in range(src.dimensions[x].size)]
+                            if x != timevar else dst_index
+                            for x in src.variables[vname].dimensions
+                        ]
+                        for prod in zip(
+                                itertools.product(*src_slices),
+                                itertools.product(*dst_slices)):
+                            src_cell, dst_cell = (list(x) for x in prod)
+                            dst[vname][*dst_cell] = src[vname][*src_cell]
+
 
     # clean up
-    print("removing temporary files")
-    for v in _tools.progress(infiles,
-                             "removing files"):
-        logger.debug(f" ... removing {v}")
-        os.remove(v)
+    if logger.getEffectiveLevel() > logging.DEBUG:
+        print("removing temporary files")
+        for v in _tools.progress(infiles,
+                                 "removing files"):
+            logger.debug(f" ... removing {v}")
+            os.remove(v)
 
     return True
 
@@ -737,6 +770,7 @@ def subset_xy(infile, target,
               by_index: bool = False,
               replace: dict = {},
               convert: dict = {},
+              compression: str | None = None,
               ):
     with (netCDF4.Dataset(infile) as src,
           netCDF4.Dataset(target, "w", format='NETCDF4') as dst):
@@ -793,19 +827,19 @@ def subset_xy(infile, target,
             imin = (min([i for i,x in enumerate(src[xvar][:])
                          if x >= xmin])
                     if xmin is not None else 0)
-            imax = (max([i for i,x in enumerate(src[xvar][:]) + 1
+            imax = (max([i + 1 for i,x in enumerate(src[xvar][:])
                          if x <= xmax])
                     if xmax is not None else src[xvar].size)
             jmin = (min([j for j,y in enumerate(src[yvar][:])
                          if y >= ymin])
                     if ymin is not None else 0)
-            jmax = (max([j for j,y in enumerate(src[yvar][:]) + 1
+            jmax = (max([j + 1 for j,y in enumerate(src[yvar][:])
                          if y <= ymax])
                     if ymax is not None else src[yvar].size)
             nmin = (min([n for n,t in enumerate(src[timevar][:])
                          if t >= tmin])
                     if tmin is not None else 0)
-            nmax = (max([n for n,t in enumerate(src[timevar][:]) + 1
+            nmax = (max([n + 1 for n,t in enumerate(src[timevar][:])
                          if t <= tmax])
                     if tmax is not None else src[timevar].size)
 
@@ -817,7 +851,8 @@ def subset_xy(infile, target,
             resize[timevar] = nmax - nmin
 
         logger.debug(f"copying structure ...")
-        copy_structure(src, dst, resize=resize, copy_data=False)
+        copy_structure(src, dst, resize=resize,
+                       compression=compression, copy_data=False)
 
         logger.debug(f"copying values ...")
         # translate incices into slices
