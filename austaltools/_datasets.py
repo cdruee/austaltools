@@ -80,6 +80,12 @@ CDSAPI_CERRA_CHUNKS = 4
     For possible values see 
     :py:func:`austaltools._dataset.cds_get_cerra_year` """
 
+CDSAPI_ERA5_CHUNKS = 6
+""" Copernicus per-request limit does not permit download of 
+    yearly files and requires splitting up donwloads. 
+    For possible values see 
+    :py:func:`austaltools._dataset.cds_get_era5_year` """
+
 COMPRESS_NETCDF = 'zlib'
 """ Standard compression method of netCDF files  """
 
@@ -119,6 +125,8 @@ Filled on demand.
 
 :meta hide-value:
 """
+
+_CLEAN_UP = True
 
 # -------------------------------------------------------------------------
 # make optional imports defined:
@@ -1314,15 +1322,15 @@ def provide_terrain(source: str, path: str = None,
     Funciton that makes a terrain dataset (digital elevation model, DEM)
     locally available, using the chosen method.
 
-    :param source: ID of the dataset to make vailable
+    :param source: ID of the dataset to make available
     :type source: str
     :param path: Path to where to write the dataset files.
-      If None, the lowest-proirity (i.e. most system-wide)
+      If None, the lowest-priority (i.e. most system-wide)
       writable location of the standard stroage locations in
       :py:const:`_tools.STORAGE_LOCATIONS` is selected.
       Defaults to None.
-    :type path: str or None, optional
-    :param force: Wheter to overwrite a dataset that is already avialable.
+    :type path: str | None, optional
+    :param force: whether to overwrite a dataset that is already avialable.
       Defaults to False.
     :type force: bool, options
     :param method: The method how to get the dataset.
@@ -1357,7 +1365,7 @@ def provide_terrain(source: str, path: str = None,
             os.chdir(temp_dir)
             logger.debug('calling %s' % str(dataset.assemble))
             dataset.assemble(path, source, force, dataset.arguments)
-            # return before clean up
+            # return before cleaning up
             os.chdir(pwd)
     else:
         raise ValueError("method must be either 'download' or 'assemble'")
@@ -1450,10 +1458,9 @@ def cds_merge_zipped(source, destination, compression=COMPRESS_NETCDF):
         if os.path.exists(destination_file):
             os.remove(destination_file)
 
-        replace, convert = cds_replace_valid_time(compression)
-
         _netcdf.merge_variables(ncfiles, destination_file,
-                                replace, convert, compression)
+                                compression=compression)
+
 
 # -------------------------------------------------------------------------
 
@@ -1525,8 +1532,6 @@ def cds_getorder(order_args: dict[str, str|dict]) -> str:
     logger.debug(f"target: {target}")
 
     cds.retrieve(dataset, request, target)
-    logger.info(f"copying {target} from cache")
-    os.link(f"/localdata/druee/tmp/tmpcache/{target}", f"./{target}")
 
     return target
 
@@ -1571,6 +1576,14 @@ def cds_processorder(order_args: dict[str, str | dict],
                           compression=compression)
         os.remove(fullname)
 
+    fullname = 'oldtime_' + target
+    shutil.move(target, fullname)
+    replace, convert = cds_replace_valid_time(compression)
+    _netcdf.merge_variables([fullname], target,
+                            replace=replace, convert=convert,
+                            compression=compression,
+                            remove_source=True)
+
     return target
 
 # -------------------------------------------------------------------------
@@ -1593,7 +1606,7 @@ def cds_get_order_list(args_list):
             with mp.Pool(CDSAPI_LIMIT_PARALLEL) as pool:
                 for _,args in zip(
                         pool.map(cds_getorder, args_list), args_list):
-                    logger.debug(f"###### DOWNLOADING {args['target']}")
+                    logger.info(f"downloading file {args['target']}")
                     queue.put(args)
             # Signal end of downloads
             queue.put(None)
@@ -1609,7 +1622,7 @@ def cds_get_order_list(args_list):
                     # End of downloads, exit
                     break
                 # do preprocessing
-                logger.debug(f"###### PREPROCESSING {args['target']}")
+                logger.info(f"preprocessing file {args['target']}")
                 processed_file = cds_processorder(args)
                 result_list.append(processed_file)
 
@@ -1642,7 +1655,7 @@ def cds_get_order_list(args_list):
 
 # -------------------------------------------------------------------------
 
-def cds_get_era5_year(year: int, chunks: int | bool = False):
+def cds_get_era5_year(year: int, chunks: int | bool = True):
     """
     Downloads ERA5 reanalysis data for a specific year and
     saves it as a NetCDF file.
@@ -1754,7 +1767,7 @@ def cds_get_era5_year(year: int, chunks: int | bool = False):
             '{:02d}'.format(x + 1) for x in range(l_mon[chunk])
         ]
         args['target'] = 'era5_ak_eu_{:04d}-{:02d}.nc'.format(
-            int(year), chunk + 1),
+            int(year), chunk + 1)
 
         args_list.append(deepcopy(args))
 
@@ -1762,105 +1775,25 @@ def cds_get_era5_year(year: int, chunks: int | bool = False):
     logger.info("starting download process")
     downloaded = cds_get_order_list(args_list)
     logger.debug(f"downloaded files: {downloaded}")
+    chunk_files = downloaded
 
-    logger.info("assemling year")
-    _netcdf.merge_time(downloaded, ncname, timevar='time',
-                       compression=COMPRESS_NETCDF)
+    if len(downloaded) == 0:
+        raise RuntimeError(f"nothing was downloaded (!?)")
+
+    logger.info("assembling year")
+    if len(chunk_files) > 1:
+        _netcdf.merge_time(chunk_files, ncname, timevar='time',
+                           compression=COMPRESS_NETCDF)
+    else:
+        shutil.move(chunk_files[0], ncname)
+
+    logger.info(f"done getting year {year}")
 
     return ncname
 
-# -------------------------------------------------------------------------
-def assemble_ERA5(path: str, name="ERA5", years:list=None,
-                  replace : bool = False, args:dict=None):
-    """
-    Downloads and assembles ERA5 reanalysis data for a list of specified
-    years, saving the data to a designated path.
-
-    This function serves as a wrapper around the `era5_getyear` function,
-    facilitating the batch retrieval of ERA5
-    data for multiple years. It utilizes multiprocessing to download data
-    in parallel, thereby significantly reducing
-    the overall time required for downloading large datasets. Each year's
-    data is saved as a separate NetCDF file within
-    the specified directory path.
-
-    :param path: The file system path where the downloaded NetCDF files
-      will be saved.
-    :type path: str
-    :param name: name (code) of the dataset to assemble
-    :type name: str
-    :param years: A list of years for which ERA5 data should be downloaded.
-      Each year should be an integer within the
-      valid range (1940 to the current year).
-    :type years: list
-    :param replace: If True, an existing file is overwritten.
-        If False, an error is raises if the file already exists.
-    :type replace: bool
-    :param args: Optionally accepted for compatiblity with the
-        general asseble funtion call. Is not evaluated.
-    :type args: dict
-
-    :raises ValueError: If any year in the `years` list is outside the
-      allowable range of 1940 to the current year.
-
-    :example:
-
-        >>> # To download ERA5 data for the years 2018 to 2020
-        >>> # and save to '/data/ERA5'
-        >>> assemble_ERA5('/data/ERA5', years=[2018, 2019])
-
-    :note:
-
-    - The function assumes that the `era5_getyear` function is defined
-      and correctly set up to retrieve ERA5 data.
-    - The parallel downloading process is set to use 10 worker processes.
-      Adjust this value in the `Pool` initialization
-      as needed based on system resources and desired performance.
-    - Ensure that sufficient disk space is available at the specified
-      path to accommodate the downloaded data files.
-    - Needs `cdsapi` for data retrieval and a **valid CDS API** key.
-
-    """
-
-    # create option tuples
-    if args is None:
-        args = {}
-    if years is None:
-        years = []
-    _init_datasets()
-    logger.debug(f"assemble_ERA5: path={path}, name={name}, "
-                 f"years={years}, replace={replace}, args={args}")
-    downloaded = {}
-    for year in years:
-        # check year
-        yn = name_yearly(name, year)
-        if yn not in [x.name for x in DATASETS]:
-            raise ValueError(f"year is out of range: {year}")
-
-        # do not download if already available
-        if not replace:
-            if dataset_get(yn).available:
-                logger.info(f"skipping available year: {yn}")
-                continue
-
-        # gently move the old file out of way
-        target = os.path.join(path, WEA_FMT % yn)
-        if not _ass_clear_target(target, replace):
-            logger.info("skipping because datafile exists: %s" % name)
-            continue
-
-        # download the year and put into place
-        logger.info(f"getting year :{year}")
-        ncname = cds_get_era5_year(year)
-        shutil.move(ncname, target)
-        logger.debug("wrote file: %s" % target)
-
-    logger.info("assembled dataset: %s" % name)
-
-
 
 # -------------------------------------------------------------------------
-def cds_get_cerra_year(year: int, chunks: int | bool = False):
+def cds_get_cerra_year(year: int, chunks: int | bool = True):
     """
     Downloads and processes a year's worth of CERRA dataset as GRIB files,
     then converts them to NetCDF format for easier use.
@@ -1879,14 +1812,14 @@ def cds_get_cerra_year(year: int, chunks: int | bool = False):
     as well as an active Copernicus account for data retrieval.
 
     :param year: The year of the dataset to retrieve.
-    :type opts: int
+    :type year: int
 
-    :param chunks: Whether to retrieve omnthly chunks or yearly files.
-      If True or 12, monthly chunks  is downloaded.
+    :param chunks: Whether to retrieve monthly chunks or yearly files.
+      If True or 12, monthly chunks are downloaded.
       If False or 1, the year is downloaded in one piece
       (which exceeds current limits as of Apr 2025)
       If 2, 3, 4, or 6, six multi-monthly chunks are downloaded
-      (wich can be faster, depending on the qeue length)
+      (which can be faster, depending on the qeue length)
     :type chunks: int | bool
 
 
@@ -1997,65 +1930,72 @@ def cds_get_cerra_year(year: int, chunks: int | bool = False):
     downloaded = cds_get_order_list(args_list)
     logger.debug(f"downloaded files: {downloaded}")
 
+    if len(downloaded) == 0:
+        raise RuntimeError(f"nothing was downloaded (!?)")
+
     logger.info("sorting forecast lead times")
-    merged = []
+    chunk_files = []
     for chunk in _tools.progress(range(chunk_count)):
+        logger.info(f"working on chunk #{chunk}")
         stem = 'cerra_ak_eu_{:04d}-{:02d}'.format(int(year), chunk + 1)
         sources = glob.glob(stem + '*.nc')
         merge_to = stem + '.nc'
-        _netcdf.merge_time(sources, merge_to, timevar='valid_time',
+        _netcdf.merge_time(sources, merge_to, timevar='time',
                            compression=COMPRESS_NETCDF)
-        merged.append(merge_to)
+        chunk_files.append(merge_to)
 
     logger.info("assembling year")
-    if len(merged) > 1:
-        _netcdf.merge_time(merged, ncname, timevar='valid_time',
+    if len(chunk_files) > 1:
+        _netcdf.merge_time(chunk_files, ncname, timevar='time',
                            compression=COMPRESS_NETCDF)
     else:
-        shutil.move(merged[0], ncname)
-
-    # replace time variable
-    replace, convert = cds_replace_valid_time(
-        compression=COMPRESS_NETCDF)
-    shutil.move(ncname, 'old_' + ncname)
-    _netcdf.merge_variables(['old_' + ncname], ncname,
-                            replace=replace, convert=convert,
-                            compression=COMPRESS_NETCDF)
+        shutil.move(chunk_files[0], ncname)
 
     logger.info(f"done getting year {year}")
     return ncname
 
 
 # -------------------------------------------------------------------------
-def assemble_CERRA(path: str, name="CERRA", years=None,
-                   replace : bool = False, args=None):
+def assemble_rea(path: str, name: str,
+                 years: str | int | None = None,
+                 chunks: bool | int = True,
+                 replace : bool = False,
+                 args: dict | None = None):
     """
-    Downloads, extracts, and merges CERRA dataset forecasts for specified
-    years into single NetCDF files per year.
+    Downloads, extracts, and merges ERA5 or CERRA datasets
+    for specified years into single NetCDF files per year.
 
     This function orchestrates the retrieval and processing of
-    CERRA forecast datasets for a list of years.
+    reanalysis / forecast datasets for a list of years.
     For each year, it fetches data for multiple lead times, extracts a
     specific region from the datasets, and then merges
-    the forecast data into a single NetCDF file per year. The operation
-    utilizes the Climate Data Operators (CDO) for data
-    manipulation and assumes a temporary directory is defined for
+    the forecast data into a single NetCDF file per year.
+    This functions assumes a temporary directory is defined for
     intermediate data storage.
 
     :param path: The path where the final merged NetCDF files
       will be stored.
     :type path: str
-    :param name: name (code) of the dataset to assemble
+
+    :param name: name (code) of the dataset to assemble.
+      Supports "ERA5" or "CERRA".
     :type name: str
+
     :param years: A list of years (integer) for which CERRA data should
       be downloaded and processed. The years should fall
       within the range of 1940 to the current year.
     :type years: list
+
+    :param chunks: Whether to retrieve monthly chunks or yearly files.
+       See :py:func:`austaltools._datasets.cds_get_cerra_year`.
+    :type chunks: int | bool
+
     :param replace: If True, an existing file is overwritten.
-        If False, an error is raises if the file already exists.
+        If False, an error is raised if the file already exists.
     :type replace: bool
+
     :param args: Optionally accepted for compatiblity with the
-        general asseble funtion call. Is not evaluated.
+        general assemble funtion call. Is not evaluated.
     :type args: dict
 
     :raises ValueError: If any of the years specified is outside the
@@ -2064,14 +2004,11 @@ def assemble_CERRA(path: str, name="CERRA", years=None,
     :example:
 
         >>> # To process CERRA data for the years 2015 to 2017
-        >>> assemble_CERRA('/path/to/final/storage', years=[2015, 2016])
+        >>> assemble_rea('/path/to/final/storage', 'CERRA',
+        >>>     years=[2015, 2016])
 
     :note:
 
-    - The function utilizes `cdo.Cdo` for data manipulation tasks such as
-      merging time steps. Make sure that python-cdo is
-      installed and properly configured along with the actual CDO
-      command-line tools.
     - A temporary directory for storing intermediate data files is
       required. This directory is assumed to be configured before
       the function call.
@@ -2086,22 +2023,29 @@ def assemble_CERRA(path: str, name="CERRA", years=None,
     if years is None:
         years = []
     _init_datasets()
-    logger.debug(f"assemble_CERRA: path={path}, name={name}, "
+    logger.debug(f"assemble_rea: path={path}, name={name}, "
                  f"years={years}, replace={replace}, args={args}")
-    temp_path = _storage.TEMP
+    fun_getyear = None
+    if name == 'ERA5':
+        fun_getyear = cds_get_era5_year
+    elif name == 'CERRA':
+        fun_getyear = cds_get_cerra_year
+    else:
+        raise ValueError(f"unknown reanalysis name: {name}")
 
     # get years to retrieve
-    combi = []
     for year in years:
         yn = name_yearly(name, year)
         if yn not in [x.name for x in DATASETS]:
             raise ValueError(f"year is out of range: {year}")
+
+        # do not download if already available
         if not replace:
             if dataset_get(yn).available:
                 logger.info(f"skipping available year: {yn}")
                 continue
 
-        # gently move the old file out of way
+        # gently move the old file out of the way
         target = os.path.join(path, WEA_FMT % yn)
         if not _ass_clear_target(target, replace):
             logger.info("skipping because datafile exists: %s" % name)
@@ -2109,9 +2053,9 @@ def assemble_CERRA(path: str, name="CERRA", years=None,
 
         # download the year and put into place
         logger.info(f"getting year :{year}")
-        ncname = cds_get_cerra_year(year, CDSAPI_CERRA_CHUNKS)
+        ncname = fun_getyear(year, chunks)
         shutil.move(ncname, target)
-        logger.debug("wrote file: %s" % target)
+        logger.info("wrote file: %s" % target)
 
     logger.info("assembled dataset: %s" % name)
 
@@ -2252,6 +2196,7 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
     to_download = {}
     for year in years:
         print(f"processing year: {year}")
+        print("")
 
         # construct time/date part of filenames
         for i in range(12):
@@ -2270,7 +2215,8 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
 
         # download the files
         logger.debug("files to download: %d" % len(to_download))
-        for k,v in _tools.progress(to_download.items(), "fetching files"):
+        for k,v in _tools.progress(list(to_download.items()),
+                                   "fetching files"):
             _tools.download(k, v)
 
         # gently move the old file out of way
@@ -2282,24 +2228,35 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
 
         # assemble the new file
         yearfiles = []
-        for k in _tools.progress(srv_dirs.keys(), "aggregating data"):
+        for k in _tools.progress(list(srv_dirs.keys()),
+                                 "aggregating data"):
             sources = [x for x in to_download.values()
                        if x.startswith(f"{k}_{year:04d}")]
             destination = f"{k}_year.nc"
-            _netcdf.merge_time(sources, destination, timevar='time')
+            _netcdf.merge_time(sources, destination,
+                               timevar='time',
+                               remove_source=False)
             yearfiles.append(destination)
+
+        print(f"assembling year")
         _netcdf.merge_variables(yearfiles, target,
-                                compression=COMPRESS_NETCDF)
+                                compression=COMPRESS_NETCDF,
+                                remove_source=False)
+
+        print(f"wrote file: {target}")
 
         # clean up
-        if logger.getEffectiveLevel() > logging.DEBUG:
+        if _CLEAN_UP:
             logger.debug("removing remaining temporary files")
-            for v in _tools.progress(to_download.values(),
-                                     "removing files"):
+            for v in _tools.progress(
+                    list(to_download.values()) + yearfiles,
+                    "removing files"):
                 if os.path.exists(v): os.remove(v)
 
     return True
+
 # -------------------------------------------------------------------------
+
 def provide_weather(source: str, path: str = None,
                     years: list = None,
                     force: bool = False, method: str = 'download'):
@@ -2369,17 +2326,19 @@ def provide_weather(source: str, path: str = None,
     delete_tmp = (logger.getEffectiveLevel() > logging.DEBUG)
     with tempfile.TemporaryDirectory(
             ignore_cleanup_errors=True, dir=_storage.TEMP,
-            delete=delete_tmp) as temp_dir:
+            delete=_CLEAN_UP) as temp_dir:
         os.chdir(temp_dir)
         success = True
         if source == "ERA5":
             import_lib('cdsapi')
             import_lib('_netcdf')
-            assemble_ERA5(path, years=years, replace=force)
+            assemble_rea(path, name='ERA5', years=years,
+                         chunks=CDSAPI_ERA5_CHUNKS, replace=force)
         elif source == "CERRA":
             import_lib('_netcdf')
             import_lib('cdsapi')
-            assemble_CERRA(path, years=years, replace=force)
+            assemble_rea(path, name='CERRA', years=years,
+                         chunks=CDSAPI_CERRA_CHUNKS, replace=force)
         elif source == "HOSTRADA":
             import_lib('_netcdf')
             assemble_hostrada(path, years=years, replace=force)
@@ -2522,7 +2481,7 @@ def xyz2csv(inputfile, output, utm_remove_zone=False):
     :param output: output file
     :type output: str
     :param utm_remove_zone: Some providers prefix UTM easting with the
-      zone numer, which results in easting values exceeding 1000km.
+      zone number, which results in easting values exceeding 1000km.
       Remove the leading digits to keep easting in the allowed range
       0m < easting < 1000000 m. defaults to False.
     :type utm_remove_zone: bool

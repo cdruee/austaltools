@@ -485,9 +485,17 @@ def main():
     args = vars(parser.parse_args())
 
     # set logging level
-    if args['verb'] is not None:
+    logging_levels={
+        logging.DEBUG: 'DEBUG',
+        logging.INFO: 'INFO',
+        logging.WARNING: 'WARNING',
+        logging.ERROR: 'ERROR',
+        logging.CRITICAL: 'CRITICAL'
+    }
+    if args.get('verb',logging.WARNING) != logging.WARNING:
         logger.setLevel(args['verb'])
-        logger.warning('level = %s' % logger.getEffectiveLevel())
+        logger.warning(f"changes loggig level to '%s'" %
+                       logging_levels[logger.getEffectiveLevel()])
     else:
         logger.setLevel(logging.WARNING)
 

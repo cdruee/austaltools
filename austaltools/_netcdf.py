@@ -18,6 +18,7 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+# -------------------------------------------------------------------------
 
 class VariableSkeleton():
     """
@@ -86,6 +87,7 @@ class VariableSkeleton():
         """
         return list(self.ncattr.keys())
 
+# -------------------------------------------------------------------------
 
 def get_dimensions(dataset: netCDF4.Dataset,
                    timevar: str | None = None) -> dict:
@@ -103,6 +105,7 @@ def get_dimensions(dataset: netCDF4.Dataset,
                   if dim != timevar else None)
             for dim in dataset.dimensions}
 
+# -------------------------------------------------------------------------
 
 def get_global_attributes(dataset):
     """
@@ -116,6 +119,7 @@ def get_global_attributes(dataset):
     return {attr: dataset.getncattr(attr)
             for attr in dataset.ncattrs()}
 
+# -------------------------------------------------------------------------
 
 def get_variables(dataset):
     """
@@ -139,8 +143,8 @@ def get_variables(dataset):
         }
     return variables
 
+# -------------------------------------------------------------------------
 
-# helper function to get variable information
 def get_variable_attributes(dataset, var):
     """
     Helper function to get the attributes of variable of a dataset
@@ -158,6 +162,7 @@ def get_variable_attributes(dataset, var):
     return {attr: dataset.variables[var].getncattr(attr)
             for attr in dataset.variables[var].ncattrs()}
 
+# -------------------------------------------------------------------------
 
 def check_homhogenity(file_list, timevar=None, fail=False):
     """
@@ -234,6 +239,7 @@ def check_homhogenity(file_list, timevar=None, fail=False):
             logger.debug(x)
     return True
 
+# -------------------------------------------------------------------------
 
 def copy_values(src, dst,
                 replace: dict[str, str | VariableSkeleton | None] = {},
@@ -308,9 +314,10 @@ def copy_values(src, dst,
                 )
                 slices_list.append(slices)
         for slices in slices_list:
-            logger.debug(str(slices))
+            #logger.debug(str(slices))
             dst[dname][slices] = converter(src[sname][slices])
 
+# -------------------------------------------------------------------------
 
 def add_variable(dst: netCDF4.Dataset,
                  svar: netCDF4.Variable,
@@ -400,14 +407,17 @@ def add_variable(dst: netCDF4.Dataset,
         dst.variables[dname].setncattr(a, string)
     return True
 
+# -------------------------------------------------------------------------
+
 def timeconverter(old_unit, new_unit):
     def dtime_fun(x):
         numtime = netCDF4.num2date(x, old_unit)
         return netCDF4.date2num(numtime, new_unit)
     return dtime_fun
 
-def replace_cds_valid_time(compression:str):
+# -------------------------------------------------------------------------
 
+def replace_cds_valid_time(compression:str):
     # replace time variable
     stime_name = 'valid_time'
     stime_unit = 'seconds since 1970-01-01'
@@ -435,6 +445,7 @@ def replace_cds_valid_time(compression:str):
 
     return replace, convert
 
+# -------------------------------------------------------------------------
 
 def copy_structure(src, dst,
                    replace: dict[str, str | VariableSkeleton | None] = {},
@@ -553,22 +564,23 @@ def copy_structure(src, dst,
     if copy_data:
         copy_values(src, dst, replace, convert)
 
+# -------------------------------------------------------------------------
 
-
-def merge_variables(sources: list[str | netCDF4.Dataset],
-                    destination: str,
+def merge_variables(infiles: list[str],
+                    target: str,
                     replace: dict[str, str | VariableSkeleton | None] = {},
                     convert: dict[str, collections.abc.Callable] = {},
-                    compression: str | None = None):
+                    compression: str | None = None,
+                    remove_source: bool = True):
     """
     Merge multiple netcdf files contained in a zip archive
     into one nc file.
 
-    :param sources: lits of paths to the files to read
-    :type source: str
+    :param infiles: List of paths to the files to read
+    :type infiles: str
 
-    :param destination: path of the destination file to create
-    :type destination: str
+    :param target: path of the destination file to create
+    :type target: str
 
     :param replace:
       A dictionary that specifies variables to be replaced or removed:
@@ -590,40 +602,42 @@ def merge_variables(sources: list[str | netCDF4.Dataset],
     :type compression: str | None
     """
 
-    if all(isinstance(x, netCDF4.Dataset) for x in sources):
-        src_list = sources
-    elif all(isinstance(x, (str, os.PathLike)) for x in sources):
-        src_list = [netCDF4.Dataset(x, 'r') for x in sources]
-    else:
-        raise ValueError(f"sources must be all str or all netCDF4.Dataset")
+    src_list = [netCDF4.Dataset(x, 'r') for x in infiles]
 
-    logger.debug("creating netcdf file %s" % destination)
-    if os.path.exists(destination):
-        os.remove(destination)
-    dst = netCDF4.Dataset(destination, "w")
+    logger.debug("creating netcdf file %s" % target)
+    if os.path.exists(target):
+        os.remove(target)
+    dst = netCDF4.Dataset(target, "w")
 
     # copy file structure
-    copy_structure(src_list[0], dst, replace, convert,
+    copy_structure(src_list[0], dst,
+                   replace=replace, convert=convert,
                    compression=compression, copy_data=True)
 
     # copy variable values
     for src in src_list[1:]:
         for sname, svar in src.variables.items():
             logger.debug(f"variable: {sname}")
-            add_variable(dst, svar, replace, compression=compression)
-        copy_values(src, dst, replace, convert)
+            add_variable(dst, svar,
+                         replace=replace, compression=compression)
+        copy_values(src, dst, replace=replace, convert=convert)
 
     # clean up
     for src in src_list:
         src.close()
+    if remove_source:
+        for f in infiles:
+            os.remove(f)
     dst.close()
-    logger.debug("finished writing netcdf file %s" % destination)
+    logger.debug("finished writing netcdf file %s" % target)
 
+# -------------------------------------------------------------------------
 
 def merge_time(infiles: list | str, target: str,
                timevar: str = "time",
                compression: str | None = None,
-               allow_duplicates: bool = False):
+               allow_duplicates: bool = False,
+               remove_source: bool = True):
     """
     Function that takes a list of input NetCDF files, each representing
     temporal slices of a dataset, and merges them into a single
@@ -724,8 +738,8 @@ def merge_time(infiles: list | str, target: str,
                             slice(None) if x != timevar else dst_index
                             for x in dst.variables[vname].dimensions
                         )
-                        logger.debug(str(src_slices))
-                        logger.debug(str(dst_slices))
+                        #logger.debug(str(src_slices))
+                        #logger.debug(str(dst_slices))
                         dst[vname][dst_slices] = src[vname][src_slices]
                     else:
                         logger.debug(f"cell-copying values from {vname}")
@@ -748,8 +762,8 @@ def merge_time(infiles: list | str, target: str,
 
 
     # clean up
-    if logger.getEffectiveLevel() > logging.DEBUG:
-        print("removing temporary files")
+    if remove_source:
+        logger.debug("removing temporary files")
         for v in _tools.progress(infiles,
                                  "removing files"):
             logger.debug(f" ... removing {v}")
@@ -757,6 +771,7 @@ def merge_time(infiles: list | str, target: str,
 
     return True
 
+# -------------------------------------------------------------------------
 
 def subset_xy(infile, target,
               xmin: int | float | None = None,
