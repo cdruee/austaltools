@@ -25,6 +25,8 @@ datasets that serve as input for austaltools
       and en on `.tif`
 
 """
+import calendar
+from copy import deepcopy
 import getpass
 import glob
 import gzip
@@ -65,11 +67,31 @@ except ImportError:
     import _fetch_dwd_obs
 
 disable_warnings(exceptions.InsecureRequestWarning)
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------------
 CDSAPI_LIMIT_PARALLEL = 2
 """ Copernicus per-user limit for parallel queries """
+
+CDSAPI_CERRA_CHUNKS = 4
+""" Copernicus per-request limit does not permit download of 
+    yearly files and requires splitting up donwloads. 
+    For possible values see 
+    :py:func:`austaltools._dataset.cds_get_cerra_year` """
+
+CDSAPI_ERA5_CHUNKS = 6
+""" Copernicus per-request limit does not permit download of 
+    yearly files and requires splitting up donwloads. 
+    For possible values see 
+    :py:func:`austaltools._dataset.cds_get_era5_year` """
+
+COMPRESS_NETCDF = 'zlib'
+""" Standard compression method of netCDF files  """
+
+RUNPARALLEL = True
+""" Use parallel processing (defaults to False on Windows Systems) """
+if CDSAPI_LIMIT_PARALLEL < 1 and os.name in ['nt']:
+    RUNPARALLEL = False
 
 with (_storage.DIST_AUX_FILES / 'dataset_definitions.json').open() as f:
     DATASET_DEFINITIONS = json.load(f)
@@ -103,31 +125,31 @@ Filled on demand.
 :meta hide-value:
 """
 
+_CLEAN_UP = True
+
 # -------------------------------------------------------------------------
 # make optional imports defined:
 cdsapi = None
 cdo = None
 gdal = None
 gdal_merge = None
+_netcdf = None
 osr = None
 # link libraries used to libraries imported
 LIB2IMPORT = {
     'cdo': 'cdo',
     'cdsapi': 'cdsapi',
     'gdal': 'osgeo',
+    'gdal_merge': 'osgeo_utils',
+    '_netcdf': '_netcdf',
     'osr': 'osgeo',
-    'gdal_merge': 'osgeo_utils'
 }
-# link libraries used to their poular names
-LIB2NAME = {
-    'cdo': 'CDO',
-    'cdsapi': 'CSDapi',
-    'gdal': 'GDAL',
-    'osr': 'OSR',
-    'gdal_merge': 'GDAL merge'
-}
+
+
 def have_lib(lib):
-    """ ask if a libray is installed
+    """
+    ask if a libray is installed
+
     :param lib: name of libray to be installed
     :type lib: str
     :return: True if installed
@@ -140,28 +162,53 @@ def have_lib(lib):
             return True
     else:
         raise ValueError(f"Unknown library '{lib}'")
+
+
 def import_lib(lib):
-    """ import a libray that is installed
+    """
+    import a libray that is installed
+
     :param lib: name of libray
     :type lib: str
     """
-    if lib in LIB2IMPORT.keys():
-        mod = LIB2IMPORT[lib]
-        if mod == lib:
-            # ``import mod``
-            globals()[lib] = importlib.import_module(LIB2IMPORT[lib])
-        else:
-            # ``from mod import lib``
-            globals()[lib] = importlib.import_module('.'+lib, mod)
+    if lib == 'cdo':
+        global cdo
+        import cdo
+    elif lib == 'cdsapi':
+        global cdsapi
+        import cdsapi
+    elif lib == 'gdal':
+        global gdal
+        from osgeo import gdal
+    elif lib == 'gdal_merge':
+        global gdal_merge
+        from osgeo_utils import gdal_merge
+    elif lib == '_netcdf':
+        global _netcdf
+        try:
+            from . import _netcdf
+        except ImportError:
+            import _netcdf
+    elif lib == 'osr':
+        global osr
+        from osgeo import osr
     else:
         raise ValueError(f"Unknown library '{lib}'")
-NO_LIB_HELP = {k: (f"The {v} library does not appear to be installed. "
-                   f"You can install it by running "
-                   f"`pip install {LIB2IMPORT[k]}` "
-                   f"or using the package manager of your choice.")
-               for k,v in LIB2IMPORT.items()}
-""" help message to be displayed if library is not installed 
-:meta hide-value: """
+    logger.debug(f"imported libray '{lib}'")
+
+
+def no_lib_help(k):
+    """
+    help message to be displayed if library is not installed
+
+    :param k: library name
+    :type k: str
+    """
+    return(f"The {k} library does not appear to be installed. "
+           f"You can install it by running "
+           f"`pip install {LIB2IMPORT[k]}` "
+           f"or using the package manager of your choice.")
+
 
 # =========================================================================
 
@@ -216,12 +263,16 @@ class DataSet:
         :param path: path to the storage location where the
           dataset shall reside
         :type path: str
+
         :param name: name of the dataset (short uppercase code)
         :type name: str
+
         :param replace: replace the dataset if it alread exists
         :type replace: bool
+
         :param args: arguments to the assembling funtion that generates the dataset
         :type args: dict
+
         :returns: If the assembly was successful
         :rtype: bool
         """
@@ -231,14 +282,17 @@ class DataSet:
     def download(self, path=None, uri=None):
         """
         Download assembled dataset from reopository
+
         :param path: path to the storage location where the
-        dataset shall reside. Only needed if the attribute
-        :py:attr:`DataSet.path` is not set or should be overridden.
+          dataset shall reside. Only needed if the attribute
+          :py:attr:`DataSet.path` is not set or should be overridden.
         :type path: str, optional
+
         :param uri: uri describing the location from where the assembled
-        dataset shall be downloaded. Only needed if the attribute
-        :py:attr:`DataSet.uri` is not set or should be overridden.
+          dataset shall be downloaded. Only needed if the attribute
+          :py:attr:`DataSet.uri` is not set or should be overridden.
         :type uri: str, optional
+
         """
         if uri is None:
             uri = self.uri
@@ -310,6 +364,7 @@ class DataSet:
 def dataset_list():
     """
     Get list of datasets
+
     :return: the requested dataset object
     :rtype: dict[dict]
 
@@ -331,8 +386,10 @@ def dataset_list():
 def dataset_get(name):
     """
     Yield the dataset with the given ID
+
     :param name: dataset ID
     :type name: str
+
     :return: the requested dataset object
     :rtype: Dataset
 
@@ -350,8 +407,10 @@ def dataset_get(name):
 def dataset_available(name):
     """
     Return if dataset is available
+
     :param name:  dataset id of dataset to be checked
     :type name: str
+
     :return: True if dataset is available, False otherwise
     :rtype: bool
 
@@ -364,6 +423,7 @@ def update_available():
     """
     update availability of datasets stored in conf
     by scanning storrage locations
+
     """
     _init_datasets()
     logger.info("re-scanning available datasets")
@@ -530,12 +590,12 @@ def _ass_clear_target(target, replace):
     logger.debug(f'data file path: {target}')
     res = True
     if os.path.exists(target):
-        if not replace:
-            logger.info("dataset exists ... %s" % target)
-            res = False
-        else:
+        if replace:
             logger.info("deleting existig : %s" % target)
             os.remove(target)
+        else:
+            logger.info("dataset exists ... %s" % target)
+            res = False
     return res
 
 # -------------------------------------------------------------------------
@@ -645,10 +705,17 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         else:
             pp = PROCS
         i = 0
-        with mp.Pool(pp) as pool:
-            for tfs in _tools.progress(pool.imap_unordered(
-                    process_input, thread_args),
-                    total=len(thread_args)):
+        if RUNPARALLEL:
+            with mp.Pool(pp) as pool:
+                for tfs in _tools.progress(pool.imap_unordered(
+                        process_input, thread_args), "processing input",
+                        total=len(thread_args)):
+                    i = i + 1
+                    logger.debug("file %5d / %5d" % (i, len(thread_args)))
+                    tile_files += tfs
+        else:
+            for args in _tools.progress(thread_args, "processing input"):
+                tfs = process_input(args)
                 i = i + 1
                 logger.debug("file %5d / %5d" % (i, len(thread_args)))
                 tile_files += tfs
@@ -695,11 +762,17 @@ def assemble_DGM_SH(path, name, replace, args: dict):
     random.shuffle(fids)
     args = [(i, len(fids), x, args) for i, x in enumerate(fids)]
     tile_files = []
-    with mp.Pool(PROCS) as pool:
-        for tf in _tools.progress(
-                pool.imap_unordered(dgm1_sh_getfid, args),
-                total=len(args)
-        ):
+    if RUNPARALLEL:
+        with mp.Pool(PROCS) as pool:
+            for tf in _tools.progress(
+                    pool.imap_unordered(dgm1_sh_getfid, args),
+                    "fetching tiles",
+                    total=len(args)
+            ):
+                tile_files += tf
+    else:
+        for args in _tools.progress(args, "fetching tiles"):
+            tf = dgm1_sh_getfid(*args)
             tile_files += tf
 
     merge_tiles(target, tile_files)
@@ -829,7 +902,8 @@ def assemble_DGM_composit(path: str, name: str,
         res_opts = {}
 
     # tip from https://gis.stackexchange.com/a/385864
-    with (tempfile.TemporaryDirectory(dir=_storage.TEMP) as tmp):
+    with (tempfile.TemporaryDirectory(
+            ignore_cleanup_errors=True, dir=_storage.TEMP) as tmp):
         logger.debug("build virtual dataset")
         gdal.BuildVRT(os.path.join(tmp, vrt_name), members)
         logger.debug("writing data file %s" % target)
@@ -1248,15 +1322,15 @@ def provide_terrain(source: str, path: str = None,
     Funciton that makes a terrain dataset (digital elevation model, DEM)
     locally available, using the chosen method.
 
-    :param source: ID of the dataset to make vailable
+    :param source: ID of the dataset to make available
     :type source: str
     :param path: Path to where to write the dataset files.
-      If None, the lowest-proirity (i.e. most system-wide)
+      If None, the lowest-priority (i.e. most system-wide)
       writable location of the standard stroage locations in
       :py:const:`_tools.STORAGE_LOCATIONS` is selected.
       Defaults to None.
-    :type path: str or None, optional
-    :param force: Wheter to overwrite a dataset that is already avialable.
+    :type path: str | None, optional
+    :param force: whether to overwrite a dataset that is already avialable.
       Defaults to False.
     :type force: bool, options
     :param method: The method how to get the dataset.
@@ -1286,11 +1360,12 @@ def provide_terrain(source: str, path: str = None,
         import_lib('osr')
         # change to temp directory
         pwd = os.getcwd()
-        with tempfile.TemporaryDirectory(dir=_storage.TEMP) as temp_dir:
+        with tempfile.TemporaryDirectory(
+                ignore_cleanup_errors=True, dir=_storage.TEMP) as temp_dir:
             os.chdir(temp_dir)
             logger.debug('calling %s' % str(dataset.assemble))
             dataset.assemble(path, source, force, dataset.arguments)
-            # return before clean up
+            # return before cleaning up
             os.chdir(pwd)
     else:
         raise ValueError("method must be either 'download' or 'assemble'")
@@ -1326,113 +1401,7 @@ def provide_terrain(source: str, path: str = None,
     return
 
 # -------------------------------------------------------------------------
-def merge_zipped_nc(source, destination):
-    """
-    Merge multiple netcdf files contained in a zip archive
-    into one nc file.
 
-    :param source: path of the archive file to read
-    :type source: str
-    :param destination: path of the destination file to create
-    :type destination: str
-    """
-    import netCDF4
-    source_file = os.path.abspath(source)
-    logger.info("unpacking downloaded zip archive %s" % source_file)
-    destination_file = os.path.abspath(destination)
-    with tempfile.TemporaryDirectory(dir=_storage.TEMP) as td:
-        with zipfile.ZipFile(source_file, 'r') as zf:
-            zf.extractall(td)
-        ncfiles = glob.glob(os.path.join(td, '*.nc'))
-        if len(ncfiles) == 0:
-            raise IOError("No files found in %s" % source)
-        sources = [netCDF4.Dataset(x, 'r') for x in ncfiles]
-
-
-        # create new file/dataset
-        compression = 'zlib'
-        stime = 'valid_time'
-        dtime = 'time'
-        logger.debug("creating netcdf file %s" % destination_file)
-        if os.path.exists(destination_file):
-            os.remove(destination_file)
-        dst = netCDF4.Dataset(destination_file, "w")
-
-        logger.debug(f"... reading old time values")
-        stimevar = sources[0][stime]
-        numtime = netCDF4.num2date(stimevar, stimevar.units)
-        logger.debug(f"creating new time variable {dtime}")
-        dst.createDimension(dtime, stimevar.size) # copy size
-        # dst.createDimension(dtime, size=None) # UNLIMITED
-        dst.createVariable(dtime,
-                           datatype='d',
-                           dimensions=(dtime),
-                           compression=compression,
-                           )
-        dunit = 'hours since 1900-01-01'
-        logger.debug(f"... setting attributes")
-        dst.variables[dtime].setncattr('long_name', dtime)
-        dst.variables[dtime].setncattr('standard_name', dtime)
-        dst.variables[dtime].setncattr('units', dunit)
-        dst.variables[dtime].setncattr('calendar', 'proleptic_gregorian')
-        logger.debug(f"... setting new time values")
-        dst.variables[dtime][:] = netCDF4.date2num(numtime, dunit)
-
-        # copy attributes
-        attributes = {}
-        for src in sources:
-            for a in src.ncattrs():
-                if a not in attributes:
-                    attributes[a] = src.getncattr(a)
-        for a in attributes:
-            dst.setncattr(a, attributes[a])
-        # copy dimensions:
-        for src in sources:
-            for k,v in src.dimensions.items():
-                if k not in dst.dimensions and k != stime:
-                    dst.createDimension(k, size=v.size)
-        # copy variables:
-        for src in sources:
-            for k,v  in src.variables.items():
-                logger.debug(f"copy variable {k} ({v.datatype})")
-                if k not in dst.variables and k != stime:
-                    if isinstance(v.datatype,
-                                  (netCDF4.VLType, netCDF4.CompoundType)):
-                        cmpr = None
-                    else:
-                        cmpr = compression
-                    if '_FillValue' in v.ncattrs():
-                        fill = v.getncattr('_FillValue')
-                    else:
-                        fill = None
-                    logger.debug(f" ... fill value {fill}")
-                    dims = (x if x != stime else dtime
-                            for x in v.dimensions)
-                    # copy variable definition
-                    dst.createVariable(k,
-                                       v.datatype,
-                                       dims,
-                                       compression=cmpr,
-                                       fill_value=fill)
-                    # copy variable attributes
-                    for a in src.variables[k].ncattrs():
-                        if a in ['_FillValue']:
-                            continue # skip
-                        logger.debug(f" ... attribute: {a}")
-                        string = src.variables[k].getncattr(a)
-                        if a == 'coordinates':
-                            string = string.replace(stime, dtime)
-                        else:
-                            pass
-                        dst.variables[k].setncattr(a, string)
-                    # copy variable values
-                    dst[k][:] = src[k][:]
-
-        for src in sources:
-            src.close()
-        dst.close()
-    logger.debug("finished writing netcdf file %s" % destination_file)
-# -------------------------------------------------------------------------
 def show_notice(storage_path, source):
     """
     Shows a notice to the user when a dataset is accessed,
@@ -1455,9 +1424,247 @@ def show_notice(storage_path, source):
     else:
         logger.debug('(no noticefile)')
 
+# -------------------------------------------------------------------------
+
+def cds_merge_zipped(source, destination, compression=COMPRESS_NETCDF):
+    """
+    Merge the files in a zipped archive downloaded from
+    cds.climate.eu into one nc file.
+
+    :param source: path of the archive file to read
+    :type source: str
+
+    :param destination: path of the destination file to create
+    :type destination: str
+
+    :param compression: (optional) compression type,
+      defaults to :py:const:`COMPRESS_NETCDF`
+    :type compression: str | None
+    """
+    source_file = os.path.abspath(source)
+    logger.info("unpacking downloaded zip archive %s" % source_file)
+    destination_file = os.path.abspath(destination)
+    delete_tmp = (logger.getEffectiveLevel() > logging.DEBUG)
+    with (tempfile.TemporaryDirectory(
+            ignore_cleanup_errors=True, dir=_storage.TEMP,
+            delete=delete_tmp) as td):
+        with zipfile.ZipFile(source_file, 'r') as zf:
+            zf.extractall(td)
+        ncfiles = glob.glob(os.path.join(td, '*.nc'))
+        if len(ncfiles) == 0:
+            raise IOError("No files found in %s" % source)
+
+        logger.debug("creating netcdf file %s" % destination_file)
+        if os.path.exists(destination_file):
+            os.remove(destination_file)
+
+        _netcdf.merge_variables(ncfiles, destination_file,
+                                compression=compression)
+
 
 # -------------------------------------------------------------------------
-def _ass_era5_getyear(year):
+
+def cds_replace_valid_time(compression:str|None = COMPRESS_NETCDF):
+    """
+    Replaces the variable ``valid_time`` in ECMWF products
+    (measured in seconds since 1970-01-01) by the more widely
+    used variable ``time`` (measured in hours since 1900-01-01).
+
+    :param compression: compression method for netCDF files produced.
+      Ususally 'zlib'. Default to :py:const:`COMPRESS_NETCDF`.
+    :type compression: str | None
+
+    :return: `replace` and `convert` for use with
+      function from the _netcdf module.
+    :rtype: dict, dict
+    """
+
+    # replace time variable
+    stime_name = 'valid_time'
+    stime_unit = 'seconds since 1970-01-01'
+    dtime_name = 'time'
+    dtime_unit = 'hours since 1900-01-01'
+
+    dtime_var = _netcdf.VariableSkeleton(
+        dtime_name, 'd',
+        dimensions=(dtime_name),
+        compression=compression,
+    )
+    dtime_var.setncattr('long_name', dtime_name)
+    dtime_var.setncattr('standard_name', dtime_name)
+    dtime_var.setncattr('units', dtime_unit)
+    dtime_var.setncattr('calendar', 'proleptic_gregorian')
+
+    dtime_fun = _netcdf.timeconverter(stime_unit, dtime_unit)
+
+    replace = {stime_name: dtime_var}
+    convert = {stime_name: dtime_fun}
+
+    return replace, convert
+
+# -------------------------------------------------------------------------
+
+def cds_getorder(order_args: dict[str, str|dict]) -> str:
+    """
+    Execute a CDS order (helper function to execute orders in parallel)
+
+    :param order_args: order data dictionary
+    :type order_args: dict
+
+    :returns: filename
+    :rtype: str
+
+    The order data dictionary must contain the keys:
+        - ``dataset``: Name of the cds dataset to get data from.
+        - ``request``: Body of the request, as described
+          in the `Climate Data Store API HowTo
+          <https://cds.climate.copernicus.eu/how-to-api>`_
+        - ``target``: Name of the file to produce
+
+    """
+    quiet = (logger.getEffectiveLevel() > logging.INFO)
+    debug = (logger.getEffectiveLevel() <= logging.DEBUG)
+    cds = cdsapi.Client(quiet=quiet, debug=debug)
+    dataset =  order_args['dataset']
+    request = order_args['request']
+    target = order_args['target']
+
+    logger.debug(f"dataset: {dataset}")
+    logger.debug("request: " + json.dumps(request, indent=4))
+    logger.debug(f"target: {target}")
+
+    cds.retrieve(dataset, request, target)
+
+    return target
+
+# -------------------------------------------------------------------------
+
+def cds_processorder(order_args: dict[str, str | dict],
+                     compression: str | None = COMPRESS_NETCDF) -> str:
+    """
+    Preprocess a file downloaded by
+    :py:func:`austaltools:_datasets.cds_getorder`
+    by converting a dowanload file that is a zip archive containing
+    netCDF files (new since 2024) into one plain netCDF file and / or by
+    optionally subestting the data.
+
+    :param order_args: order data dictionary
+    :type order_args: dict
+        must contain the keys:
+        - ``target``: Name of the file to produce
+
+       optionally may contain:
+        - ``subset``: a dictionary containing arguments to
+          :py: func:`austaltools._netcdf.subset_xy`,
+          except `rsc` and `dst`.
+          If the keyword is not contained in `order_args`,
+          no subestting is applied.
+
+    :returns: filename of the produced file
+    :rtype: str
+
+    """
+    target = order_args.get('target',None)
+    if target is None:
+        raise ValueError("target key must be specified in oder_args")
+    if zipfile.is_zipfile(target):
+        zipname = target + '.zip'
+        shutil.move(target, zipname)
+        cds_merge_zipped(zipname, target)
+        os.remove(zipname)
+
+    if order_args.get('subset', None) is not None:
+        fullname = 'full_' + target
+        shutil.move(target, fullname)
+        _netcdf.subset_xy(fullname, target, **order_args['subset'],
+                          compression=compression)
+        os.remove(fullname)
+
+    fullname = 'oldtime_' + target
+    shutil.move(target, fullname)
+    replace, convert = cds_replace_valid_time(compression)
+    _netcdf.merge_variables([fullname], target,
+                            replace=replace, convert=convert,
+                            compression=compression,
+                            remove_source=True)
+
+    return target
+
+# -------------------------------------------------------------------------
+
+def cds_get_order_list(args_list):
+    logger.debug(f"RUNPARALLEL = {RUNPARALLEL}")
+    if RUNPARALLEL:
+        logger.info(f"running parallel jobs")
+        # Queue to hold downloaded files for processing
+        download_queue = mp.Queue()
+        # Manager list to store processed results (shared across processes)
+        manager = mp.Manager()
+        processed_files = manager.list()
+
+        # Set up multiprocessing logging
+        mp.log_to_stderr(logger.getEffectiveLevel())
+
+        def download_files(args_list: list,
+                           queue: mp.Queue) -> None:
+            """
+            Executes order downloading files and puts them in the queue.
+            """
+            with mp.Pool(CDSAPI_LIMIT_PARALLEL) as pool:
+                for _,args in zip(
+                        pool.map(cds_getorder, args_list), args_list):
+                    print(f"downloading file {args['target']}",
+                          flush=True)
+                    queue.put(args)
+            # Signal end of downloads
+            queue.put(None)
+
+        def process_files(queue: mp.Queue,
+                          result_list: list) -> None:
+            """
+            Processes files from the download queue as they become available.
+            """
+            while True:
+                args = queue.get()
+                if args is None:
+                    # End of downloads, exit
+                    break
+                # do preprocessing
+                print(f"preprocessing file {args['target']}",
+                            flush=True)
+                processed_file = cds_processorder(args)
+                result_list.append(processed_file)
+
+        # Create processes for downloading and processing
+        download_process = mp.Process(
+            target=download_files, args=(args_list, download_queue)
+        )
+        process_process = mp.Process(
+            target=process_files, args=(download_queue, processed_files)
+        )
+
+        # Start processes
+        download_process.start()
+        process_process.start()
+
+        # Wait for processes to complete
+        download_process.join()
+        process_process.join()
+
+        downloaded = list(processed_files)
+    else:
+        downloaded = []
+        for i,args in enumerate(args_list):
+            print(f"running download job ({i+1}/{len(args_list)})")
+            downloaded_file = cds_getorder(args)
+            processed_file = cds_processorder(args)
+            downloaded.append(processed_file)
+
+    return downloaded
+
+# -------------------------------------------------------------------------
+
+def cds_get_era5_year(year: int, chunks: int | bool = True):
     """
     Downloads ERA5 reanalysis data for a specific year and
     saves it as a NetCDF file.
@@ -1474,190 +1681,128 @@ def _ass_era5_getyear(year):
     :param year: The year for which to download the data (integer).
     :type year: int
 
+    :param chunks: Whether to retrieve omnthly chunks or yearly files.
+      If True or 12, monthly chunks  is downloaded.
+      If False or 1, the year is downloaded in one piece
+      (which exceeds current limits as of Apr 2025)
+      If 2, 3, 4, or 6, six multi-monthly chunks are downloaded
+      (wich can be faster, depending on the qeue length)
+    :type chunks: int | bool
+
     :returns: None. The function saves a NetCDF file to the specified
       path but does not return any value.
 
     :example:
         >>> # To download ERA5 data for the year 2020 and
         >>> # save it to the specified directory
-        >>> _ass_era5_getyear(2020)
+        >>> cds_get_era5_year(2020)
 
     :note:
-    - The function crafts a filename based on the year, prefixing it
-      with `era5_ak_eu_` to denote the region and
-      type of data retrieved. Ensure that the specified directory exists
-      and is writable.
-    - The library `cdsapi` must be installed and a **valid CDS API key**
-      must be configured as per the `cdsapi` package documentation.
-    """
+      - The function crafts a filename based on the year, prefixing it
+        with `era5_ak_eu_` to denote the region and type of data retrieved.
+        Ensure that the specified directory exists and is writable.
+      - The library `cdsapi` must be installed and a **valid CDS API key**
+        must be configured as per the `cdsapi` package documentation.
 
+
+    """
     ncname = 'era5_ak_eu_{:04d}.nc'.format(int(year))
-    c = cdsapi.Client()
-    c.retrieve(
-        'reanalysis-era5-single-levels',
-        {
-            'product_type': 'reanalysis',
-            'variable': [
-                '10m_u_component_of_wind', '10m_v_component_of_wind',
-                '2m_dewpoint_temperature',
-                '2m_temperature', 'forecast_surface_roughness',
-                'friction_velocity',
-                'surface_latent_heat_flux', 'surface_pressure',
-                'surface_sensible_heat_flux',
-                'low_cloud_cover', 'total_cloud_cover',
-                'cloud_base_height', 'total_precipitation',
-            ],
-            'year': year,
-            'month': [
-                '01', '02', '03',
-                '04', '05', '06',
-                '07', '08', '09',
-                '10', '11', '12',
-            ],
-            'day': [
-                '01', '02', '03',
-                '04', '05', '06',
-                '07', '08', '09',
-                '10', '11', '12',
-                '13', '14', '15',
-                '16', '17', '18',
-                '19', '20', '21',
-                '22', '23', '24',
-                '25', '26', '27',
-                '28', '29', '30',
-                '31',
-            ],
-            'time': [
-                '00:00', '01:00', '02:00',
-                '03:00', '04:00', '05:00',
-                '06:00', '07:00', '08:00',
-                '09:00', '10:00', '11:00',
-                '12:00', '13:00', '14:00',
-                '15:00', '16:00', '17:00',
-                '18:00', '19:00', '20:00',
-                '21:00', '22:00', '23:00',
-            ],
-            'area': [
-                71, -12, 33,
-                36,
-            ],
-            'format': 'netcdf',
-        },
-        ncname)
+    if cdsapi is None:
+        logger.error('library cdsapi not available')
+    order_dataset = 'reanalysis-era5-single-levels'
+    order_template = {
+        'product_type': ['reanalysis'],
+        'variable': [
+            '10m_u_component_of_wind',
+            '10m_v_component_of_wind',
+            '2m_dewpoint_temperature',
+            '2m_temperature',
+            'surface_pressure',
+            'total_precipitation',
+            'forecast_surface_roughness',
+            'friction_velocity',
+            'surface_latent_heat_flux',
+            'surface_sensible_heat_flux',
+            'low_cloud_cover',
+            'total_cloud_cover',
+            'cloud_base_height',
+        ],
+        'year': ['null'],
+        'month': ['null'],
+        'day': ['null'],
+        'time': [
+            '00:00', '01:00', '02:00',
+            '03:00', '04:00', '05:00',
+            '06:00', '07:00', '08:00',
+            '09:00', '10:00', '11:00',
+            '12:00', '13:00', '14:00',
+            '15:00', '16:00', '17:00',
+            '18:00', '19:00', '20:00',
+            '21:00', '22:00', '23:00',
+        ],
+        'data_format': 'netcdf',
+        'download_format': 'unarchived',
+        'area': [
+            71, -12, 33, 36,
+        ],
+    }
+    args_list = []
+    if chunks == True:
+        chunk_count = 12
+    elif chunks == False:
+        chunk_count = 1
+    elif 12 % chunks == 0:
+        chunk_count = int(chunks)
+    else:
+        raise ValueError("chunks is neither divisor of 12, True or False")
+
+    if chunk_count == 12:
+        chunks_months = [['{:02d}'.format(x + 1)]  for x in range(12)]
+        l_mon = [calendar.monthrange(year, x + 1)[1] for x in range(12)]
+    else:
+        chunks_months = [['{:02d}'.format(x + y + 1)
+                          for y in range(int(12 / chunk_count))]
+                         for x in range(0, 12, int(12 / chunk_count))]
+        l_mon = [31] * len(chunks_months)
+
+    for chunk in range(chunk_count):
+        args = {
+            'dataset': order_dataset,
+            'request': order_template.copy()
+        }
+        args['request']['year'] = ['{:04d}'.format(year)]
+        args['request']['month'] = chunks_months[chunk]
+        args['request']['day'] = [
+            '{:02d}'.format(x + 1) for x in range(l_mon[chunk])
+        ]
+        args['target'] = 'era5_ak_eu_{:04d}-{:02d}.nc'.format(
+            int(year), chunk + 1)
+
+        args_list.append(deepcopy(args))
+
+    # execute orders
+    logger.info("starting download process")
+    downloaded = cds_get_order_list(args_list)
+    logger.debug(f"downloaded files: {downloaded}")
+    chunk_files = downloaded
+
+    if len(downloaded) == 0:
+        raise RuntimeError(f"nothing was downloaded (!?)")
+
+    logger.info("assembling year")
+    if len(chunk_files) > 1:
+        _netcdf.merge_time(chunk_files, ncname, timevar='time',
+                           compression=COMPRESS_NETCDF)
+    else:
+        shutil.move(chunk_files[0], ncname)
+
+    logger.info(f"done getting year {year}")
+
     return ncname
 
 
 # -------------------------------------------------------------------------
-def assemble_ERA5(path: str, name="ERA5", years:list=None,
-                  replace : bool = False, args:dict=None):
-    """
-    Downloads and assembles ERA5 reanalysis data for a list of specified
-    years, saving the data to a designated path.
-
-    This function serves as a wrapper around the `era5_getyear` function,
-    facilitating the batch retrieval of ERA5
-    data for multiple years. It utilizes multiprocessing to download data
-    in parallel, thereby significantly reducing
-    the overall time required for downloading large datasets. Each year's
-    data is saved as a separate NetCDF file within
-    the specified directory path.
-
-    :param path: The file system path where the downloaded NetCDF files
-      will be saved.
-    :type path: str
-    :param name: name (code) of the dataset to assemble
-    :type name: str
-    :param years: A list of years for which ERA5 data should be downloaded.
-      Each year should be an integer within the
-      valid range (1940 to the current year).
-    :type years: list
-    :param replace: If True, an existing file is overwritten.
-        If False, an error is raises if the file already exists.
-    :type replace: bool
-    :param args: Optionally accepted for compatiblity with the
-        general asseble funtion call. Is not evaluated.
-    :type args: dict
-
-    :raises ValueError: If any year in the `years` list is outside the
-      allowable range of 1940 to the current year.
-
-    :example:
-
-        >>> # To download ERA5 data for the years 2018 to 2020
-        >>> # and save to '/data/ERA5'
-        >>> assemble_ERA5('/data/ERA5', years=[2018, 2019])
-
-    :note:
-
-    - The function assumes that the `era5_getyear` function is defined
-      and correctly set up to retrieve ERA5 data.
-    - The parallel downloading process is set to use 10 worker processes.
-      Adjust this value in the `Pool` initialization
-      as needed based on system resources and desired performance.
-    - Ensure that sufficient disk space is available at the specified
-      path to accommodate the downloaded data files.
-    - Needs `cdsapi` for data retrieval and a **valid CDS API** key.
-
-    """
-
-    # create option tuples
-    if args is None:
-        args = {}
-    if years is None:
-        years = []
-    _init_datasets()
-    logger.debug(f"assemble_ERA5: path={path}, name={name}, "
-                 f"years={years}, replace={replace}, args={args}")
-    combi = []
-    for year in years:
-        yn = name_yearly(name, year)
-        if yn not in [x.name for x in DATASETS]:
-            raise ValueError(f"year is out of range: {year}")
-        if not replace:
-            if dataset_get(yn).available:
-                logger.info(f"skipping available year: {yn}")
-                continue
-        combi.append(year)
-    # get data in parallel directly to storage
-    downloaded = []
-    with mp.Pool(PROCS) as pool:
-        for ncname in pool.map(_ass_era5_getyear, combi):
-            downloaded.append(ncname)
-
-    for c in zip(combi, downloaded):
-        year, ncname = c
-        yn = name_yearly(name, year)
-        target = os.path.join(path, WEA_FMT % yn)
-        # gently move the old file out of way
-        if not _ass_clear_target(target, replace):
-            logger.info("skipping because dataset exists: %s" % name)
-            os.remove(ncname)
-            continue
-        if zipfile.is_zipfile(ncname):
-            # new output format as of Jan 2024
-            merge_zipped_nc(ncname, target)
-        else:
-            # old output format as of Jan 2024
-            shutil.move(ncname, target)
-# -------------------------------------------------------------------------
-def _cerraname(y, lt=None):
-    """
-    assembles CERRA data file name from year and part
-    :param y: year
-    :type y: int
-    :param lt: part number
-    :type lt: int
-    :return:  filename
-    :rtype: str
-    """
-    name = 'cerra_ak_eu_%04i' % y
-    if lt is not None:
-        name += '_%01i' % lt
-    return name
-
-
-# -------------------------------------------------------------------------
-def _ass_cerra_getyear(opts):
+def cds_get_cerra_year(year: int, chunks: int | bool = True):
     """
     Downloads and processes a year's worth of CERRA dataset as GRIB files,
     then converts them to NetCDF format for easier use.
@@ -1675,12 +1820,17 @@ def _ass_cerra_getyear(opts):
     Requires the `cdsapi` and `cdo` (Climate Data Operators) packages,
     as well as an active Copernicus account for data retrieval.
 
-    :param opts: A tuple containing two elements:
-                 - `y` (int): The year of the dataset to retrieve.
-                 - `lt` (int): The lead time in hours for the forecast data.
-    :type opts: tuple
+    :param year: The year of the dataset to retrieve.
+    :type year: int
 
-    A sample of expected parameter format: `(2023, 48)`
+    :param chunks: Whether to retrieve monthly chunks or yearly files.
+      If True or 12, monthly chunks are downloaded.
+      If False or 1, the year is downloaded in one piece
+      (which exceeds current limits as of Apr 2025)
+      If 2, 3, 4, or 6, six multi-monthly chunks are downloaded
+      (which can be faster, depending on the qeue length)
+    :type chunks: int | bool
+
 
     :returns: None. The function's primary purpose is file I/O
               (downloading and converting data).
@@ -1693,8 +1843,7 @@ def _ass_cerra_getyear(opts):
     :example:
 
         >>> # To download and process the CERRA data for the year 2023
-        >>> # with a lead time of 48 hours
-        >>> _ass_cerra_getyear((2023, 48))
+        >>> cds_get_cerra_year(2023)
 
     :note:
 
@@ -1707,111 +1856,155 @@ def _ass_cerra_getyear(opts):
       `.grib` or `.nc` is appended for output files.
 
     """
-    logger.debug("start job %s" % str(opts))
-    logger.debug(str(opts))
-    y, lt = opts
-    gribname = _cerraname(y, lt) + '.grib'
-    c = cdsapi.Client()
-    if not os.path.exists(gribname):
-        print("cds getting: " + gribname)
-        opts = (
-            'reanalysis-cerra-single-levels',
-            {
-                'data_type': 'reanalysis',
-                'product_type': 'forecast',
-                'variable': [
-                    '10m_wind_direction', '10m_wind_speed',
-                    '2m_relative_humidity',
-                    '2m_temperature', 'low_cloud_cover',
-                    'medium_cloud_cover',
-                    'momentum_flux_at_the_surface_u_component',
-                    'momentum_flux_at_the_surface_v_component',
-                    'surface_latent_heat_flux',
-                    'surface_pressure', 'surface_roughness',
-                    'surface_sensible_heat_flux',
-                    'total_cloud_cover', 'total_precipitation',
-                ],
-                'level_type': 'surface_or_atmosphere',
-                'year': '%04i' % y,
-                'month': [
-                    '01', '02', '03',
-                    '04', '05', '06',
-                    '07', '08', '09',
-                    '10', '11', '12',
-                ],
-                'day': [
-                    '01', '02', '03',
-                    '04', '05', '06',
-                    '07', '08', '09',
-                    '10', '11', '12',
-                    '13', '14', '15',
-                    '16', '17', '18',
-                    '19', '20', '21',
-                    '22', '23', '24',
-                    '25', '26', '27',
-                    '28', '29', '30',
-                    '31',
-                ],
-                'time': [
-                    '00:00', '03:00', '06:00',
-                    '09:00', '12:00', '15:00',
-                    '18:00', '21:00',
-                ],
-                'leadtime_hour': '%i' % lt,
-                'format': 'grib',
-            },
-            gribname
-        )
-        c.retrieve(*opts)
-        ncname = _cerraname(y, lt) + '.nc'
-        logger.debug("cdo  subsetting: " + ncname)
-        cwd = os.getcwd()
-        logger.debug(f'cwd: {cwd}')
-        oper = cdo.Cdo(tempdir=cwd)
-        print(" ".join([str(x) for x in
-                       ['489,649,479,659', '-f nc',
-                        gribname, ncname]]
-        ))
-        oper.selindexbox('489,649,479,659', options='-f nc',
-                        input=gribname, output=ncname)
-        print('piep')
-        del oper
-        logger.debug("done subsetting: " + ncname)
-        os.remove(gribname)
-    logger.debug("done job %s" % str(opts))
-    return True
+    ncname = 'cerra_ak_eu_{:04d}.nc'.format(int(year))
+    if cdsapi is None:
+        logger.error('library cdsapi not available')
+    order_dataset = 'reanalysis-cerra-single-levels'
+    order_template = {
+        'variable': [
+            '10m_wind_direction',
+            '10m_wind_speed',
+            '2m_relative_humidity',
+            '2m_temperature',
+            'low_cloud_cover',
+            'medium_cloud_cover',
+            'momentum_flux_at_the_surface_u_component',
+            'momentum_flux_at_the_surface_v_component',
+            'surface_latent_heat_flux',
+            'surface_pressure',
+            'surface_roughness',
+            'surface_sensible_heat_flux',
+            'total_cloud_cover',
+            'total_precipitation'
+        ],
+        'level_type': 'surface_or_atmosphere',
+        'data_type': ['reanalysis'],
+        'product_type': 'forecast',
+        'year': ['null'],
+        'month': ['null'],
+        'day': ['null'],
+        'time': [
+            '00:00', '03:00', '06:00',
+            '09:00', '12:00', '15:00',
+            '18:00', '21:00'
+        ],
+        'leadtime_hour': ['null'],
+        'data_format': 'netcdf'
+    }
+    args_list = []
+    if chunks == True:
+        chunk_count = 12
+    elif chunks == False:
+        chunk_count = 1
+    elif 12 % chunks == 0:
+        chunk_count = int(chunks)
+    else:
+        raise ValueError("chunks is neither divisor of 12, True or False")
+
+    if chunk_count == 12:
+        chunks_months = [['{:02d}'.format(x + 1)]  for x in range(12)]
+        l_mon = [calendar.monthrange(year, x + 1)[1] for x in range(12)]
+    else:
+        chunks_months = [['{:02d}'.format(x + y + 1)
+                          for y in range(int(12 / chunk_count))]
+                         for x in range(0, 12, int(12 / chunk_count))]
+        l_mon = [31] * len(chunks_months)
+
+    for chunk in range(chunk_count):
+        args = {
+            'dataset': order_dataset,
+            'request': order_template.copy()
+        }
+        args['request']['year'] = ['{:04d}'.format(year)]
+        args['request']['month'] = chunks_months[chunk]
+        args['request']['day'] = [
+            '{:02d}'.format(x + 1) for x in range(l_mon[chunk])
+        ]
+        args['subset'] = {
+            'xmin': 489,
+            'xmax': 649,
+            'ymax': 659,
+            'ymin': 479,
+            'by_index': True
+        }
+        # one request per each lead time (1-3h)
+        for lead_time in range(1, 4):
+            args['target']= 'cerra_ak_eu_{:04d}-{:02d}+{:02d}.nc'.format(
+                int(year), chunk + 1, lead_time)
+            args['request']['leadtime_hour'] = ['{:d}'.format(lead_time)]
+            args_list.append(deepcopy(args))
+
+    # execute orders
+    logger.info("starting download process")
+    downloaded = cds_get_order_list(args_list)
+    logger.debug(f"downloaded files: {downloaded}")
+
+    if len(downloaded) == 0:
+        raise RuntimeError(f"nothing was downloaded (!?)")
+
+    logger.info("sorting forecast lead times")
+    chunk_files = []
+    for chunk in _tools.progress(range(chunk_count), "sorting time"):
+        logger.info(f"working on chunk #{chunk}")
+        stem = 'cerra_ak_eu_{:04d}-{:02d}'.format(int(year), chunk + 1)
+        sources = glob.glob(stem + '*.nc')
+        merge_to = stem + '.nc'
+        _netcdf.merge_time(sources, merge_to, timevar='time',
+                           compression=COMPRESS_NETCDF)
+        chunk_files.append(merge_to)
+
+    logger.info("assembling year")
+    if len(chunk_files) > 1:
+        _netcdf.merge_time(chunk_files, ncname, timevar='time',
+                           compression=COMPRESS_NETCDF)
+    else:
+        shutil.move(chunk_files[0], ncname)
+
+    logger.info(f"done getting year {year}")
+    return ncname
 
 
 # -------------------------------------------------------------------------
-def assemble_CERRA(path: str, name="CERRA", years=None,
-                   replace : bool = False, args=None):
+def assemble_rea(path: str, name: str,
+                 years: str | int | None = None,
+                 chunks: bool | int = True,
+                 replace : bool = False,
+                 args: dict | None = None):
     """
-    Downloads, extracts, and merges CERRA dataset forecasts for specified
-    years into single NetCDF files per year.
+    Downloads, extracts, and merges ERA5 or CERRA datasets
+    for specified years into single NetCDF files per year.
 
     This function orchestrates the retrieval and processing of
-    CERRA forecast datasets for a list of years.
+    reanalysis / forecast datasets for a list of years.
     For each year, it fetches data for multiple lead times, extracts a
     specific region from the datasets, and then merges
-    the forecast data into a single NetCDF file per year. The operation
-    utilizes the Climate Data Operators (CDO) for data
-    manipulation and assumes a temporary directory is defined for
+    the forecast data into a single NetCDF file per year.
+    This functions assumes a temporary directory is defined for
     intermediate data storage.
 
     :param path: The path where the final merged NetCDF files
       will be stored.
     :type path: str
-    :param name: name (code) of the dataset to assemble
+
+    :param name: name (code) of the dataset to assemble.
+      Supports "ERA5" or "CERRA".
     :type name: str
+
     :param years: A list of years (integer) for which CERRA data should
       be downloaded and processed. The years should fall
       within the range of 1940 to the current year.
     :type years: list
+
+    :param chunks: Whether to retrieve monthly chunks or yearly files.
+       See :py:func:`austaltools._datasets.cds_get_cerra_year`.
+    :type chunks: int | bool
+
     :param replace: If True, an existing file is overwritten.
-        If False, an error is raises if the file already exists.
+        If False, an error is raised if the file already exists.
     :type replace: bool
+
     :param args: Optionally accepted for compatiblity with the
-        general asseble funtion call. Is not evaluated.
+        general assemble funtion call. Is not evaluated.
     :type args: dict
 
     :raises ValueError: If any of the years specified is outside the
@@ -1820,14 +2013,11 @@ def assemble_CERRA(path: str, name="CERRA", years=None,
     :example:
 
         >>> # To process CERRA data for the years 2015 to 2017
-        >>> assemble_CERRA('/path/to/final/storage', years=[2015, 2016])
+        >>> assemble_rea('/path/to/final/storage', 'CERRA',
+        >>>     years=[2015, 2016])
 
     :note:
 
-    - The function utilizes `cdo.Cdo` for data manipulation tasks such as
-      merging time steps. Make sure that python-cdo is
-      installed and properly configured along with the actual CDO
-      command-line tools.
     - A temporary directory for storing intermediate data files is
       required. This directory is assumed to be configured before
       the function call.
@@ -1842,62 +2032,45 @@ def assemble_CERRA(path: str, name="CERRA", years=None,
     if years is None:
         years = []
     _init_datasets()
-    logger.debug(f"assemble_CERRA: path={path}, name={name}, "
+    logger.debug(f"assemble_rea: path={path}, name={name}, "
                  f"years={years}, replace={replace}, args={args}")
-    temp_path = _storage.TEMP
-    logger.debug(f"looking for cdo ...{temp_path}")
-    data = cdo.Cdo(tempdir=temp_path)
-    logger.debug("python-cdo version: %s" % cdo.__version__)
-    logger.debug("cdo        version: %s" % data.version())
-    data.debug = True
-    data.cleanTempDir()
+    fun_getyear = None
+    if name == 'ERA5':
+        fun_getyear = cds_get_era5_year
+    elif name == 'CERRA':
+        fun_getyear = cds_get_cerra_year
+    else:
+        raise ValueError(f"unknown reanalysis name: {name}")
 
-    # get sets of bunches to retrieve
-    combi = []
+    # get years to retrieve
     for year in years:
         yn = name_yearly(name, year)
         if yn not in [x.name for x in DATASETS]:
             raise ValueError(f"year is out of range: {year}")
+
+        # do not download if already available
         if not replace:
             if dataset_get(yn).available:
                 logger.info(f"skipping available year: {yn}")
                 continue
-        for lt in range(1, 4):
-            combi.append((year, lt))
-    logger.debug("forking parallel jobs: "+str(combi))
 
-
-    # get data and extract region
-    with mpf.ThreadPoolExecutor(max_workers=CDSAPI_LIMIT_PARALLEL) as e:
-        for c in combi:
-            future = e.submit(_ass_cerra_getyear, c)
-            #_ = future.result()
-
-    logger.debug("finished parallel jobs")
-    # combine forecasts
-    for year in set([x for x, _ in combi]):
-        logger.debug(f"processing year: {year}")
-        lts = set([y for x, y in combi if x == year])
-        infiles = [_cerraname(year, lt) + '.nc' for lt in lts]
-        yn = name_yearly(name, year)
+        # gently move the old file out of the way
         target = os.path.join(path, WEA_FMT % yn)
-        # gently move the old file out of way
         if not _ass_clear_target(target, replace):
-            logger.info("skipping because dataset exists: %s" % name)
+            logger.info("skipping because datafile exists: %s" % name)
             continue
-        # build new file
-        data.mergetime(
-            input=" ".join([
-                data.setgridtype('curvilinear', input=x)
-                for x in infiles
-            ]),
-            output=target,
-            options='-f nc4 -z zip_6 --reduce_dim'
-        )
-        for x in infiles:
-            os.remove(x)
-        logger.debug(f"finished with: {year}")
 
+        # download the year and put into place
+        print(f"processing year: {year}")
+        print("")
+        ncname = fun_getyear(year, chunks)
+        shutil.move(ncname, target)
+
+        print(f"wrote file: {target}")
+
+    logger.info("assembled dataset: %s" % name)
+
+    return True
 
 # -------------------------------------------------------------------------
 def assemble_DWD(path: str, name="DWD", years: list = None,
@@ -1967,7 +2140,10 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
             df.to_csv(path_or_buf=zf.open("%05i.csv" % station,
                                           mode='w'))
 
+    return True
+
 # -------------------------------------------------------------------------
+
 def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
                       replace : bool = False, args=None):
     """
@@ -2004,13 +2180,12 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
             years = args['years']
         else:
             raise ValueError(f"years is required for {name} dataset")
-    # check database
+    # check the database
     target = os.path.join(path, OBS_FMT % name)
     if not _ass_clear_target(target, replace):
         logger.info("skipping because dataset exists: %s" % name)
         return False
 
-    import netCDF4
     srv_host = 'https://opendata.dwd.de/'
     srv_path = 'climate_environment/CDC/grids_germany/hourly/hostrada/'
     srv_dirs = {
@@ -2029,29 +2204,32 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
     srv_file = "%s/%s_1hr_HOSTRADA-v1-0_BE_gn_%s.nc"
     datavars = srv_dirs.keys()
 
-    # create download list
+    # create a download list
     logger.debug("creating file names")
     to_download = {}
     for year in years:
         print(f"processing year: {year}")
+        print("")
 
         # construct time/date part of filenames
         for i in range(12):
-            mstart = pd.Timestamp(year=year, month=i+1, day=1, hour=00)
-            mend = ((mstart
+            month_start = pd.Timestamp(year=year, month=i+1, day=1, hour=00)
+            month_end = ((month_start
                     + pd.tseries.offsets.MonthEnd())
                     + pd.tseries.offsets.Hour(23))
             srv_time = "{}-{}".format(
-                mstart.strftime("%Y%m%d%H"), mend.strftime("%Y%m%d%H")
+                month_start.strftime("%Y%m%d%H"),
+                month_end.strftime("%Y%m%d%H")
             )
             for k,v in srv_dirs.items():
                 to_download[
                     srv_host + srv_path + srv_file % (v, k, srv_time)
-                ] = f"{k}_{mstart.strftime("%Y%m%d%H")}.nc"
+                ] = f"{k}_{month_start.strftime("%Y%m%d%H")}.nc"
 
         # download the files
         logger.debug("files to download: %d" % len(to_download))
-        for k,v in _tools.progress(to_download.items(), "fetching files"):
+        for k,v in _tools.progress(list(to_download.items()),
+                                   "fetching files"):
             _tools.download(k, v)
 
         # gently move the old file out of way
@@ -2061,101 +2239,39 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
             logger.info("skipping because dataset exists: %s" % yn)
             continue
 
-        # assemble new file
+        # assemble the new file
+        yearfiles = []
+        for k in _tools.progress(list(srv_dirs.keys()),
+                                 "aggregating data"):
+            sources = [x for x in to_download.values()
+                       if x.startswith(f"{k}_{year:04d}")]
+            destination = f"{k}_year.nc"
+            _netcdf.merge_time(sources, destination,
+                               timevar='time',
+                               remove_source=False)
+            yearfiles.append(destination)
 
-        with netCDF4.Dataset(target, "w", format='NETCDF4') as dst:
-            # copy fixed values from first file
-            blueprint = list(to_download.values())[0]
-            print(f"initializing output")
-            with netCDF4.Dataset(blueprint) as src:
-                print(f"initializing from {blueprint}")
-            # copy global attributes all at once via dictionary
-                dst.setncatts(src.__dict__)
-                # copy dimensions
-                nx = len(src.dimensions['X'])
-                ny = len(src.dimensions['Y'])
-                for id in ['X', 'Y', 'time']:
-                    logger.debug(f"copying dimension {id}")
-                    dimension = src.dimensions[id]
-                    # copy only if not already in dst
-                    if dimension.isunlimited():
-                        dst.createDimension(id, None)
-                    else:
-                        dst.createDimension(id, len(dimension))
-                # copy the values
-                for id in ['X', 'Y', 'time', 'lat', 'lon', 'crs']:
-                    logger.debug(f"copying variable {id}")
-                    var = src.variables[id]
-                    dst.createVariable(id, var.datatype, var.dimensions,
-                                       compression='zlib')
-                    if id != 'time':
-                        dst[id][:] = src[id][:]
-                    # copy variable attributes all at once via dictionary
-                    dst[id].setncatts(src[id].__dict__)
+        print(f"assembling year")
+        _netcdf.merge_variables(yearfiles, target,
+                                compression=COMPRESS_NETCDF,
+                                remove_source=False)
 
-            # create empty data fields
-            i_time = 0
-
-            # collect data
-            for ncfile in _tools.progress(list(to_download.values()),
-                                          "copying data  "):
-                with netCDF4.Dataset(ncfile) as src:
-                    logger.debug(f"reading {ncfile}")
-                    if 'time' not in dst.variables.keys():
-                        logger.debug(f"initializing time")
-                        var = src.variables['time']
-                        dst.createVariable('time',
-                                           var.datatype,
-                                           var.dimensions,
-                                           compression='zlib')
-                        dst['time'][:] = \
-                            src['time'][:]
-                    elif (src['time'][1]
-                          not in dst['time'][:]):
-                        logger.debug(f"appending time")
-                        itime = len(dst.dimensions['time'])
-                        dst['time'][:] = np.append(
-                            dst['time'][:], src['time'][:]
-                        )
-                    else:
-                        logger.debug(f"time is ok")
-                    for id in [x for x in datavars if x != 'time']:
-                        if id in src.variables.keys():
-                            if id not in dst.variables.keys():
-                                # init first time
-                                logger.debug(f"initializing {id}")
-                                var = src.variables[id]
-                                # special treatment for fill_value
-                                # https://github.com/guziy/PyNotebooks/
-                                #   blob/master/netcdf/test_copy.ipynb
-                                if hasattr(var, "_FillValue"):
-                                    fill_value = var._FillValue
-                                else:
-                                    fill_value = None
-                                dst.createVariable(id,
-                                                   var.datatype,
-                                                   var.dimensions,
-                                                   fill_value=fill_value,
-                                                   compression='zlib')
-                                dst[id][:,:,:] = \
-                                    src[id][:,:,:]
-                                dst[id].setncatts(
-                                    {x: src[id].getncattr(x)
-                                     for x in src[id].ncattrs()
-                                     if x not in ["_FillValue"]}
-                                )
-                            else:
-                                # append later
-                                logger.debug(f"appending {id}")
-                                dst[id][itime:,:,:] = src[id][:,:,:]
+        print(f"wrote file: {target}")
 
         # clean up
-        print("removing temporary files")
-        for v in _tools.progress(to_download.values(),
-                                 "removing files"):
-            os.remove(v)
+        if _CLEAN_UP:
+            logger.debug("removing remaining temporary files")
+            for v in _tools.progress(
+                    list(to_download.values()) + yearfiles,
+                    "removing files"):
+                if os.path.exists(v): os.remove(v)
+
+    logger.info("assembled dataset: %s" % name)
+
+    return True
 
 # -------------------------------------------------------------------------
+
 def provide_weather(source: str, path: str = None,
                     years: list = None,
                     force: bool = False, method: str = 'download'):
@@ -2222,17 +2338,24 @@ def provide_weather(source: str, path: str = None,
     #dataset = dataset_get(source)
     logger.info("downloading weather source %s" % source)
     pwd = os.getcwd()
-    with tempfile.TemporaryDirectory(dir=_storage.TEMP) as temp_dir:
+    delete_tmp = (logger.getEffectiveLevel() > logging.DEBUG)
+    with tempfile.TemporaryDirectory(
+            ignore_cleanup_errors=True, dir=_storage.TEMP,
+            delete=_CLEAN_UP) as temp_dir:
         os.chdir(temp_dir)
         success = True
         if source == "ERA5":
             import_lib('cdsapi')
-            assemble_ERA5(path, years=years)
+            import_lib('_netcdf')
+            assemble_rea(path, name='ERA5', years=years,
+                         chunks=CDSAPI_ERA5_CHUNKS, replace=force)
         elif source == "CERRA":
-            import_lib('cdo')
+            import_lib('_netcdf')
             import_lib('cdsapi')
-            assemble_CERRA(path, years=years, replace=force)
+            assemble_rea(path, name='CERRA', years=years,
+                         chunks=CDSAPI_CERRA_CHUNKS, replace=force)
         elif source == "HOSTRADA":
+            import_lib('_netcdf')
             assemble_hostrada(path, years=years, replace=force)
         elif source == "DWD":
             dataset = dataset_get(source)
@@ -2241,6 +2364,10 @@ def provide_weather(source: str, path: str = None,
         else:
             logger.error("unknown dataset to download %s" % source)
             success = False
+        try:
+            shutil.rmtree(temp_dir)
+        except PermissionError:
+            logger.warning('Permission Error during cleanup')
     # return before clean up
     os.chdir(pwd)
     return success
@@ -2288,8 +2415,10 @@ def stationlist_DWD(path: str = None, fmt: str = None):
 
 def provide_stationlist(source:str=None, fmt:str=None, out:str=None):
     """
-    Extract the stationlist from a
-    :param source: code of the source dataset
+    Extract the stationlist from a data source
+
+    :param source: code of the source dataset.
+      Currently, only "DWD" is implemented
     :type source: str
     :param fmt: file format or generate (csv or json)
     :type fmt: str|None
@@ -2303,7 +2432,7 @@ def provide_stationlist(source:str=None, fmt:str=None, out:str=None):
     if source == "DWD":
         stationlist_DWD(path=out, fmt=fmt)
     else:
-        
+
         raise ValueError(f"stationlist: unkwnown source {source}")
 
 # -------------------------------------------------------------------------
@@ -2367,7 +2496,7 @@ def xyz2csv(inputfile, output, utm_remove_zone=False):
     :param output: output file
     :type output: str
     :param utm_remove_zone: Some providers prefix UTM easting with the
-      zone numer, which results in easting values exceeding 1000km.
+      zone number, which results in easting values exceeding 1000km.
       Remove the leading digits to keep easting in the allowed range
       0m < easting < 1000000 m. defaults to False.
     :type utm_remove_zone: bool
@@ -2503,12 +2632,16 @@ def xyz2tif(inputfile, srcsrs, utm_remove_zone=False):
     # returns a tuple containing file handle and the abs pathname!
     csvhdl, csvfile = tempfile.mkstemp(
         prefix='dgm', suffix='.csv', dir=_storage.TEMP)
+    # close file handle so that file is not open an there is
+    # no permission issue when gdal tries to open it by name
+    # in contrast to tempfile.TemporaryFile this does not remove
+    # the file. we need to remove ist explicitly by os.remove!
+    os.close(csvhdl)
     got_csv = xyz2csv(inputfile, csvfile,
                       utm_remove_zone=utm_remove_zone)
     os.remove(inputfile)
     if not got_csv:
         logger.warning(f"did not convert ... {inputfile}")
-        os.close(csvhdl)
         os.remove(csvfile)
         return None
     gdal.Translate(destName=tf1,
@@ -2516,7 +2649,6 @@ def xyz2tif(inputfile, srcsrs, utm_remove_zone=False):
                    outputSRS=srcsrs,
                    noData=-9999,
                    )
-    os.close(csvhdl)
     os.remove(csvfile)
     return tf1
 

@@ -444,6 +444,10 @@ def cli_parser():
                         default=None,
                         help='custom location for temp files [/tmp]'
                         )
+    parser.add_argument('--noparallel',
+                        action='store_true',
+                        help='disable parallel execution of downloads.'
+                        )
 
     more_epilog = ""
     if not DS.have_lib('cdo') or not DS.have_lib('cdsapi'):
@@ -454,7 +458,7 @@ def cli_parser():
         more_epilog += f"Terrain sources cannot be assembled. "
     for x in DS.LIB2IMPORT.keys():
         if not DS.have_lib(x):
-            more_epilog += DS.NO_LIB_HELP[x]
+            more_epilog += DS.no_lib_help(x)
     if parser.epilog is None:
         parser.epilog = more_epilog
     else:
@@ -481,11 +485,18 @@ def main():
     args = vars(parser.parse_args())
 
     # set logging level
-    if args['verb'] is not None:
-        logger.setLevel(args['verb'])
-        logger.warning('level = %s' % logger.getEffectiveLevel())
-    else:
-        logger.setLevel(logging.WARNING)
+    logginglevel_name={
+        logging.DEBUG: 'DEBUG',
+        logging.INFO: 'INFO',
+        logging.WARNING: 'WARNING',
+        logging.ERROR: 'ERROR',
+        logging.CRITICAL: 'CRITICAL'
+    }
+    if (args.get('verb',None) is not None
+            and args.get('verb') != logger.getEffectiveLevel()):
+        logger.setLevel(args.get('verb'))
+        logger.warning(f"changed logging level to '%s'" %
+                       logginglevel_name[args.get('verb')])
 
     if logger.getEffectiveLevel() <= logging.DEBUG:
         global PROCS
@@ -497,6 +508,9 @@ def main():
 
     if args['temp'] is not None:
         _storage.TEMP = args['temp']
+
+    if args['noparallel'] is True:
+        DS.RUNPARALLEL = False
 
     if args['action'] == 'list':
         list_datasets(args['only'], args['state'], args['long'])

@@ -43,7 +43,7 @@ except ImportError:
 
 
 logging.basicConfig()
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 # ----------------------------------------------------
 
@@ -488,6 +488,8 @@ def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
                     'fsr',  # m
                     'tp'  # mm
                     ])
+    logger.debug("got: %s" % res.keys())
+    logger.debug("z0 : %s" % z0)
     return res, z0
 
 
@@ -503,10 +505,10 @@ def read_cerra_nc(ncfile, lat, lon):
     | name    | unit      | description                        |
     +=========+===========+====================================+
     | 'time'  |           |                                    |
-    | '10wdir'| deg       | 10-metre wind direction true       |
-    | '10si'  | m s**-1   | 10-metre wind speed                |
-    | '2r'    | %         | 2-metre relative humidity          |
-    | '2t'    | K         | 2-metre temperature                |
+    | 'wdir10'| deg       | 10-metre wind direction true       |
+    | 'si10'  | m s**-1   | 10-metre wind speed                |
+    | 'r2'    | %         | 2-metre relative humidity          |
+    | 't2m'   | K         | 2-metre temperature                |
     | 'lcc'   | %         | low-level cloud cover              |
     | 'mcc'   | %         | medium-level cloud cover           |
     | 'tisemf'| N m**-2 s | time integral of surface eastward  |
@@ -526,7 +528,7 @@ def read_cerra_nc(ncfile, lat, lon):
     """
     import netCDF4
 
-    _VAR_NEEDED = ['10wdir', '10si', '2r', '2t', 'lcc',
+    _VAR_NEEDED = ['wdir10', 'si10', 'r2', 't2m', 'lcc',
                    'mcc', 'tisemf', 'tisnmf', 'slhf', 'sp',
                    'sr', 'sshf', 'tcc']
     _VAR_OPTIONAL = ['tp']
@@ -543,17 +545,20 @@ def read_cerra_nc(ncfile, lat, lon):
         else:
             all_variables.append(x)
 
-    dims = {'lat': nc['lat'][:].data,
-            'lon': nc['lon'][:].data}
+    dims = {'lat': nc['latitude'][:].data,
+            'lon': nc['longitude'][:].data}
     #
     # convert time
     logger.info('calculating time')
     values = pd.DataFrame()
     time_unit_string = nc.variables['time'].units
     time_unit, _, base_date = time_unit_string.split(maxsplit=2)
+    logger.debug(f"time_unit: {time_unit}")
+    logger.debug(f"base_date: {base_date}")
     epoch = pd.to_datetime(base_date, utc=True)
     values['time'] = [epoch + pd.Timedelta(x, unit=time_unit)
                       for x in nc.variables['time'][:].data]
+    logger.debug(f"time: {values['time'][0:2].values} ...")
     #
     # interpolate values to position
     #
@@ -569,7 +574,7 @@ def read_cerra_nc(ncfile, lat, lon):
     pv['u10'] = []
     pv['v10'] = []
     for i, _ in _tools.progress(enumerate(positions),'decomposoing wind'):
-        u10, v10 = m.wind.dir2uv(pv['10si'][i], pv['10wdir'][i])
+        u10, v10 = m.wind.dir2uv(pv['si10'][i], pv['wdir10'][i])
         pv['u10'].append(u10)
         pv['v10'].append(v10)
     # calculate weights and average the values
@@ -582,8 +587,7 @@ def read_cerra_nc(ncfile, lat, lon):
     #  convert values
     values.rename({
         'sr': 'fsr',
-        '2t': 't2m',
-        '2r': 'r2m',
+        'r2': 'r2m',
     }, axis=1, inplace=True)
     #
     #  un-accumulate the cumulative values
@@ -643,8 +647,10 @@ def read_cerra_nc(ncfile, lat, lon):
         values['u10'], values['v10'])
     values.drop(['u10', 'v10'], axis=1)
 
-    if values['time'][0] > epoch:
-        first_hours = pd.date_range(start=epoch,
+    newyear = pd.Timestamp(year=values['time'][0].year, month=1, day=1,
+                           tz=values['time'][0].tz)
+    if values['time'][0] > newyear:
+        first_hours = pd.date_range(start=newyear,
                                     end=(values['time'][0] -
                                          pd.Timedelta(1,"m")),
                                     freq='1h')
@@ -732,6 +738,8 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
                     'fsr',  # m
                     'tp'  # mm
                     ])
+    logger.debug("got: %s" % res.keys())
+    logger.debug("z0 : %s" % z0)
     return res, z0
 
 # ----------------------------------------------------
@@ -906,6 +914,8 @@ def get_hostrada_weather(lat, lon, year, datafile=None) \
                     'tcc',  # 1
                     ])
     logger.debug("got: %s" % res.keys())
+    logger.debug("z0 : %s" % z0)
+
     return res, z0
 
 # ----------------------------------------------------
@@ -1025,6 +1035,8 @@ def get_dwd_weather(lat: float, lon: float, year:int,
                         'fsr',  # m
                         ])
 
+    logger.debug("got: %s" % data.keys())
+    logger.debug("z0 : %s" % z0)
     return data, z0
 
 
@@ -1121,6 +1133,8 @@ def austal_weather(args):
             f.write('# %.4f %.4f %.1f %.3f %s, %s\n' %
                     (lat, lon, ele, z0, source, format(stat_nam)))
             obs.to_csv(f, float_format='%.2f', index=False, na_rep='-999')
+
+    logger.debug(str(obs.iloc[0:2]))
 
     methods_available = []
 

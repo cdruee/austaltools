@@ -260,16 +260,25 @@ def main(args=None):
     #
     # logging level
     #
-    if args["verb"] is not None:
-        logger.setLevel(args["verb"])
-    else:
-        logger.setLevel(logging.WARNING)
+    # set logging level
+    logginglevel_name={
+        logging.DEBUG: 'DEBUG',
+        logging.INFO: 'INFO',
+        logging.WARNING: 'WARNING',
+        logging.ERROR: 'ERROR',
+        logging.CRITICAL: 'CRITICAL'
+    }
+    if (args.get('verb',None) is not None
+            and args.get('verb') != logger.getEffectiveLevel()):
+        logger.setLevel(args.get('verb'))
+        logger.warning(f"changed logging level to '%s'" %
+                       logginglevel_name[args.get('verb')])
     #
     if logger.getEffectiveLevel() >= logging.DEBUG:
         # suppress too frequend debug output unlsess --insane
         logging.getLogger('austaltools._dispersion').setLevel(logging.INFO)
     elif logger.getEffectiveLevel() >= logging.INFO:
-        # reduce amount of traceback
+        # reduce the amount of traceback
         sys.tracebacklimit = 1
     elif logger.getEffectiveLevel() >= logging.WARNING:
         # switch off traceback

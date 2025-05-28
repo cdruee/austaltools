@@ -157,6 +157,7 @@ deploy_pages:
     - job: build_deb
   script:
     - touch public
+  pages: true
   artifacts:
     paths:
     - public

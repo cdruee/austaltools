@@ -391,14 +391,14 @@
   "ERA5": {
     "split": "years",
     "storage": "weather",
-    "assemble": "assemble_ERA5",
+    "assemble": "assemble_rea",
     "position": "grid",
     "years_available": "1941-2023"
   },
   "CERRA": {
     "split": "years",
     "storage": "weather",
-    "assemble": "assemble_CERRA",
+    "assemble": "assemble_rea",
     "position": "grid",
     "years_available": "1985-2020"
   },

@@ -1,4 +1,5 @@
 :orphan:
+
 ---------------------
 configure-austaltools
 ---------------------
@@ -135,7 +136,7 @@ Each dict has the follwing entries:
         of files is generated using the `format` and `values`
         arguments.
 
-        A downloaded 'filelist` is parsed acording to its
+        A downloaded `filelist` is parsed acording to its
         filename exension. Supported formats are 'xml', 'meta4',
         'html', 'json', and 'geojson'.
         Which information is extracted must be defined

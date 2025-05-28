@@ -30,7 +30,7 @@ try:
 except ImportError:
     from _version import __version__
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     logging.getLogger('readmet.dmna').setLevel(logging.WARNING)
 

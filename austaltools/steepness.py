@@ -17,7 +17,7 @@ except ImportError:
     import _tools
     import _plotting
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 # -------------------------------------------------------------------------
 
 

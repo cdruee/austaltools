@@ -33,7 +33,7 @@ except ImportError:
     from _version import __version__
 
 logging.basicConfig()
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------------
 
