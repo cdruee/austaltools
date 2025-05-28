@@ -2,7 +2,9 @@ import logging
 import os
 
 import pandas as pd
-import readmet
+
+if os.getenv('BUILDING_SPHINX', 'false') == 'false':
+    import readmet
 
 try:
     from ._version import __version__, __title__
