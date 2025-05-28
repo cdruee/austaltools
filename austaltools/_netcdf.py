@@ -6,8 +6,9 @@ import itertools
 import logging
 import os
 
-import netCDF4
-import numpy as np
+if os.getenv('BUILDING_SPHINX', 'false') == 'false':
+    import netCDF4
+    import numpy as np
 
 try:
     from . import _storage
