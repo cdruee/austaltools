@@ -1475,7 +1475,7 @@ def cds_replace_valid_time(compression:str|None = COMPRESS_NETCDF):
     :type compression: str | None
 
     :return: `replace` and `convert` for use with
-    function from the _netcdf module.
+      function from the _netcdf module.
     :rtype: dict, dict
     """
 
@@ -1552,16 +1552,18 @@ def cds_processorder(order_args: dict[str, str | dict],
     :type order_args: dict
         must contain the keys:
         - ``target``: Name of the file to produce
+
        optionally may contain:
         - ``subset``: a dictionary containing arguments to
-            :py: func:`austaltools._netcdf.subset_xy`,
-            except `rsc` and `dst`.
-            If the keyword is not contained in `order_args`,
-            no subestting is applied.
+          :py: func:`austaltools._netcdf.subset_xy`,
+          except `rsc` and `dst`.
+          If the keyword is not contained in `order_args`,
+          no subestting is applied.
+
     :returns: filename of the produced file
     :rtype: str
 
-"""
+    """
     target = order_args.get('target',None)
     if target is None:
         raise ValueError("target key must be specified in oder_args")

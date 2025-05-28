@@ -125,8 +125,8 @@ def contiguous_areas(array: np.ndarray[bool]) -> (np.ndarray[int], int):
     :type array: np.array
     :return: A tuple containing:
       - A 2D array of integers of the same shape as the input where each
-        contiguous region of 'True' values is labeled with a unique
-        integer.
+      contiguous region of 'True' values is labeled with a unique
+      integer.
       - The number of unique contiguous labeled areas in the input array.
     :rtype: Tuple[np.array, int]
 

@@ -508,7 +508,7 @@ def read_cerra_nc(ncfile, lat, lon):
     | 'wdir10'| deg       | 10-metre wind direction true       |
     | 'si10'  | m s**-1   | 10-metre wind speed                |
     | 'r2'    | %         | 2-metre relative humidity          |
-    | 't2m'    | K         | 2-metre temperature                |
+    | 't2m'   | K         | 2-metre temperature                |
     | 'lcc'   | %         | low-level cloud cover              |
     | 'mcc'   | %         | medium-level cloud cover           |
     | 'tisemf'| N m**-2 s | time integral of surface eastward  |

@@ -84,7 +84,8 @@ ELEVATION_API = "https://api.open-elevation.com/api/v1/lookup"
 
 class SmartFormatter(argparse.HelpFormatter):
     """
-    Custom Help Formatter that maintains '\n' in argument help.
+    Custom Help Formatter that maintains '\\\\n' in argument help.
+
     """
     def _split_lines(self, text, width):
         r = []
