@@ -41,7 +41,7 @@ except ImportError:
     import _plotting
 
 logging.basicConfig()
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     logging.getLogger('readmet.dmna').setLevel(logging.ERROR)

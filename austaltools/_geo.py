@@ -113,7 +113,8 @@ def ll2ut(lat: float, lon: float) -> (float, float):
     :rtype: float, float
     """
     transform = osr.CoordinateTransformation(LL, UT)
-    return transform.TransformPoint(lat, lon)
+    easting, nothing, zz = transform.TransformPoint(lat, lon)
+    return easting, nothing
 
 # -------------------------------------------------------------------------
 
@@ -155,7 +156,8 @@ def gk2ut(rechts: float, hoch: float) -> (float, float):
     :rtype: float, float
     """
     transform = osr.CoordinateTransformation(GK, UT)
-    return transform.TransformPoint(rechts, hoch)
+    easting, nothing, zz = transform.TransformPoint(rechts, hoch)
+    return easting, nothing
 
 # -------------------------------------------------------------------------
 

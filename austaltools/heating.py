@@ -32,7 +32,7 @@ except ImportError:
 # -------------------------------------------------------------------------
 
 logging.basicConfig()
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------------
 

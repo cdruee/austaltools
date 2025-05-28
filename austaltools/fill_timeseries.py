@@ -27,7 +27,7 @@ except ImportError:
 # ----------------------------------------------------
 
 logging.basicConfig()
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 # ----------------------------------------------------
 
 DEFAULT_BEGIN = 8

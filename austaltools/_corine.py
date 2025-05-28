@@ -30,7 +30,7 @@ except ImportError:
     import _storage
 
 logging.basicConfig()
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 # ----------------------------------------------------
 LANDCOVER_CLASSES_Z0_LBM_DE = {
@@ -163,9 +163,13 @@ def roughness_austal(xg: float, yg: float, h: float,
         if digit not in z0_classes:
             logger.warning(f"Corine land cover class {digit} not defined")
         z0 = z0_classes.get(digit, np.nan)
-        logger.debug(f"... CORINE class: {z0}")
+        if z0 in [-999, np.nan]:
+            logger.debug(f"... roughness length: (no data)")
+            continue
+        else:
+            logger.debug(f"... roughness length: {z0} m")
         values.append(z0)
-    result = np.mean(values, axis=0)
+    result = np.nanmean(values, axis=0)
     return result
 
 # ----------------------------------------------------
@@ -278,7 +282,7 @@ def roughness_web(xg: float, yg: float, h: float, fac=10.) -> float:
             z0_values.append(z0)
         else:
             logger.error("Unknown corine class %s" % code)
-    average = np.mean(z0_values)
+    average = np.nanmean(z0_values)
     return average
 
 # ----------------------------------------------------

@@ -22,7 +22,7 @@ try:
 except ImportError:
     import _tools
 
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 _PATH = "."
 """operate in current working die by default"""

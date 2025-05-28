@@ -485,19 +485,18 @@ def main():
     args = vars(parser.parse_args())
 
     # set logging level
-    logging_levels={
+    logginglevel_name={
         logging.DEBUG: 'DEBUG',
         logging.INFO: 'INFO',
         logging.WARNING: 'WARNING',
         logging.ERROR: 'ERROR',
         logging.CRITICAL: 'CRITICAL'
     }
-    if args.get('verb',logging.WARNING) != logging.WARNING:
-        logger.setLevel(args['verb'])
-        logger.warning(f"changes loggig level to '%s'" %
-                       logging_levels[logger.getEffectiveLevel()])
-    else:
-        logger.setLevel(logging.WARNING)
+    if (args.get('verb',None) is not None
+            and args.get('verb') != logger.getEffectiveLevel()):
+        logger.setLevel(args.get('verb'))
+        logger.warning(f"changed logging level to '%s'" %
+                       logginglevel_name[args.get('verb')])
 
     if logger.getEffectiveLevel() <= logging.DEBUG:
         global PROCS

@@ -23,7 +23,7 @@ except ImportError:
     from _version import __title__
 
 logging.basicConfig()
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------------
 

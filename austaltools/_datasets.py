@@ -49,7 +49,6 @@ from pathlib import PurePath
 import numpy as np
 import pandas as pd
 import requests
-from botocore import args
 from urllib3 import disable_warnings, exceptions
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
@@ -68,7 +67,7 @@ except ImportError:
     import _fetch_dwd_obs
 
 disable_warnings(exceptions.InsecureRequestWarning)
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------------
 CDSAPI_LIMIT_PARALLEL = 2
@@ -709,13 +708,13 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         if RUNPARALLEL:
             with mp.Pool(pp) as pool:
                 for tfs in _tools.progress(pool.imap_unordered(
-                        process_input, thread_args),
+                        process_input, thread_args), "processing input",
                         total=len(thread_args)):
                     i = i + 1
                     logger.debug("file %5d / %5d" % (i, len(thread_args)))
                     tile_files += tfs
         else:
-            for args in _tools.progress(thread_args):
+            for args in _tools.progress(thread_args, "processing input"):
                 tfs = process_input(args)
                 i = i + 1
                 logger.debug("file %5d / %5d" % (i, len(thread_args)))
@@ -767,11 +766,12 @@ def assemble_DGM_SH(path, name, replace, args: dict):
         with mp.Pool(PROCS) as pool:
             for tf in _tools.progress(
                     pool.imap_unordered(dgm1_sh_getfid, args),
+                    "fetching tiles",
                     total=len(args)
             ):
                 tile_files += tf
     else:
-        for args in _tools.progress(args):
+        for args in _tools.progress(args, "fetching tiles"):
             tf = dgm1_sh_getfid(*args)
             tile_files += tf
 
@@ -1522,7 +1522,9 @@ def cds_getorder(order_args: dict[str, str|dict]) -> str:
         - ``target``: Name of the file to produce
 
     """
-    cds = cdsapi.Client()
+    quiet = (logger.getEffectiveLevel() > logging.INFO)
+    debug = (logger.getEffectiveLevel() <= logging.DEBUG)
+    cds = cdsapi.Client(quiet=quiet, debug=debug)
     dataset =  order_args['dataset']
     request = order_args['request']
     target = order_args['target']
@@ -1598,6 +1600,9 @@ def cds_get_order_list(args_list):
         manager = mp.Manager()
         processed_files = manager.list()
 
+        # Set up multiprocessing logging
+        mp.log_to_stderr(logger.getEffectiveLevel())
+
         def download_files(args_list: list,
                            queue: mp.Queue) -> None:
             """
@@ -1606,7 +1611,8 @@ def cds_get_order_list(args_list):
             with mp.Pool(CDSAPI_LIMIT_PARALLEL) as pool:
                 for _,args in zip(
                         pool.map(cds_getorder, args_list), args_list):
-                    logger.info(f"downloading file {args['target']}")
+                    print(f"downloading file {args['target']}",
+                          flush=True)
                     queue.put(args)
             # Signal end of downloads
             queue.put(None)
@@ -1622,7 +1628,8 @@ def cds_get_order_list(args_list):
                     # End of downloads, exit
                     break
                 # do preprocessing
-                logger.info(f"preprocessing file {args['target']}")
+                print(f"preprocessing file {args['target']}",
+                            flush=True)
                 processed_file = cds_processorder(args)
                 result_list.append(processed_file)
 
@@ -1646,7 +1653,7 @@ def cds_get_order_list(args_list):
     else:
         downloaded = []
         for i,args in enumerate(args_list):
-            logger.info(f"running download job ({i+1}/{len(args_list)})")
+            print(f"running download job ({i+1}/{len(args_list)})")
             downloaded_file = cds_getorder(args)
             processed_file = cds_processorder(args)
             downloaded.append(processed_file)
@@ -1935,7 +1942,7 @@ def cds_get_cerra_year(year: int, chunks: int | bool = True):
 
     logger.info("sorting forecast lead times")
     chunk_files = []
-    for chunk in _tools.progress(range(chunk_count)):
+    for chunk in _tools.progress(range(chunk_count), "sorting time"):
         logger.info(f"working on chunk #{chunk}")
         stem = 'cerra_ak_eu_{:04d}-{:02d}'.format(int(year), chunk + 1)
         sources = glob.glob(stem + '*.nc')
@@ -2052,12 +2059,16 @@ def assemble_rea(path: str, name: str,
             continue
 
         # download the year and put into place
-        logger.info(f"getting year :{year}")
+        print(f"processing year: {year}")
+        print("")
         ncname = fun_getyear(year, chunks)
         shutil.move(ncname, target)
-        logger.info("wrote file: %s" % target)
+
+        print(f"wrote file: {target}")
 
     logger.info("assembled dataset: %s" % name)
+
+    return True
 
 # -------------------------------------------------------------------------
 def assemble_DWD(path: str, name="DWD", years: list = None,
@@ -2252,6 +2263,8 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
                     list(to_download.values()) + yearfiles,
                     "removing files"):
                 if os.path.exists(v): os.remove(v)
+
+    logger.info("assembled dataset: %s" % name)
 
     return True
 
