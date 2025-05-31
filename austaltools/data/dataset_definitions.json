@@ -392,13 +392,23 @@
     "split": "years",
     "storage": "weather",
     "assemble": "assemble_rea",
+    "arguments": {
+      "parallel_queries": 2,
+      "chunks": 6,
+      "area": [71.0, 33.0, -12.0, 36.0]
+    },
     "position": "grid",
-    "years_available": "1941-2023"
+    "years_available": "1941-2024"
   },
   "CERRA": {
     "split": "years",
     "storage": "weather",
     "assemble": "assemble_rea",
+    "arguments": {
+      "parallel_queries": 2,
+      "chunks": 4,
+      "subset": [489, 649, 479, 659]
+    },
     "position": "grid",
     "years_available": "1985-2020"
   },

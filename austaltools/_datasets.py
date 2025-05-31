@@ -73,17 +73,16 @@ logger = logging.getLogger(__name__)
 CDSAPI_LIMIT_PARALLEL = 2
 """ Copernicus per-user limit for parallel queries """
 
-CDSAPI_CERRA_CHUNKS = 4
+CDSAPI_CHUNKS = True
 """ Copernicus per-request limit does not permit download of 
     yearly files and requires splitting up donwloads. 
     For possible values see 
     :py:func:`austaltools._dataset.cds_get_cerra_year` """
 
-CDSAPI_ERA5_CHUNKS = 6
-""" Copernicus per-request limit does not permit download of 
-    yearly files and requires splitting up donwloads. 
-    For possible values see 
-    :py:func:`austaltools._dataset.cds_get_era5_year` """
+WEA_WINDOW = (33, 71, -12, 36)
+""" standard lat/lon window for worldwide weather datasets 
+    latmin, latmax, lonmin, lonmax """
+
 
 COMPRESS_NETCDF = 'zlib'
 """ Standard compression method of netCDF files  """
@@ -105,9 +104,10 @@ SOURCES_WEATHER = [k for k, v in DATASET_DEFINITIONS.items()
 DEM_FMT = '%s.elevation.nc'  # % NAME
 """ terrain database file name template"""
 DEM_CRS = "EPSG:5677"
+""" standard DEM reference system """
+DEM_WINDOW = (47, 54, 5, 16)
 """ standard lat/lon window for worldwide terrain datasets 
     latmin, latmax, lonmin, lonmax """
-DEM_WINDOW = (47, 54, 5, 16)
 
 """ terrain data projection (GAUSS-KRÜGER zone 3)"""
 WEA_FMT = '%s.ak-input.nc'
@@ -270,7 +270,8 @@ class DataSet:
         :param replace: replace the dataset if it alread exists
         :type replace: bool
 
-        :param args: arguments to the assembling funtion that generates the dataset
+        :param args: arguments to the assembling funtion
+          that generates the dataset
         :type args: dict
 
         :returns: If the assembly was successful
@@ -439,13 +440,15 @@ def _available_read() -> dict:
     """
     Read datasets available on the system from the config.
 
+    :return: Dict of available datasets: Name and storage location
+    :rtype: dict[str, str]
     """
     conf = _storage.read_config()
     available_datasets = {}
 
     # if conf has an entry `available`
     if (c_avail := conf.get("available", None)) is not None:
-        # if `available' has a sub-enty st
+        # if `available` has a sub-entry st
         for st in _storage.STORAGES:
             if (st_avail := c_avail.get(st, None)) is not None:
                 # append any item to the dict
@@ -457,6 +460,12 @@ def _available_read() -> dict:
 # -------------------------------------------------------------------------
 
 def _available_write(datasets: list[DataSet]):
+    """
+    Write available Read on the system to the config.
+
+    :param datasets: List of known datasets (DataSet objects).
+    :type: list[DataSet]
+    """
 
     # read config
     conf = _storage.read_config()
@@ -482,6 +491,10 @@ def _available_scan(locs : list = None) -> dict:
 
     :param locs: list of possible storage loactions
     :type locs: list[str]
+
+    :return: Dict of available datasets: Name and storage location
+    :rtype: dict[str, str]
+
     """
     _init_datasets()
     if locs is None:
@@ -513,6 +526,15 @@ def _available_scan(locs : list = None) -> dict:
 # -------------------------------------------------------------------------
 
 def _datasets_expand(defs: dict) -> list[DataSet]:
+    """
+    Create list of known datasets from definitions.
+
+    :param defs: Dataset definitions a read from dataset definition file
+    :type defs: dict
+
+    :return: List of known datasets (DataSet objects).
+    :rtype: list[DataSet]
+    """
     datasets = []
     for k,v in defs.items():
         if "split" in v.keys():
@@ -560,7 +582,7 @@ def _datasets_set_available(
 
 def _init_datasets():
     """
-    initialize datsets and retrieve storage patths from config
+    Initialize datsets and retrieve storage paths from config
 
     :return:  list of all known datasets
     :rtype: list[DataSet]
@@ -577,7 +599,7 @@ def _init_datasets():
 
 def _ass_clear_target(target, replace):
     """
-    assure that a datafile is not already present
+    Assure that a datafile is not already present
 
     :param target: path of the datafile
     :type target: str
@@ -616,34 +638,34 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     :param args: The arguments neede to preform the asembly.
         for more details see :doc:`configure-austaltools`.
 
-        - provider['host']: (str)
+        - "host": (str)
           Hostname and protocol from where to download data.
           Supported protocols are :code:`"http://..."`,
           :code:`"https://..."`, and  :code:`"file:///..."`.
-        - provider['cert-check']: (str, optional)
+        - "cert-check": (str, optional)
           Wether to check the server certificates of `host` or not.
           Disables verification by setting this value to
           "no" or "false". Defaults to "true".
-        - provider['filelist']: (str or list, optional)
+        - "filelist": (str or list, optional)
           list of filenames to download or "generate" or Path or URL
           to file that contains this list.
-        - provider['localstore']: (str, optional)
+        - "localstore": (str, optional)
           path to local storage of the downloaded files.
           Locally saved files have priority over downloaded files.
           Successfully downloaded files are copied to this location.
-        - provider['jsonpath']: (str, optional)
+        - "jsonpath": (str, optional)
           Pattern how to extract file list from `filelist`
           if it points to a json file
           See :py:func:`jsonpath`
-        - provider['xmlpath']: (str, optional)
+        - "xmlpath": (str, optional)
           Pattern how to extract file list from `filelist`
           if it points to an xml file
           See :py:func:`xmlpath`
-        - provider['links']: (str, optional)
+        - "links": (str, optional)
           Regular expression to extract file list from `filelist`
           if it points to a htmls file,
           by filtering all links in `filelist`.
-        - provider['missing']: (str, optional)
+        - "missing": (str, optional)
           if 'ok', 'ignore', an empty list is returned,
           if the URL download fails with error 404 (not found)
         - provider["unpack"]: (str, optional)
@@ -1592,10 +1614,31 @@ def cds_processorder(order_args: dict[str, str | dict],
 
 # -------------------------------------------------------------------------
 
-def cds_get_order_list(args_list):
+def cds_get_order_list(args_list: list, maxparallel: int | None = None
+                       ) -> list[str]:
+    """
+    Execute a list of orders by submitting queries to CDS either
+    sequentially or in parallel, depending on the constant
+    :const:`RUNPARRALEL`.
+
+    :param args_list: list of sets of arguments accepted by
+       :func:`austaltools._datasets.cds_getorder`
+    :type args_list: list[dict]
+
+    :param maxparallel: number of parallel queries that are
+      submitted to the CDS API
+      or `None` for the default value :const:`CDSAPI_LIMIT_PARALLEL`.
+    :type maxparallel: int | None
+
+    :return: list of downloaded files
+    :rtype: list[str]
+    """
+    if maxparallel is None:
+        maxparallel = CDSAPI_LIMIT_PARALLEL
     logger.debug(f"RUNPARALLEL = {RUNPARALLEL}")
     if RUNPARALLEL:
         logger.info(f"running parallel jobs")
+
         # Queue to hold downloaded files for processing
         download_queue = mp.Queue()
         # Manager list to store processed results (shared across processes)
@@ -1610,7 +1653,7 @@ def cds_get_order_list(args_list):
             """
             Executes order downloading files and puts them in the queue.
             """
-            with mp.Pool(CDSAPI_LIMIT_PARALLEL) as pool:
+            with mp.Pool(maxparallel) as pool:
                 for _,args in zip(
                         pool.map(cds_getorder, args_list), args_list):
                     print(f"downloading file {args['target']}",
@@ -1664,7 +1707,11 @@ def cds_get_order_list(args_list):
 
 # -------------------------------------------------------------------------
 
-def cds_get_era5_year(year: int, chunks: int | bool = True):
+def cds_get_era5_year(year: int,
+                      chunks: int | bool = True,
+                      maxparallel: int = None,
+                      area: list | None = None,
+                      subset: list | None = None):
     """
     Downloads ERA5 reanalysis data for a specific year and
     saves it as a NetCDF file.
@@ -1689,6 +1736,21 @@ def cds_get_era5_year(year: int, chunks: int | bool = True):
       (wich can be faster, depending on the qeue length)
     :type chunks: int | bool
 
+    :param maxparallel: number of parallel queries that are
+      submitted to the CDS API. Or `None` for the default value.
+    :type maxparallel: int | None
+
+    :param area: Area to extract from the CDS database
+      as a list of "North, West, South, East"
+      (Minimum latitude, maximum latitude,
+      minimum longitude, maximum longitude)
+      or `None` for the default value.
+    :type area: list[float, float, float, float] | None
+
+    :param subset: Accepted for consistency with other
+      ``cds_get_...`` functions.
+    :type subset: None
+
     :returns: None. The function saves a NetCDF file to the specified
       path but does not return any value.
 
@@ -1706,6 +1768,15 @@ def cds_get_era5_year(year: int, chunks: int | bool = True):
 
 
     """
+    if subset is not None:
+        logger.error("option 'subset' given with a value that is "
+                     "not equal to the only allowed value: 'None'")
+    if area is not None:
+        latmin, latmax, lonmin, lonmax = area
+    else:
+        latmin, latmax, lonmin, lonmax = WEA_WINDOW
+
+
     ncname = 'era5_ak_eu_{:04d}.nc'.format(int(year))
     if cdsapi is None:
         logger.error('library cdsapi not available')
@@ -1743,7 +1814,8 @@ def cds_get_era5_year(year: int, chunks: int | bool = True):
         'data_format': 'netcdf',
         'download_format': 'unarchived',
         'area': [
-            71, -12, 33, 36,
+            int(x) if x.is_integer() else x
+            for x in [latmax, lonmin, latmin, lonmax]
         ],
     }
     args_list = []
@@ -1782,7 +1854,7 @@ def cds_get_era5_year(year: int, chunks: int | bool = True):
 
     # execute orders
     logger.info("starting download process")
-    downloaded = cds_get_order_list(args_list)
+    downloaded = cds_get_order_list(args_list, maxparallel=maxparallel)
     logger.debug(f"downloaded files: {downloaded}")
     chunk_files = downloaded
 
@@ -1802,7 +1874,11 @@ def cds_get_era5_year(year: int, chunks: int | bool = True):
 
 
 # -------------------------------------------------------------------------
-def cds_get_cerra_year(year: int, chunks: int | bool = True):
+def cds_get_cerra_year(year: int,
+                       chunks: int | bool = True,
+                       maxparallel: int = None,
+                       area: list | None = None,
+                       subset: list | None = None):
     """
     Downloads and processes a year's worth of CERRA dataset as GRIB files,
     then converts them to NetCDF format for easier use.
@@ -1831,6 +1907,19 @@ def cds_get_cerra_year(year: int, chunks: int | bool = True):
       (which can be faster, depending on the qeue length)
     :type chunks: int | bool
 
+    :param maxparallel: number of parallel queries that are
+      submitted to the CDS API. Or `None` for the default value.
+    :type maxparallel: int | None
+
+    :param area: accepted for consistency with other
+      ``cds_get_...`` functions.
+    :type area: None
+
+    :param subset: subset to extract after downloading data
+      from the CDS database in the terms of grid cell indices
+      in the order "xmin, xmax, ymax, ymin"
+      or `None` for the default value.
+    :type subset: list[int, int, int, int] | None
 
     :returns: None. The function's primary purpose is file I/O
               (downloading and converting data).
@@ -1856,6 +1945,19 @@ def cds_get_cerra_year(year: int, chunks: int | bool = True):
       `.grib` or `.nc` is appended for output files.
 
     """
+    if area is not None:
+        logger.error("option 'area' given with a value that is "
+                     "not equal to the only allowed value: 'None'")
+    if subset is not None:
+        xmin, xmax, ymin, ymax = subset
+    else:
+        # default: Germany
+        xmin = 489
+        xmax = 649
+        ymin = 479
+        ymax = 659
+
+
     ncname = 'cerra_ak_eu_{:04d}.nc'.format(int(year))
     if cdsapi is None:
         logger.error('library cdsapi not available')
@@ -1921,10 +2023,10 @@ def cds_get_cerra_year(year: int, chunks: int | bool = True):
             '{:02d}'.format(x + 1) for x in range(l_mon[chunk])
         ]
         args['subset'] = {
-            'xmin': 489,
-            'xmax': 649,
-            'ymax': 659,
-            'ymin': 479,
+            'xmin': xmin,
+            'xmax': xmax,
+            'ymax': ymax,
+            'ymin': ymin,
             'by_index': True
         }
         # one request per each lead time (1-3h)
@@ -1936,7 +2038,7 @@ def cds_get_cerra_year(year: int, chunks: int | bool = True):
 
     # execute orders
     logger.info("starting download process")
-    downloaded = cds_get_order_list(args_list)
+    downloaded = cds_get_order_list(args_list, maxparallel=maxparallel)
     logger.debug(f"downloaded files: {downloaded}")
 
     if len(downloaded) == 0:
@@ -1967,7 +2069,6 @@ def cds_get_cerra_year(year: int, chunks: int | bool = True):
 # -------------------------------------------------------------------------
 def assemble_rea(path: str, name: str,
                  years: str | int | None = None,
-                 chunks: bool | int = True,
                  replace : bool = False,
                  args: dict | None = None):
     """
@@ -1995,16 +2096,50 @@ def assemble_rea(path: str, name: str,
       within the range of 1940 to the current year.
     :type years: list
 
-    :param chunks: Whether to retrieve monthly chunks or yearly files.
-       See :py:func:`austaltools._datasets.cds_get_cerra_year`.
-    :type chunks: int | bool
-
     :param replace: If True, an existing file is overwritten.
         If False, an error is raised if the file already exists.
     :type replace: bool
 
-    :param args: Optionally accepted for compatiblity with the
-        general assemble funtion call. Is not evaluated.
+    :param args: The arguments neede to preform the asembly.
+        for more details see :doc:`configure-austaltools`.
+
+        - "parallel_queries": (int, optional)
+          number of parallel queries that are accepted
+          by CDS for this dataset.
+          Defaults to :const:`CDS_PARALLEL_QUERIES`.
+        - "chunks": (str | bool, optional)
+          Whether to query the data in one piece (`1` or `False`),
+          in montly chunks (`12 or `True`) or in 2, 3, or 4
+          multi-month chunks.
+          Single chunks result in a few large files to transfer,
+          which are ususally ranked lower in the request queue and
+          possibly exceed the maximum query size.
+          Small chunks create much more queries but which are
+          usually answered faster.
+          Defaults to const:`CDSAPI_CHUNKS`.
+        - "window": (str, optional)
+          How to subset the original dataset: Known keywords are:
+          - "area": use the subestting funtionality of the
+          CDS provided for several datasets, for example ERA5.
+          - "index": subset the data after donload, based on the
+          grid index.
+          - "dimension": subset the data after donload, based on the
+          values of the dimension variables.
+
+          Requires "nwse" or "xxyy".
+        - "nwse": (list[float, float, float, float], optional)
+          values determining the window boundaries in the order.
+          north (maximum y coordinate or latitude),
+          west (minimum x coordinate or longitude),
+          south (minimum y coordinate or latitude), and
+          east (maximum x coordinate or longitude).
+        - "xxyy": (list[float, float, float, float], optional)
+          values determining the window boundaries in the order.
+          minimum x coordinate or longitude,
+          maximum x coordinate or longitude,
+          minimum y coordinate or latitude, and
+          maximum y coordinate or latitude.
+
     :type args: dict
 
     :raises ValueError: If any of the years specified is outside the
@@ -2037,10 +2172,17 @@ def assemble_rea(path: str, name: str,
     fun_getyear = None
     if name == 'ERA5':
         fun_getyear = cds_get_era5_year
+        area = args.get('area', None)
+        subset = None
     elif name == 'CERRA':
         fun_getyear = cds_get_cerra_year
+        area = None
+        subset = args.get('subset', None)
     else:
         raise ValueError(f"unknown reanalysis name: {name}")
+
+    chunks = args.get('chunks', CDSAPI_CHUNKS)
+    maxparallel = args.get('parallel_queries', CDSAPI_LIMIT_PARALLEL)
 
     # get years to retrieve
     for year in years:
@@ -2063,7 +2205,9 @@ def assemble_rea(path: str, name: str,
         # download the year and put into place
         print(f"processing year: {year}")
         print("")
-        ncname = fun_getyear(year, chunks)
+        ncname = fun_getyear(year, chunks,
+                             maxparallel=maxparallel,
+                             area=area, subset=subset)
         shutil.move(ncname, target)
 
         print(f"wrote file: {target}")
@@ -2345,15 +2489,19 @@ def provide_weather(source: str, path: str = None,
         os.chdir(temp_dir)
         success = True
         if source == "ERA5":
+            dataset = dataset_get(name_yearly(source, years[0]))
             import_lib('cdsapi')
             import_lib('_netcdf')
             assemble_rea(path, name='ERA5', years=years,
-                         chunks=CDSAPI_ERA5_CHUNKS, replace=force)
+                         replace=force,
+                         args=dataset.arguments)
         elif source == "CERRA":
+            dataset = dataset_get(name_yearly(source, years[0]))
             import_lib('_netcdf')
             import_lib('cdsapi')
             assemble_rea(path, name='CERRA', years=years,
-                         chunks=CDSAPI_CERRA_CHUNKS, replace=force)
+                         replace=force,
+                         args=dataset.arguments)
         elif source == "HOSTRADA":
             import_lib('_netcdf')
             assemble_hostrada(path, years=years, replace=force)
@@ -2692,7 +2840,8 @@ def unpack_file(dl_file, unpack):
     """
     Unpack files from an archive
 
-    :param dl_file: filename, otionally incl. path, of the archive (downloadad file)
+    :param dl_file: filename, otionally incl. path, of
+      the archive (downloadad file)
     :type dl_file: str
     :param unpack: string describing what to unpack
     :type unpack: str
@@ -3006,7 +3155,8 @@ def process_input(args):
         - provider: dict containing the processing arguments
             - provider['localstore']: (str, optional)
               path where local copies of the download files are stored.
-              Files that exist in this directory are copied from there and not downloaded.
+              Files that exist in this directory are copied from there
+              and not downloaded.
               Successfully downloaded files are copied to this location.
             - provider['missing']: (str, optional)
               if 'ok', 'ignore', an empty list is returned,
@@ -3014,7 +3164,8 @@ def process_input(args):
             - provider["unpack"]: (str, optional)
               the description, what to unpack.
             - provider["CRS"]: (str, optional)
-              the referecnce system of the input data (in the form "EPSG:xxxx")
+              the referecnce system of the input data
+              (in the form "EPSG:xxxx")
             - provider["utm_remove_zone"]: (str, optional)
               If 'True', 'true', 'yes', True is passed
               to :py:func:`_ass_reduce`
