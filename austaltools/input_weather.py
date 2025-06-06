@@ -12,11 +12,9 @@ import os
 import sys
 import zipfile
 
+import netCDF4
 import numpy as np
 import pandas as pd
-
-import austaltools._geo
-import austaltools._tools
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import meteolib as m
@@ -47,13 +45,32 @@ logger = logging.getLogger(__name__)
 
 # ----------------------------------------------------
 
-# possible defaults: fixed_057 fixed_010 model_mean model_uv10 model_fsr
 DEFAULT_WIND_VARIANT = os.environ.get('WIND_VARIANT', 'model_uv10')
-# possible defaults: weighted nearest mean
+""" 
+  Default method to calculate the 10-m wind 
+ 
+  Overridden by environment variable "WIND_VARIANT"
+ 
+  Possible values are: 'fixed_057' 'fixed_010' 'model_mean' 
+  'model_uv10' 'model_fsr'
+"""
 DEFAULT_INTER_VARIANT = os.environ.get('INTER_VARIANT', 'weighted')
-# possible values: all kms kmc pts pgc empty or non-empty string:
+"""
+  Default method to interpolate to a given position
+  
+  Overridden by environment variable "INTER_VARIANT"
+  
+  Possible values are: 'weighted', 'nearest', 'mean'
+"""
 DEFAULT_CLASS_SCHEME = os.environ.get('CLASS_SCHEME', 'all')
-
+"""
+  Default method to calculate stability class
+  
+  Overridden by environment variable "CLASS_SCHEME"
+   
+  Possible values: 'all'  or a space-delimited list containing one ore
+  multiple of: 'kms', 'k2s', 'kmc', 'pts, 'pgc' 
+"""
 # ----------------------------------------------------
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
@@ -267,35 +284,164 @@ def grid_calulate_weights(pos: list, inter_variant=None) -> list[float]:
 
 # ----------------------------------------------------
 
+def decode_nc_time(nc: netCDF4.Dataset,timevar: str = 'time') -> pd.Series:
+    """
+    Decode a time variable from a NetCDF dataset into a pandas Series of
+    datetime objects.
+
+    This function reads a time variable from a NetCDF4 dataset, extracts
+    its time units and calendar, and decodes the raw time values into
+    Timestamps using :py:func:`netCDF4.num2date`.
+
+    :param nc: The NetCDF dataset containing the time variable.
+    :type nc: netCDF4.Dataset
+    :param timevar: Name of the time variable to decode. Defaults to 'time'.
+    :type timevar: str, optional
+
+    :return: A pandas Series of decoded time values as pandas.Timestamp.
+    :rtype: pandas.Series
+
+    :raises KeyError: If the specified time variable does not exist.
+    :raises AttributeError: If the time variable lacks 'units' or 'calendar'.
+    :raises ValueError: If the units or calendar are invalid for decoding.
+
+    :notes:
+         - Uses `netCDF4.num2date` for decoding.
+         - Ensures native Python `datetime` objects with:
+           `only_use_cftime_datetimes=False` and
+           `only_use_python_datetimes=True`.
+         - Expects the time variable to follow CF conventions.
+
+    :example:
+
+         >>> import netCDF4
+         >>> import pandas as pd
+         >>> ds = netCDF4.Dataset('example.nc')
+         >>> times = decode_nc_time(ds)
+         >>> print(times.head())
+
+    """
+    time_unit = nc.variables[timevar].getncattr('units')
+    time_calendar = nc.variables[timevar].getncattr('calendar')
+    logger.debug(f"time_unit: {time_unit}")
+    logger.debug(f"calendar: {time_calendar}")
+    datetime = netCDF4.num2date(nc.variables['time'][:],
+                              units=time_unit,
+                              calendar=time_calendar,
+                              only_use_cftime_datetimes=False,
+                              only_use_python_datetimes=True)
+    return pd.to_datetime(datetime)
+
+# ----------------------------------------------------
+
 def read_era5_nc(ncfile, lat, lon, wind_variant=None):
     """
-    read ERA5 nc file and interpolate values to position (lat, lon)
-    and recalculate 10 wind speed and direction (ff/dd) using
-    actual surface roughness
-    values:
+    Read an ERA5 NetCDF file, interpolate meteorological variables to a
+    specific geographic position (latitude, longitude), and calculate
+    wind speed and direction adjusted for surface roughness.
 
-    ======  ========    ==========================  ======
-     name   unit        description                 code
-    ======  ========    ==========================  ======
-    'time'
-    'u10'   m s**-1     10m_u-component_of_wind     10u
-    'v10'   m s**-1     10m_v-component_of_wind     10v
-    'sp'    Pa          surface_pressure            sp
-    'zust'  m s**-1     friction_velocity           zust
-    'fsr'   m           forecast_surface_roughness  fsr
-    't2m'   K           2m_temperature              2t
-    'd2m'   K           2m_dewpoint_temperature     2d
-    'cbh'   m           cloud_base_height           cbh
-    'sshf'  J m**-2     surface_sensible_heat_flux  sshf
-    'slhf'  J m**-2     surface_latent_heat_flux    slhf
-    'lcc'   1           low_cloud_cover             lcc
-    'tcc'   1           total_cloud_cover           tcc
-    ------  --------    --------------------------  ------
-    optional:
-    ------------------------------------------------------
-    'mcc'   1           medium_cloud_cover          mcc
-    'tp'    m           total_precipitation         tp
-    ======  ========    ==========================  ======
+    This function extracts required and optional ERA5 meteorological
+    variables from the input NetCDF file, interpolates them to the given
+    point location, applies surface flux and roughness adjustments, and
+    optionally computes wind speed based on selected surface roughness
+    models.
+
+    :param ncfile: Path to the ERA5 NetCDF file.
+    :type ncfile:  str
+
+    :param lat: Latitude (in degrees) of the point at which to
+      interpolate values.
+    :type lat: float
+    :param lon: Longitude (in degrees) of the point at which to
+      interpolate values.
+    :type lon: float
+    :param wind_variant: Method used to compute 10 m wind speed (`ff`).
+      Default is :py:const:`DEFAULT_WIND_VARIANT`.
+      Supported options:
+
+        - `'fixed_057'` : Assumes fixed surface roughness z₀ = 0.57 m.
+        - `'fixed_010'` : Assumes fixed surface roughness z₀ = 0.10 m.
+        - `'model_mean'` : Uses mean surface roughness from model data.
+        - `'model_uv10'` : Uses u10 and v10 without adjustment.
+        - `'model_fsr'` : Uses model-provided roughness field (fsr).
+
+    :type wind_variant: str
+
+    :returns:
+        DataFrame containing interpolated meteorological variables
+        and computed wind metrics.
+        Includes the following variables (if present in the input data):
+
+        Required:
+            - `time` : datetime64[ns], timestamps
+            - `u10`  : float, 10 m u-component of wind [m/s]
+            - `v10`  : float, 10 m v-component of wind [m/s]
+            - `sp`   : float, surface pressure [Pa]
+            - `zust` : float, friction velocity [m/s]
+            - `fsr`  : float, forecast surface roughness [m]
+            - `t2m`  : float, 2 m temperature [K]
+            - `d2m`  : float, 2 m dewpoint temperature [K]
+            - `cbh`  : float, cloud base height [m]
+            - `sshf` : float, surface sensible heat flux [W/m²]
+            - `slhf` : float, surface latent heat flux [W/m²]
+            - `lcc`  : float, low cloud cover [fraction]
+            - `tcc`  : float, total cloud cover [fraction]
+
+        Optional (included if available):
+            - `mcc`  : float, medium cloud cover [fraction]
+            - `tp`   : float, total precipitation [mm]
+
+        Computed:
+            - `ff`   : float, 10 m wind speed [m/s]
+            - `dd`   : float, wind direction in degrees from North [°]
+    :rtype: pandas.DataFrame
+
+    :raises ValueError:
+      If a required variable is missing from the NetCDF file or
+      if the `wind_variant` is unknown or unsupported.
+
+    :notes:
+        The ERA5 variables expected in the input file are:
+
+        ======  ========    ==========================  ======
+         name   unit        description                 code
+        ======  ========    ==========================  ======
+        'time'
+        'u10'   m s**-1     10m_u-component_of_wind     10u
+        'v10'   m s**-1     10m_v-component_of_wind     10v
+        'sp'    Pa          surface_pressure            sp
+        'zust'  m s**-1     friction_velocity           zust
+        'fsr'   m           forecast_surface_roughness  fsr
+        't2m'   K           2m_temperature              2t
+        'd2m'   K           2m_dewpoint_temperature     2d
+        'cbh'   m           cloud_base_height           cbh
+        'sshf'  J m**-2     surface_sensible_heat_flux  sshf
+        'slhf'  J m**-2     surface_latent_heat_flux    slhf
+        'lcc'   1           low_cloud_cover             lcc
+        'tcc'   1           total_cloud_cover           tcc
+        ------  --------    --------------------------  ------
+        optional:
+        ------------------------------------------------------
+        'mcc'   1           medium_cloud_cover          mcc
+        'tp'    m           total_precipitation         tp
+        ======  ========    ==========================  ======
+
+        - The function uses logarithmic wind profile theory to estimate
+          wind speeds when `wind_variant` involves surface roughness.
+        - Heat fluxes (`sshf`, `slhf`) are converted from J/m² per hour
+          to W/m² (SI units).
+        - Total precipitation (`tp`) is converted from meters to millimeters.
+        - Wind direction (`dd`) is computed as meteorological direction
+          (from which the wind blows).
+        - Wind components (u10, v10) in ERA5 are based on a fixed
+          roughness length for short grass (z₀=0.03m),
+          so wind speed (`ff`) is recalculated accordingly.
+
+    :example:
+
+        >>> df = read_era5_nc("era5_data.nc", lat=52.52, lon=13.405)
+        >>> print(df[['time', 'ff', 'dd']].head())
+
     """
     if wind_variant is None:
         wind_variant = DEFAULT_WIND_VARIANT
@@ -332,9 +478,10 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
     # convert time
     logger.info('calculating time')
     values = pd.DataFrame()
-    epoch = dt.datetime(1900, 1, 1, 0, 0, tzinfo=dt.timezone.utc)
-    values['time'] = pd.to_datetime(
-        [epoch + dt.timedelta(hours=int(x)) for x in nc['time']])
+    # epoch = dt.datetime(1900, 1, 1, 0, 0, tzinfo=dt.timezone.utc)
+    # values['time'] = pd.to_datetime(
+    #     [epoch + dt.timedelta(hours=int(x)) for x in nc['time']])
+    values['time'] = decode_nc_time(nc)
     #
     # interpolate values to position
     #
@@ -496,36 +643,88 @@ def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
 # ----------------------------------------------------
 def read_cerra_nc(ncfile, lat, lon):
     """
-    read CERRA nc file and interpolate values to position (lat, lon)
-    and recalculate 10 wind speed and direction (ff/dd) using
-    actual surface roughness
-    values:
+    Read a CERRA NetCDF file and interpolate variables to a given
+    position (lat, lon), converting units where necessary and
+    recalculating wind speed and direction using surface roughness.
 
-    +---------+-----------+------------------------------------+
-    | name    | unit      | description                        |
-    +=========+===========+====================================+
-    | 'time'  |           |                                    |
-    | 'wdir10'| deg       | 10-metre wind direction true       |
-    | 'si10'  | m s**-1   | 10-metre wind speed                |
-    | 'r2'    | %         | 2-metre relative humidity          |
-    | 't2m'   | K         | 2-metre temperature                |
-    | 'lcc'   | %         | low-level cloud cover              |
-    | 'mcc'   | %         | medium-level cloud cover           |
-    | 'tisemf'| N m**-2 s | time integral of surface eastward  |
-    |         |           | momentum flux                      |
-    | 'tisnmf'| N m**-2 s | time integral of surface northward |
-    |         |           | momentum flux                      |
-    | 'slhf'  | J m**-2   | surface latent heat flux           |
-    | 'sp'    | Pa        | surface pressure                   |
-    | 'sr'    | m         | surface roughness                  |
-    | 'sshf'  | J m**-2   | surface sensible heat flux         |
-    | 'tcc'   | %         | total cloud cover                  |
-    +---------+-----------+------------------------------------+
-    | optional:                                                |
-    +----------------------------------------------------------+
-    | 'tp'    | kg m**-2  | total precipitation                |
-    +---------+---------+--------------------------------------+
-    """
+    The function interpolates variables to the provided coordinates,
+    converts units for physical consistency,
+    decomposes and recomputes 10-meter wind speed and direction,
+    decomposes accumulated variables and normalizes them
+    and returns the processed data as a pandas DataFrame
+
+
+    :param ncfile: Path to the NetCDF file.
+    :type ncfile: str
+
+    :param lat: Latitude (decimal degrees) for interpolation.
+    :type lat: float
+
+    :param lon: Longitude (decimal degrees) for interpolation.
+    :type lon: float
+
+    :returns:
+        DataFrame containing time series of interpolated and
+        derived variables at the specified location.
+        Returned columns include:
+
+        Required:
+            - 'time' : Timestamp (UTC)
+            - 't2m' : 2-metre temperature [K]
+            - 'sp' : Surface pressure [Pa]
+            - 'sshf' : Sensible heat flux [W m**-2]
+            - 'slhf' : Latent heat flux [W m**-2]
+            - 'sr' → 'fsr' : Surface roughness [m]
+            - 'r2' → 'r2m' : Relative humidity [1]
+            - 'lcc' : Low-level cloud cover [1]
+            - 'mcc' : Medium-level cloud cover [1]
+            - 'tcc' : Total cloud cover [1]
+
+        Optional (if available):
+            - 'tp' : Total precipitation [mm]
+
+        Computed variables:
+            - 'zust' : Friction velocity [m s**-1]
+            - 'ff' : 10-metre wind speed [m s**-1]
+            - 'dd' : 10-metre wind direction [deg]
+    :rtype: pandas.DataFrame
+
+    :raises ValueError:
+        If any required variable is missing in the NetCDF file.
+
+    :notes:
+         The ERA5 variables expected in the input file are:
+
+         ========= =========== ====================================
+          name      unit        description
+         ========= =========== ====================================
+          'time'
+          'wdir10'  deg         10-metre wind direction true
+          'si10'    m s**-1     10-metre wind speed
+          'r2'      %           2-metre relative humidity
+          't2m'     K           2-metre temperature
+          'lcc'     %           low-level cloud cover
+          'mcc'     %           medium-level cloud cover
+          'tisemf'  N m**-2 s   time integral of surface eastward
+                                momentum flux
+          'tisnmf'  N m**-2 s   time integral of surface northward
+                                momentum flux
+          'slhf'    J m**-2     surface latent heat flux
+          'sp'      Pa          surface pressure
+          'sr'      m           surface roughness
+          'sshf'    J m**-2     surface sensible heat flux
+          'tcc'     %           total cloud cover
+         --------- ----------- ------------------------------------
+         optional:
+         ----------------------------------------------------------
+         'tp'      kg m**=2    total precipitation
+         ========= =========== ====================================
+
+    :warning:
+        Missing optional variables are skipped with a warning.
+
+
+   """
     import netCDF4
 
     _VAR_NEEDED = ['wdir10', 'si10', 'r2', 't2m', 'lcc',
@@ -551,13 +750,14 @@ def read_cerra_nc(ncfile, lat, lon):
     # convert time
     logger.info('calculating time')
     values = pd.DataFrame()
-    time_unit_string = nc.variables['time'].units
-    time_unit, _, base_date = time_unit_string.split(maxsplit=2)
-    logger.debug(f"time_unit: {time_unit}")
-    logger.debug(f"base_date: {base_date}")
-    epoch = pd.to_datetime(base_date, utc=True)
-    values['time'] = [epoch + pd.Timedelta(x, unit=time_unit)
-                      for x in nc.variables['time'][:].data]
+    # time_unit_string = nc.variables['time'].units
+    # time_unit, _, base_date = time_unit_string.split(maxsplit=2)
+    # logger.debug(f"time_unit: {time_unit}")
+    # logger.debug(f"base_date: {base_date}")
+    # epoch = pd.to_datetime(base_date, utc=True)
+    # values['time'] = [epoch + pd.Timedelta(x, unit=time_unit)
+    #                   for x in nc.variables['time'][:].data]
+    values['time'] = decode_nc_time(nc)
     logger.debug(f"time: {values['time'][0:2].values} ...")
     #
     # interpolate values to position
@@ -746,20 +946,67 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
 
 def read_hostrada_nc(ncfile, lat, lon, wind_variant=None):
     """
-    read HOSTRADA nc file and interpolate values to position (lat, lon)
-    values:
+    Read a HOSTRADA NetCDF file and interpolate variables to a given
+    position (lat, lon), converting units where needed.
 
-    ===================  ========  ==========================
-     name                 unit      long name
-    ===================  ========  ==========================
-    'time'
-    'tas'                 °C        Near-Surface Air Temperature
-    'clt'                 octa      Total Cloud Fraction
-    'hurs'                %         Near-Surface Relative Humidity
-    'ps'                  Pa        Surface Air Pressure
-    'sfcWind_direction'   deg       Near-Surface Wind Direction
-    'sfcWind'             m s**-1   Near-Surface Wind Speed
-    ===================  ========  ==========================
+    This function reads the NetCDF file, interpolates variables
+    to the specified location, converts units to standardized formats,
+    returning the interpolated values renamed to the
+    unified naming convention
+
+
+    :param ncfile: Path to the HOSTRADA NetCDF file.
+    :type ncfile: str
+
+    :param lat: Latitude (decimal degrees) at which to interpolate data.
+    :type lat: float
+
+    :param lon: Longitude (decimal degrees) at which to interpolate data.
+    :type lon: float
+
+    :param wind_variant:
+        Placeholder for future use (e.g., handling different wind
+        input schemes). Currently unused.
+    :type wind_variant: str | None
+
+    :returns: A DataFrame containing interpolated and converted variables
+      at the given point. The following variables are included:
+
+        Required:
+            - 'time' : Timestamp (UTC)
+            - 'sp' : Surface pressure [Pa]
+            - 'ff' : Wind speed at 10 m [m s**-1]
+            - 'dd' : Wind direction at 10 m [deg]
+
+        Computed:
+            - 't2m' : 2-metre temperature [K] (converted from °C)
+            - 'tcc' : Total cloud cover [1] (from 0–8 octas)
+            - 'r2m' : Relative humidity [1] (from %)
+    :rtype: pandas.DataFrame
+
+    :raises ValueError:
+        If any required variable is missing in the NetCDF file.
+
+    :notes:
+        Variables expected in the input file are:
+
+        ===================  ========  ==========================
+         name                 unit      long name
+        ===================  ========  ==========================
+        'time'
+        'tas'                 °C        Near-Surface Air Temperature
+        'clt'                 octa      Total Cloud Fraction
+        'hurs'                %         Near-Surface Relative Humidity
+        'ps'                  Pa        Surface Air Pressure
+        'sfcWind_direction'   deg       Near-Surface Wind Direction
+        'sfcWind'             m s**-1   Near-Surface Wind Speed
+        ===================  ========  ==========================
+
+        - The function assumes the NetCDF contains 2D longitude/latitude
+          fields.
+        - Missing or malformed wind data will result in interpolation
+          errors or incorrect wind values.
+
     """
     if wind_variant is None:
         wind_variant = DEFAULT_WIND_VARIANT
@@ -785,9 +1032,7 @@ def read_hostrada_nc(ncfile, lat, lon, wind_variant=None):
     # convert time
     logger.info('calculating time')
     values = pd.DataFrame()
-    epoch = dt.datetime(1900, 1, 1, 0, 0, tzinfo=dt.timezone.utc)
-    values['time'] = pd.to_datetime(
-        [epoch + dt.timedelta(hours=int(x)) for x in nc['time']])
+    values['time'] = decode_nc_time(nc)
     #
     # interpolate values to position
     #
@@ -970,11 +1215,11 @@ def get_dwd_weather(lat: float, lon: float, year:int,
         datafile = os.path.join(ds.path, ds.file_data)
     logging.info('reading data from; %s' % datafile)
     if station is None:
-        _, _, _, nam, station = austaltools._geo.read_dwd_stationinfo(
+        _, _, _, nam, station = _geo.read_dwd_stationinfo(
             station=None, pos_lat=lat, pos_lon=lon, datafile=datafile)
         logger.info(f"selected nearest station {nam}")
     else:
-        _, _, _, nam = austaltools._geo.read_dwd_stationinfo(
+        _, _, _, nam = _geo.read_dwd_stationinfo(
             station, datafile=datafile)
     with zipfile.ZipFile(datafile,
                          mode='r') as zf:
@@ -1044,9 +1289,13 @@ def get_dwd_weather(lat: float, lon: float, year:int,
 def austal_weather(args):
 
     """
-    This function processes weather data based on the provided arguments and retrieves weather observations from various sources.
+    This is the main function implementing the command 'weather'.
 
-    :param dict args: A dictionary containing the following keys:
+    The function processes weather data based on the provided arguments
+    and retrieves weather observations from various sources.
+
+    :param args: A dictionary containing the following keys:
+
         - dwd (str or None): DWD station ID, used to retrieve station information.
         - wmo (str or None): WMO station ID, used to retrieve station information.
         - gk (list of float or None): Gauss-Krüger coordinates [rechts, hoch].
@@ -1057,6 +1306,8 @@ def austal_weather(args):
         - output (str): Output name for the results.
         - source (str): Source of the weather data (e.g., "ERA5", "CERRA", "DWD").
         - prec (bool): Flag indicating whether precipitation data should be included.
+
+    :type args: dict
 
     :raises ValueError: If an unknown source is provided.
     """
