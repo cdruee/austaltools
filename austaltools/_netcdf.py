@@ -759,8 +759,11 @@ def merge_time(infiles: list | str, target: str,
                                 itertools.product(*src_slices),
                                 itertools.product(*dst_slices)):
                             src_cell, dst_cell = (list(x) for x in prod)
-                            dst[vname][*dst_cell] = src[vname][*src_cell]
-
+                            #Python >= 3.11 :
+                            # dst[vname][*dst_cell] = src[vname][*src_cell]
+                            # Python <= 3.10 :
+                            dst[vname][tuple(dst_cell)] = src[vname][
+                                tuple(src_cell)]
 
     # clean up
     if remove_source:

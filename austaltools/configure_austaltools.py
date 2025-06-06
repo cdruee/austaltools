@@ -450,7 +450,7 @@ def cli_parser():
                         )
 
     more_epilog = ""
-    if not DS.have_lib('cdo') or not DS.have_lib('cdsapi'):
+    if not DS.have_lib('cdsapi'):
         more_epilog += f"Source CERRA cannot be assembled. "
     if not DS.have_lib('cdsapi'):
         more_epilog += f"Source ERA cannot be assembled. "

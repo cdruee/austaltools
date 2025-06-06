@@ -130,14 +130,12 @@ _CLEAN_UP = True
 # -------------------------------------------------------------------------
 # make optional imports defined:
 cdsapi = None
-cdo = None
 gdal = None
 gdal_merge = None
 _netcdf = None
 osr = None
 # link libraries used to libraries imported
 LIB2IMPORT = {
-    'cdo': 'cdo',
     'cdsapi': 'cdsapi',
     'gdal': 'osgeo',
     'gdal_merge': 'osgeo_utils',
@@ -171,10 +169,7 @@ def import_lib(lib):
     :param lib: name of libray
     :type lib: str
     """
-    if lib == 'cdo':
-        global cdo
-        import cdo
-    elif lib == 'cdsapi':
+    if lib == 'cdsapi':
         global cdsapi
         import cdsapi
     elif lib == 'gdal':
@@ -1859,7 +1854,7 @@ def cds_get_cerra_year(year: int,
     converting it to a NetCDF file for more convenient analysis and removes
     the original GRIB file to conserve space.
 
-    Requires the `cdsapi` and `cdo` (Climate Data Operators) packages,
+    Requires the `cdsapi` package,
     as well as an active Copernicus account for data retrieval.
 
     :param year: The year of the dataset to retrieve.
@@ -1892,8 +1887,9 @@ def cds_get_cerra_year(year: int,
               It does not return a value but will print status messages
               regarding its progress.
 
-    :raises FileNotFoundError: If the CDO command fails to find the
-            downloaded GRIB file for conversion.
+    :raises RuntimeError: If nothing was downloaded.
+    :raises ValueError: If `chunks` is neither divisor of 12,
+      nor `True` or `False`.
 
     :example:
 
@@ -1905,8 +1901,6 @@ def cds_get_cerra_year(year: int,
     - The 'cdsapi' Client is used for data retrieval, requiring
       a **valid CDS API key**
       set up as per the CDS API's documentation.
-    - The 'cdo' tool is called for data processing, necessitating
-      its installation and availability in the system's PATH.
     - This function assumes `cerraname` returns a base filename to which
       `.grib` or `.nc` is appended for output files.
 
@@ -2327,14 +2321,15 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
             month_end = ((month_start
                     + pd.tseries.offsets.MonthEnd())
                     + pd.tseries.offsets.Hour(23))
+            first_of_month_str = month_start.strftime("%Y%m%d%H")
             srv_time = "{}-{}".format(
-                month_start.strftime("%Y%m%d%H"),
+                first_of_month_str,
                 month_end.strftime("%Y%m%d%H")
             )
             for k,v in srv_dirs.items():
                 to_download[
                     srv_host + srv_path + srv_file % (v, k, srv_time)
-                ] = f"{k}_{month_start.strftime("%Y%m%d%H")}.nc"
+                ] = f"{k}_{first_of_month_str}.nc"
 
         # download the files
         logger.debug("files to download: %d" % len(to_download))
