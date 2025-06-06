@@ -163,11 +163,11 @@ def main(args: dict):
               )
     logger.debug("bounds: %s" % format(bounds))
     tif_handle, tif_name = tempfile.mkstemp(suffix=".tif")
-    # close file handle so that file is not open an there is
+    # close file handle so that file is not open and there is
     # no permission issue when gdal tries to open it by name
     # in contrast to tempfile.TemporaryFile this does not remove
     # the file. we need to remove ist explicitly by os.remove!
-    tif_handle.close()
+    os.close(tif_handle)
     logger.debug("tempfile: %s" % tif_name)
     gdal.Warp(tif_name, dataset,
               dstSRS="EPSG:5677",

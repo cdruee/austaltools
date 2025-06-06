@@ -34,17 +34,17 @@ def main(args):
         )
         return
 
-    # try to load topography
-    topo_path = os.path.join(args['working_dir'],
-                             "zg%02d.dmna" % args["grid"])
+    # try to load AUSTAL topography
+    if args.get('topo', None) is not None:
+        topo_path = args['topo']
+    else:
+        topo_path = os.path.join(args['working_dir'],
+                                 "zg%02d.dmna" % args["grid"])
     if os.path.exists(topo_path):
         logger.info('reading topography from %s' % topo_path)
-    topofile = readmet.dmna.DataFile(topo_path)
-    topz = topofile.data[""]
-    topx = topofile.axes(ax="x")
-    topy = topofile.axes(ax="y")
 
-    dd = float(topofile.header["delta"])
+    topx, topy, topz, dd = _plotting.read_topography(topo_path)
+
     dzdx = np.diff(topz, axis=0, prepend=np.nan) / dd
     dzdy = np.diff(topz, axis=1, prepend=np.nan) / dd
     gammax = [ x  - dd / 2 for x in topx[1:]]
@@ -85,12 +85,17 @@ def add_options(subparsers):
         name="steepness",
         help='Plot AUSTAL topography steepness'
     )
-    pars_ste.add_argument('-g', '--grid',
+    pars_ste_what = pars_ste.add_mutually_exclusive_group()
+    pars_ste_what.add_argument('-g', '--grid',
                           metavar='ID',
-                          nargs='?',
                           default=0,
                           help='ID (number) of the grid to evaluate. '
                                'Defaults to 0')
+    pars_ste_what.add_argument('-t', '--topo',
+                          metavar='FILE',
+                          default=None,
+                          help='Topography file to read instead of '
+                               'the AUSTAL topography files.')
     pars_ste = _plotting.add_arguents_common_plot(pars_ste)
 
     return pars_ste
