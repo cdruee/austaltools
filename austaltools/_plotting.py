@@ -2,7 +2,7 @@ import argparse
 import importlib.util
 import logging
 import os
-import sys
+import re
 
 import pandas as pd
 
@@ -24,6 +24,7 @@ NO_MATPLOTLIB_HELP = ("The matplotlib library "
                       "You can install it by running "
                       "`pip install matplotlib` "
                       "or using the package manager of your choice.")
+
 # ----------------------------------------------------
 
 def have_matplotlib(mock: bool = False):
@@ -36,11 +37,15 @@ def have_matplotlib(mock: bool = False):
       return res
     else:
       return True
+
 # ----------------------------------------------------
+
 matplotlib = None
 colors = None
 patches = None
 plt = None
+
+
 def import_matplotlib():
     """ import a libray that is installed
     :param lib: name of libray
@@ -66,6 +71,7 @@ def import_matplotlib():
     return have_display
 
 # ----------------------------------------------------
+
 def import_plotlib(lib):
     """
     return a libray that is installed or return None
@@ -89,7 +95,80 @@ def import_plotlib(lib):
         logger.debug(f"failed to import {mob}")
     return res
 
-# -------------------------------------------------------------------------
+# =========================================================================
+
+class GridASCII(object):
+    """
+    Class that represents a grid in ASCII format.
+
+
+    Example:
+        >>> grid = GridASCII("my_grid.asc")
+        >>> print(grid.header["ncols"])  # Access header values
+        >>> grid.write("output_grid.asc")  # Write grid data to a new file
+    """
+    file = None
+    """Path to the ASCII file."""
+    data = None
+    """ grided data """
+    _keys = ["ncols", "nrows", "xllcorner", "yllcorner", "cellsize",
+             "NODATA_value"]
+    header = {x: None for x in _keys}
+    """Dictionary containing header information."""
+
+    def __init__(self, file=None):
+        """
+
+        :param file:
+            Path to the ASCII file (default: None).
+        :type file:
+            str (optional)
+        """
+        if file is not None:
+            self.read(file)
+
+    def read(self, file):
+        """
+        Reads the data from a GridASCII file in to the object.
+
+        :param file: file name (optionally including path)
+        :type file: str
+
+        :raises: ValueError if file is not a GridASCII file
+        """
+        self.file = file
+        self.data = np.rot90(np.loadtxt(file, skiprows=6), k=3)
+        with open(file, "r") as f:
+            for ln in f:
+                k, v = re.split(r"\s+", ln.strip(), 1)
+                if re.match(r'[0-9-.E]+', k):
+                    # if fist field is a number the header is over
+                    break
+                elif k in self._keys:
+                    self.header[k] = v
+                else:
+                    raise ValueError(
+                        'unknown header value in file: %s' % k)
+
+    def write(self, file=None):
+        """
+        Writes the data the object into a GridASCII file.
+
+        :param file: file name (optionally including path).
+          If missing, the name contained in the attribute `name` is used.
+        :type file: str, optional
+
+        :raises: ValueError if file is not a GridASCII file
+        """
+        if file is None:
+            file = self.file
+        ascii_header = "\n".join(["%-12s %s" % (k, self.header[k])
+                                  for k in self._keys])
+
+        np.savetxt(file, self.data, header=ascii_header,
+                   comments='', fmt="%4.0f", delimiter="")
+
+# =========================================================================
 
 def _add_epilog(parser: argparse.ArgumentParser
                 ) -> argparse.ArgumentParser:
@@ -251,6 +330,7 @@ def plot_add_mark(ax, mark):
             sym = "o"
         ax.plot(x, y, sym, markersize=10)
 
+# -------------------------------------------------------------------------
 
 def plot_add_topo(ax, topo, working_dir='.'):
     logger.debug('adding topography')
@@ -267,11 +347,7 @@ def plot_add_topo(ax, topo, working_dir='.'):
             topo_path = os.path.join(working_dir, topo)
         else:
             raise ValueError('topography file not found: %s' % topo)
-        logger.info('reading topography from %s' % topo_path)
-        topofile = readmet.dmna.DataFile(topo_path)
-        topz = topofile.data[""]
-        topx = topofile.axes(ax="x")
-        topy = topofile.axes(ax="y")
+        topx, topy, topz, dd = read_topography(topo_path)
     else:
         raise ValueError('topo must be dict of filename')
     con = ax.contour(topx, topy, topz.T, origin="lower",
@@ -396,17 +472,19 @@ def common_plot(args: dict,
         order = 10 ** np.floor(np.log10(data_range))
         dmin = np.floor(dmin / order) * order
         dmax = np.ceil(dmax / order) * order
-        logger.debug('data_range: %f' % data_range)
-        levels = np.arange(dmin, dmax, data_range / 10)
+        logger.debug('scale range: %f' % (dmax - dmin))
+        delta = (dmax - dmin) / 10.
+        levels = np.arange(dmin, dmax, delta)
 
+    logger.debug(f"levels: {levels}")
     if args['fewcols']:
-        cmap = plt.get_cmap(cmap_name, len(levels) + 1)
+        color_levels=levels
     else:
-        cmap = plt.get_cmap(cmap_name,1000)
-        cl = levels
-        levels = [cl[0]]
-        for i in range(1,len(cl)):
-            levels += list(np.linspace(cl[i-1], cl[i], 10))[1:]
+        color_levels = [levels[0]]
+        for x in levels[1:]:
+            color_levels += [np.nan] * 9 + [x]
+        color_levels = pd.Series(color_levels).interpolate(method='quadratic').tolist()
+    cmap = plt.get_cmap(cmap_name, len(color_levels) + 1)
     if args['kind'] == "contour":
         #
         # Note to self: "TypeError: 'NoneType' object is not callable"
@@ -415,26 +493,25 @@ def common_plot(args: dict,
         img = plt.contourf(datx, daty,
                            datz.T,
                            origin="lower",
-                           levels=levels,
+                           levels=color_levels,
                            cmap=cmap,
                            extend='both',
                            )
-        plt.colorbar(img, label=unit, format='%.2g', extend='both')
     elif args['kind'] == "grid":
         img = plt.pcolormesh(datx, daty,
                          datz.T,
                          shading="nearest",
                          cmap=cmap,
                          norm = colors.BoundaryNorm(
-                             boundaries= levels,
-                             ncolors=len(levels),
+                             boundaries= color_levels,
+                             ncolors=len(color_levels),
                              clip=False
                          )
                          )
-        plt.colorbar(img, label=unit, format='%.2g', extend='both',
-                     boundaries=levels)
     else:
         raise ValueError('argument display missing or invalid')
+    plt.colorbar(img, label=unit, format='%.3g', extend='both',
+                 ticks=levels)
     logger.debug('unit: %s' % unit)
 
     # ---------------------------
@@ -543,3 +620,29 @@ def read_extracted_weather(csv_name: str) -> (
                       parse_dates=True, na_values='-999')
 
     return lat, lon, ele, z0, source, nam, obs
+
+# -------------------------------------------------------------------------
+
+def read_topography(topo_path):
+    topo_extension = os.path.splitext(topo_path)[1]
+    logger.debug(f"file extension: {topo_extension}")
+    if topo_extension == '.dmna':
+        topofile = readmet.dmna.DataFile(topo_path)
+        topz = topofile.data[""]
+        topx = topofile.axes(ax="x")
+        topy = topofile.axes(ax="y")
+        dd = float(topofile.header["delta"])
+    elif topo_extension == '.grid':
+        topofile = GridASCII(topo_path)
+        topz = topofile.data
+        dd = float(topofile.header["cellsize"])
+        xll = float(topofile.header["xllcorner"])
+        yll = float(topofile.header["yllcorner"])
+        nx = int(topofile.header["ncols"])
+        ny = int(topofile.header["nrows"])
+        topx = [xll + float(i) * dd for i in range(nx)]
+        topy = [yll + float(i) * dd for i in range(ny)]
+    else:
+        raise ValueError(f"unknown topo file extension {topo_extension}")
+
+    return topx, topy, topz, dd

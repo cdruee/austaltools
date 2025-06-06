@@ -12,11 +12,11 @@ Installation:
 
 Essential requirements:
 
-     gdal meteolib numpy pandas readmet 
+     gdal meteolib numpy pandas readmet requests
 
 Optional requirements (deneding upon intended use) 
 
-    tqdm matplotlib cdo 
+    matplotlib netCDF4 tqdm 
 
 AustalTools can be installed from PyPi:
 
@@ -30,7 +30,7 @@ The module contains the following scripts :
 
 ``austaltools``
     The main application. I suports subcommands like
-    ``eap``, ``fill-timeseries``, 
+    ``eap``, ``fill-timeseries``, ``widfield``, ...
 
 ``configure-austaltools``
     Application to prepare local datasources for ``austaltools``.
