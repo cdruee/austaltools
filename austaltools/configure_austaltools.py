@@ -570,6 +570,7 @@ def main():
             raise ValueError("Source not recognized: %s "
                              % args['source'])
 
+
     elif args['action'] == 'simple':
         set_simple(args)
 

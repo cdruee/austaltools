@@ -1,7 +1,14 @@
 {
   "DGM25-RP": {
     "storage": "terrain",
-    "assemble": "assemble_DGM25_RP",
+    "assemble": "assemble_DGMxx",
+    "arguments": {
+      "host": "http://www.vermkv.service24.rlp.de",
+      "path": "opendat/dgm25",
+      "filelist": "dgm25.zip",
+      "unpack": "zip://*.xyz",
+      "CRS": "EPSG:25832"
+    },
     "uri": "doi://10.5281/zenodo.12740424",
     "license": "spdx:DL-DE-BY-2.0",
     "notice": "Generated from DGM1 data '(c) GeoBasis-DE / LVermGeoRP, 2024)',  www.lvermgeo.rlp.de, licensed under DL-DE-BY-2.0"

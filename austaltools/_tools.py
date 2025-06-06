@@ -5,6 +5,7 @@ import shlex
 import logging
 import select
 import sys
+import typing
 import unicodedata
 import urllib.parse
 from xml.etree import ElementTree
@@ -344,7 +345,8 @@ class Spinner:
 
 # -------------------------------------------------------------------------
 
-def progress(itr=None, desc="", *args, **kwargs):
+def progress(itr: typing.Iterable | None = None,
+             desc: str = "", *args, **kwargs):
     """
     A progress bar that shows if :class:`tqdm.tqdm` is available and
     the log level is below :class:`logging.DEBUG`
@@ -358,14 +360,26 @@ def progress(itr=None, desc="", *args, **kwargs):
     :return: decorated iterator or `itr`, depending on the conditions
     :rtype: iterator
     """
+
+    class Itr(list):
+        """ Helper class """
+        def __init__(self, iterable, *args, **kwargs):
+            list.__init__(self, iterable)
+        def __enter__(self):
+            return self
+        def __exit__(self, exc_type, exc_val, exc_tb):
+            return None
+        def update(self, x):
+            pass
+
     if itr is None:
-        itr = []
+        itr = Itr([])
     if tqdm is not None and 10 < logger.getEffectiveLevel() <= 30:
         return tqdm(itr, desc,
                     bar_format="{l_bar}{bar}|{remaining}",
                     *args, **kwargs)
     else:
-        return itr
+        return Itr(itr)
 
 # -------------------------------------------------------------------------
 

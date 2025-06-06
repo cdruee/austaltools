@@ -306,6 +306,8 @@ class DataSet:
                 uri = self.uri
             else:
                 raise ValueError("No uri defined or provided")
+        else:
+            logger.info(f"downloading: {uri}")
         if uri.startswith('doi'):
             doi = re.sub('^doi[:/]*', '', uri)
             doi_url = f"https://doi.org/{doi}"
@@ -320,7 +322,7 @@ class DataSet:
             else:
                 raise Exception("Could not resolve DOI")
             if "zenodo" in redirect:
-                url = f"{redirect}/files/{self.file_data}?download=1"
+                url = f"{redirect}/files/{self.file_data}" #?download=1"
             else:
                 raise ValueError(f"Dont know how to hande redirect " +
                                  "URL: {URL}")
@@ -328,9 +330,24 @@ class DataSet:
             url = uri
         else:
             raise ValueError(f'cannot handle URI: {uri}')
-        with open(os.path.join(path, self.file_data), 'wb') as fid:
-            with requests.get(url, allow_redirects=True) as req:
-                fid.write(req.content)
+        with requests.head(url, allow_redirects=True) as req:
+            length = req.headers.get('content-length')
+            if length is None:
+                length_iterator = None
+            else:
+                length_iterator = range(int(length))
+
+        target = os.path.join(path, self.file_data)
+        with requests.get(url, allow_redirects=True, stream=True) as req:
+            with open(target, 'wb') as fid, _tools.progress(
+                length_iterator, desc='downloaded',
+                unit='iB', unit_scale=True, unit_divisor=1024
+            ) as bar:
+                for chunk in req.iter_content(chunk_size=4096):
+                    size = fid.write(chunk)
+                    logger.debug(str(size))
+                    bar.update(size)
+        logger.info(f"wrote file {target}")
 
     # -------------------------------------------------------------------------
     def __init__(self, **kwargs):
@@ -642,6 +659,8 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
           Hostname and protocol from where to download data.
           Supported protocols are :code:`"http://..."`,
           :code:`"https://..."`, and  :code:`"file:///..."`.
+        - "path": (str)
+          Storage path on the host, defaults to ``.
         - "cert-check": (str, optional)
           Wether to check the server certificates of `host` or not.
           Disables verification by setting this value to
@@ -668,11 +687,11 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         - "missing": (str, optional)
           if 'ok', 'ignore', an empty list is returned,
           if the URL download fails with error 404 (not found)
-        - provider["unpack"]: (str, optional)
+        - "unpack": (str, optional)
           the description, what to unpack (see `unpack string`_)
-        - provider["CRS"]: (str, optional)
+        - "CRS": (str, optional)
           the referecnce system of the input data (in the form "EPSG:xxxx")
-        - provider["utm_remove_zone"]: (str, optional)
+        - "utm_remove_zone": (str, optional)
           If 'True', 'true', 'yes', True is passed
           to :py:func:`_fetch_dgm_od._ass_reduce_tile`
     :type args: dict
@@ -744,7 +763,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
     else:
         raise ValueError(f'method {method} not implemented')
 
-    # merge the GeoTiff Files from all tiles into one file
+    # merge the tiles from all tiles into one file
     merge_tiles(target, tile_files)
     logger.info(f"data file written: {target}")
 
@@ -797,60 +816,6 @@ def assemble_DGM_SH(path, name, replace, args: dict):
             tf = dgm1_sh_getfid(*args)
             tile_files += tf
 
-    merge_tiles(target, tile_files)
-
-    return True
-
-
-# -------------------------------------------------------------------------
-def assemble_DGM25_RP(path, name="DGM25-RP",
-                      replace=False, args=None):
-    """
-    Special function to assemble the 25-m digital elevation model (DEM)
-    of the German state Rheinland-Pfalz (RP) that has been
-    avaliable online before all states had to licence their 1-m DEM
-    as open data.
-
-    .. deprecated:: 1.0
-       use :py:func:`assemble_DGMxx` instead.
-
-    :param path: Path where to generate the file
-    :type path: str
-    :param name: name (code) of the dataset to assemble
-    :type name: str
-    :param replace: If True, an existing file is overwritten.
-        If False, an error is raises if the file already exists.
-    :type replace: bool
-    :param args: Dictionary conating the command arguments.
-    :type args: dict|None
-    :return: Success (True) of Failure (False)
-    :rtype: bool
-    """
-    if args is None:
-        args = {}
-    target = os.path.join(path, DEM_FMT % name)
-    if not _ass_clear_target(target, replace):
-        logger.info("skipping because dataset exists: %s" % name)
-        return False
-
-    url = "https://vermkv.service24.rlp.de/opendat/dgm25/dgm25.zip"
-    logger.debug("downloading ... %s" % url)
-    zip_file = _tools.download(url, os.path.basename(url))
-    logger.debug("extracting ... %s" % zip_file)
-    shutil.unpack_archive(zip_file)
-    for tile_xyz in glob.glob("*.xyz"):
-        logger.debug("converting tile ... %s" % tile_xyz)
-        tile_tif = tile_xyz.replace(".xyz", ".tif")
-        try:
-            gdal.Warp(destNameOrDestDS=tile_tif,
-                      dstSRS="EPSG:5677",
-                      srcDSOrSrcDSTab=tile_xyz,
-                      srcSRS="EPSG:25832",
-                      format="GTiff")
-        except Exception as e:
-            logger.error(str(e))
-    # merge the GeoTiff Files from all tiles into one file
-    tile_files = glob.glob("DGM25_*.tif")
     merge_tiles(target, tile_files)
 
     return True
@@ -1373,6 +1338,7 @@ def provide_terrain(source: str, path: str = None,
     logger.info("providing terrain source %s" % source)
     if method == 'download':
         if dataset.uri is None:
+            sys.tracebacklimit = 0
             raise Exception("Dataset has no download uri, assemble it.")
         dataset.download(path)
     elif method == 'assemble':
