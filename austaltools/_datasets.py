@@ -53,7 +53,6 @@ from urllib3 import disable_warnings, exceptions
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import multiprocessing as mp
-    import concurrent.futures as mpf
 
 try:
     from ._version import __version__, __title__
@@ -290,8 +289,6 @@ class DataSet:
         :type uri: str, optional
 
         """
-        if uri is None:
-            uri = self.uri
         if path is None:
             path = self.path
         else:
@@ -343,6 +340,7 @@ class DataSet:
                     logger.debug(str(size))
                     bar.update(size)
         logger.info(f"wrote file {target}")
+        return True
 
     # -------------------------------------------------------------------------
     def __init__(self, **kwargs):
@@ -557,7 +555,7 @@ def _datasets_expand(defs: dict) -> list[DataSet]:
                     name = name_yearly(k, ya)
                     vy = v.copy()
                     if 'uri' in v and isinstance(v['uri'], dict):
-                        vy['uri'] = v['uri'][str(ya)]
+                        vy['uri'] = v['uri'].get(str(ya), None)
                     datasets.append(DataSet(name=name, **vy))
             else:
                 raise ValueError(f"unkown split type {v['split']}")
@@ -705,7 +703,6 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         verify = True
     filelist = args['filelist']
     # switch formats:
-    method = input_files = capabilities = layer = None
     # if filelist is string, make a list
     if isinstance(filelist, str):
         if filelist == 'generate':
@@ -1508,6 +1505,10 @@ def cds_getorder(order_args: dict[str, str|dict]) -> str:
     quiet = (logger.getEffectiveLevel() > logging.INFO)
     debug = (logger.getEffectiveLevel() <= logging.DEBUG)
     cds = cdsapi.Client(quiet=quiet, debug=debug)
+    # silence double logging
+    for name in logging.root.manager.loggerDict:
+        if name.startswith('datapi'):
+            logging.getLogger(name).setLevel(logging.ERROR)
     dataset =  order_args['dataset']
     request = order_args['request']
     target = order_args['target']
@@ -2407,8 +2408,7 @@ def provide_weather(source: str, path: str = None,
       Defaults to False.
     :type force: bool, options
     :param method: The method to use for obtaining the data.
-      Currently, only "download" is implemented, but the parameter
-      is designed to accommodate future methods like "cache" or "stream".
+      Valid values are 'dowload' and 'assemble'.
     :type method: str, optional
 
     :returns: A boolean value indicating the success (`True`) or failure
@@ -2436,49 +2436,61 @@ def provide_weather(source: str, path: str = None,
       information is logged.
     """
 
-    # param method is implemented for future use
     if path is None:
         path = _storage.find_writeable_storage(path,
                                       _storage.STORAGE_WAETHER)
-    #dataset = dataset_get(source)
-    logger.info("downloading weather source %s" % source)
-    pwd = os.getcwd()
-    delete_tmp = (logger.getEffectiveLevel() > logging.DEBUG)
-    with tempfile.TemporaryDirectory(
-            ignore_cleanup_errors=True, dir=_storage.TEMP,
-            delete=_CLEAN_UP) as temp_dir:
-        os.chdir(temp_dir)
-        success = True
-        if source == "ERA5":
-            dataset = dataset_get(name_yearly(source, years[0]))
-            import_lib('cdsapi')
-            import_lib('_netcdf')
-            assemble_rea(path, name='ERA5', years=years,
-                         replace=force,
-                         args=dataset.arguments)
-        elif source == "CERRA":
-            dataset = dataset_get(name_yearly(source, years[0]))
-            import_lib('_netcdf')
-            import_lib('cdsapi')
-            assemble_rea(path, name='CERRA', years=years,
-                         replace=force,
-                         args=dataset.arguments)
-        elif source == "HOSTRADA":
-            import_lib('_netcdf')
-            assemble_hostrada(path, years=years, replace=force)
-        elif source == "DWD":
-            dataset = dataset_get(source)
-            assemble_DWD(path, years=years, replace=force,
-                         args=dataset.arguments)
+    for year in years:
+        dataset = dataset_get(name_yearly(source, year))
+        if method == 'download':
+            logger.info("downloading weather source %s" % source)
+            if dataset.uri is None:
+                sys.tracebacklimit = 0
+                raise Exception("Dataset has no download uri, "
+                                "assemble it.")
+            dataset.download(path)
+            success = True
+        elif method == 'assemble':
+            logger.info("assembling weather source %s" % source)
+            pwd = os.getcwd()
+            delete_tmp = (logger.getEffectiveLevel() > logging.DEBUG)
+            with tempfile.TemporaryDirectory(
+                    ignore_cleanup_errors=True, dir=_storage.TEMP,
+                    delete=_CLEAN_UP) as temp_dir:
+                os.chdir(temp_dir)
+                success = True
+                if source == "ERA5":
+                    dataset = dataset_get(name_yearly(source, years[0]))
+                    import_lib('cdsapi')
+                    import_lib('_netcdf')
+                    assemble_rea(path, name='ERA5', years=years,
+                                 replace=force,
+                                 args=dataset.arguments)
+                elif source == "CERRA":
+                    dataset = dataset_get(name_yearly(source, years[0]))
+                    import_lib('_netcdf')
+                    import_lib('cdsapi')
+                    assemble_rea(path, name='CERRA', years=years,
+                                 replace=force,
+                                 args=dataset.arguments)
+                elif source == "HOSTRADA":
+                    import_lib('_netcdf')
+                    assemble_hostrada(path, years=years, replace=force)
+                elif source == "DWD":
+                    dataset = dataset_get(source)
+                    assemble_DWD(path, years=years, replace=force,
+                                 args=dataset.arguments)
+                else:
+                    logger.error("unknown dataset to download %s" % source)
+                    success = False
+                try:
+                    shutil.rmtree(temp_dir)
+                except PermissionError:
+                    logger.warning('Permission Error during cleanup')
+            # return before clean up
+            os.chdir(pwd)
         else:
-            logger.error("unknown dataset to download %s" % source)
-            success = False
-        try:
-            shutil.rmtree(temp_dir)
-        except PermissionError:
-            logger.warning('Permission Error during cleanup')
-    # return before clean up
-    os.chdir(pwd)
+            raise ValueError("method must be either "
+                             "'download' or 'assemble'")
     return success
 
 

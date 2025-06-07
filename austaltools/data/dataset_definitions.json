@@ -396,8 +396,11 @@
     "notice": "The data used for this paper have been provided by the Earth Observation Research Center (EORC) of the Japan Aerospace Exploration Agency (JAXA)."
   },
   "ERA5": {
-    "split": "years",
     "storage": "weather",
+    "split": "years",
+    "uri": {
+      "2020": "https://seafile.rlp.net/f/96bf0fb417b04c0b8de3/?dl=1"
+    },
     "assemble": "assemble_rea",
     "arguments": {
       "parallel_queries": 2,
@@ -408,8 +411,11 @@
     "years_available": "1941-2024"
   },
   "CERRA": {
-    "split": "years",
     "storage": "weather",
+    "split": "years",
+    "uri": {
+      "2020": "https://seafile.rlp.net/f/f4080382f6234d88905b/?dl=1"
+    },
     "assemble": "assemble_rea",
     "arguments": {
       "parallel_queries": 2,
@@ -420,8 +426,11 @@
     "years_available": "1985-2020"
   },
   "HOSTRADA": {
-    "split": "years",
     "storage": "weather",
+    "split": "years",
+    "uri": {
+      "2020": "https://seafile.rlp.net/f/09263c65838741f6a94f/?dl=1"
+    },
     "assemble": "assemble_hostrada",
     "position": "grid",
     "years_available": "1995-2024"
