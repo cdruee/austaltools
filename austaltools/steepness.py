@@ -8,18 +8,16 @@ import os
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
-    import readmet
 
 try:
-    from . import _tools
     from . import _plotting
+    from . import _tools
 except ImportError:
-    import _tools
     import _plotting
+    import _tools
 
 logger = logging.getLogger(__name__)
 # -------------------------------------------------------------------------
-
 
 def main(args):
     #
@@ -27,12 +25,6 @@ def main(args):
     #
     logger.debug("args: %s" % format(args))
 
-    # disable subcommand if no plotting is possible
-    if not _plotting.have_matplotlib():
-        logger.critical(f"  subcommand {__name__} is disabled. " +
-                        _plotting.NO_MATPLOTLIB_HELP
-        )
-        return
 
     # try to load AUSTAL topography
     if args.get('topo', None) is not None:
@@ -70,17 +62,6 @@ def main(args):
 
 def add_options(subparsers):
 
-    # disable subcommand if no plotting is possible
-    if not _plotting.have_matplotlib():
-        msg = 'disabled because Matplotlib is not installed.'
-        subparsers.add_parser(
-            name=f'{__name__}',
-            help=msg,
-            description=msg
-        )
-        return
-
-    # act normally otherwise
     pars_ste = subparsers.add_parser(
         name="steepness",
         help='Plot AUSTAL topography steepness'
@@ -96,6 +77,6 @@ def add_options(subparsers):
                           default=None,
                           help='Topography file to read instead of '
                                'the AUSTAL topography files.')
-    pars_ste = _plotting.add_arguents_common_plot(pars_ste)
+    pars_ste = _tools.add_arguents_common_plot(pars_ste)
 
     return pars_ste

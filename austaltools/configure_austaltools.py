@@ -6,15 +6,18 @@ import argparse
 import logging
 import os
 
+
 try:
+    from . import _datasets as DS
+    from . import _imports
     from . import _storage
     from . import _tools
-    from . import _datasets as DS
     from ._version import __version__, __title__
 except ImportError:
+    import _datasets as DS
+    import _imports
     import _storage
     import _tools
-    import _datasets as DS
     from _version import __version__, __title__
 
 logging.basicConfig()
@@ -450,15 +453,15 @@ def cli_parser():
                         )
 
     more_epilog = ""
-    if not DS.have_lib('cdsapi'):
+    if not _imports.have_lib('cdsapi'):
         more_epilog += f"Source CERRA cannot be assembled. "
-    if not DS.have_lib('cdsapi'):
+    if not _imports.have_lib('cdsapi'):
         more_epilog += f"Source ERA cannot be assembled. "
-    if not DS.have_lib('gdal'):
+    if not _imports.have_lib('gdal'):
         more_epilog += f"Terrain sources cannot be assembled. "
-    for x in DS.LIB2IMPORT.keys():
-        if not DS.have_lib(x):
-            more_epilog += DS.no_lib_help(x)
+    for x in _imports.LIB2IMPORT.keys():
+        if not _imports.have_lib(x):
+            more_epilog += _imports.no_lib_help(x)
     if parser.epilog is None:
         parser.epilog = more_epilog
     else:

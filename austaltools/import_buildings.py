@@ -800,6 +800,6 @@ def add_options(subparsers):
                         default=DEFAULT_ZVALUE)
     pars_bldg_hgt.add_argument('-Z', '--height',
                         help='height of all buildings')
-    pars_bldg = _plotting.add_arguents_common_plot(pars_bldg)
+    pars_bldg = _tools.add_arguents_common_plot(pars_bldg)
 
     return pars_bldg

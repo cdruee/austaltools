@@ -9,7 +9,6 @@ German regulatory dispersion model AUSTAL [AST31]_
 import os
 import logging
 import shutil
-import sys
 import warnings
 
 import pandas as pd

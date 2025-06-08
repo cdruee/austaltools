@@ -30,7 +30,6 @@ from copy import deepcopy
 import getpass
 import glob
 import gzip
-import importlib.util
 import itertools
 import json
 import logging
@@ -51,15 +50,20 @@ import pandas as pd
 import requests
 from urllib3 import disable_warnings, exceptions
 
+
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    import cdsapi
+    import netCDF4
     import multiprocessing as mp
 
 try:
+    from . import _imports
     from ._version import __version__, __title__
     from . import _storage
     from . import _tools
     from . import _fetch_dwd_obs
 except ImportError:
+    import _imports
     from _version import __version__, __title__
     import _storage
     import _tools
@@ -134,74 +138,6 @@ gdal_merge = None
 _netcdf = None
 osr = None
 # link libraries used to libraries imported
-LIB2IMPORT = {
-    'cdsapi': 'cdsapi',
-    'gdal': 'osgeo',
-    'gdal_merge': 'osgeo_utils',
-    '_netcdf': '_netcdf',
-    'osr': 'osgeo',
-}
-
-
-def have_lib(lib):
-    """
-    ask if a libray is installed
-
-    :param lib: name of libray to be installed
-    :type lib: str
-    :return: True if installed
-    :rtype: bool
-    """
-    if lib in LIB2IMPORT.keys():
-        if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-            return importlib.util.find_spec(LIB2IMPORT[lib])
-        else:
-            return True
-    else:
-        raise ValueError(f"Unknown library '{lib}'")
-
-
-def import_lib(lib):
-    """
-    import a libray that is installed
-
-    :param lib: name of libray
-    :type lib: str
-    """
-    if lib == 'cdsapi':
-        global cdsapi
-        import cdsapi
-    elif lib == 'gdal':
-        global gdal
-        from osgeo import gdal
-    elif lib == 'gdal_merge':
-        global gdal_merge
-        from osgeo_utils import gdal_merge
-    elif lib == '_netcdf':
-        global _netcdf
-        try:
-            from . import _netcdf
-        except ImportError:
-            import _netcdf
-    elif lib == 'osr':
-        global osr
-        from osgeo import osr
-    else:
-        raise ValueError(f"Unknown library '{lib}'")
-    logger.debug(f"imported libray '{lib}'")
-
-
-def no_lib_help(k):
-    """
-    help message to be displayed if library is not installed
-
-    :param k: library name
-    :type k: str
-    """
-    return(f"The {k} library does not appear to be installed. "
-           f"You can install it by running "
-           f"`pip install {LIB2IMPORT[k]}` "
-           f"or using the package manager of your choice.")
 
 
 # =========================================================================
@@ -1335,9 +1271,15 @@ def provide_terrain(source: str, path: str = None,
         dataset.download(path)
     elif method == 'assemble':
         # load libraries
-        import_lib('gdal')
-        import_lib('gdal_merge')
-        import_lib('osr')
+        _imports.assure_libs(
+            ['gdal', 'gdal_merge', 'osr'],
+            "Cannot assemble terain sources because the")
+        global gdal
+        from osgeo import gdal
+        global gdal_merge
+        from osgeo_utils import gdal_merge
+        global osr
+        from osgeo import osr
         # change to temp directory
         pwd = os.getcwd()
         with tempfile.TemporaryDirectory(
@@ -2123,6 +2065,10 @@ def assemble_rea(path: str, name: str,
       points to a valid temporary directory for intermediate files.
 
     """
+
+    import netCDF4
+    import cdsapi
+
     if args is None:
         args = {}
     if years is None:
@@ -2460,20 +2406,24 @@ def provide_weather(source: str, path: str = None,
                 success = True
                 if source == "ERA5":
                     dataset = dataset_get(name_yearly(source, years[0]))
-                    import_lib('cdsapi')
-                    import_lib('_netcdf')
+                    _imports.assure_libs(
+                        ['cdsapi', 'netCDF4'],
+                        "Cannot assemble source ERA5 because the")
                     assemble_rea(path, name='ERA5', years=years,
                                  replace=force,
                                  args=dataset.arguments)
                 elif source == "CERRA":
                     dataset = dataset_get(name_yearly(source, years[0]))
-                    import_lib('_netcdf')
-                    import_lib('cdsapi')
+                    _imports.assure_libs(
+                        ['cdsapi', 'netCDF4'],
+                        "Cannot assemble source CERRA because the")
                     assemble_rea(path, name='CERRA', years=years,
                                  replace=force,
                                  args=dataset.arguments)
                 elif source == "HOSTRADA":
-                    import_lib('_netcdf')
+                    _imports.assure_libs(
+                        ['cdsapi', 'netCDF4'],
+                        "Cannot assemble source HOSTRADA because the")
                     assemble_hostrada(path, years=years, replace=force)
                 elif source == "DWD":
                     dataset = dataset_get(source)

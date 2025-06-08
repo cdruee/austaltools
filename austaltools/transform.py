@@ -9,30 +9,26 @@ model coordinates to real world coordinates is
 also possible
 """
 import logging
-import sys
 import os
+
+if os.getenv('BUILDING_SPHINX', 'false') == 'false':
+    from osgeo import osr
 
 try:
     from . import _datasets
     from . import _geo
-    from . import _plotting
     from . import _tools
-    from . import input_weather
+    from . import _plotting
+    from ._version import __version__
     from . import _wmo_metadata
 except ImportError:
     import _datasets
     import _geo
-    import _plotting
     import _tools
-    import input_weather
+    import _plotting
     import _wmo_metadata
-
-try:
-    from ._version import __version__
-except ImportError:
     from _version import __version__
 
-logging.basicConfig()
 logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------------
@@ -106,13 +102,6 @@ def in_bounds(lat, lon, crs):
 # -------------------------------------------------------------------------
 
 def main(args):
-
-    # sub-command-specific imports
-    from osgeo import osr
-    try:
-        from . import _geo
-    except ImportError:
-        import _geo
 
     GK_REFS = {x: osr.SpatialReference() for x in [1,2,3,4,5]}
     # DHDN / 3-degree Gauss-Kruger zone 1 (E-N), https://epsg.io/5680
@@ -231,8 +220,8 @@ def add_options(subparsers):
     pars_transf = subparsers.add_parser(
         name='transform',
         help='transfrom coordinates into other projections')
-    pars_transf = _plotting.add_location_opts(pars_transf, stations=True,
-                                                        required=False)
+    pars_transf = _tools.add_location_opts(pars_transf, stations=True,
+                                                       required=False)
     pars_transf.add_argument('-M', '--model',
                          metavar=("x", "y"),
                          dest="xy",

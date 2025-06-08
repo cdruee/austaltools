@@ -32,17 +32,17 @@ setup(
     url=v['__url__'],
     install_requires=[
         "austaltools",
+        "gdal"
+        "meteolib",
+        "netcdf4"
         "numpy",
         "pandas",
-        "matplotlib",
-        "setuptools",
-        "requests",
-        "meteolib",
-        "scipy",
-        "gdal",
-        "readmet",
-        "tqdm",
         "pyyaml",
+        "readmet",
+        "requests",
+        "setuptools",
+        "tqdm",
+        "pyyaml"
         "urllib3",
     ],
     description=v['__description__'],

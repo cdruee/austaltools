@@ -12,11 +12,11 @@ import os
 import sys
 import zipfile
 
-import netCDF4
 import numpy as np
 import pandas as pd
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    import netCDF4
     import meteolib as m
     import readmet
 
@@ -26,7 +26,6 @@ try:
     from . import _datasets
     from . import _dispersion as dis
     from . import _geo
-    from . import _plotting
     from . import _storage
     from . import _tools
 except ImportError:
@@ -35,7 +34,6 @@ except ImportError:
     import _datasets
     import _dispersion as dis
     import _geo
-    import _plotting
     import _storage
     import _tools
 
@@ -321,6 +319,9 @@ def decode_nc_time(nc: netCDF4.Dataset,timevar: str = 'time') -> pd.Series:
          >>> print(times.head())
 
     """
+    if not isinstance(nc, netCDF4.Dataset):
+        raise TypeError('nc must be an instance of netCDF4.Dataset')
+
     time_unit = nc.variables[timevar].getncattr('units')
     time_calendar = nc.variables[timevar].getncattr('calendar')
     logger.debug(f"time_unit: {time_unit}")
@@ -450,8 +451,6 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
                    't2m', 'd2m', 'cbh', 'sshf', 'slhf',
                    'lcc', 'tcc']
     _VAR_OPTIONAL = ['mcc', 'tp']
-
-    import netCDF4
 
     nc = netCDF4.Dataset(ncfile)
 
@@ -725,8 +724,6 @@ def read_cerra_nc(ncfile, lat, lon):
 
 
    """
-    import netCDF4
-
     _VAR_NEEDED = ['wdir10', 'si10', 'r2', 't2m', 'lcc',
                    'mcc', 'tisemf', 'tisnmf', 'slhf', 'sp',
                    'sr', 'sshf', 'tcc']
@@ -798,6 +795,7 @@ def read_cerra_nc(ncfile, lat, lon):
     #  start time +03:00 is 3-h mean
     #  subtract +02:00-values from +03:00 values to get 1-h mean
     #  from +02:00 to +03:00, ...
+    epoch = pd.Timestamp(year=values['time'].min().year, month=1, day=1)
     hours_total = [int((x - epoch) / pd.Timedelta('1 hour'))
                    for x in values['time']]
     hours_lead = np.array([(x - 1) % 3 + 1 for x in hours_total])
@@ -1013,8 +1011,6 @@ def read_hostrada_nc(ncfile, lat, lon, wind_variant=None):
 
     _VAR_NEEDED = ['tas', 'clt', 'hurs', 'ps',
                    'sfcWind_direction', 'sfcWind']
-
-    import netCDF4
 
     nc = netCDF4.Dataset(ncfile)
 
@@ -1313,16 +1309,10 @@ def austal_weather(args):
     """
     logger.debug("args: %s" % format(args))
 
-    # sub-command-specific imports
-    try:
-        from . import _geo
-    except ImportError:
-        import _geo
-
     if args.get('read-extracted', None) is not None:
         csv_name = args['read-extracted']
         lat, lon, ele, z0, source, stat_nam, obs = \
-            _plotting.read_extracted_weather(csv_name)
+            _tools.read_extracted_weather(csv_name)
 
         year = obs.index.year[0]
         logger.debug("year: %s" % year)
@@ -1583,7 +1573,7 @@ def add_options(subparsers):
     pars_wea.add_argument(dest="output", metavar="NAME", nargs='?',
                           help="file name to store data in."
                           )
-    pars_wea = _plotting.add_location_opts(pars_wea, stations=True)
+    pars_wea = _tools.add_location_opts(pars_wea, stations=True)
     pars_wea.add_argument('-s', '--source',
                         metavar="CODE",
                         nargs=None,

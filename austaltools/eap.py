@@ -30,17 +30,16 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import meteolib
 
 try:
-    from . import _tools
-    from ._version import __version__
     from . import _dispersion
     from . import _plotting
+    from . import _tools
+    from ._version import __version__
 except ImportError:
-    import _tools
-    from _version import __version__
     import _dispersion
     import _plotting
+    import _tools
+    from _version import __version__
 
-logging.basicConfig()
 logger = logging.getLogger(__name__)
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
@@ -541,9 +540,6 @@ def interpolate_wind(u_in: list, v_in: list, z_in: list, levels: list):
 # -------------------------------------------------------------------------
 
 
-# -------------------------------------------------------------------------
-
-
 def run_austal(workdir, tmproot=None):
     """
     Creates a wind library using the diagnostig model TALdia
@@ -609,7 +605,7 @@ def run_austal(workdir, tmproot=None):
     #
     if topo_file is None:
         raise ValueError('no complex terrain defined')
-    topo = GridASCII(os.path.join(workdir, topo_file))
+    topo = _tools.GridASCII(os.path.join(workdir, topo_file))
     topo.data = np.full(np.shape(topo.data), np.nanmedian(topo.data))
     topo.write(os.path.join(tmpdir, topo_file))
 
@@ -743,7 +739,7 @@ def austal_ref(workdir, levels, dirs, tmproot=None, overwrite=False):
 
 # -------------------------------------------------------------------------
 
-def calc_ref(levels, dirs, overwite=False):
+def calc_ref(levels, dirs, overwrite=False):
     """
     calculate reference wind profile from diabatic wind profile
     after Monin-Obukhov
@@ -1290,6 +1286,6 @@ def add_options(subparsers):
                               help='Use linear wind profile interpolation '
                                    'for comparison with VDI 3783 p 16 '
                                    'reference implementation.')
-    pars_eap = _plotting.add_arguents_common_plot(pars_eap)
+    pars_eap = _tools.add_arguents_common_plot(pars_eap)
 
     return pars_eap

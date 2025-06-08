@@ -908,3 +908,4 @@ def subset_xy(infile, target,
                 logger.debug(f" ... convert values {sname} -> {dname}")
                 converter = np.vectorize(convert[sname])
                 dst[dname][:] = converter(src[sname][slices])
+
