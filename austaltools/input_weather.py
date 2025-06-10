@@ -331,7 +331,7 @@ def decode_nc_time(nc: netCDF4.Dataset,timevar: str = 'time') -> pd.Series:
                               calendar=time_calendar,
                               only_use_cftime_datetimes=False,
                               only_use_python_datetimes=True)
-    return pd.to_datetime(datetime)
+    return pd.to_datetime(datetime, utc=True)
 
 # ----------------------------------------------------
 
@@ -604,8 +604,8 @@ def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
         _datasets.name_yearly("ERA5", year)
     )
     if not ds.available:
-        
         raise ValueError(f"Dataset not available: {ds.name}")
+
     if datafile is None:
         datafile = os.path.join(ds.path, ds.file_data)
     logging.info('reading data from; %s' % datafile)
