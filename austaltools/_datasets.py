@@ -53,21 +53,23 @@ from urllib3 import disable_warnings, exceptions
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import cdsapi
-    import netCDF4
     import multiprocessing as mp
+    from osgeo import gdal
+    from osgeo_utils import gdal_merge
+    from osgeo import osr
 
 try:
-    from . import _imports
-    from ._version import __version__, __title__
+    from . import _fetch_dwd_obs
+    from . import _netcdf
     from . import _storage
     from . import _tools
-    from . import _fetch_dwd_obs
+    from ._version import __version__, __title__
 except ImportError:
-    import _imports
-    from _version import __version__, __title__
+    import _fetch_dwd_obs
+    import _netcdf
     import _storage
     import _tools
-    import _fetch_dwd_obs
+    from _version import __version__, __title__
 
 disable_warnings(exceptions.InsecureRequestWarning)
 logger = logging.getLogger(__name__)
@@ -129,15 +131,6 @@ Filled on demand.
 """
 
 _CLEAN_UP = True
-
-# -------------------------------------------------------------------------
-# make optional imports defined:
-cdsapi = None
-gdal = None
-gdal_merge = None
-_netcdf = None
-osr = None
-# link libraries used to libraries imported
 
 
 # =========================================================================
@@ -1270,16 +1263,6 @@ def provide_terrain(source: str, path: str = None,
             raise Exception("Dataset has no download uri, assemble it.")
         dataset.download(path)
     elif method == 'assemble':
-        # load libraries
-        _imports.assure_libs(
-            ['gdal', 'gdal_merge', 'osr'],
-            "Cannot assemble terain sources because the")
-        global gdal
-        from osgeo import gdal
-        global gdal_merge
-        from osgeo_utils import gdal_merge
-        global osr
-        from osgeo import osr
         # change to temp directory
         pwd = os.getcwd()
         with tempfile.TemporaryDirectory(
@@ -2065,9 +2048,7 @@ def assemble_rea(path: str, name: str,
       points to a valid temporary directory for intermediate files.
 
     """
-
-    import netCDF4
-    import cdsapi
+  
 
     if args is None:
         args = {}
@@ -2406,24 +2387,15 @@ def provide_weather(source: str, path: str = None,
                 success = True
                 if source == "ERA5":
                     dataset = dataset_get(name_yearly(source, years[0]))
-                    _imports.assure_libs(
-                        ['cdsapi', 'netCDF4'],
-                        "Cannot assemble source ERA5 because the")
                     assemble_rea(path, name='ERA5', years=years,
                                  replace=force,
                                  args=dataset.arguments)
                 elif source == "CERRA":
                     dataset = dataset_get(name_yearly(source, years[0]))
-                    _imports.assure_libs(
-                        ['cdsapi', 'netCDF4'],
-                        "Cannot assemble source CERRA because the")
                     assemble_rea(path, name='CERRA', years=years,
                                  replace=force,
                                  args=dataset.arguments)
                 elif source == "HOSTRADA":
-                    _imports.assure_libs(
-                        ['cdsapi', 'netCDF4'],
-                        "Cannot assemble source HOSTRADA because the")
                     assemble_hostrada(path, years=years, replace=force)
                 elif source == "DWD":
                     dataset = dataset_get(source)

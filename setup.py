@@ -31,10 +31,10 @@ setup(
     license=v['__license__'],
     url=v['__url__'],
     install_requires=[
-        "austaltools",
-        "gdal"
+        "cdsapi",
+        "gdal",
         "meteolib",
-        "netcdf4"
+        "netcdf4",
         "numpy",
         "pandas",
         "pyyaml",
@@ -42,7 +42,7 @@ setup(
         "requests",
         "setuptools",
         "tqdm",
-        "pyyaml"
+        "pyyaml",
         "urllib3",
     ],
     description=v['__description__'],

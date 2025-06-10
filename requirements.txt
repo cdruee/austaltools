@@ -1,5 +1,5 @@
 austaltools
-#cdsapi
+cdsapi
 GDAL
 matplotlib
 meteolib
@@ -11,3 +11,6 @@ readmet
 requests
 setuptools
 urllib3
+
+sphinx
+sphinx-argparse

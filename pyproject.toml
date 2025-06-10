@@ -1,15 +1,7 @@
 [build-system]
-#fixme select gdal version more intelligent matching system
 requires = [
-    "setuptools",
     "sphinx",
     "sphinx-argparse",
-    "numpy",
-    "pandas",
-    "gdal<3.10",
-    "requests",
-    "tqdm",
-    "pyyaml",
-    "urllib3"
+    "setuptools",
 ]
 build-backend = "setuptools.build_meta"

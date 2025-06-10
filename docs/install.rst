@@ -1,4 +1,4 @@
-.. -*- coding: utf-8 -*-
+.. -* -**coding**: utf-8 -*-
 
 *************
 Installation
@@ -7,38 +7,25 @@ Installation
 Generic installation:
 ~~~~~~~~~~~~~~~~~~~~~
 
-In order to be able to install austaltools, the following dependencies
-are required:
-
-::
-
-    pip install meteolib numpy pandas pyyaml readmet
-
-You also need Geospatial Data Abstraction Library (GDAL, see the
-`GDAL download page <https://gdal.org/en/stable/download.html>`_
-for instructions matching your system) and the gdal Python bindings:
-
-::
-
-   pip install gdal
-
-To enable plotting and for a clearer screen display, install
-
-::
-
-   pip install tqdm matplotlib
-
-Then install austaltools from Pypi:
+Users can install Austaltools from the Python Package Index (PyPI) by:
 
 ::
 
    pip install austaltools
 
-or download the source distribution and install with
+Installing Austaltools using ``pip`` also installs
+all the necessary dependencies.
 
-::
+**Note:**
 
-   python3 setup.py install --user
+The Geospatial Data Abstraction Library (GDAL), which is used
+by AustalTools for geospatial data handling, may not have its
+full functionality if it was installed prior to AustalTools as
+a system package (Linux) or a binary distribution (Windows).
+In such cases, it is necessary to additionally install 'libgdal'
+and its development headers
+(see the `GDAL download page <https://gdal.org/en/stable/download.html>`_
+for instructions matching your system).
 
 Ubuntu / Debian Linux:
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -75,7 +62,7 @@ Then install austaltools from Pypi:
    ``...installed in '/home/benutzer/.local/bin' which is not on PATH.``
    meaning that you cannot yet use AustalTools like normal commands.
 
-   Fix this by eiter adding the following code to you\ ``.profile``
+   Fix this by eiter adding the following code to your ``.profile``
    file:
 
    ::
@@ -85,8 +72,8 @@ Then install austaltools from Pypi:
            PATH="$HOME/.local/bin:$PATH"
        fi
 
-   or - if you do not already have a ``bin`` directory in your home
-   directory - by issuing the command:
+   or  -**if you do not already have a ``bin`` directory in your home
+   directory  -**by issuing the command:
 
    ::
 
@@ -115,10 +102,74 @@ Then install austaltools from Pypi:
        pip3 install --no-build-isolation austaltools
 
    Note that although in a virtual environment, ``--no-build-isolation``
-   is needed because without this option, pip updates the python gdal
+   is needed because without this option, ``pip3`` updates the python gdal
    bindings to its newest version that does not match the gdal version
    installed on your system!
 
    Remember that everytime you want to use AustalTools, you need to
    activate the virtual environment. You can leave it anytime issuing
    the command ``deactivate``.
+
+
+Requirements:
+~~~~~~~~~~~~~
+
+Austaltools uses the following python packages:
+
+ -**cdsapi**:
+  The `Climate Data Store Application Program Interface
+  (CDS API) <https://cds.climate.copernicus.eu/how-to-api>`_
+  is a Python library which allows you to access data from the CDS
+  programmatically
+ -**GDAL**:
+  The
+  `Geospatial Data Abstraction Library <https://gdal.org/en/stable/>`_
+  is a library for translation and processing of raster and vector
+  geospatial data.
+ -**matplotlib**:
+  `Matplotlib <https://matplotlib.org/>`_ is a comprehensive
+  library for creating visualizations in Python.
+ -**meteolib**:
+  `Meteolib <https://github.com/cdruee/meteolib>`_ is a Python
+  that standard equations, constants and conversions fully backed by
+  citable refrences and/or recommendations of the
+  World meteorological Organization (WMO), for general use in meteorology.
+ -**netCDF4**:
+  The `package netCDF4 <https://unidata.github.io/netcdf4-python/>`_
+  is a Python interface to the library that implements
+  access to files in the `NetCDF (Network Common Data Form)
+  <https://www.unidata.ucar.edu/software/netcdf/>`_ format that
+  is a community standard for sharing scientific data.
+ -**numpy**:
+  `NumPy <https://numpy.org/>`_ is a widely-used Python libary
+  offering comprehensive mathematical functions, etc.
+ -**pandas**:
+  `Pandas <https://pandas.pydata.org/>`_ is a widely-used
+  Python tool for data analysis and manipulation.
+ -**PyYAML**:
+  `PyYAML < https://pyyaml.org/>`_ is a parser and emitter
+  for Python. `YAML (yet another markup language) <https://yaml.org/>`_
+  a data description and serialization language that is easy to read
+  for humans.
+ -**readmet**:
+  `readmet <https://github.com/cdruee/readmet>`_ is a open-source Python
+  library for reading and writing a selection of data formats used
+  in atmospheric sciences.
+ -**requests**:
+  `Requests <https://requests.readthedocs.io/en/latest/>`_
+  is a simple-to-use Python library for making web-requests.
+ -**setuptools**:
+  `library <https://setuptools.pypa.io>`_
+  designed to facilitate packaging Python projects.
+ -**urllib3**:
+  Is is a requirement of *requests*, but it needs to be imported
+  separately for better control of the excessive warnings emitted
+  by *requests*.
+
+To generate the documentation, AustalTools uses:
+ -**sphinx**:
+  `Sphinx <https://www.sphinx-doc.org/>`_
+   is a documentation generator written and used by the Python community.
+ -**sphinx-argparse**:
+  `Sphinx extension <https://github.com/sphinx-doc/sphinx-argparse/>`_
+  to automatically document argparse commands and options.
