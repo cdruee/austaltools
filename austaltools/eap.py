@@ -108,7 +108,7 @@ def same_sense_rotation(val, ref):
 
 
 # -------------------------------------------------------------------------
-def contiguous_areas(array: np.ndarray[bool]) -> (np.ndarray[int], int):
+def contiguous_areas(array: np.ndarray) -> (np.ndarray, int):
     """
     Identify and label contiguous areas in a 2D binary array.
 
@@ -335,7 +335,7 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
 
 # -------------------------------------------------------------------------
 
-def find_eap(g_lower: np.ndarray[float]):
+def find_eap(g_lower: np.ndarray):
     """
     Find the anemometer-position replacement
     (german: Ersatz-AnemometerPosition, EAP) location.
