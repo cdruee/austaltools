@@ -6,9 +6,27 @@ import itertools
 import logging
 import os
 
-import netCDF4
 if os.getenv('BUILDING_SPHINX', 'false') == 'false':
+    import netCDF4
     import numpy as np
+else:
+    # Minimal dummy classes for Sphinx documentation builds
+    class _DummyDataset:
+        """Dummy Dataset class for Sphinx builds."""
+        pass
+
+    class _DummyVariable:
+        """Dummy Variable class for Sphinx builds."""
+        pass
+
+    # Create a mock netCDF4 module
+    class _MockNetCDF4:
+        Dataset = _DummyDataset
+        Variable = _DummyVariable
+
+    # Make the mock module available
+    netCDF4 = _MockNetCDF4()
+
 
 try:
     from . import _storage
