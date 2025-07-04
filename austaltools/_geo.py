@@ -187,7 +187,7 @@ def evaluate_location_opts(args: dict):
         rechts, hoch = [float(x) for x in args['gk']]
         lat, lon = gk2ll(rechts, hoch)
     elif args.get("ut", None) is not None:
-        rechts, hoch, _ = ut2gk(*[float(x) for x in args['ut']])
+        rechts, hoch = ut2gk(*[float(x) for x in args['ut']])
         lat, lon = gk2ll(rechts, hoch)
     elif args.get("ll", None) is not None:
         lat, lon = [float(x) for x in args['ll']]

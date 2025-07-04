@@ -30,7 +30,6 @@ from copy import deepcopy
 import getpass
 import glob
 import gzip
-import importlib.util
 import itertools
 import json
 import logging
@@ -51,20 +50,26 @@ import pandas as pd
 import requests
 from urllib3 import disable_warnings, exceptions
 
+
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    import cdsapi
     import multiprocessing as mp
-    import concurrent.futures as mpf
+    from osgeo import gdal
+    from osgeo_utils import gdal_merge
+    from osgeo import osr
 
 try:
-    from ._version import __version__, __title__
+    from . import _fetch_dwd_obs
+    from . import _netcdf
     from . import _storage
     from . import _tools
-    from . import _fetch_dwd_obs
+    from ._version import __version__, __title__
 except ImportError:
-    from _version import __version__, __title__
+    import _fetch_dwd_obs
+    import _netcdf
     import _storage
     import _tools
-    import _fetch_dwd_obs
+    from _version import __version__, __title__
 
 disable_warnings(exceptions.InsecureRequestWarning)
 logger = logging.getLogger(__name__)
@@ -126,88 +131,6 @@ Filled on demand.
 """
 
 _CLEAN_UP = True
-
-# -------------------------------------------------------------------------
-# make optional imports defined:
-cdsapi = None
-cdo = None
-gdal = None
-gdal_merge = None
-_netcdf = None
-osr = None
-# link libraries used to libraries imported
-LIB2IMPORT = {
-    'cdo': 'cdo',
-    'cdsapi': 'cdsapi',
-    'gdal': 'osgeo',
-    'gdal_merge': 'osgeo_utils',
-    '_netcdf': '_netcdf',
-    'osr': 'osgeo',
-}
-
-
-def have_lib(lib):
-    """
-    ask if a libray is installed
-
-    :param lib: name of libray to be installed
-    :type lib: str
-    :return: True if installed
-    :rtype: bool
-    """
-    if lib in LIB2IMPORT.keys():
-        if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-            return importlib.util.find_spec(LIB2IMPORT[lib])
-        else:
-            return True
-    else:
-        raise ValueError(f"Unknown library '{lib}'")
-
-
-def import_lib(lib):
-    """
-    import a libray that is installed
-
-    :param lib: name of libray
-    :type lib: str
-    """
-    if lib == 'cdo':
-        global cdo
-        import cdo
-    elif lib == 'cdsapi':
-        global cdsapi
-        import cdsapi
-    elif lib == 'gdal':
-        global gdal
-        from osgeo import gdal
-    elif lib == 'gdal_merge':
-        global gdal_merge
-        from osgeo_utils import gdal_merge
-    elif lib == '_netcdf':
-        global _netcdf
-        try:
-            from . import _netcdf
-        except ImportError:
-            import _netcdf
-    elif lib == 'osr':
-        global osr
-        from osgeo import osr
-    else:
-        raise ValueError(f"Unknown library '{lib}'")
-    logger.debug(f"imported libray '{lib}'")
-
-
-def no_lib_help(k):
-    """
-    help message to be displayed if library is not installed
-
-    :param k: library name
-    :type k: str
-    """
-    return(f"The {k} library does not appear to be installed. "
-           f"You can install it by running "
-           f"`pip install {LIB2IMPORT[k]}` "
-           f"or using the package manager of your choice.")
 
 
 # =========================================================================
@@ -295,8 +218,6 @@ class DataSet:
         :type uri: str, optional
 
         """
-        if uri is None:
-            uri = self.uri
         if path is None:
             path = self.path
         else:
@@ -348,6 +269,7 @@ class DataSet:
                     logger.debug(str(size))
                     bar.update(size)
         logger.info(f"wrote file {target}")
+        return True
 
     # -------------------------------------------------------------------------
     def __init__(self, **kwargs):
@@ -562,7 +484,7 @@ def _datasets_expand(defs: dict) -> list[DataSet]:
                     name = name_yearly(k, ya)
                     vy = v.copy()
                     if 'uri' in v and isinstance(v['uri'], dict):
-                        vy['uri'] = v['uri'][str(ya)]
+                        vy['uri'] = v['uri'].get(str(ya), None)
                     datasets.append(DataSet(name=name, **vy))
             else:
                 raise ValueError(f"unkown split type {v['split']}")
@@ -710,7 +632,6 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         verify = True
     filelist = args['filelist']
     # switch formats:
-    method = input_files = capabilities = layer = None
     # if filelist is string, make a list
     if isinstance(filelist, str):
         if filelist == 'generate':
@@ -1342,10 +1263,6 @@ def provide_terrain(source: str, path: str = None,
             raise Exception("Dataset has no download uri, assemble it.")
         dataset.download(path)
     elif method == 'assemble':
-        # load libraries
-        import_lib('gdal')
-        import_lib('gdal_merge')
-        import_lib('osr')
         # change to temp directory
         pwd = os.getcwd()
         with tempfile.TemporaryDirectory(
@@ -1513,6 +1430,10 @@ def cds_getorder(order_args: dict[str, str|dict]) -> str:
     quiet = (logger.getEffectiveLevel() > logging.INFO)
     debug = (logger.getEffectiveLevel() <= logging.DEBUG)
     cds = cdsapi.Client(quiet=quiet, debug=debug)
+    # silence double logging
+    for name in logging.root.manager.loggerDict:
+        if name.startswith('datapi'):
+            logging.getLogger(name).setLevel(logging.ERROR)
     dataset =  order_args['dataset']
     request = order_args['request']
     target = order_args['target']
@@ -1859,7 +1780,7 @@ def cds_get_cerra_year(year: int,
     converting it to a NetCDF file for more convenient analysis and removes
     the original GRIB file to conserve space.
 
-    Requires the `cdsapi` and `cdo` (Climate Data Operators) packages,
+    Requires the `cdsapi` package,
     as well as an active Copernicus account for data retrieval.
 
     :param year: The year of the dataset to retrieve.
@@ -1892,8 +1813,9 @@ def cds_get_cerra_year(year: int,
               It does not return a value but will print status messages
               regarding its progress.
 
-    :raises FileNotFoundError: If the CDO command fails to find the
-            downloaded GRIB file for conversion.
+    :raises RuntimeError: If nothing was downloaded.
+    :raises ValueError: If `chunks` is neither divisor of 12,
+      nor `True` or `False`.
 
     :example:
 
@@ -1905,8 +1827,6 @@ def cds_get_cerra_year(year: int,
     - The 'cdsapi' Client is used for data retrieval, requiring
       a **valid CDS API key**
       set up as per the CDS API's documentation.
-    - The 'cdo' tool is called for data processing, necessitating
-      its installation and availability in the system's PATH.
     - This function assumes `cerraname` returns a base filename to which
       `.grib` or `.nc` is appended for output files.
 
@@ -2128,6 +2048,8 @@ def assemble_rea(path: str, name: str,
       points to a valid temporary directory for intermediate files.
 
     """
+  
+
     if args is None:
         args = {}
     if years is None:
@@ -2327,14 +2249,15 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
             month_end = ((month_start
                     + pd.tseries.offsets.MonthEnd())
                     + pd.tseries.offsets.Hour(23))
+            first_of_month_str = month_start.strftime("%Y%m%d%H")
             srv_time = "{}-{}".format(
-                month_start.strftime("%Y%m%d%H"),
+                first_of_month_str,
                 month_end.strftime("%Y%m%d%H")
             )
             for k,v in srv_dirs.items():
                 to_download[
                     srv_host + srv_path + srv_file % (v, k, srv_time)
-                ] = f"{k}_{month_start.strftime("%Y%m%d%H")}.nc"
+                ] = f"{k}_{first_of_month_str}.nc"
 
         # download the files
         logger.debug("files to download: %d" % len(to_download))
@@ -2412,8 +2335,7 @@ def provide_weather(source: str, path: str = None,
       Defaults to False.
     :type force: bool, options
     :param method: The method to use for obtaining the data.
-      Currently, only "download" is implemented, but the parameter
-      is designed to accommodate future methods like "cache" or "stream".
+      Valid values are 'dowload' and 'assemble'.
     :type method: str, optional
 
     :returns: A boolean value indicating the success (`True`) or failure
@@ -2441,49 +2363,56 @@ def provide_weather(source: str, path: str = None,
       information is logged.
     """
 
-    # param method is implemented for future use
     if path is None:
         path = _storage.find_writeable_storage(path,
                                       _storage.STORAGE_WAETHER)
-    #dataset = dataset_get(source)
-    logger.info("downloading weather source %s" % source)
-    pwd = os.getcwd()
-    delete_tmp = (logger.getEffectiveLevel() > logging.DEBUG)
-    with tempfile.TemporaryDirectory(
-            ignore_cleanup_errors=True, dir=_storage.TEMP,
-            delete=_CLEAN_UP) as temp_dir:
-        os.chdir(temp_dir)
-        success = True
-        if source == "ERA5":
-            dataset = dataset_get(name_yearly(source, years[0]))
-            import_lib('cdsapi')
-            import_lib('_netcdf')
-            assemble_rea(path, name='ERA5', years=years,
-                         replace=force,
-                         args=dataset.arguments)
-        elif source == "CERRA":
-            dataset = dataset_get(name_yearly(source, years[0]))
-            import_lib('_netcdf')
-            import_lib('cdsapi')
-            assemble_rea(path, name='CERRA', years=years,
-                         replace=force,
-                         args=dataset.arguments)
-        elif source == "HOSTRADA":
-            import_lib('_netcdf')
-            assemble_hostrada(path, years=years, replace=force)
-        elif source == "DWD":
-            dataset = dataset_get(source)
-            assemble_DWD(path, years=years, replace=force,
-                         args=dataset.arguments)
+    for year in years:
+        dataset = dataset_get(name_yearly(source, year))
+        if method == 'download':
+            logger.info("downloading weather source %s" % source)
+            if dataset.uri is None:
+                sys.tracebacklimit = 0
+                raise Exception("Dataset has no download uri, "
+                                "assemble it.")
+            dataset.download(path)
+            success = True
+        elif method == 'assemble':
+            logger.info("assembling weather source %s" % source)
+            pwd = os.getcwd()
+            delete_tmp = (logger.getEffectiveLevel() > logging.DEBUG)
+            with tempfile.TemporaryDirectory(
+                    ignore_cleanup_errors=True, dir=_storage.TEMP,
+                    delete=_CLEAN_UP) as temp_dir:
+                os.chdir(temp_dir)
+                success = True
+                if source == "ERA5":
+                    dataset = dataset_get(name_yearly(source, years[0]))
+                    assemble_rea(path, name='ERA5', years=years,
+                                 replace=force,
+                                 args=dataset.arguments)
+                elif source == "CERRA":
+                    dataset = dataset_get(name_yearly(source, years[0]))
+                    assemble_rea(path, name='CERRA', years=years,
+                                 replace=force,
+                                 args=dataset.arguments)
+                elif source == "HOSTRADA":
+                    assemble_hostrada(path, years=years, replace=force)
+                elif source == "DWD":
+                    dataset = dataset_get(source)
+                    assemble_DWD(path, years=years, replace=force,
+                                 args=dataset.arguments)
+                else:
+                    logger.error("unknown dataset to download %s" % source)
+                    success = False
+                try:
+                    shutil.rmtree(temp_dir)
+                except PermissionError:
+                    logger.warning('Permission Error during cleanup')
+            # return before clean up
+            os.chdir(pwd)
         else:
-            logger.error("unknown dataset to download %s" % source)
-            success = False
-        try:
-            shutil.rmtree(temp_dir)
-        except PermissionError:
-            logger.warning('Permission Error during cleanup')
-    # return before clean up
-    os.chdir(pwd)
+            raise ValueError("method must be either "
+                             "'download' or 'assemble'")
     return success
 
 

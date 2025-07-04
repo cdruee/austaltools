@@ -10,6 +10,7 @@ import unicodedata
 import urllib.parse
 from xml.etree import ElementTree
 
+import pandas as pd
 import requests
 
 if os.getenv('BUILDING_SPHINX', 'false') == 'false':
@@ -35,6 +36,8 @@ DEFAULT_WORKING_DIR = "."
 """
 Default location for input and output
 """
+DEFAULT_COLORMAP = "YlOrRd"
+"""Default colors used for the commpon plot type"""
 MAX_RETRY = 3
 """ number of tries made to download a ceratin file """
 
@@ -93,6 +96,79 @@ class SmartFormatter(argparse.HelpFormatter):
         for t in text.splitlines():
             r.extend(argparse.HelpFormatter._split_lines(self, t, width))
         return r
+
+# =========================================================================
+
+class GridASCII(object):
+    """
+    Class that represents a grid in ASCII format.
+
+
+    Example:
+        >>> grid = GridASCII("my_grid.asc")
+        >>> print(grid.header["ncols"])  # Access header values
+        >>> grid.write("output_grid.asc")  # Write grid data to a new file
+    """
+    file = None
+    """Path to the ASCII file."""
+    data = None
+    """ grided data """
+    _keys = ["ncols", "nrows", "xllcorner", "yllcorner", "cellsize",
+             "NODATA_value"]
+    header = {x: None for x in _keys}
+    """Dictionary containing header information."""
+
+    def __init__(self, file=None):
+        """
+
+        :param file:
+            Path to the ASCII file (default: None).
+        :type file:
+            str (optional)
+        """
+        if file is not None:
+            self.read(file)
+
+    def read(self, file):
+        """
+        Reads the data from a GridASCII file in to the object.
+
+        :param file: file name (optionally including path)
+        :type file: str
+
+        :raises: ValueError if file is not a GridASCII file
+        """
+        self.file = file
+        self.data = np.rot90(np.loadtxt(file, skiprows=6), k=3)
+        with open(file, "r") as f:
+            for ln in f:
+                k, v = re.split(r"\s+", ln.strip(), 1)
+                if re.match(r'[0-9-.E]+', k):
+                    # if fist field is a number the header is over
+                    break
+                elif k in self._keys:
+                    self.header[k] = v
+                else:
+                    raise ValueError(
+                        'unknown header value in file: %s' % k)
+
+    def write(self, file=None):
+        """
+        Writes the data the object into a GridASCII file.
+
+        :param file: file name (optionally including path).
+          If missing, the name contained in the attribute `name` is used.
+        :type file: str, optional
+
+        :raises: ValueError if file is not a GridASCII file
+        """
+        if file is None:
+            file = self.file
+        ascii_header = "\n".join(["%-12s %s" % (k, self.header[k])
+                                  for k in self._keys])
+
+        np.savetxt(file, self.data, header=ascii_header,
+                   comments='', fmt="%4.0f", delimiter="")
 
 # =========================================================================
 
@@ -1178,3 +1254,144 @@ def read_heff(working_dir, conf=None):
     return heff
 
 # -------------------------------------------------------------------------
+
+def add_arguents_common_plot(parser: argparse.ArgumentParser
+                             ) -> argparse.ArgumentParser:
+    """
+    Add agruments to a parser
+
+    :param parser: parser to add arguments to
+    :type parser: argparse.ArgumentParser
+    :return: parser with added arguments
+    :rtype:  argparse.ArgumentParser
+
+    """
+    parser.add_argument('-b', '--no-buildings',
+                        dest='buildings',
+                        action='store_false',
+                        help='do not show the buildings ' +
+                             'defined in config file')
+    parser.add_argument('-l', '--low-colors',
+                        dest='fewcols',
+                        action='store_true',
+                        help='use only few discrete colors ' +
+                             'for better print results')
+    parser.add_argument('-c', '--colormap',
+                        default=DEFAULT_COLORMAP,
+                        help='name of colormap to use. Defaults to "%s"' %
+                             DEFAULT_COLORMAP)
+    parser.add_argument('-k', '--kind',
+                        default='contour',
+                        choices=['contour', 'grid'],
+                        help='choose kind of display. ' +
+                             '`contour` produces filled contours, ' +
+                             '`grid` produces coloured grid cells. ' +
+                             'Defaults to `contour`')
+    parser.add_argument('-p', '--plot',
+                        metavar="FILE",
+                        nargs='?',
+                        const='__default__',
+                        help='save plot to a file. If `FILE` is "-" ' +
+                             'the plot is shown on screen. If `FILE` is ' +
+                             'missing, the file name defaults to ' +
+                             'the data file name with extension `png`'
+                        )
+    parser.add_argument('-f', '--force',
+                        action='store_true',
+                        default=False,
+                        help='force overwriting plotfile if it exists.')
+    return parser
+
+
+def add_location_opts(parser,
+                      stations=False,
+                      required=True):
+    """
+    This routine adds the input arguments defining a position:
+
+    :param parser: the arguemnt parser to add the options to
+    :type parser: argpargse.ArgumentParser
+    :param stations: WMO or DWD station numbers are accepted as positions
+    :type stations: bool
+    :param required: if a location specification is required
+      type required: bool
+
+    Note:
+        - dwd (str or None): DWD option, mutually exclusive with 'wmo' and required with 'ele'.
+        - wmo (str or None): WMO option, mutually exclusive with 'dwd' and required with 'ele'.
+        - ele (str or None): Element option, required with either 'dwd' or 'wmo'.
+        - year (int or None): Year option, required with '-L', '-G', '-U', '-D', or '-W'.
+        - output (str or None): Output name, required with '-L', '-G', '-U', '-D', or '-W'.
+        - station (str or None): Station option, only valid with 'dwd' or 'wmo'.
+
+    """
+    loc_opt = parser.add_mutually_exclusive_group(required=required)
+    loc_opt.add_argument('-L', '--ll',
+                         metavar=("LAT", "LON"),
+                         dest="ll",
+                         nargs=2,
+                         default=None,
+                         help='Center position given as Latitude and ' +
+                              'Longitude, respectively. ' +
+                              'This is the default.')
+    loc_opt.add_argument('-G', '--gk',
+                         metavar=("X", "Y"),
+                         dest="gk",
+                         nargs=2,
+                         default=None,
+                         help='Center position given in Gauß-Krüger zone 3' +
+                              'coordinates: X = `Rechtswert`, ' +
+                              'Y = `Hochwert`. ')
+    loc_opt.add_argument('-U', '--utm',
+                         metavar=("X", "Y"),
+                         dest="ut",
+                         nargs=2,
+                         default=None,
+                         help='Center position given in UTM Zone 32N' +
+                              'coordinates: X = `easting`, ' +
+                              'Y = `northing`.')
+    if stations:
+        loc_opt.add_argument('-D', '--dwd',
+                             metavar="NUMBER",
+                             dest="dwd",
+                             help='Weather station position with ' +
+                                  'German weather service (DWD) ID `NUMBER`')
+        loc_opt.add_argument('-W', '--wmo',
+                             metavar="NUMBER",
+                             dest="wmo",
+                             help='Postion of weather station with ' +
+                                  'World Meteorological Organization (WMO)' +
+                                  'station ID `NUMBER`')
+
+    return parser
+
+
+def read_extracted_weather(csv_name: str) -> (
+        float, float, float, str, str, pd.DataFrame):
+    """
+    read weather data that were previously extracted from a
+    dataset and stored into a csv file with specially crafted header line
+
+    :param csv_name: file name and path
+    :type csv_name: str
+    :return: latitude, longitude, elevation, roughness length z0,
+      code of the original dataset, station name (if applicable),
+      and the weather data
+    :rtype: float, float, float, str, str, pd.DataFrame
+    """
+    # halt if file is not found
+    if not os.path.exists(csv_name):
+        raise IOError('weather data not found: %s' % csv_name)
+    logger.info('reading weather data from: %s' % csv_name)
+
+    # read position fom comment line
+    with open(csv_name, 'r') as f:
+        lat, lon, ele, z0, source, nam = f.readline(
+        ).strip('# \n').split(maxsplit=6)
+    stat_no = 0
+
+    # read observation data from subsequent lines
+    obs = pd.read_csv(csv_name, comment='#', index_col=0,
+                      parse_dates=True, na_values='-999')
+
+    return lat, lon, ele, z0, source, nam, obs

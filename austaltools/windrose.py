@@ -11,21 +11,22 @@ import numpy as np
 import pandas as pd
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    import meteolib
+    import matplotlib as mpl
+    import matplotlib.pyplot as plt
 
 try:
+    from . import _dispersion
+    from . import _corine
+    from . import _plotting
     from . import _tools
     from ._version import __version__
-    from . import _corine
-    from . import _dispersion
-    from . import _plotting
     from . import _windutil
 except ImportError:
+    import _dispersion
+    import _corine
+    import _plotting
     import _tools
     from _version import __version__
-    import _corine
-    import _dispersion
-    import _plotting
     import _windutil
 
 logger = logging.getLogger(__name__)
@@ -52,21 +53,6 @@ def main(args):
     :type args: dict
     """
     logger.debug(format(args))
-
-    # recheck if plotting is possible
-    _plotting.have_matplotlib(mock=True)
-    # dynamic import of plotting
-    mpl = _plotting.import_plotlib('mpl')
-    mco = _plotting.import_plotlib('mco')
-    mpt = _plotting.import_plotlib('mpt')
-    plt = _plotting.import_plotlib('plt')
-
-    # disable subcommand if no plotting is possible
-    if not _plotting.have_matplotlib():
-        logger.critical(f"  subcommand {__name__} is disabled. " +
-                        _plotting.NO_MATPLOTLIB_HELP)
-        return
-    have_display = _plotting.import_matplotlib()
 
     working_dir = args.get('working_dir', '.')
     weather = args.get('weather', None)
@@ -233,15 +219,6 @@ def main(args):
 
 def add_options(subparsers):
 
-    # disable subcommand if no plotting is possible
-    if not _plotting.have_matplotlib():
-        subparsers.add_parser(
-            name=f'{__name__}',
-            help='disabled because Matplotlib is not installed.'
-        )
-        return
-
-    # act normally otherwise
     pars_wrs = subparsers.add_parser(
         name='windrose',
         help='Plot wind rose',

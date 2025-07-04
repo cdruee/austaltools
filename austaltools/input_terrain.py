@@ -11,22 +11,30 @@ import sys
 import tempfile
 from importlib import resources
 
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    from osgeo import gdal
+
 try:
-    from . import _tools
     from . import _datasets
+    from . import _geo
     from . import _plotting
+    from . import _tools
     from ._version import __title__
 except ImportError:
-    import _tools
     import _datasets
+    import _geo
     import _plotting
+    import _tools
     from _version import __title__
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------------
-
+SUBCOMMAND = "terrain"
+"""
+the keyword under which the subcommand provided by this module appears
+"""
 STORAGE_DIR = "terrain"
 """
 keyword that marks terrain datasets and is the name of the subdirectory 
@@ -102,13 +110,6 @@ def main(args: dict):
     :raises ValueError: If the source is not one of the available sources.
     """
     logger.debug("args: %s" % format(args))
-
-    # sub-command-specific imports
-    from osgeo import gdal
-    try:
-        from . import _geo
-    except ImportError:
-        import _geo
 
     lat, lon, ele, stat_no, stat_nam = _geo.evaluate_location_opts(args)
     rechts, hoch = _geo.ll2gk(lat, lon)
@@ -196,14 +197,14 @@ def add_options(subparsers):
     default_extent = 5.
 
     pars_ter = subparsers.add_parser(
-        name='terrain',
+        name=SUBCOMMAND,
         help='generate terrain input for AUSTAL'
     )
     pars_ter.add_argument(dest="output", metavar="NAME",
                           help="file name to store data in.",
                           )
 
-    pars_ter = _plotting.add_location_opts(parser=pars_ter)
+    pars_ter = _tools.add_location_opts(parser=pars_ter)
 
     pars_ter.add_argument('-s', '--source',
                           metavar="CODE",

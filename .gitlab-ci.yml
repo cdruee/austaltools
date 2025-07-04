@@ -43,7 +43,7 @@ build_pages:
   script:
     - pip install setuptools
     - pip install sphinx sphinx-argparse
-    - pip install numpy pandas
+    - pip install numpy pandas netCDF4
     - BUILDING_SPHINX=true sphinx-build -b html docs build/sphinx/html
     - mv build/sphinx/html/ public/
   artifacts:

@@ -2195,7 +2195,7 @@ def main(args):
     # get weather data
     csv_name = args['extracted_weather']
     lat, lon, ele, z0, source, stat_nam, obs = \
-            _plotting.read_extracted_weather(csv_name)
+            _tools.read_extracted_weather(csv_name)
 
     # extract variables from weather data
     tz = obs.index.tz

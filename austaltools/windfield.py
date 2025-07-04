@@ -16,18 +16,18 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import meteolib
 
 try:
-    from . import _tools
-    from ._version import __version__
     from . import _corine
     from . import _dispersion
     from . import _plotting
+    from . import _tools
+    from ._version import __version__
     from . import _windutil
 except ImportError:
-    import _tools
-    from _version import __version__
     import _corine
     import _dispersion
     import _plotting
+    import _tools
+    from _version import __version__
     import _windutil
 
 logger = logging.getLogger(__name__)
@@ -156,13 +156,6 @@ def main(args):
     :type args: dict
     """
     logger.debug(format(args))
-
-    # disable subcommand if no plotting is possible
-    if not _plotting.have_matplotlib():
-        logger.critical(f"  subcommand {__name__} is disabled. " +
-                        _plotting.NO_MATPLOTLIB_HELP
-        )
-        return
 
     # act normally otherwise
     try:
@@ -428,15 +421,6 @@ def main(args):
 
 def add_options(subparsers):
 
-    # disable subcommand if no plotting is possible
-    if not _plotting.have_matplotlib():
-        subparsers.add_parser(
-            name=f'{__name__}',
-            help='disabled because Matplotlib is not installed.'
-        )
-        return
-
-    # act normally otherwise
     pars_wif = subparsers.add_parser(
         name='windfield',
         help='Plot wind field'
