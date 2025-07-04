@@ -19,6 +19,8 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import netCDF4
     import meteolib as m
     import readmet
+else:
+    from ._mock import netCDF4
 
 try:
     from ._version import __version__, __title__
