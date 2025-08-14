@@ -40,7 +40,8 @@ except:
     res = 'Unknown'
 
 print(res)
-" 2>/dev/null || echo "Unknown"
+"
+ #2>/dev/null || echo "Unknown"
 
 ## Fallback function to read from _metadata.py or _version.py if available
 #function get_fallback_info() {
