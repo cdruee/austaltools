@@ -24,7 +24,7 @@ if os.getenv('BUILDING_SPHINX', 'false') == 'false':
     import readmet
 
 try:
-    from ._version import __version__, __title__
+    from ._metadata import __version__, __title__
 except ImportError:
     from _version import __version__, __title__
 

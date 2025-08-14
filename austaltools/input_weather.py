@@ -23,7 +23,7 @@ else:
     from ._mock import netCDF4
 
 try:
-    from ._version import __version__, __title__
+    from ._metadata import __version__, __title__
     from . import _corine
     from . import _datasets
     from . import _dispersion as dis

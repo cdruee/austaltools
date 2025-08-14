@@ -19,7 +19,7 @@ try:
     from . import _geo
     from . import _plotting
     from . import _tools
-    from ._version import __title__
+    from ._metadata import __title__
 except ImportError:
     import _datasets
     import _geo

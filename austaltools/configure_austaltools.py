@@ -6,17 +6,10 @@ import argparse
 import logging
 import os
 
-
-try:
-    from . import _datasets as DS
-    from . import _storage
-    from . import _tools
-    from ._version import __version__, __title__
-except ImportError:
-    import _datasets as DS
-    import _storage
-    import _tools
-    from _version import __version__, __title__
+from . import _datasets as DS
+from . import _storage
+from . import _tools
+from ._metadata import __version__
 
 logging.basicConfig()
 logger = logging.getLogger()

@@ -20,7 +20,7 @@ try:
     from . import _dispersion
     from . import _plotting
     from . import _tools
-    from ._version import __version__
+    from ._metadata import __version__
     from . import _windutil
 except ImportError:
     import _corine
