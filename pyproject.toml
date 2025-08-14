@@ -15,7 +15,7 @@ description = "Tools for use with the Lagrangian atmospheric pollutant dispersio
 authors = [
     {name = "Clemens Drüe", email = "druee@uni-trier.de"},
 ]
-license = {file = "LICENSE.txt"}
+license = "EUPL-1.2"
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [

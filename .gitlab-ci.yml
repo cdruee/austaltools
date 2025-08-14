@@ -41,7 +41,7 @@ build_pages:
     - exists:
       - docs/conf.py
   script:
-    - pip install setuptools
+    - pip install setuptools metadata
     - pip install sphinx sphinx-argparse
     - pip install numpy pandas
     - BUILDING_SPHINX=true sphinx-build -b html docs build/sphinx/html
