@@ -72,8 +72,7 @@ Then install austaltools from Pypi:
            PATH="$HOME/.local/bin:$PATH"
        fi
 
-   or  -**if you do not already have a ``bin`` directory in your home
-   directory  -**by issuing the command:
+   or  - **if you do not already have a ``bin`` directory in your home directory** - by orgissuing the command:
 
    ::
 
@@ -147,7 +146,7 @@ Austaltools uses the following python packages:
   `Pandas <https://pandas.pydata.org/>`_ is a widely-used
   Python tool for data analysis and manipulation.
  -**PyYAML**:
-  `PyYAML < https://pyyaml.org/>`_ is a parser and emitter
+  `PyYAML <https://pyyaml.org/>`_ is a parser and emitter
   for Python. `YAML (yet another markup language) <https://yaml.org/>`_
   a data description and serialization language that is easy to read
   for humans.

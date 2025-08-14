@@ -575,7 +575,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
           Supported protocols are :code:`"http://..."`,
           :code:`"https://..."`, and  :code:`"file:///..."`.
         - "path": (str)
-          Storage path on the host, defaults to ``.
+          Storage path on the host, defaults to "".
         - "cert-check": (str, optional)
           Wether to check the server certificates of `host` or not.
           Disables verification by setting this value to

@@ -8,6 +8,13 @@
 
 import os
 import sys
+try:
+    import tomllib
+except ImportError:
+    try:
+        import tomli as tomllib
+    except ImportError:
+        sys.exit(1)
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -19,8 +26,20 @@ sys.path.insert(0, os.path.abspath('../austaltools'))
 # global variable to disable external imports
 BUILDING_SPHINX = True
 
-from austaltools._version import \
-    __title__, __copyright__, __author__, __version__
+
+try:
+    with open('pyproject.toml', 'rb') as f:
+        data = tomllib.load(f)
+        __title__ = data.get('project').get('name')
+        authors = data.get('project').get('authors')
+        __author__ = authors[0].get('name')
+        __email__ = authors[0].get('email')
+        __description__ = data.get('project').get('description', '')
+except FileNotFoundError:
+    __title__ = __author__ = __email__ = __description__ = 'Unknown'
+
+from austaltools._version import __version__
+from austaltools._metadata import __copyright__
 
 
 # -- General configuration ------------------------------------------------
@@ -37,6 +56,7 @@ extensions = ['sphinx.ext.autodoc',
               'sphinxarg.ext',
               'sphinx.ext.autosectionlabel',
              ]
+suppress_warnings = ['autosectionlabel.*']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
