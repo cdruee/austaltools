@@ -41,9 +41,10 @@ build_pages:
     - exists:
       - docs/conf.py
   script:
-    - pip install setuptools importlib
+    - pip install setuptools importlib build
     - pip install sphinx sphinx-argparse
     - pip install numpy pandas
+    - python -m build --wheel
     - BUILDING_SPHINX=true sphinx-build -b html docs build/sphinx/html
     - mv build/sphinx/html/ public/
   artifacts:

@@ -1,5 +1,6 @@
 # austaltools/__init__.py or austaltools/_metadata.py
 from datetime import datetime
+import os
 try:
     from importlib.metadata import metadata, version
 except ImportError:
@@ -24,12 +25,15 @@ def get_metadata():
     }
 
 # Make variables available at module level
-_meta = get_metadata()
-__version__ = _meta['__version__']
-__author__ = _meta['__author__']
-__author_email__ = _meta['__author_email__']
-__description__ = _meta['__description__']
-__url__ = _meta['__url__']
-__license__ = _meta['__license__']
+if os.getenv('BUILDING_SPHINX', 'false') == 'false':
+    _meta = get_metadata()
+else:
+    _meta = {}   
+__version__ = _meta.get('__version__', '')
+__author__ = _meta.get('__author__', '')
+__author_email__ = _meta.get('__author_email__', '')
+__description__ = _meta.get('__description__', '')
+__url__ = _meta.get('__url__', '')
+__license__ = _meta.get('__license__', '')
 
 # Usage: from austaltools import __author__, __version__
