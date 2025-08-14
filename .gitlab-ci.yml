@@ -19,7 +19,7 @@ build_sdist:
   image: python:latest
   stage: build
   before_script:
-    - pip install setuptools build
+    - pip install build
   script:
     - python -m build --sdist
     - echo 'ls dist/*tar.gz'
