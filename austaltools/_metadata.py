@@ -25,10 +25,10 @@ def get_metadata():
     }
 
 # Make variables available at module level
-if os.getenv('BUILDING_SPHINX', 'false') == 'false':
-    _meta = get_metadata()
-else:
-    _meta = {}   
+#if os.getenv('BUILDING_SPHINX', 'false') == 'false':
+_meta = get_metadata()
+#else:
+#    _meta = {}
 __version__ = _meta.get('__version__', '')
 __author__ = _meta.get('__author__', '')
 __author_email__ = _meta.get('__author_email__', '')
