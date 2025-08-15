@@ -42,47 +42,6 @@ except:
 print(res)
         " 2>/dev/null || echo "Unknown"
 
-## Fallback function to read from _metadata.py or _version.py if available
-#function get_fallback_info() {
-#    local field=$1
-#
-#    # Try _metadata.py first
-#    if [ -e ${NAME}/_metadata.py ]; then
-#        case $field in
-#            "author")
-#                python3 -c "
-#import sys
-#sys.path.insert(0, '.')
-#try:
-#    from ${NAME}._metadata import __author__
-#    print(__author__)
-#except:
-#    print('Unknown')
-#" 2>/dev/null || echo "Unknown"
-#                ;;
-#            "email")
-#                python3 -c "
-#import sys
-#sys.path.insert(0, '.')
-#try:
-#    from ${NAME}._metadata import __author_email__
-#    print(__author_email__)
-#except:
-#    print('Unknown')
-#" 2>/dev/null || echo "Unknown"
-#                ;;
-#            "description")
-#                python3 -c "
-#import sys
-#sys.path.insert(0, '.')
-#try:
-#    from ${NAME}._metadata import __description__
-#    print(__description__)
-#except:
-#    print('Unknown')
-#" 2>/dev/null || echo "Unknown"
-#                ;;
-#        esac
     else
         echo "Unknown"
     fi
@@ -104,27 +63,6 @@ AUTHOR=$(get_project_info "author")
 EMAIL=$(get_project_info "email")
 DESCRIPTION=$(get_project_info "description")
 
-# Use fallback if pyproject.toml reading failed
-#if [ "$AUTHOR" = "Unknown" ]; then
-#    AUTHOR=$(get_fallback_info "author")
-#fi
-#if [ "$EMAIL" = "Unknown" ]; then
-#    EMAIL=$(get_fallback_info "email")
-#fi
-#if [ "$DESCRIPTION" = "Unknown" ]; then
-#    DESCRIPTION=$(get_fallback_info "description")
-#fi
-
-## Final hardcoded fallbacks based on your project
-#if [ "$AUTHOR" = "Unknown" ]; then
-#    AUTHOR="Clemens Drüe"
-#fi
-#if [ "$EMAIL" = "Unknown" ]; then
-#    EMAIL="druee@uni-trier.de"
-#fi
-#if [ "$DESCRIPTION" = "Unknown" ]; then
-#    DESCRIPTION="Tools for use with the Lagrangian atmospheric pollutant dispersion model AUSTAL"
-#fi
 
 echo "Using metadata: AUTHOR='$AUTHOR', EMAIL='$EMAIL', DESCRIPTION='$DESCRIPTION'"
 
