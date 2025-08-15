@@ -31,7 +31,7 @@ build_sdist:
   artifacts:
     paths:
       - dist
-      - "*/*.egg-info"
+      - *.egg-info
     reports:
       dotenv: build.env
 
