@@ -40,8 +40,7 @@ except:
     res = 'Unknown'
 
 print(res)
-"
- #2>/dev/null || echo "Unknown"
+        " 2>/dev/null || echo "Unknown"
 
 ## Fallback function to read from _metadata.py or _version.py if available
 #function get_fallback_info() {
@@ -84,10 +83,10 @@ print(res)
 #" 2>/dev/null || echo "Unknown"
 #                ;;
 #        esac
-#    else
-#        echo "Unknown"
-#    fi
-#}
+    else
+        echo "Unknown"
+    fi
+}
 
 if [ -e deb_dist/$CODENAME ]; then
   rm -r deb_dist/$CODENAME
@@ -186,7 +185,7 @@ awk '
 
 # Handle Raspberry Pi architecture if needed
 RASPBIAN_CODENAMES=("wheezy" "jessie" "stretch" "buster" "bullseye" "bookworm" "trixie" "forky")
-if [[ $(echo ${RASPBIAN_CODENAMES[@]} | fgrep -w $CODENAME) ]]; then
+if [[ $(echo "${RASPBIAN_CODENAMES[@]}" | fgrep -w $CODENAME) ]]; then
   #ARCH_OPTS="--host-arch armhf -d"
   cat << EOF > ~/tmp.sh
 #!/bin/bash
@@ -205,7 +204,7 @@ dpkg-buildpackage -us -uc $ARCH_OPTS -b
 popd
 
 # Make reprepro happy - set correct distribution
-for X in $( ls *.changes ); do
+for X in *.changes; do
   sed -i "s/Distribution: .*/Distribution: ${CODENAME}/" $X
 done
 
