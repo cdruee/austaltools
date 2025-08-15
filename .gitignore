@@ -18,3 +18,4 @@ build/
 /austaltools.egg-info/
 /dist/
 .Rproj.user
+/austaltools/_version.py

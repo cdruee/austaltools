@@ -24,7 +24,7 @@ except ImportError:
     import _plotting
 
 try:
-    from ._version import __version__
+    from ._metadata import __version__
 except ImportError:
     from _version import __version__
 

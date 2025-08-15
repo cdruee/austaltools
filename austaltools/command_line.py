@@ -7,7 +7,7 @@ import sys
 
 try:
     from . import _tools
-    from ._version import __version__, __title__
+    from ._metadata import __version__, __title__
     from . import _storage
     from . import import_buildings
     from . import eap

@@ -13,7 +13,7 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import yaml
 
 try:
-    from ._version import __title__
+    from ._metadata import __title__
 except ImportError:
     from _version import __title__
 

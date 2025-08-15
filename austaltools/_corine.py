@@ -23,7 +23,7 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import readmet
 
 try:
-    from ._version import __title__
+    from ._metadata import __title__
     from . import _storage
 except ImportError:
     from _version import __title__

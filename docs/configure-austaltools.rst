@@ -142,7 +142,7 @@ Each dict has the follwing entries:
         Which information is extracted must be defined
         by the arguments `xmplath` (xml and meta4), `links` (html),
         or `jsonpath` (json and geojson).
-        If the value of `filelist'
+        If the value of `filelist`
         does not end with any of these, it may be postfixed by
         two colons followed by the desired filename extension.
         This postfix is removed from the string before

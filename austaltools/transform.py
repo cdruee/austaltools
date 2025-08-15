@@ -19,7 +19,7 @@ try:
     from . import _geo
     from . import _tools
     from . import _plotting
-    from ._version import __version__
+    from ._metadata import __version__
     from . import _wmo_metadata
 except ImportError:
     import _datasets

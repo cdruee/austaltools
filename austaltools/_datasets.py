@@ -58,18 +58,11 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from osgeo_utils import gdal_merge
     from osgeo import osr
 
-try:
-    from . import _fetch_dwd_obs
-    from . import _netcdf
-    from . import _storage
-    from . import _tools
-    from ._version import __version__, __title__
-except ImportError:
-    import _fetch_dwd_obs
-    import _netcdf
-    import _storage
-    import _tools
-    from _version import __version__, __title__
+from . import _fetch_dwd_obs
+from . import _netcdf
+from . import _storage
+from . import _tools
+from ._metadata import __version__, __title__
 
 disable_warnings(exceptions.InsecureRequestWarning)
 logger = logging.getLogger(__name__)
@@ -582,7 +575,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
           Supported protocols are :code:`"http://..."`,
           :code:`"https://..."`, and  :code:`"file:///..."`.
         - "path": (str)
-          Storage path on the host, defaults to ``.
+          Storage path on the host, defaults to "".
         - "cert-check": (str, optional)
           Wether to check the server certificates of `host` or not.
           Disables verification by setting this value to

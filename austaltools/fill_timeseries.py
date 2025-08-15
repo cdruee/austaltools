@@ -18,7 +18,7 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 try:
     from . import _tools
-    from ._version import __version__
+    from ._metadata import __version__
 except ImportError:
     import _tools
     from _version import __version__

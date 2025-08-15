@@ -9,7 +9,7 @@ import json
 import os
 
 try:
-    from ._version import __version__, __title__
+    from ._metadata import __version__, __title__
     from . import _storage
 except ImportError:
     from _version import __version__, __title__

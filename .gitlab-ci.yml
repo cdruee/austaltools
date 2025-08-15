@@ -1,8 +1,8 @@
 workflow:
-  # Run if tag is 0.00.00 indicating a release
+  # Run if tag starts v0.00.00 indicating a release
   #     or pipeline ist started manually in gitlab
   rules:
-    - if: $CI_COMMIT_TAG =~ /^[0-9]*\.[0-9]*\.[0-9]*$/
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]*\.[0-9]*\.[0-9]*/
     - if: $CI_PIPELINE_SOURCE == "web" || $CI_JOB_MANUAL == "true"
 
 variables:
@@ -19,9 +19,9 @@ build_sdist:
   image: python:latest
   stage: build
   before_script:
-    - pip install setuptools
+    - pip install build
   script:
-    - python setup.py sdist
+    - python -m build --sdist
     - echo 'ls dist/*tar.gz'
     - ls dist/*tar.gz
     - echo 'cd dist && ls *tar.gz'
@@ -41,9 +41,10 @@ build_pages:
     - exists:
       - docs/conf.py
   script:
-    - pip install setuptools
+    - pip install setuptools importlib build
     - pip install sphinx sphinx-argparse
     - pip install numpy pandas
+    - python -m build --wheel
     - BUILDING_SPHINX=true sphinx-build -b html docs build/sphinx/html
     - mv build/sphinx/html/ public/
   artifacts:
@@ -94,6 +95,9 @@ build_deb:
           - bookworm
 
 merge_github:
+  # deploy only if a release (no ".devX" or "+"in version string):
+  rules:
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG !~ /(\.dev|\+)/
   stage: package
   image: alpine
   before_script:
@@ -110,6 +114,7 @@ merge_github:
    - apk add --update git
    - git config --global user.email "$GITLAB_USER_EMAIL"
    - git config --global user.name "$GITLAB_USER_NAME"
+   - git config checkout.defaultRemote origin
    - echo remote set-url origin "https://ci_access_token:$CI_ACCESS_TOKEN@$CI_SERVER_HOST/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME.git"
    - git remote set-url origin "https://ci_access_token:$CI_ACCESS_TOKEN@$CI_SERVER_HOST/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME.git"
    - git branch -avv
@@ -125,16 +130,16 @@ merge_github:
    - git fetch origin github || echo "nothing to fetch !?"
    - git fetch --refetch -f github github || echo "nothing to fetch !?"
    - git branch -avv
-   - git checkout github
+   - git checkout --track origin/github  # Be explicit about which branch
    - git branch -avv
    - git pull --rebase origin  github
    - git branch -avv
-   # puch synched branches
+   # push synched branches
    - git push origin github
    - git push github github
    - git branch -avv
    # then merge repo main branch into local working dir (github branch)
-   - git merge --squash origin/main -X theirs --allow-unrelated-histories | 2>&1 tee git.out
+   - git merge --squash origin/main -X theirs --allow-unrelated-histories 2>&1 | tee git.out
    - git branch -avv
    # if there was nothing new, exit graceful
    - if grep -q "Already up to date" git.out ; then exit 0 ; else rm git.out; fi
@@ -145,10 +150,12 @@ merge_github:
    - git push origin github
    # push working dir also to github.com
    - git push github github
-   - if ! [[ "x$CI_COMMIT_TAG" == "x" ]]; then git push origin $CI_COMMIT_TAG; fi
-
+   - if ! [[ "x$CI_COMMIT_TAG" == "x" ]]; then git push origin $CI_COMMIT_TAG; git push github $CI_COMMIT_TAG; fi
 
 deploy_pages:
+  # deploy only if a release (no ".devX" or "+"in version string):
+  rules:
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG !~ /(\.dev|\+)/
   image: python:latest
   stage: deploy
   needs:
@@ -163,6 +170,9 @@ deploy_pages:
     - public
 
 release:
+  # deploy only if a release (no ".devX" or "+"in version string):
+  rules:
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG !~ /(\.dev|\+)/
   image: ubuntu:latest
   stage: deploy
   needs:
@@ -212,6 +222,9 @@ release:
     - 'release-cli create --name "$CI_COMMIT_TAG" --tag-name "$CI_COMMIT_TAG" --description "$CI_COMMIT_MESSAGE" --ref "$CI_COMMIT_TAG" --assets-link "$( jq -c . <<< $ASSET_ARGS )"'
 
 deploy_deb:
+  # deploy only if a release (no ".devX" or "+"in version string):
+  rules:
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG !~ /(\.dev|\+)/
   image: ubuntu:latest
   stage: deploy
   needs:
@@ -263,6 +276,9 @@ deploy_deb:
     - echo "Ende"
 
 deploy_pypi:
+  # deploy only if a release (no ".devX" or "+"in version string):
+  rules:
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG !~ /(\.dev|\+)/
   image: python:latest
   stage: deploy
   needs:
