@@ -1,6 +1,8 @@
-from ._metadata import __title__, __description__, __url__, __version__
-from ._metadata import __author__, __author_email__
-from ._metadata import __license__, __copyright__
+import os
+if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
+    from ._metadata import __title__, __description__, __url__, __version__
+    from ._metadata import __author__, __author_email__
+    from ._metadata import __license__, __copyright__
 
 from . import import_buildings
 from . import eap
@@ -11,3 +13,4 @@ from . import steepness
 from . import transform
 from . import input_terrain
 from . import input_weather
+
