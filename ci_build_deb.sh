@@ -12,8 +12,7 @@ function get_project_info() {
     local FIELD=$1
 
     # First try to read from pyproject.toml using python
-    if command -v python3 >/dev/null 2>&1; then
-      python3 -c "
+    python3 -c "
 import sys
 try:
     import tomllib
@@ -23,7 +22,7 @@ except ImportError:
     except ImportError:
         sys.exit(1)
 
-try:
+if True: # try:
     with open('pyproject.toml', 'rb') as f:
         data = tomllib.load(f)
     if $FIELD in ['author', 'email']:
@@ -36,15 +35,11 @@ try:
         res = data.get('project', {}).get('description')
     else:
         res = 'Unknown'
-except:
-    res = 'Unknown'
+# except:
+#     res = 'Unknown'
 
 print(res)
         " 2>/dev/null || echo "Unknown"
-
-    else
-        echo "Unknown"
-    fi
 }
 
 if [ -e deb_dist/$CODENAME ]; then
@@ -72,7 +67,7 @@ export DEBFULLNAME="$AUTHOR"
 dh_make --python -p ${NAME}_${VERSION}-1${CODENAME}1 \
   -f ../${FULLNAME}.tar.gz \
   -c custom \
-  --copyrightfile ../../LICENSE.txt \
+  --copyrightfile LICENSE.txt \
   --email "$EMAIL" \
   --yes
 

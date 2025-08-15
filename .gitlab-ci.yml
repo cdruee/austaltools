@@ -116,7 +116,6 @@ merge_github:
    - apk add --update git
    - git config --global user.email "$GITLAB_USER_EMAIL"
    - git config --global user.name "$GITLAB_USER_NAME"
-   - git config checkout.defaultRemote origin
    - echo remote set-url origin "https://ci_access_token:$CI_ACCESS_TOKEN@$CI_SERVER_HOST/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME.git"
    - git remote set-url origin "https://ci_access_token:$CI_ACCESS_TOKEN@$CI_SERVER_HOST/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME.git"
    - git branch -avv
@@ -132,9 +131,64 @@ merge_github:
    - git fetch origin github || echo "nothing to fetch !?"
    - git fetch --refetch -f github github || echo "nothing to fetch !?"
    - git branch -avv
-   - git checkout --track origin/github  # Be explicit about which branch
+   # Smart checkout: use the most recent version of github branch
+   - |
+     if git show-ref --verify --quiet refs/heads/github; then
+       echo "Local github branch exists"
+       git checkout github
+       
+       # Check if we can fast-forward from origin/github
+       if git merge-base --is-ancestor origin/github github; then
+         echo "Local github is ahead of or equal to origin/github"
+       elif git merge-base --is-ancestor github origin/github; then
+         echo "origin/github is ahead, fast-forwarding local branch"
+         git reset --hard origin/github
+       else
+         echo "Branches have diverged, using origin/github as authoritative"
+         git reset --hard origin/github
+       fi
+       
+       # Also check github/github remote
+       if git show-ref --verify --quiet refs/remotes/github/github; then
+         if git merge-base --is-ancestor github github/github; then
+           echo "github/github is ahead, updating to it"
+           git reset --hard github/github
+         elif git merge-base --is-ancestor github/github github; then
+           echo "Local github is ahead of github/github"
+         else
+           echo "Local and github/github have diverged, merging github/github"
+           git merge --no-edit github/github || echo "Merge failed, keeping local version"
+         fi
+       fi
+     else
+       echo "No local github branch, creating from most recent remote"
+       # Choose the most recent between origin/github and github/github
+       ORIGIN_COMMIT=$(git rev-parse origin/github 2>/dev/null || echo "")
+       GITHUB_COMMIT=$(git rev-parse github/github 2>/dev/null || echo "")
+       
+       if [ -n "$ORIGIN_COMMIT" ] && [ -n "$GITHUB_COMMIT" ]; then
+         if git merge-base --is-ancestor origin/github github/github; then
+           echo "Using github/github (more recent)"
+           git checkout -b github github/github
+         else
+           echo "Using origin/github"
+           git checkout -b github origin/github
+         fi
+       elif [ -n "$ORIGIN_COMMIT" ]; then
+         echo "Using origin/github (only option)"
+         git checkout -b github origin/github
+       elif [ -n "$GITHUB_COMMIT" ]; then
+         echo "Using github/github (only option)"
+         git checkout -b github github/github
+       else
+         echo "No github branch found anywhere, creating empty"
+         git checkout -b github
+       fi
+     fi
    - git branch -avv
-   - git pull --rebase origin  github
+   # Sync with both remotes to ensure we have the latest
+   - git pull --rebase origin github || echo "Could not pull from origin/github"
+   - git pull --rebase github github || echo "Could not pull from github/github"
    - git branch -avv
    # push synched branches
    - git push origin github
