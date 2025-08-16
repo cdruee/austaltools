@@ -54,12 +54,6 @@ cp ../../dist/${FULLNAME}.tar.gz .
 tar -xzvf ${FULLNAME}.tar.gz
 pushd ${FULLNAME}
 
-# if system sees pyproject.toml
-ls -l pyproject.toml
-
-# if python sees pyproject.toml
-python3 -c "import os; print('yes' if os.path.exists('pyproject.toml') else 'no')"
-
 # Get metadata from pyproject.toml
 AUTHOR=$(get_project_info "author")
 EMAIL=$(get_project_info "email")
@@ -68,19 +62,10 @@ DESCRIPTION=$(get_project_info "description")
 # show what we got
 echo "Using metadata: AUTHOR='$AUTHOR', EMAIL='$EMAIL', DESCRIPTION='$DESCRIPTION'"
 
-ls -l LICENSE.txt
-ls -l ./LICENSE.txt
-ls -l ../LICENSE.txt
-ls -l ../../LICENSE.txt
-
-readlink -e LICENSE.txt
-
-ls -l $( readlink -e LICENSE.txt )
-
 rm -r debian/ 2>/dev/null || true
 
 export DEBFULLNAME="$AUTHOR"
-dh_make --python -p ${NAME}_${VERSION}-1${CODENAME}1 \
+dh_make --python -p ${NAME}_${VERSION}+1${CODENAME}1 \
   -f ../${FULLNAME}.tar.gz \
   -c custom \
   --copyrightfile $( readlink -e LICENSE.txt ) \
