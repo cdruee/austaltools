@@ -54,17 +54,24 @@ cp ../../dist/${FULLNAME}.tar.gz .
 tar -xzvf ${FULLNAME}.tar.gz
 pushd ${FULLNAME}
 
+# if system sees pyproject.toml
 ls -l pyproject.toml
 
+# if python sees pyproject.toml
 python3 -c "import os; print('yes' if os.path.exists('pyproject.toml') else 'no')"
 
-# Get metadata - try pyproject.toml first, then fallback methods
+# Get metadata from pyproject.toml
 AUTHOR=$(get_project_info "author")
 EMAIL=$(get_project_info "email")
 DESCRIPTION=$(get_project_info "description")
 
-
+# show what we got
 echo "Using metadata: AUTHOR='$AUTHOR', EMAIL='$EMAIL', DESCRIPTION='$DESCRIPTION'"
+
+ls -l LICENSE.txt
+ls -l ./LICENSE.txt
+ls -l ../LICENSE.txt
+ls -l ../../LICENSE.txt
 
 rm -r debian/ 2>/dev/null || true
 
