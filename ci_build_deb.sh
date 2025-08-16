@@ -53,6 +53,10 @@ cp ../../dist/${FULLNAME}.tar.gz .
 tar -xzvf ${FULLNAME}.tar.gz
 pushd ${FULLNAME}
 
+ls -l pyproject.toml
+
+python3 -c "import os; print('yes' if os.path.exists('pyproject.toml') else 'no')"
+
 # Get metadata - try pyproject.toml first, then fallback methods
 AUTHOR=$(get_project_info "author")
 EMAIL=$(get_project_info "email")
