@@ -73,6 +73,10 @@ ls -l ./LICENSE.txt
 ls -l ../LICENSE.txt
 ls -l ../../LICENSE.txt
 
+readlink -e LICENSE.txt
+
+ls -l $( readlink -e LICENSE.txt )
+
 rm -r debian/ 2>/dev/null || true
 
 export DEBFULLNAME="$AUTHOR"
