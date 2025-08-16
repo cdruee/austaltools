@@ -27,11 +27,11 @@ if True: # try:
         data = tomllib.load(f)
     if '$FIELD' in ['author', 'email']:
         authors = data.get('project', {}).get('authors')
-        if '$FIELD' == 'author'
+        if '$FIELD' == 'author':
           res = authors[0].get('name')
         else:
           res = authors[0].get('email')
-    elif '$FIELD' == 'description'
+    elif '$FIELD' == 'description':
         res = data.get('project', {}).get('description')
     else:
         res = 'Unknown'
