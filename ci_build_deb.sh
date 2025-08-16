@@ -39,7 +39,8 @@ if True: # try:
 #     res = 'Unknown'
 
 print(res)
-        " 2>/dev/null || echo "Unknown"
+        "
+         # 2>/dev/null || echo "Unknown"
 }
 
 if [ -e deb_dist/$CODENAME ]; then
