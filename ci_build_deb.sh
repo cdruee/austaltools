@@ -120,9 +120,9 @@ awk '
   if (index($0, "python3-setuptools-scm") == 0) {
     # Also ensure we have build and other modern dependencies
     if (index($0, "python3-build") == 0) {
-      print $0 ", python3-setuptools-scm, python3-build"
+      print $0 "python3-setuptools-scm, python3-build, "
     } else {
-      print $0 ", python3-setuptools-scm"
+      print $0 "python3-setuptools-scm, "
     }
   } else {
     print $0
