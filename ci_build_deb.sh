@@ -25,13 +25,13 @@ except ImportError:
 if True: # try:
     with open('pyproject.toml', 'rb') as f:
         data = tomllib.load(f)
-    if $FIELD in ['author', 'email']:
+    if '$FIELD' in ['author', 'email']:
         authors = data.get('project', {}).get('authors')
-        if $FIELD == 'author'
+        if '$FIELD' == 'author'
           res = authors[0].get('name')
         else:
           res = authors[0].get('email')
-    elif $FIELD == 'description'
+    elif '$FIELD' == 'description'
         res = data.get('project', {}).get('description')
     else:
         res = 'Unknown'
