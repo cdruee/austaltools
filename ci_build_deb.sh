@@ -83,7 +83,7 @@ export DEBFULLNAME="$AUTHOR"
 dh_make --python -p ${NAME}_${VERSION}-1${CODENAME}1 \
   -f ../${FULLNAME}.tar.gz \
   -c custom \
-  --copyrightfile ./LICENSE.txt \
+  --copyrightfile $( readlink -e LICENSE.txt ) \
   --email "$EMAIL" \
   --yes
 
