@@ -89,7 +89,6 @@ build_deb:
     matrix:
       - PUBLISHER: ubuntu
         DISTRIB:
-          - focal
           - jammy
           - noble
       - PUBLISHER: debian
