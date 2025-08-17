@@ -27,11 +27,11 @@ if True: # try:
         data = tomllib.load(f)
     if '$FIELD' in ['author', 'email']:
         authors = data.get('project', {}).get('authors')
-        if '$FIELD' == 'author'
+        if '$FIELD' == 'author':
           res = authors[0].get('name')
         else:
           res = authors[0].get('email')
-    elif '$FIELD' == 'description'
+    elif '$FIELD' == 'description':
         res = data.get('project', {}).get('description')
     else:
         res = 'Unknown'
@@ -39,7 +39,8 @@ if True: # try:
 #     res = 'Unknown'
 
 print(res)
-        " 2>/dev/null || echo "Unknown"
+        "
+         # 2>/dev/null || echo "Unknown"
 }
 
 if [ -e deb_dist/$CODENAME ]; then
@@ -53,25 +54,21 @@ cp ../../dist/${FULLNAME}.tar.gz .
 tar -xzvf ${FULLNAME}.tar.gz
 pushd ${FULLNAME}
 
-ls -l pyproject.toml
-
-python3 -c "import os; print('yes' if os.path.exists('pyproject.toml') else 'no')"
-
-# Get metadata - try pyproject.toml first, then fallback methods
+# Get metadata from pyproject.toml
 AUTHOR=$(get_project_info "author")
 EMAIL=$(get_project_info "email")
 DESCRIPTION=$(get_project_info "description")
 
-
+# show what we got
 echo "Using metadata: AUTHOR='$AUTHOR', EMAIL='$EMAIL', DESCRIPTION='$DESCRIPTION'"
 
 rm -r debian/ 2>/dev/null || true
 
 export DEBFULLNAME="$AUTHOR"
-dh_make --python -p ${NAME}_${VERSION}-1${CODENAME}1 \
+dh_make --python -p ${NAME}_${VERSION}+1${CODENAME}1 \
   -f ../${FULLNAME}.tar.gz \
   -c custom \
-  --copyrightfile LICENSE.txt \
+  --copyrightfile $( readlink -e LICENSE.txt ) \
   --email "$EMAIL" \
   --yes
 
@@ -108,9 +105,9 @@ awk '
   if (index($0, "python3-setuptools-scm") == 0) {
     # Also ensure we have build and other modern dependencies
     if (index($0, "python3-build") == 0) {
-      print $0 ", python3-setuptools-scm, python3-build"
+      print $0 "python3-setuptools-scm, python3-build, "
     } else {
-      print $0 ", python3-setuptools-scm"
+      print $0 "python3-setuptools-scm, "
     }
   } else {
     print $0
