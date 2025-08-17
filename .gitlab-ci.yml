@@ -93,8 +93,8 @@ build_deb:
           - noble
       - PUBLISHER: debian
         DISTRIB:
-          - bullseye
           - bookworm
+          - trixie
 
 merge_github:
   # deploy only if a release (no ".devX" or "+"in version string):
