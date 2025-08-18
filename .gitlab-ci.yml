@@ -71,10 +71,10 @@ build_deb:
   script:
     - export DEBIAN_FRONTEND=noninteractive
     - apt update
-    - apt-get -y install dh-python debhelper dh-make
+    - apt-get -y install gawk dh-python debhelper dh-make
     - apt-get -y install python3-all
     - apt-get -y install python3-numpy python3-pandas
-    - apt-get -y install python3-setuptools python3-all python3-stdeb
+    - apt-get -y install python3-setuptools python3-stdeb
     - apt-get -y install python3-setuptools-scm python3-build
     - bash -x ./ci_build_deb.sh $BUILD_VERSION
     - echo "DEB_${DISTRIB^^}_VERSION=$( cd deb_dist/$DISTRIB && ls *deb )" | tee -a  build.env

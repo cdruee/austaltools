@@ -22,25 +22,20 @@ except ImportError:
     except ImportError:
         sys.exit(1)
 
-if True: # try:
-    with open('pyproject.toml', 'rb') as f:
-        data = tomllib.load(f)
-    if '$FIELD' in ['author', 'email']:
-        authors = data.get('project', {}).get('authors')
-        if '$FIELD' == 'author':
-          res = authors[0].get('name')
-        else:
-          res = authors[0].get('email')
-    elif '$FIELD' == 'description':
-        res = data.get('project', {}).get('description')
+with open('pyproject.toml', 'rb') as f:
+    data = tomllib.load(f)
+if '$FIELD' in ['author', 'email']:
+    authors = data.get('project', {}).get('authors')
+    if '$FIELD' == 'author':
+      res = authors[0].get('name')
     else:
-        res = 'Unknown'
-# except:
-#     res = 'Unknown'
-
+      res = authors[0].get('email')
+elif '$FIELD' == 'description':
+    res = data.get('project', {}).get('description')
+else:
+    res = 'Unknown'
 print(res)
-        "
-         # 2>/dev/null || echo "Unknown"
+"
 }
 
 if [ -e deb_dist/$CODENAME ]; then
@@ -100,19 +95,41 @@ BEGIN{doc=0}
 echo " " >> debian/control
 mv debian/control debian/control.old
 awk '
-/^Build-Depends:/ {
+BEGIN{
+  block=0
+}
+# one-line format
+/^Build-Depends:\s*\S+/{
   # Check if setuptools-scm is already there
   if (index($0, "python3-setuptools-scm") == 0) {
-    # Also ensure we have build and other modern dependencies
-    if (index($0, "python3-build") == 0) {
-      print $0 "python3-setuptools-scm, python3-build, "
-    } else {
-      print $0 "python3-setuptools-scm, "
-    }
-  } else {
-    print $0
+    $0 = $0", python3-setuptools-scm"
   }
+  if (index($0, "python3-build") == 0) {
+    $0 = $0", python3-build"
+  }
+  print $0
   next
+}
+# newer multiline format
+(block==1 && $0 ~ /python3-setuptools-scm/){
+  pss=1
+}
+(block==1 && $0 ~ /python3-build/){
+  pb=1
+}
+(block==1 && $0 ~ /^[^ ]/){
+  block=0
+  if (pss==0){
+    print " python3-setuptools-scm,"
+  }
+  if (pb==0){
+    print " python3-build,"
+  }
+}
+/^Build-Depends:[\s]*/{
+  block=1
+  pss=0
+  pb=0
 }
 {print $0}
 ' debian/control.old | tee debian/control
@@ -146,5 +163,10 @@ done
 # rm -rv $FULLNAME
 
 popd
-echo "Debian packages built successfully:"
 ls -l deb_dist/$CODENAME
+if $( ls deb_dist/$CODENAME -h | grep '.changes' > /dev/null ); then
+  echo "Debian packages built successfully."
+else
+  echo ".changes file not build, something is wrong!"
+  exit 1
+fi
