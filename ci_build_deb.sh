@@ -146,5 +146,10 @@ done
 # rm -rv $FULLNAME
 
 popd
-echo "Debian packages built successfully:"
 ls -l deb_dist/$CODENAME
+if $( ls deb_dist/$CODENAME -h | grep '.changes' > /dev/null ); then
+  echo "Debian packages built successfully."
+else
+  echo ".changes file not build, something is wrong!"
+  exit 1
+fi
