@@ -8,7 +8,7 @@ import numpy as np
 import austaltools.import_buildings as prog
 import austaltools._tools as _tools
 
-NAME = os.path.join('austaltools','command_line.py')
+CMD = ['python','-m','austaltools.command_line']
 SUBCMD = "import-buildings"
 
 logger = logging.getLogger()
@@ -45,13 +45,13 @@ def rot_bldg(build, angle):
 
 class TestCommandLine(unittest.TestCase):
     def test_no_param(self):
-        command = [NAME, SUBCMD]
+        command = CMD + [SUBCMD]
         out, err, exitcode = capture(command)
         assert exitcode == 1
         self.assertRegex(err.decode(), "not found")
 
     def test_help(self):
-        command = [NAME, SUBCMD, '-h']
+        command = CMD + [SUBCMD, '-h']
         out, err, exitcode = capture(command)
         self.assertEqual(exitcode, 0)
         self.assertRegex(out.decode(), "^usage")

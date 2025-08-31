@@ -2,8 +2,8 @@ import os.path
 import unittest
 import subprocess
 
-NAME = os.path.join('austaltools','command_line.py')
-CMD = 'weather'
+CMD = ['python','-m','austaltools.command_line']
+SUBCMD = 'weather'
 OUTPUT = 'test'
 EXTENSION = 'akterm'
 
@@ -33,19 +33,19 @@ def verify_akterm(path):
 
 class TestCommandLine(unittest.TestCase):
     def test_no_param(self):
-        command = [NAME, CMD]
+        command = CMD + [SUBCMD]
         out, err, exitcode = capture(command)
         assert exitcode != 0
         assert err.decode().startswith('usage')
 
     def test_help(self):
-        command = [NAME, CMD, '-h']
+        command = CMD + [SUBCMD, '-h']
         out, err, exitcode = capture(command)
         assert exitcode == 0
         assert out.decode().startswith('usage')
 
     def test_ll(self):
-        command = [NAME, CMD,
+        command = CMD + [SUBCMD,
                    '-L', '49.75', '6.75',
                    '-y', '2000',
                    OUTPUT]
@@ -59,7 +59,7 @@ class TestCommandLine(unittest.TestCase):
             os.remove(x)
 
     def test_gk(self):
-        command = [NAME, '-v', CMD,
+        command = CMD + ['-v', SUBCMD,
                    '-G', '3337932', '5515030',
                    '-y', '2000',
                    OUTPUT]
@@ -76,7 +76,7 @@ class TestCommandLine(unittest.TestCase):
 
 
     def test_ut(self):
-        command = [NAME, CMD,
+        command = CMD + [SUBCMD,
                    '-U', '337921', '5513264',
                    '-y', '2000',
                    OUTPUT]
@@ -90,7 +90,7 @@ class TestCommandLine(unittest.TestCase):
             os.remove(x)
 
     def test_mutex(self):
-        command = [NAME, CMD,
+        command = CMD + [SUBCMD,
                    '-L', '6.75', '49.75',
                    '-U', '337921', '5513264',
                    OUTPUT]
@@ -103,7 +103,7 @@ class TestCommandLine(unittest.TestCase):
             os.remove(x)
 
     def test_noyear(self):
-        command = [NAME, CMD,
+        command = CMD + [SUBCMD,
                    '-L', '6.75', '49.75',
                    OUTPUT]
         out, err, exitcode = capture(command)
@@ -114,7 +114,7 @@ class TestCommandLine(unittest.TestCase):
             os.remove(x)
 
     # def test_list_sources(self):
-    #     command = [NAME, CMD, '--source'
+    #     command = CMD + [SUBCMD, '--source'
     #                      '-action', 'list']
     #     out, err, exitcode = capture(command)
     #     assert exitcode == 0

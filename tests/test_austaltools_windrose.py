@@ -2,7 +2,7 @@ import os.path
 import unittest
 import subprocess
 
-NAME = os.path.join('austaltools','command_line.py')
+CMD = ['python','-m','austaltools.command_line']
 SUBCMD = 'windrose'
 def capture(command):
     proc = subprocess.Popen(command,
@@ -20,20 +20,20 @@ scales = ['beaufort', '2ms', 'quantile', 'stability', 'halfyear', 'season']
 
 class TestCommandLine(unittest.TestCase):
     def test_help(self):
-        command = [NAME, SUBCMD, '-h']
+        command = CMD + [SUBCMD, '-h']
         out, err, exitcode = capture(command)
         assert exitcode == 0
         assert out.decode().startswith('usage')
 
     def test_no_param(self):
-        command = [NAME, SUBCMD]
+        command = CMD + [SUBCMD]
         out, err, exitcode = capture(command)
         self.assertEqual(exitcode, 1)
         self.assertRegex(err.decode(), 'austal.txt or austal2000.txt not found')
 
     def test_file_default(self):
         for sc in scales:
-            command = [NAME, SUBCMD,
+            command = CMD + [SUBCMD,
                        '-w', 'tests/example.akterm', '-p', '-s', sc]
             out, err, exitcode = capture(command)
             self.assertEqual(exitcode, 0)
@@ -42,7 +42,7 @@ class TestCommandLine(unittest.TestCase):
 
     def test_file_star(self):
         for sc in scales:
-            command = [NAME, SUBCMD,
+            command = CMD + [SUBCMD,
                        '-k', 'star',
                        '-w', 'tests/example.akterm',
                        '-p', '-s', sc]

@@ -1215,18 +1215,20 @@ def read_z0(working_dir, conf=None):
 
 # -------------------------------------------------------------------------
 
-def read_heff(working_dir, conf=None):
+def read_heff(working_dir, conf=None, z0=None):
     """
     get effective anemometer height from
     z0 defined in austal.txt and the heights
     given in the akterm file (weather timeseries) given
     as parameter 'az'
 
-    :param working_dir: the working directoty of austal(2000),
+    :param working_dir: the working directory of austal(2000),
       where austal.txt resides
     :type working_dir: str
     :param conf: (optional) configuration file contents as dict
     :type conf: dict
+    :param z0: (optional) override z0 defined in austal.txt
+    :type z0: float
 
     :return: effective anemometer height
     :rtype: float
@@ -1242,12 +1244,17 @@ def read_heff(working_dir, conf=None):
     if 'az' in conf:
         az_file = conf['az'][0]
     else:
-        
         raise ValueError('no az defined, cannot read h_eff')
-    z0 = read_z0(working_dir, conf)
+    if z0:
+        # use supplied z0
+        z0 = float(z0)
+    else:
+        # default: get z= from austal.txt
+        z0 = read_z0(working_dir, conf)
+
     if z0 is None:
-        
         raise ValueError('no z0 defined, cannot read h_eff')
+    logger.debug(f"using z0={z0}")
     z0_class = find_z0_class(z0)
     az = readmet.akterm.DataFile(file=os.path.join(working_dir, az_file))
     heff = float(az.heights[z0_class])

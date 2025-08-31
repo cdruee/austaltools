@@ -2,7 +2,7 @@ import unittest
 import os
 import subprocess
 
-NAME = os.path.join('austaltools','command_line.py')
+CMD = ['python','-m','austaltools.command_line']
 COMMAND = 'fill-timeseries'
 
 
@@ -44,18 +44,18 @@ cycle01.so2:
 
 class TestCommandLine(unittest.TestCase):
     def test_no_param(self):
-        command = [NAME, COMMAND]
+        command = CMD + [COMMAND]
         out, err, exitcode = capture(command)
         assert exitcode == 2
 
     def test_help(self):
         # test help pop up on blank command
-        command = [NAME, COMMAND]
+        command = CMD + [COMMAND]
         out, err, exitcode = capture(command)
         assert exitcode == 2
         assert err.decode().startswith('usage')
         # test help wanted
-        command = [NAME, COMMAND,
+        command = CMD + [COMMAND,
                    '-h']
         out, err, exitcode = capture(command)
         assert exitcode == 0
@@ -64,11 +64,11 @@ class TestCommandLine(unittest.TestCase):
     def test_week5(self):
         make_zeitreihe()
         # other directory, missing options
-        command = [NAME, '-d', 'tests', COMMAND]
+        command = CMD + ['-d', 'tests', COMMAND]
         out, err, exitcode = capture(command)
         assert exitcode == 2
         # other directory, output only
-        command = [NAME, '-d', 'tests', COMMAND,
+        command = CMD + ['-d', 'tests', COMMAND,
                    '-w', '-o', '1.0']
         out, err, exitcode = capture(command)
         assert exitcode == 0
@@ -79,23 +79,23 @@ class TestCommandLine(unittest.TestCase):
         make_cycle('cycle.yaml')
         capture(['cat','tests/cycle.yaml'])
         # cycle file, implicit default name
-        command = [NAME, '-d', 'tests', COMMAND,
+        command = CMD + ['-d', 'tests', COMMAND,
                    '-c']
         out, err, exitcode = capture(command)
         assert exitcode == 0
         # cycle file, do not accept filename after -c
-        command = [NAME, '-d', 'tests', COMMAND,
+        command = CMD + ['-d', 'tests', COMMAND,
                    '-c', 'cycle.yaml']
         out, err, exitcode = capture(command)
         assert exitcode == 2
         # cycle file, explicit default name
-        command = [NAME, '-d', 'tests', COMMAND,
+        command = CMD + ['-d', 'tests', COMMAND,
                    '-c', '-f', 'cycle.yaml']
         out, err, exitcode = capture(command)
         assert exitcode == 0
         os.renames('tests/cycle.yaml', 'tests/abcde.yaml')
         # cycle file, non-default name
-        command = [NAME, '-d', 'tests', COMMAND,
+        command = CMD + ['-d', 'tests', COMMAND,
                    '-c', '-f', 'abcde.yaml']
         out, err, exitcode = capture(command)
         assert exitcode == 0
