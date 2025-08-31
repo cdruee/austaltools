@@ -41,18 +41,20 @@ DEFAULT_WIF_COLORMAP = 'plasma'
 
 # -------------------------------------------------------------------------
 
-def load_topo(topo_path: str) -> (list, list, np.ndarray):
+def load_topo(path: str, variable: str = '') -> (list, list, np.ndarray):
     """
     Get the AUSTAL model topography from the file `topo_path`
 
-    :param topo_path: file name of the topography file
-    :type topo_path: str
+    :param path: file name of the topography file
+    :type path: str
+    :param variable: variable name, defaults to empty string
+    :type variable: str
     :return: axes coordinates and topography grid
     :rtype: (list, list, np.ndarray)
     """
-    logger.info('reading topography from %s' % topo_path)
-    topofile = readmet.dmna.DataFile(topo_path)
-    topz = topofile.data[""]
+    logger.info('reading topography from %s' % path)
+    topofile = readmet.dmna.DataFile(path)
+    topz = topofile.data[variable]
     topx = topofile.axes(ax="x")
     topy = topofile.axes(ax="y")
     return topx, topy, topz
@@ -217,7 +219,7 @@ def main(args):
                   for x in sorted(list(set(file_info["wdir"])))]
     u_grid, v_grid, axes = _tools.read_wind(file_info, path=lib_dir,
                                      grid=grid, centers=True)
-    ha = _tools.read_heff(working_dir)
+    ha = _tools.read_heff(working_dir, conf=conf, z0=args.get('z0', None))
     xa = conf.get('xa', 0)
     ya = conf.get('ya', 0)
 
@@ -226,17 +228,22 @@ def main(args):
                                  u, v, xa, ya, ha, ak0)
     nx, ny, nz = u_field.shape
     # try to load topography
-    topo_path = os.path.join(args['working_dir'],
-                             "zg0%01d.dmna" % grid)
+    if grid == 0:
+        topo_path = os.path.join(args['working_dir'],
+                             "zg00.dmna" % grid)
+        topo_var = ""
+    else:
+        topo_path = os.path.join(args['working_dir'],
+                             "lib/zg%01d1.dmna" % grid)
+        topo_var = "zg"
     if os.path.exists(topo_path):
         logger.info('reading terrain from %s' % topo_path)
-        topo = topo_path
     else:
         if conf and "gh" in conf:
             logging.warning('file not found: %s' % topo_path)
-        topo = None
-    if topo:
-        topx, topy, topz = load_topo(topo_path)
+        topo_path = None
+    if topo_path:
+        topx, topy, topz = load_topo(topo_path, topo_var)
     else:
         logger.warning('no topography: assuming zero elevation')
         topz = np.full((nx, ny), 0.)
@@ -304,7 +311,7 @@ def main(args):
 
         # show topography
         #
-        if topo:
+        if topo_path:
             if args.get('shade', False):
                 ls = mco.LightSource(azdeg=315, altdeg=45)
                 ax.imshow(ls.hillshade(topz.T),
@@ -506,3 +513,14 @@ def add_options(subparsers):
                              'missing, the file name defaults to ' +
                              'the data file name with extension `png`'
                         )
+    pars_adv_wif = pars_wif.add_argument_group('advanced options')
+    pars_adv_wif.add_argument('--z0',
+                         dest='z0',
+                         default=None,
+                         help=f"roughness length at the position of the "
+                              f"measurement used for calculation of "
+                              f"the effective anemometer height. "
+                              f"Overrides the value provided by the "
+                              f"data source. Ignored if value is None. "
+                              f"[%(default)s]"
+                         )

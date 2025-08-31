@@ -3,7 +3,10 @@ import os
 import subprocess
 import unittest
 
-NAME = os.path.join('austaltools','austal_input.py')
+import sys
+sys.path.insert(0,',,')
+
+CMD = ['python','-m','austaltools.austal_input']
 SUBCMD = "buildings-geojson"
 
 logger = logging.getLogger()
@@ -23,13 +26,13 @@ def capture(command):
 
 class TestCommandLine(unittest.TestCase):
     def test_no_param(self):
-        command = [NAME, SUBCMD]
+        command = CMD + [SUBCMD]
         out, err, exitcode = capture(command)
         assert exitcode == 2
         self.assertRegex(err.decode(), "^usage")
 
     def test_help(self):
-        command = [NAME, SUBCMD, '-h']
+        command = CMD + [SUBCMD, '-h']
         out, err, exitcode = capture(command)
         self.assertEqual(exitcode, 0)
         self.assertRegex(out.decode(), "^usage")
@@ -43,7 +46,7 @@ class TestFuntionCall(unittest.TestCase):
             self.assertEqual(cm.exception, "Error")
 
     def test_help(self):
-        command = [NAME, SUBCMD, '-h']
+        command = CMD + [SUBCMD, '-h']
         out, err, exitcode = capture(command)
         self.assertEqual(exitcode, 0)
         self.assertRegex(out.decode(), "^usage")

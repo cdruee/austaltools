@@ -2,7 +2,7 @@ import os.path
 import unittest
 import subprocess
 
-NAME = os.path.join('austaltools','command_line.py')
+CMD = ['python','-m','austaltools.command_line']
 SUBCMD = "terrain"
 TESTFILE = 'temp.grid'
 
@@ -22,19 +22,19 @@ def verify_grid(path):
 
 class TestCommandLine(unittest.TestCase):
     def test_no_param(self):
-        command = [NAME, SUBCMD]
+        command = CMD + [SUBCMD]
         out, err, exitcode = capture(command)
         assert exitcode == 2
         assert err.decode().startswith('usage')
 
     def test_help(self):
-        command = [NAME, SUBCMD, '-h']
+        command = CMD + [SUBCMD, '-h']
         out, err, exitcode = capture(command)
         assert exitcode == 0
         assert out.decode().startswith('usage')
 
     def test_ll(self):
-        command = [NAME, SUBCMD,
+        command = CMD + [SUBCMD,
                    '-L', '49.75', '6.75',
                    TESTFILE.replace('.grid','')]
         out, err, exitcode = capture(command)
@@ -44,7 +44,7 @@ class TestCommandLine(unittest.TestCase):
         if os.path.exists(TESTFILE): os.remove(TESTFILE)
 
     def test_gk(self):
-        command = [NAME, SUBCMD,
+        command = CMD + [SUBCMD,
                    '-G', '3337932', '5515030',
                    TESTFILE.replace('.grid','')]
         out, err, exitcode = capture(command)
@@ -55,7 +55,7 @@ class TestCommandLine(unittest.TestCase):
 
 
     def test_ut(self):
-        command = [NAME, SUBCMD,
+        command = CMD + [SUBCMD,
                    '-U', '337921', '5513264',
                    TESTFILE.replace('.grid', '')]
         out, err, exitcode = capture(command)
@@ -65,7 +65,7 @@ class TestCommandLine(unittest.TestCase):
         if os.path.exists(TESTFILE): os.remove(TESTFILE)
 
     def test_mutex(self):
-        command = [NAME, SUBCMD,
+        command = CMD + [SUBCMD,
                    '-L', '49.75', '6.75',
                    '-U', '337921', '5513264',
                    TESTFILE.replace('.grid', '')]
