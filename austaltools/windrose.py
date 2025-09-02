@@ -173,9 +173,14 @@ def main(args):
         stacks = [hist[:,j] for j in range(nyy)]
         # default colors
         cmap = 'Set1' if cmap is None else cmap
+        # repeat last element before first avoid gap
+        # between 0° and the first step
+        xs = np.array([0, *xx[1:], 360.])
+        ss = [[stacks[-1][j], *stacks[:][j]] for j in range(nyy)]
         # plot
+        print (len(xs), len(ss), xs, ss)
         ax.stackplot(
-            np.deg2rad(xx), *stacks, step='pre',
+            np.deg2rad(xs), *ss, step='pre',
             colors=mpl.colormaps[cmap].colors,
             linestyle='-',
             edgecolor='black',

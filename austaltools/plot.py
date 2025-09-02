@@ -214,11 +214,16 @@ def main(args):
     elif args['plot'] == '__default__':
         args['plot'] = os.path.splitext(os.path.basename(infile_path))[0]
 
-    #scale = 10 ** (np.ceil(np.log10(np.percentile(datz, 97.5))))
-    scale = float('%.2g' % np.percentile(datz, 97.5))
-    # for all-zero fields or bad data, make a dummy scale
-    if scale <= 0.:
-        scale = 1.
+
+    if args.get('scale', None):
+        scale = float(args['scale'])
+    else:
+        # austoscale
+        # # scale = 10 ** (np.ceil(np.log10(np.percentile(datz, 97.5))))
+        scale = float('%.2g' % np.percentile(datz, 97.5))
+        # for all-zero fields or bad data, make a dummy scale
+        if scale <= 0.:
+            scale = 1.
     logging.debug('scale: %f' % scale)
     levels = np.array([10, 60, 120, 240, 360, 680, 1000]
                       ) / 1000 * scale
@@ -247,6 +252,15 @@ def add_options(subparsers):
                            'larder than `STDVs` times the standard ' +
                            'deviation caculated by austal. ' +
                            'If missing, `STDVs` defaults to 1.0.')
+
+    adv_plot = pars_plot.add_argument_group('advanced options')
+    adv_plot.add_argument('--scale',
+                      metavar="VALUE",
+                      nargs='?',
+                      default=None,
+                      help='Max value of the colour scale in '
+                           'plotted value units. '
+                           'Default is autoscale.')
 
     pars_plot = _tools.add_arguents_common_plot(pars_plot)
 
