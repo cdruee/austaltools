@@ -232,7 +232,7 @@ def main(args):
 def add_options(subparsers):
 
     pars_plot = subparsers.add_parser(
-        name=f'{__name__}',
+        name=f'plot',
         help='plot AUSTAL output data')
     pars_plot.add_argument(dest="file", metavar="DATA",
                       help="data file to plot."
