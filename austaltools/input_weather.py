@@ -836,10 +836,23 @@ def read_cerra_nc(ncfile, lat, lon):
     #  start time +03:00 is 3-h mean
     #  subtract +02:00-values from +03:00 values to get 1-h mean
     #  from +02:00 to +03:00, ...
-    epoch = pd.Timestamp(year=values['time'].min().year, month=1, day=1)
-    hours_total = [int((x - epoch) / pd.Timedelta('1 hour'))
-                   for x in values['time']]
-    hours_lead = np.array([(x - 1) % 3 + 1 for x in hours_total])
+    #
+    # Check if the series is tz-aware
+    tz = getattr(values['time'].dt, "tz", None)
+
+    if tz is not None:
+    # tz-aware: make epoch tz-aware with the same tz
+        epoch = pd.Timestamp(year=values['time'].min().year,
+                             month=1, day=1, tz=tz)
+    else:
+        # tz-naive: keep epoch tz-naive
+        epoch = pd.Timestamp(year=values['time'].min().year,
+                             month=1, day=1)
+    # Vectorized difference in hours
+    hours_total = ((values['time'] - epoch) /
+                   pd.Timedelta('1 hour')).astype(int)
+
+    hours_lead = ((hours_total - 1) % 3 + 1).to_numpy()
     for val in ['sshf', 'slhf', 'tisemf', 'tisnmf', 'tp']:
         values[val] = values[val].mask(
             cond=(hours_lead > 1),
