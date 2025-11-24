@@ -726,16 +726,27 @@ def read_cerra_nc(ncfile, lat, lon):
 
 
    """
-    _VAR_NEEDED = ['wdir10', 'si10', 'r2', 't2m', 'lcc',
+    _VAR_NEEDED = [['wdir10','10wdir'], ['si10', '10si'],
+                   ['r2', '2r'], ['t2m', '2t'], 'lcc',
                    'mcc', 'tisemf', 'tisnmf', 'slhf', 'sp',
                    'sr', 'sshf', 'tcc']
     _VAR_OPTIONAL = ['tp']
 
+    _VAR_LAT = ['latitude', 'lat']
+    _VAR_LON = ['longitude', 'lon']
+
+
     nc = netCDF4.Dataset(ncfile)
 
     for x in _VAR_NEEDED:
-        if x not in nc.variables:
-            raise ValueError('needed variable not in input data: %s' % x)
+        if isinstance(x, list):
+            if all([y not in nc.variables for y in x]):
+                raise ValueError('needed variable not in input data: '
+                                 '%s' % str(x))
+        else:
+            if x not in nc.variables:
+                raise ValueError('needed variable not in input data: '
+                                 '%s' % x)
     all_variables = _VAR_NEEDED
     for x in _VAR_OPTIONAL:
         if x not in nc.variables:
@@ -743,8 +754,25 @@ def read_cerra_nc(ncfile, lat, lon):
         else:
             all_variables.append(x)
 
-    dims = {'lat': nc['latitude'][:].data,
-            'lon': nc['longitude'][:].data}
+    for x in _VAR_LAT:
+        if x in nc.variables:
+            break
+    else:
+        raise ValueError('no known variable for latitude input data:'
+                                 '%s' % _VAR_LAT)
+    tal_nc = x
+    for x in _VAR_LON:
+        if x in nc.variables:
+            break
+    else:
+        raise ValueError('no known variable for longitude input data:'
+                                 '%s' % _VAR_LON)
+    lon_nc = x
+
+
+
+    dims = {'lat': nc[tal_nc][:].data,
+            'lon': nc[lon_nc][:].data}
     #
     # convert time
     logger.info('calculating time')
@@ -766,7 +794,18 @@ def read_cerra_nc(ncfile, lat, lon):
     # extract input values at positions
     pv = {}
     for val in _tools.progress(all_variables, 'extract variables'):
-        pv[val] = [nc[val][:, x, y].data for x, y, _ in positions]
+        if isinstance(val, list):
+            val_pv = val[0]
+            for x in val:
+                if x in nc.variables:
+                    break
+            else:
+                raise ValueError('none of the variable names in input '
+                                 'data: %s' % str(val))
+            val_nc = x
+        else:
+            val_pv = val_nc = val
+        pv[val_pv] = [nc[val_nc][:, x, y].data for x, y, _ in positions]
     # free memory
     nc.close()
     # decompose wind into vector components before interpolating
