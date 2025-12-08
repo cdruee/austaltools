@@ -39,7 +39,7 @@ def main(args):
     conf = _storage.read_config()
     simple_conf = conf.get('simple', {})
     w_source = simple_conf.get(
-        'weather', _storage.SIMPLE_DEFAULT_TERRAIN)
+        'weather', _storage.SIMPLE_DEFAULT_WEATHER)
     w_year = int(simple_conf.get(
         'year', _storage.SIMPLE_DEFAULT_YEAR))
     t_source = simple_conf.get(
