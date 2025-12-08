@@ -100,7 +100,7 @@ def main(args):
     with open(args['output'] + '.txt', 'w') as f:
         lat, lon = float(args['lat']), float(args['lon'])
         f.write('%s %s : Reference Position\n' % (lat, lon))
-        x, y, _ = _geo.ll2gk(lat, lon)
+        x, y = _geo.ll2gk(lat, lon)
         f.write('%.0f %.0f : Gauss-Krueger Coordinates\n' % (x, y))
 
         print('getting averaged surface roughness')
