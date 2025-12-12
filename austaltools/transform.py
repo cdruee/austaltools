@@ -76,6 +76,7 @@ def crs_bounds(crs):
     :rtype: list[float]
     """
     aou = crs.GetAreaOfUse()
+    logging.debug('getting bounds of CRS %s' % crs.GetName())
     return[aou.west_lon_degree, aou.south_lat_degree,
            aou.east_lon_degree, aou.north_lat_degree]
 
@@ -96,6 +97,8 @@ def in_bounds(lat, lon, crs):
     :rtype: bool
     """
     llur = crs_bounds(crs)
+    logging.debug('checking (%f, %f) inside bounds: %s' %
+                  (lat, lon, repr(llur)))
     return ((llur[0] <= lon <= llur[2]) and
             (llur[1] <= lat <= llur[3]))
 
@@ -177,13 +180,17 @@ def main(args):
         east, north = _geo.ll2ut(lat, lon)
 
 
-
+    decimals = args.get('decimals', False)
+    if decimals:
+        number_format = ' %-10.2f  %-10.2f'
+    else:
+        number_format = ' %-10.0f  %-10.0f'
     print("Latitude,   Longitude (WGS84):")
     print(" %-10.5f, %-10.5f " % (lat,lon))
     print("Rechtswert, Hochwert  (Gauss-Krüger Zone 3):")
-    print(" %-10.2f, %-10.2f " % (rechts, hoch))
+    print(number_format % (rechts, hoch))
     print("Easting,    Northing  (UTM Zone 32):")
-    print(" %-10.2f, %-10.2f " % (east, north))
+    print(number_format % (east, north))
     print("Rechtswert, Hochwert, Zone (Gauss-Krüger passende Zone):")
     crs = zone = None
     for k, v in GK_REFS.items():
@@ -195,7 +202,7 @@ def main(args):
     if crs:
         transform = osr.CoordinateTransformation(_geo.LL, crs)
         gx, gy, _ = transform.TransformPoint(lat, lon)
-        print(" %-10.2f, %-10.2f, %i " % (gx, gy, zone))
+        print((number_format + " %i") % (gx, gy, zone))
     else:
         print(" (position outside)")
 
@@ -231,4 +238,17 @@ def add_options(subparsers):
                               'coordinats x and y (relative '
                               'to the model origin) into '
                               'geographic coordinates.')
+
+    pars_transf.add_argument('-f', '--float',
+                             dest='decimals',
+                             action="store_true",
+                             default=False,
+                             help='Print UTM and Gauss-Krüger coordinates '
+                                  'as floating-point numbers with decimals '
+                                  'for more precision '
+                                  '(Note that using floating-point numbers'
+                                  'for the reference coordinates'
+                                  'will cause AUSTAL to crash).')
+
+
     return pars_transf
