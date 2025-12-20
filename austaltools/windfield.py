@@ -229,8 +229,7 @@ def main(args):
     nx, ny, nz = u_field.shape
     # try to load topography
     if grid == 0:
-        topo_path = os.path.join(args['working_dir'],
-                             "zg00.dmna" % grid)
+        topo_path = os.path.join(args['working_dir'], "zg00.dmna")
         topo_var = ""
     else:
         topo_path = os.path.join(args['working_dir'],
