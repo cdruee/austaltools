@@ -14,18 +14,11 @@ from importlib import resources
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from osgeo import gdal
 
-try:
-    from . import _datasets
-    from . import _geo
-    from . import _plotting
-    from . import _tools
-    from ._metadata import __title__
-except ImportError:
-    import _datasets
-    import _geo
-    import _plotting
-    import _tools
-    from _version import __title__
+from . import _datasets
+from . import _geo
+from . import _plotting
+from . import _tools
+from ._metadata import __title__
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)

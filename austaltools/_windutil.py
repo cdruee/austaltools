@@ -6,18 +6,11 @@ import pandas as pd
 if os.getenv('BUILDING_SPHINX', 'false') == 'false':
     import readmet
 
-try:
-    from ._metadata import __version__, __title__
-    from . import _corine
-    from . import _dispersion
-    from . import _geo
-    from . import _tools
-except ImportError:
-    from _version import __version__, __title__
-    import _corine
-    import _dispersion
-    import _geo
-    import _tools
+from ._metadata import __version__, __title__
+from . import _corine
+from . import _dispersion
+from . import _geo
+from . import _tools
 
 logger = logging.getLogger(__name__)
 

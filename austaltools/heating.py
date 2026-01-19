@@ -22,12 +22,8 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import yaml
     from tqdm import tqdm
 
-try:
-    from . import _plotting
-    from . import _tools
-except ImportError:
-    import _plotting
-    import _tools
+from . import _plotting
+from . import _tools
 
 # -------------------------------------------------------------------------
 
@@ -2391,7 +2387,7 @@ def add_options(subparsers):
                          help='import rooms and walls from spreadsheet '
                               'in .ods, .xls, or .xslx format and wirite '
                               'them in the heating file specified by '
-                              '`-f/--heating-file`. Overwites all rooms '
+                              '`-f/--heating-file`. Overwrites all rooms '
                               'and walls in the heating file. '
                               'The building name is `default` or must be '
                               'given by `-b/--building`.\n'

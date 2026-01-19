@@ -220,7 +220,7 @@ def query_corine_class(lat: float, lon: float) -> int:
             logger.debug('... CORINE class: ' + result)
         else:
             logger.error("looking up CORINE class online did not return "
-                        "one single feature: %" % str(features))
+                        "one single feature: %s" % str(features))
             result = 0
     return int(result)
 
@@ -244,6 +244,9 @@ def sample_points(xg: float, yg: float, h: float, fac: int = None) -> list:
     """
     if fac is None:
         fac = 10
+    # Edge case: if h is zero or very small, return only the center point
+    if h <= 0:
+        return [(xg, yg)]
     points = []
     for xm in np.arange(np.floor(-fac), np.ceil(fac + 1)) * h:
         for ym in np.arange(np.floor(-fac), np.ceil(fac + 1)) * h:

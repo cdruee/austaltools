@@ -11,15 +11,9 @@ import argparse
 import os
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    try:
-        from . import command_line
-    except ImportError:
-        import command_line
+    from . import command_line
 
-try:
-    from ._metadata import __version__, __title__
-except ImportError:
-    from _version import __version__, __title__
+from ._metadata import __version__, __title__
 
 
 logging.basicConfig()

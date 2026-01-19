@@ -22,22 +22,13 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 else:
     from ._mock import netCDF4
 
-try:
-    from ._metadata import __version__, __title__
-    from . import _corine
-    from . import _datasets
-    from . import _dispersion as dis
-    from . import _geo
-    from . import _storage
-    from . import _tools
-except ImportError:
-    from _version import __version__, __title__
-    import _corine
-    import _datasets
-    import _dispersion as dis
-    import _geo
-    import _storage
-    import _tools
+from ._metadata import __version__, __title__
+from . import _corine
+from . import _datasets
+from . import _dispersion as dis
+from . import _geo
+from . import _storage
+from . import _tools
 
 
 logging.basicConfig()

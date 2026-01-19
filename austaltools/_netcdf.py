@@ -13,12 +13,8 @@ else:
     from ._mock import netCDF4
 
 
-try:
-    from . import _storage
-    from . import _tools
-except ImportError:
-    import _storage
-    import _tools
+from . import _storage
+from . import _tools
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +78,6 @@ class VariableSkeleton():
     def ncattrs(self):
         """
         List the names of the variable attributes set in this instance
-
-        :param name: name of the attribute
-        :type name: str
-
-        :param value: value to set
-        :type value: Any
         """
         return list(self.ncattr.keys())
 

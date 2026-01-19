@@ -5,38 +5,21 @@ import logging
 import os
 import sys
 
-try:
-    from . import _tools
-    from ._metadata import __version__, __title__
-    from . import _storage
-    from . import import_buildings
-    from . import eap
-    from . import fill_timeseries
-    from . import heating
-    from . import input_terrain
-    from . import input_weather
-    from . import steepness
-    from . import simple
-    from . import transform
-    from . import plot
-    from . import windfield
-    from . import windrose
-except ImportError:
-    import _tools
-    from _version import __version__, __title__
-    import _storage
-    import import_buildings
-    import eap
-    import fill_timeseries
-    import heating
-    import input_terrain
-    import input_weather
-    import simple
-    import steepness
-    import transform
-    import plot
-    import windfield
-    import windrose
+from . import _tools
+from ._metadata import __version__, __title__
+from . import _storage
+from . import import_buildings
+from . import eap
+from . import fill_timeseries
+from . import heating
+from . import input_terrain
+from . import input_weather
+from . import steepness
+from . import simple
+from . import transform
+from . import plot
+from . import windfield
+from . import windrose
 
 # ----------------------------------------------------
 

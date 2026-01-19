@@ -17,16 +17,9 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
     import readmet
 
-try:
-    from . import _tools
-    from . import _plotting
-except ImportError:
-    import _tools
-    import _plotting
-try:
-    from ._metadata import __version__
-except ImportError:
-    from _version import __version__
+from . import _tools
+from . import _plotting
+from ._metadata import __version__
 
 logger = logging.getLogger(__name__)
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':

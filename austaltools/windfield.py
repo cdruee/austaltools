@@ -16,20 +16,12 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import readmet
     import meteolib
 
-try:
-    from . import _corine
-    from . import _dispersion
-    from . import _plotting
-    from . import _tools
-    from ._metadata import __version__
-    from . import _windutil
-except ImportError:
-    import _corine
-    import _dispersion
-    import _plotting
-    import _tools
-    from _version import __version__
-    import _windutil
+from . import _corine
+from . import _dispersion
+from . import _plotting
+from . import _tools
+from ._metadata import __version__
+from . import _windutil
 
 logger = logging.getLogger(__name__)
 

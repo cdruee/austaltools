@@ -29,16 +29,10 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
     import meteolib
 
-try:
-    from . import _dispersion
-    from . import _plotting
-    from . import _tools
-    from ._metadata import __version__
-except ImportError:
-    import _dispersion
-    import _plotting
-    import _tools
-    from _version import __version__
+from . import _dispersion
+from . import _plotting
+from . import _tools
+from ._metadata import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -1129,7 +1123,7 @@ def main(args):
     vdi = args.get('vdi', False)
     overwrite = args.get('overwrite', None)
     if args['reference'] == 'simple':
-        u_ref, v_ref = calc_ref(axes['z'], directions, overwite=overwrite)
+        u_ref, v_ref = calc_ref(axes['z'], directions, overwrite=overwrite)
     elif args['reference'] == 'file':
         u_ref, v_ref = read_ref('Ref1d.dat', axes['z'], directions,
                                 linear_interpolation=vdi)

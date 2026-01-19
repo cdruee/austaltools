@@ -17,15 +17,12 @@ import requests
 import numpy as np
 import pandas as pd
 
-try:
-    from . import _tools
-except ImportError:
-    import _tools
+from . import _tools
 
 logger = logging.getLogger(__name__)
 
 _PATH = "."
-"""operate in current working die by default"""
+"""operate in current working dir by default"""
 OLDEST = pd.to_datetime('1970-01-01', utc=True)
 """ remove observations before ...
 to avoid problems with odd observation timing in the very manual era) """

@@ -2,16 +2,9 @@ import glob
 import logging
 import os
 
-
-
-try:
-    from . import _storage
-    from . import _tools
-    from ._metadata import __version__
-except ImportError:
-    import _storage
-    import _tools
-    from _version import __version__
+from . import _storage
+from . import _tools
+from ._metadata import __version__
 
 logger = logging.getLogger(__name__)
 

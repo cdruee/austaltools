@@ -14,20 +14,12 @@ import os
 if os.getenv('BUILDING_SPHINX', 'false') == 'false':
     from osgeo import osr
 
-try:
-    from . import _datasets
-    from . import _geo
-    from . import _tools
-    from . import _plotting
-    from ._metadata import __version__
-    from . import _wmo_metadata
-except ImportError:
-    import _datasets
-    import _geo
-    import _tools
-    import _plotting
-    import _wmo_metadata
-    from _version import __version__
+from . import _datasets
+from . import _geo
+from . import _tools
+from . import _plotting
+from ._metadata import __version__
+from . import _wmo_metadata
 
 logger = logging.getLogger(__name__)
 
