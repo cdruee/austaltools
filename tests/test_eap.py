@@ -6,6 +6,7 @@ Comprehensive test suite for austaltools.eap module.
 This module tests the EAP (Ersatz-AnemometerPosition) functionality
 for finding substitute anemometer positions according to VDI 3783 Part 16.
 """
+import logging
 import os
 import subprocess
 import tempfile
@@ -61,6 +62,55 @@ class TestMain(unittest.TestCase):
         }
         command_line.main(args)
         mock_eap_main.assert_called_once_with(args)
+
+    def test_main_no_working_dir_raises(self):
+        """Test main raises when working_dir is None."""
+        args = {
+            'command': 'eap',
+            'working_dir': None,
+            'verb': None,
+            'temp_dir': None
+        }
+        with self.assertRaises(ValueError) as context:
+            command_line.main(args)
+        self.assertIn('PATH not given', str(context.exception))
+
+    @patch('austaltools.command_line._storage')
+    @patch('austaltools.command_line.eap.main')
+    def test_main_sets_temp_dir(self, mock_eap_main, mock_storage):
+        """Test main sets _storage.TEMP when temp_dir provided."""
+        args = {
+            'command': 'eap',
+            'working_dir': '/tmp',
+            'verb': None,
+            'temp_dir': '/custom/temp'
+        }
+        command_line.main(args)
+        self.assertEqual(mock_storage.TEMP, '/custom/temp')
+
+class TestPytestStyle:
+    """Pytest-style tests with parametrization."""
+
+    @pytest.mark.parametrize("subcommand", [
+        'eap',
+    ])
+    def test_subcommand_help_available(self, subcommand):
+        """Test help is available for all subcommands."""
+        command = CMD + [subcommand, '-h']
+        out, err, exitcode = capture(command)
+        assert exitcode == 0
+        assert 'usage' in out.decode().lower()
+
+    @pytest.mark.parametrize("verbosity_flag,expected_level", [
+        ('--debug', logging.DEBUG),
+        ('--verbose', logging.INFO),
+        ('-v', logging.INFO),
+    ])
+    def test_verbosity_flags(self, verbosity_flag, expected_level):
+        """Test verbosity flags set correct logging levels."""
+        parser = command_line.cli_parser()
+        args = parser.parse_args([verbosity_flag, 'eap'])
+        assert args.verb == expected_level
 
 
 class TestSameSenseRotation(unittest.TestCase):
@@ -294,7 +344,7 @@ class TestInterpolateWind(unittest.TestCase):
         """Test interpolation between input levels."""
         u_in = [10.0, 20.0]
         v_in = [5.0, 10.0]
-        z_in = [0.0, 100.0]
+        z_in = [10.0, 100.0]
         levels = [50.0]
 
         u_out, v_out = eap.interpolate_wind(u_in, v_in, z_in, levels)
@@ -307,7 +357,7 @@ class TestInterpolateWind(unittest.TestCase):
         """Test that mismatched input lengths raise ValueError."""
         u_in = [10.0, 15.0]
         v_in = [5.0, 8.0, 12.0]  # Different length
-        z_in = [0.0, 100.0]
+        z_in = [10.0, 100.0]
         levels = [50.0]
 
         with self.assertRaises(ValueError) as context:

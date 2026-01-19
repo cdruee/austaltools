@@ -488,11 +488,11 @@ def interpolate_wind(u_in: list, v_in: list, z_in: list, levels: list):
 
     :example:
 
-        >>> u_values = [10.0, 15.0, 20.0]
-        >>> v_values = [5.0, 8.0, 12.0]
-        >>> heights = [0.0, 100.0, 200.0]
-        >>> target_levels = [50.0, 150.0]
-        >>> interpolate_wind(u_values, v_values, heights, target_levels)
+        >>> u_in = [10.0, 15.0, 20.0]
+        >>> v_in = [5.0, 8.0, 12.0]
+        >>> z_in = [10.0, 100.0, 200.0]
+        >>> levels = [50.0, 150.0]
+        >>> interpolate_wind(u_in, v_in, z_in, levels)
         ([12.5, 17.5], [6.5, 10.0])
     """
     if not (len(u_in) == len(v_in) == len(z_in)):
