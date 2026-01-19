@@ -195,6 +195,7 @@ def check_homhogenity(file_list, timevar=None, fail=False):
 
                 if ref_dataset is None:
                     # Initialize reference data
+                    ref_dataset = fname
                     ref_dimensions = dimensions
                     ref_global_attrs = global_attrs
                     ref_variables = variables
@@ -267,6 +268,7 @@ def copy_values(src, dst,
         replacement = replace.get(sname, False)
         if replacement is None:
             logger.debug(f" ... skipping values {sname}")
+            continue
         if replacement is False:
             dname = sname
         elif isinstance(replacement, VariableSkeleton):

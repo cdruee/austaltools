@@ -83,8 +83,12 @@ def same_sense_rotation(val, ref):
     :param ref: (array of float) reference wind directions
     :returns bool: Sense ist the same
     """
-    val_diff = np.sign(np.diff(val % 360.))
-    ref_diff = np.sign(np.diff(ref % 360.))
+
+    def angdiff(ang: np.ndarray) -> np.ndarray:
+        return (np.diff(ang) + 180) % 360 - 180
+
+    val_diff = np.sign(angdiff(val))
+    ref_diff = np.sign(angdiff(ref))
     if all(ref_diff >= 0):
         sense = +1
     elif all(ref_diff <= 0):

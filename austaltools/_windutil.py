@@ -51,7 +51,7 @@ def load_weather(working_dir: str, conf: dict = None,
             az_file = file
     else:
         az_file = None
-        # dir name given: serach file
+        # dir name given: search file
         if conf is None:
             austxt = _tools.find_austxt(working_dir)
             conf = _tools.get_austxt(austxt)
@@ -70,7 +70,8 @@ def load_weather(working_dir: str, conf: dict = None,
         res['FF'] = zr['ua'].values
         res['DD'] = zr['ra'].values
         z0 = get_roughness_length(working_dir=working_dir, conf=conf)
-        res['KM'] = [_dispersion.KM2021.get_index(z0, x) for x in zr['ra']]
+        res['KM'] = [_dispersion.KM2021.get_index(z0, x)
+                     for x in zr['ra'].values]
     else:
         if az_file is None:
             # akterm file for AUSTAL
