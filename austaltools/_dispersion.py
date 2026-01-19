@@ -603,7 +603,8 @@ def vdi_3872_6_standard_wind(va: float | np.ndarray,
     :param z0p: (required,float) roughness lenght at the
         measurement site (:math:`z_0`) in m.
     """
-    va = np.array(va)
+    # Handle scalar vs array input for va
+    va_arr = np.atleast_1d(va)
     # hr = 100 m
     # For hap >100 m , the reference height h r should be
     # set to hap′.
@@ -618,7 +619,7 @@ def vdi_3872_6_standard_wind(va: float | np.ndarray,
     f_2 = np.log((ha - d0) / z0) / np.log((hr - d0) / z0)
     f = f_1 * f_2
 
-    v10 = np.array([np.round(f * x, 1) for x in va])
+    v10 = np.array([np.round(f * x, 1) for x in va_arr])
 
     return v10[()]  # Flatten 0d arrays to scalars
 
