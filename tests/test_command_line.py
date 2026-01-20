@@ -56,50 +56,50 @@ class TestCliParser(unittest.TestCase):
         """Test cli_parser includes working_dir argument."""
         parser = command_line.cli_parser()
         # Parse with a subcommand and check working_dir
-        args = parser.parse_args(['-d', '/custom/path', 'eap'])
+        args = parser.parse_args(['-d', '/custom/path', 'simple', '49.75', '6.65', 'Test'])
         self.assertEqual(args.working_dir, '/custom/path')
 
     def test_cli_parser_default_working_dir(self):
         """Test cli_parser has default working_dir."""
         parser = command_line.cli_parser()
-        args = parser.parse_args(['eap'])
+        args = parser.parse_args(['simple', '49.75', '6.65', 'Test'])
         self.assertIsNotNone(args.working_dir)
 
     def test_cli_parser_has_temp_dir(self):
         """Test cli_parser includes temp_dir argument."""
         parser = command_line.cli_parser()
-        args = parser.parse_args(['--temp-dir', '/tmp/custom', 'eap'])
+        args = parser.parse_args(['--temp-dir', '/tmp/custom', 'simple', '49.75', '6.65', 'Test'])
         self.assertEqual(args.temp_dir, '/tmp/custom')
 
     def test_cli_parser_temp_dir_default_none(self):
         """Test cli_parser temp_dir defaults to None."""
         parser = command_line.cli_parser()
-        args = parser.parse_args(['eap'])
+        args = parser.parse_args(['simple', '49.75', '6.65', 'Test'])
         self.assertIsNone(args.temp_dir)
 
     def test_cli_parser_verbosity_debug(self):
         """Test cli_parser accepts --debug."""
         parser = command_line.cli_parser()
-        args = parser.parse_args(['--debug', 'eap'])
+        args = parser.parse_args(['--debug', 'simple', '49.75', '6.65', 'Test'])
         self.assertEqual(args.verb, logging.DEBUG)
 
     def test_cli_parser_verbosity_verbose(self):
         """Test cli_parser accepts --verbose."""
         parser = command_line.cli_parser()
-        args = parser.parse_args(['--verbose', 'eap'])
+        args = parser.parse_args(['--verbose', 'simple', '49.75', '6.65', 'Test'])
         self.assertEqual(args.verb, logging.INFO)
 
     def test_cli_parser_verbosity_short(self):
         """Test cli_parser accepts -v for verbose."""
         parser = command_line.cli_parser()
-        args = parser.parse_args(['-v', 'eap'])
+        args = parser.parse_args(['-v', 'simple', '49.75', '6.65', 'Test'])
         self.assertEqual(args.verb, logging.INFO)
 
     def test_cli_parser_verbosity_mutual_exclusion(self):
         """Test --debug and --verbose are mutually exclusive."""
         parser = command_line.cli_parser()
         with self.assertRaises(SystemExit):
-            parser.parse_args(['--debug', '--verbose', 'eap'])
+            parser.parse_args(['--debug', '--verbose', 'simple', '49.75', '6.65', 'Test'])
 
     def test_cli_parser_requires_subcommand(self):
         """Test cli_parser requires a subcommand."""
@@ -116,7 +116,7 @@ class TestCliParser(unittest.TestCase):
 #         self.parser = command_line.cli_parser()
 #
 #     def test_has_eap_subcommand(self):
-#         """Test 'eap' subcommand is available."""
+#         """Test 'simple' subcommand is available."""
 #         args = self.parser.parse_args(['eap'])
 #         self.assertEqual(args.command, 'eap')
 #
@@ -127,7 +127,7 @@ class TestCliParser(unittest.TestCase):
 #
 #     def test_has_simple_subcommand(self):
 #         """Test 'simple' subcommand is available."""
-#         args = self.parser.parse_args(['simple'])
+#         args = self.parser.parse_args(['simple', '49.75', '6.65', 'Test'])
 #         self.assertEqual(args.command, 'simple')
 #
 #     def test_has_steepness_subcommand(self):
@@ -191,9 +191,9 @@ class TestCliParser(unittest.TestCase):
 #
 #     @patch('austaltools.command_line.eap.main')
 #     def test_main_calls_eap(self, mock_eap_main):
-#         """Test main dispatches to eap.main for 'eap' command."""
+#         """Test main dispatches to eap.main for 'simple' command."""
 #         args = {
-#             'command': 'eap',
+#             'command': 'simple',
 #             'working_dir': '/tmp',
 #             'verb': None,
 #             'temp_dir': None
@@ -252,7 +252,7 @@ class TestCliParser(unittest.TestCase):
 #     def test_main_no_working_dir_raises(self):
 #         """Test main raises when working_dir is None."""
 #         args = {
-#             'command': 'eap',
+#             'command': 'simple',
 #             'working_dir': None,
 #             'verb': None,
 #             'temp_dir': None
@@ -266,7 +266,7 @@ class TestCliParser(unittest.TestCase):
 #     def test_main_sets_temp_dir(self, mock_eap_main, mock_storage):
 #         """Test main sets _storage.TEMP when temp_dir provided."""
 #         args = {
-#             'command': 'eap',
+#             'command': 'simple',
 #             'working_dir': '/tmp',
 #             'verb': None,
 #             'temp_dir': '/custom/temp'
@@ -324,11 +324,11 @@ class TestCommandLineHelp(unittest.TestCase):
 
     def test_subcommand_help(self):
         """Test subcommand --help shows subcommand usage."""
-        command = CMD + ['eap', '--help']
+        command = CMD + ['simple', '--help']
         out, err, exitcode = capture(command)
         self.assertEqual(exitcode, 0)
         self.assertIn('usage', out.decode().lower())
-        self.assertIn('eap', out.decode().lower())
+        self.assertIn('simple', out.decode().lower())
 
 
 class TestCommandLineVerbosity(unittest.TestCase):
@@ -338,13 +338,13 @@ class TestCommandLineVerbosity(unittest.TestCase):
         """Test --debug affects logging level."""
         # This is tested indirectly via parsing
         parser = command_line.cli_parser()
-        args = parser.parse_args(['--debug', 'eap'])
+        args = parser.parse_args(['--debug', 'simple', '49.75', '6.65', 'Test'])
         self.assertEqual(args.verb, logging.DEBUG)
 
     def test_verbose_sets_logging(self):
         """Test --verbose affects logging level."""
         parser = command_line.cli_parser()
-        args = parser.parse_args(['--verbose', 'eap'])
+        args = parser.parse_args(['--verbose', 'simple', '49.75', '6.65', 'Test'])
         self.assertEqual(args.verb, logging.INFO)
 
 
@@ -354,7 +354,7 @@ class TestCommandLineVerbosity(unittest.TestCase):
 #     """Pytest-style tests with parametrization."""
 #
 #     @pytest.mark.parametrize("subcommand", [
-#         'eap', 'plot', 'simple', 'steepness', 'terrain',
+#         'simple', 'plot', 'simple', 'steepness', 'terrain',
 #         'transform', 'weather', 'windfield', 'windrose',
 #         'heating', 'import-buildings', 'bg', 'fill-timeseries', 'ft'
 #     ])
@@ -373,7 +373,7 @@ class TestCommandLineVerbosity(unittest.TestCase):
 #     def test_verbosity_flags(self, verbosity_flag, expected_level):
 #         """Test verbosity flags set correct logging levels."""
 #         parser = command_line.cli_parser()
-#         args = parser.parse_args([verbosity_flag, 'eap'])
+#         args = parser.parse_args([verbosity_flag, 'simple', '49.75', '6.65', 'Test'])
 #         assert args.verb == expected_level
 
 
