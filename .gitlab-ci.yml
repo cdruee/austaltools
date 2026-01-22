@@ -150,13 +150,13 @@ merge_github:
    - git push origin github
    - git push github github
    - git branch -avv
-   # then merge repo main branch into local working dir (github branch)
-   - git merge --squash origin/main -X theirs --allow-unrelated-histories 2>&1 | tee git.out
-   - git branch -avv
-   # if there was nothing new, exit graceful
-   - if grep -q "Already up to date" git.out ; then exit 0 ; else rm git.out; fi
-   # check if something is to commit (diff-index non-zero exit), commit if there is
-   - git diff-index --quiet --cached HEAD || git commit -a -m "Squash merge main into github"
+# then merge repo main branch into local working dir (github branch)
+   - |
+     git merge --squash origin/main -X theirs --allow-unrelated-histories 2>&1 | tee git.out || {
+       # Resolve any remaining conflicts by taking theirs (handles add/add conflicts)
+       git diff --name-only --diff-filter=U | xargs -r git checkout --theirs --
+       git add -A
+     }
    - git branch -avv
    # push working dir back into repo github branch
    - git push origin github
