@@ -40,6 +40,41 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     logging.getLogger('readmet.dmna').setLevel(logging.ERROR)
 # -------------------------------------------------------------------------
 
+# Constants
+KAPPA = meteolib.constants.kappa  # von Kármán constant
+F_C = 1.1e-4  # Coriolis parameter at mid-latitudes (rad/s)
+
+VDI_GEOSTROPIC_WIND = [1.6, 2.5, 7.8, 5.6, 4.2, 3.8]
+"""
+Geostrophic wind speed v_g for each stability class (Table 1, VDI 3783-8)
+Index 0: Class I (very stable), Index 5: Class V (very unstable)
+"""
+VDI_THETA_GRADIENT = [0.0080, 0.0057, 0.0032, 0.0012, 0.0003, 0.0000]
+"""
+Potential temperature vertical gradient for each stability class (Table 1)
+"""
+VDI_INVERSION_HEIGHT = [250, 250, 800, 800, 1100, 1100]
+"""
+Inversion heights after VDI 3783 Blatt 8 (2002) Tab.4
+"""
+
+# VDI_DFEAULT_ROUGHNESS = 0.02
+# value for LBM-DE landcover class 231 (Wiesen und Weiden)
+# as required by VDI 3783 Blatt 8 sect. 6.1
+VDI_DEFAULT_ROUGHNESS = 0.1
+"""
+Default roughness length for wind profile calculation.
+
+To be used instead of value for LBM-DE landcover class 231 
+(Wiesen und Weiden, as required by VDI 3783 Blatt 8 sect. 6.1)
+since 2023, according to UBA TEXTE 144/2023
+"Weiterentwicklung ausgewählter methodischer Grundlagen
+der Schornsteinhöhenbestimmung und der
+Ausbreitungsrechnung nach TA Luft"
+calculated values according to VDI 3783 Blatt 16 table 1
+"""
+
+
 # VDI 3783 part 8:
 N_CLASS = 6
 """number of stability classes"""
@@ -737,196 +772,140 @@ def austal_ref(workdir, levels, dirs, tmproot=None, overwrite=False):
 
 # -------------------------------------------------------------------------
 
-# def calc_ref(levels, dirs, overwrite=False):
-#     """
-#     calculate reference wind profile from diabatic wind profile
-#     after Monin-Obukhov
-#
-#     :param levels: desired levels to get reference winds for
-#     :param dirs: desired wind directions to get reference winds for
-#     :param overwrite: overwrite existing refence file
-#         (details see :py:func:`write_ref`)
-#     :type overwrite: bool|None
-#     :return: u-reference wind and v-reference wind,
-#       dimensions (#levels, #stability classes, #wind directions)
-#     :rtype: numpy.ndarray, numpy.ndarray
-#     """
-#     logger.debug("calculating wind reference profile")
-#     # z0 = 0.02 # value for LBM-DE landcover class 231 (Wiesen und Weiden)
-#     # as required by VDI 3783 Blatt 8 sect. 6.1
-#     z0 = 0.1  # to be used instead since 2023 according to UBA TEXTE 144/2023
-#     # "Weiterentwicklung ausgewählter methodischer Grundlagen
-#     #  der Schornsteinhöhenbestimmung und der
-#     #  Ausbreitungsrechnung nach TA Luft"
-#     # calculated values according to VDI 3783 Blatt 16 table 1
-#     #
-#     # \Theta_g = \frac{\partial \Theta}{\partial z}
-#     # in K/m
-#     # val_theta_g = [
-#     #     0.008,
-#     #     0.0057,
-#     #     0.0032,
-#     #     0.0012,
-#     #     0.0003,
-#     #     0.0000
-#     # ]
-#     # # v_g
-#     # in m/s
-#     val_v_g = [
-#         1.6,
-#         1.5,
-#         7.8,
-#         5.6,
-#         4.2,
-#         3.8
-#     ]
-#     # inversion heights after VDI 3783 Blatt 8 (2002) Tab.4
-#     val_z_i = [
-#         250,
-#         250,
-#         800,
-#         800,
-#         1100,
-#         1100
-#     ]
-#     # Obukhov-length
-#     l_obukhov = [_dispersion.KM2021.get_center(x, z0=z0)
-#             for x in range(N_CLASS)]
-#     # turning angle at inversion height after Van Ulden & Holtslag (1985)
-#     d_h = [
-#         35,
-#         35,
-#         15,
-#         0,
-#         0,
-#         0
-#     ]
-#
-#     # shape of reference wind profiles: (nz, nstab, ndir)
-#     u_ref = np.full((len(levels), N_CLASS, len(dirs)), np.nan)
-#     v_ref = np.full((len(levels), N_CLASS, len(dirs)), np.nan)
-#
-#     for istab in range(N_CLASS):
-#         # VDI 3783 Blatt 8 (2002)
-#         # Prandtl layer is 0.1 the inversion height z_i
-#         # Wind speed reaches 80% v_g at top of the Prandtl layer
-#         h_ref = val_z_i[istab] * 0.1
-#         ffref = val_v_g[istab] * 0.8
-#         ww = meteolib.wind.DiabaticWind(z0=z0,
-#                                         u=ffref,
-#                                         z=h_ref,
-#                                         zoL=h_ref / l_obukhov[istab])
-#         for idir, wdir in enumerate(dirs):
-#             d_20 = d_h[istab] * 1.58 * (
-#                         1. - np.exp(-1.0 * 20. / val_z_i[istab]))
-#             for iz, z in enumerate(levels):
-#                 if z < (ww.z0 + ww.d):
-#                     ff = 0
-#                 elif z > h_ref:
-#                     ff = ww.u(h_ref)
-#                 else:
-#                     ff = ww.u(z)
-#                 d_z = d_h[istab] * 1.58 * (
-#                             1. - np.exp(-1.0 * z / val_z_i[istab]))
-#                 dd = wdir - d_20 + d_z
-#                 logger.debug(str([istab, idir, z, ff, dd]))
-#                 (u_ref[iz, istab, idir],
-#                  v_ref[iz, istab, idir]
-#                  ) = meteolib.wind.dir2uv(ff, dd)
-#     write_ref("Ref1d.dat", levels, dirs, u_ref, v_ref,
-#               (levels, [x for x in range(N_CLASS)], dirs))
-#     return u_ref, v_ref
-#
+def calc_ref(levels: list[float], dirs: list[float],
+             z0: float|None = None,
+             overwrite : bool = False) -> (np.ndarray, np.ndarray):
+    """
+    calculate reference wind profile from diabatic wind profile
+    after Monin-Obukhov
+
+    :param levels: desired levels to get reference winds for
+    :param dirs: desired wind directions to get reference winds for
+    :param overwrite: overwrite existing refence file
+        (details see :py:func:`write_ref`)
+    :type overwrite: bool|None
+    :return: u-reference wind and v-reference wind,
+      dimensions (#levels, #stability classes, #wind directions)
+    :rtype: numpy.ndarray, numpy.ndarray
+    """
+    logger.debug("calculating wind reference profile")
+
+    if z0 is None:
+        z0 = VDI_DEFAULT_ROUGHNESS
+
+    # Obukhov-length
+    l_obukhov = [_dispersion.KM2021.get_center(x, z0=z0)
+            for x in range(N_CLASS)]
+    # turning angle at inversion height after Van Ulden & Holtslag (1985)
+    d_h = [ 35, 35, 15, 0, 0, 0]
+
+    # shape of reference wind profiles: (nz, nstab, ndir)
+    u_ref = np.full((len(levels), N_CLASS, len(dirs)), np.nan)
+    v_ref = np.full((len(levels), N_CLASS, len(dirs)), np.nan)
+
+    for istab in range(N_CLASS):
+        # VDI 3783 Blatt 8 (2002)
+        # Prandtl layer is 0.1 the inversion height z_i
+        # Wind speed reaches 80% v_g at top of the Prandtl layer
+        h_ref = VDI_INVERSION_HEIGHT[istab] * 0.1
+        ffref = VDI_GEOSTROPIC_WIND[istab] * 0.8
+        ww = meteolib.wind.DiabaticWind(z0=z0,
+                                        u=ffref,
+                                        z=h_ref,
+                                        zoL=h_ref / l_obukhov[istab])
+        for idir, wdir in enumerate(dirs):
+            d_20 = d_h[istab] * 1.58 * (
+                        1. - np.exp(-1.0 * 20. / VDI_INVERSION_HEIGHT[istab]))
+            for iz, z in enumerate(levels):
+                if z < (ww.z0 + ww.d):
+                    ff = 0
+                elif z > h_ref:
+                    ff = ww.u(h_ref)
+                else:
+                    ff = ww.u(z)
+                d_z = d_h[istab] * 1.58 * (
+                            1. - np.exp(-1.0 * z / VDI_INVERSION_HEIGHT[istab]))
+                dd = wdir - d_20 + d_z
+                logger.debug(str([istab, idir, z, ff, dd]))
+                (u_ref[iz, istab, idir],
+                 v_ref[iz, istab, idir]
+                 ) = meteolib.wind.dir2uv(ff, dd)
+    write_ref("Ref1d.dat", levels, dirs, u_ref, v_ref,
+              (levels, [x for x in range(N_CLASS)], dirs))
+    return u_ref, v_ref
+
 
 # -------------------------------------------------------------------------
+# -------------------------------------------------------------------------
 
-# def calc_vdi3783_8(levels, dirs, z0=Z0_DEFAULT, h_a=H_A_DEFAULT,
-#                    h_m=H_M_DEFAULT, overwrite=False):
-KAPPA = 0.4  # von Kármán constant
-F_C = 1.1e-4  # Coriolis parameter at mid-latitudes (rad/s)
-# Obukhov lengths for Klug-Manier classes (from TA Luft Table 17)
-# Class 1: very stable, Class 6: very unstable
-L_OBUKHOV = {
-    1: 10.,      # very stable
-    2: 35.,      # stable
-    3: 100.,     # slightly stable
-    4: 1e10,     # neutral (effectively infinite)
-    5: -100.,    # slightly unstable
-    6: -10.,     # very unstable
-}
-
-# Reference wind speed at reference height (m/s) for each stability class
-U_REF_10M = {
-    1: 1.5,
-    2: 2.5,
-    3: 4.0,
-    4: 3.5,
-    5: 2.5,
-    6: 2.0,
-}
-
-# Default parameters
-Z0_DEFAULT = 0.1  # roughness length (m)
-H_A_DEFAULT = 10.0  # anemometer/reference height (m)
-H_M_DEFAULT = 800.0  # mixing layer height (m)
-ALPHA_PARAM = 1.0  # parameter in h1 formula
-
-def calc_ref(levels, dirs, z0=Z0_DEFAULT, h_a=H_A_DEFAULT,
-                       h_m=H_M_DEFAULT, overwrite=False):
-
+def calc_vdi3783_8(levels, dirs, z0=None, h_a=None, h_m=None,
+                   overwrite=False):
     """
     Calculate reference wind profiles according to VDI 3783 Blatt 8.
 
-    Parameters
-    ----------
-    levels : array-like
+    :param levels:
         Heights above ground (m), non-zero, increasing
-    dirs : array-like
+    :type levels: array-like
+    :param dirs:
         Wind directions at reference height (degrees, meteorological convention)
-    z0 : float
-        Roughness length (m)
-    h_a : float
-        Reference/anemometer height (m)
-    h_m : float
-        Mixing layer height (m)
-    overwrite : bool
-        Whether to overwrite existing output file
+    :type dirs: array-like
+    :param z0:
+        Roughness length (m). Default 0.02 for LBM-DE class 231
+        "Wiesen und Weiden" (meadows and pastures).
+    :type z0: float|None, optional
+    :param h_a:
+        Reference/anemometer height (m). Default 10.0.
+    :type h_a: float|None, optional
+    :param h_m:
+        Mixing layer height (m). Default 800.0.
+    :type h_m: float|None, optional
+    :param overwrite:
+        Whether to overwrite existing output file. Default False.
+    :type overwrite: bool|None
 
     Returns
     -------
-    u_ref : ndarray
-        Eastward wind component, shape (nz, nstab, ndir)
-    v_ref : ndarray
-        Northward wind component, shape (nz, nstab, ndir)
+    :return u_ref, vref:
+        Eastward and Northward wind components, shape (nz, nstab, ndir)
+    :rtype u_ref, v_ref:  ndarray, ndarray
     """
+    # Set defaults
+    if z0 is None:
+        z0 = VDI_DEFAULT_ROUGHNESS
+    if h_a is None:
+        h_a = 10.0  # Anemometer height
+    if h_m is None:
+        h_m = 800.0  # Mixing layer height
+
     levels = np.asarray(levels, dtype=float)
     dirs = np.asarray(dirs, dtype=float)
 
     nz = len(levels)
-    nstab = N_CLASS
     ndir = len(dirs)
 
-    u_ref = np.zeros((nz, nstab, ndir))
-    v_ref = np.zeros((nz, nstab, ndir))
+    u_ref = np.zeros((nz, N_CLASS, ndir))
+    v_ref = np.zeros((nz, N_CLASS, ndir))
 
-    for istab in range(nstab):
-        stab_class = istab + 1  # 1-based stability class
-        L = L_OBUKHOV[stab_class]
-        ff_ref = U_REF_10M[stab_class]
+    # Get Obukhov lengths for all stability classes (depends on z0)
+    l_obukhov = [_dispersion.KM2021.get_center(x, z0=z0) for x in
+            range(N_CLASS)]
 
-        # Create diabatic wind profile object
+    for istab in range(N_CLASS):
+        L = l_obukhov[istab]
+        v_g = VDI_GEOSTROPIC_WIND[istab]
+
+        # Calculate u_star from geostrophic wind and stability
+        u_star = _calc_u_star_from_vg(v_g, z0, L, h_m)
+
+        # Create diabatic wind profile object with calculated u_star
         wind_profile = meteolib.wind.DiabaticWind(
-            u=ff_ref,
-            z=h_a,
+            u_star=u_star,
             z0=z0,
-            zoL=h_a/L
+            L=L
         )
 
-        # Get friction velocity
-        u_star = wind_profile.ust
-
         # Calculate layer interface height h1
-        h1 = _calc_h1(L, h_m, ALPHA_PARAM)
+        h1 = _calc_h1(L, h_m)
 
         # Calculate eddy diffusivity K at h1
         K = _calc_Km(h1, u_star, L, h_m)
@@ -943,8 +922,9 @@ def calc_ref(levels, dirs, z0=Z0_DEFAULT, h_a=H_A_DEFAULT,
 
                 if z <= h1:
                     # Lower layer: surface layer with linear direction turning
-                    ff_z = wind_profile.u(z)
-                    dd_z = dd_ref - np.rad2deg(a * (z - h_a))  # met convention
+                    ff_z = wind_profile.ff(z)
+                    dd_z = dd_ref - np.rad2deg(
+                        a * (z - h_a))  # met convention
                     dd_z = dd_z % 360
 
                     u, v = meteolib.wind.dir2uv(ff_z, dd_z)
@@ -964,11 +944,79 @@ def calc_ref(levels, dirs, z0=Z0_DEFAULT, h_a=H_A_DEFAULT,
     return u_ref, v_ref
 
 
-def _calc_h1(L, h_m, alpha):
+def _calc_u_star_from_vg(v_g, z0, L, h_m, alpha=None):
+    """
+    Calculate friction velocity u_star from geostrophic wind v_g.
+
+    Uses the resistance law for the planetary boundary layer.
+    Iterative solution since u_star appears on both sides.
+
+    Parameters
+    ----------
+    v_g : float
+        Geostrophic wind speed (m/s)
+    z0 : float
+        Roughness length (m)
+    L : float
+        Obukhov length (m)
+    h_m : float
+        Mixing layer height (m)
+    alpha : float, optional
+        Parameter in h1 formula. Default 1.0.
+
+    Returns
+    -------
+    u_star : float
+        Friction velocity (m/s)
+    """
+    if alpha is None:
+        alpha = 1.0
+
+    # Initial guess using neutral log-law at h_m
+    u_star = KAPPA * v_g / np.log(h_m / z0)
+
+    # Iterate to convergence
+    for _ in range(20):
+        # Calculate h1 and K for current u_star
+        h1 = _calc_h1(L, h_m, alpha)
+        K = _calc_Km(h1, u_star, L, h_m)
+
+        # Resistance law: use profile value at h_m as approximation to v_g
+        zeta = h_m / L if np.abs(L) < 1e9 else 0.0
+        psi_m = meteolib.wind.psi_m(zeta)
+
+        # Update u_star
+        u_star_new = KAPPA * v_g / (np.log(h_m / z0) - psi_m)
+
+        if np.abs(u_star_new - u_star) < 1e-6:
+            break
+        u_star = u_star_new
+
+    return u_star
+
+
+def _calc_h1(L, h_m, alpha=None):
     """
     Calculate layer interface height h1.
     Equation (A19)
+
+    Parameters
+    ----------
+    L : float
+        Obukhov length (m)
+    h_m : float
+        Mixing layer height (m)
+    alpha : float, optional
+        Parameter in h1 formula. Default 1.0.
+
+    Returns
+    -------
+    h1 : float
+        Layer interface height (m)
     """
+    if alpha is None:
+        alpha = 1.0
+
     if L >= 0:
         if L > 1e9:  # neutral
             return h_m / (12 * alpha)
@@ -981,18 +1029,29 @@ def _calc_h1(L, h_m, alpha):
 def _calc_Km(z, u_star, L, h_m):
     """
     Calculate eddy diffusivity Km at height z.
+    Equation (36) / (A20)
+
+    Parameters
+    ----------
+    z : float
+        Height (m)
+    u_star : float
+        Friction velocity (m/s)
+    L : float
+        Obukhov length (m)
+    h_m : float
+        Mixing layer height (m)
+
+    Returns
+    -------
+    Km : float
+        Eddy diffusivity (m²/s)
     """
-    # Get phi_m inverse from psi_m derivative relationship
-    if L >= 0:
-        if L > 1e9:  # neutral
-            phi_m_inv = 1.0
-        else:
-            phi_m_inv = 1.0 / (1 + 5 * z / L)
-    else:
-        phi_m_inv = (1 - 15 * z / L) ** 0.25
+    zeta = z / L if np.abs(L) < 1e9 else 0.0
+    phi_m = meteolib.wind.phi_m(zeta)
 
     z_eff = min(z, h_m)
-    Km = KAPPA * u_star * z_eff * phi_m_inv * (1 - z_eff / h_m)
+    Km = KAPPA * u_star * z_eff / phi_m * (1 - z_eff / h_m)
     Km = max(Km, 0.1)
 
     return Km
@@ -1002,15 +1061,39 @@ def _calc_ekman_layer(z, h1, wind_profile, L, dd_ref, a, h_a, A):
     """
     Calculate wind components in upper (Ekman) layer.
     Equations (A8)-(A17)
+
+    Parameters
+    ----------
+    z : float
+        Height (m)
+    h1 : float
+        Layer interface height (m)
+    wind_profile : meteolib.wind.DiabaticWind
+        Wind profile object
+    L : float
+        Obukhov length (m)
+    dd_ref : float
+        Reference wind direction at h_a (degrees, meteorological)
+    a : float
+        Direction gradient (rad/m)
+    h_a : float
+        Reference/anemometer height (m)
+    A : float
+        Ekman parameter (1/m)
+
+    Returns
+    -------
+    u, v : float
+        Wind components (m/s)
     """
     # Values at h1
-    u1_h1 = wind_profile.u(h1)
-    u_star = wind_profile.ust
+    u1_h1 = wind_profile.ff(h1)
+    u_star = wind_profile.u_star
 
     # Derivative du1/dz at h1 using phi_m (A7)
-    zeta = h1 / L if abs(L) < 1e9 else 0
-    phi_m = _phi_m(h1, L)
-    du1_dz_h1 = u_star * phi_m / (KAPPA * h1)
+    zeta_h1 = h1 / L if np.abs(L) < 1e9 else 0.0
+    phi_m_h1 = meteolib.wind.phi_m(zeta_h1)
+    du1_dz_h1 = u_star * phi_m_h1 / (KAPPA * h1)
 
     # Direction at h1 (meteorological convention)
     dd_h1 = dd_ref - np.rad2deg(a * (h1 - h_a))
@@ -1028,8 +1111,10 @@ def _calc_ekman_layer(z, h1, wind_profile, L, dd_ref, a, h_a, A):
     q = du1_dz_h1 * w_minus - a * u1_h1 * w_plus
 
     # Ekman spiral functions (A16, A17)
-    c_z = np.exp(-A * (z - h1)) * np.cos(A * (z - h1))
-    s_z = np.exp(-A * (z - h1)) * np.sin(A * (z - h1))
+    exp_decay = np.exp(-A * (z - h1))
+    A_dz = A * (z - h1)
+    c_z = exp_decay * np.cos(A_dz)
+    s_z = exp_decay * np.sin(A_dz)
 
     # Wind components (A8, A9)
     u = u1_h1 * c1 + 1 / (2 * A) * ((1 - c_z) * p + s_z * q)
@@ -1037,20 +1122,7 @@ def _calc_ekman_layer(z, h1, wind_profile, L, dd_ref, a, h_a, A):
 
     return u, v
 
-
-def _phi_m(z, L):
-    """
-    Stability function phi_m (derivative of psi_m).
-    Fallback if meteolib doesn't provide it.
-    """
-    if L >= 0:
-        if L > 1e9:  # neutral
-            return 1.0
-        else:
-            return 1 + 5 * z / L
-    else:
-        return (1 - 15 * z / L) ** (-0.25)
-
+# -------------------------------------------------------------------------
 # -------------------------------------------------------------------------
 
 def read_ref(file: str, levels: list[float], dirs: list[float],
@@ -1341,6 +1413,9 @@ def main(args):
     overwrite = args.get('overwrite', None)
     if args['reference'] == 'simple':
         u_ref, v_ref = calc_ref(axes['z'], directions, overwrite=overwrite)
+    elif args['reference'] == 'vdi':
+        u_ref, v_ref = calc_vdi3783_8(axes['z'], directions,
+                                overwrite=overwrite)
     elif args['reference'] == 'file':
         u_ref, v_ref = read_ref('Ref1d.dat', axes['z'], directions,
                                 linear_interpolation=vdi)
@@ -1461,11 +1536,11 @@ def add_options(subparsers):
                           help='show detailed results')
     pars_eap.add_argument('-r', '--reference',
                           default='austal',
-                          choices=['simple', 'file', 'austal'],
+                          choices=['vdi', 'simple', 'file', 'austal'],
                           help='choose kind of reference profile. '
                                '`simple` produces a log wind profile, '
                                '`file` reads reference profile from file. '
-                               'Defaults to `simple`')
+                               'Defaults to `vdi`')
     pars_eap.add_argument('-z', '--height',
                           metavar='METERS',
                           nargs='?',
