@@ -28,11 +28,11 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import pandas as pd
 
     import meteolib
+    import readmet
 
 from . import _dispersion
 from . import _plotting
 from . import _tools
-from ._metadata import __version__
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ KAPPA = meteolib.constants.kappa  # von Kármán constant
 F_C = 1.1e-4  # Coriolis parameter at mid-latitudes (rad/s)
 
 # VDI
-#VDI_GEOSTROPIC_WIND = [1.6, 2.5, 7.8, 5.6, 4.2, 3.8]
+# VDI_GEOSTROPIC_WIND = [1.6, 2.5, 7.8, 5.6, 4.2, 3.8]
 # AUSTAL
 VDI_GEOSTROPIC_WIND = [5.27, 7.08, 10.86, 5.49, 3.86, 3.78]
 """
@@ -81,7 +81,6 @@ der Schornsteinhöhenbestimmung und der
 Ausbreitungsrechnung nach TA Luft"
 calculated values according to VDI 3783 Blatt 16 table 1
 """
-
 
 # VDI 3783 part 8:
 N_CLASS = 6
@@ -780,9 +779,10 @@ def austal_ref(workdir, levels, dirs, tmproot=None, overwrite=False):
 
 # -------------------------------------------------------------------------
 
-def calc_ref(levels: list[float], dirs: list[float],
-             z0: float|None = None,
-             overwrite : bool = False) -> (np.ndarray, np.ndarray):
+def calc_ref_geostrophic(levels: list[float], dirs: list[float],
+                         z0: float | None = None,
+                         overwrite: bool = False) -> (np.ndarray,
+                                                      np.ndarray):
     """
     calculate reference wind profile from diabatic wind profile
     after Monin-Obukhov
@@ -796,57 +796,84 @@ def calc_ref(levels: list[float], dirs: list[float],
       dimensions (#levels, #stability classes, #wind directions)
     :rtype: numpy.ndarray, numpy.ndarray
     """
-    logger.debug("calculating wind reference profile")
+    logger.info("calculating general wind reference profile")
 
     if z0 is None:
         z0 = VDI_DEFAULT_ROUGHNESS
 
-    # Obukhov-length
-    l_obukhov = [_dispersion.KM2021.get_center(x, z0=z0)
-            for x in range(N_CLASS)]
-    # turning angle at inversion height after Van Ulden & Holtslag (1985)
-    d_h = [ 35, 35, 15, 0, 0, 0]
+    return calc_vdi3783_8(levels, dirs, z0=z0,
+                          u_a_classes=None,
+                          h_a_classes=None,
+                          overwrite=overwrite)
 
-    # shape of reference wind profiles: (nz, nstab, ndir)
-    u_ref = np.full((len(levels), N_CLASS, len(dirs)), np.nan)
-    v_ref = np.full((len(levels), N_CLASS, len(dirs)), np.nan)
 
-    for istab in range(N_CLASS):
-        # VDI 3783 Blatt 8 (2002)
-        # Prandtl layer is 0.1 the inversion height z_i
-        # Wind speed reaches 80% v_g at top of the Prandtl layer
-        h_ref = VDI_INVERSION_HEIGHT[istab] * 0.1
-        ffref = VDI_GEOSTROPIC_WIND[istab] * 0.8
-        ww = meteolib.wind.DiabaticWind(z0=z0,
-                                        u=ffref,
-                                        z=h_ref,
-                                        zoL=h_ref / l_obukhov[istab])
-        for idir, wdir in enumerate(dirs):
-            d_20 = d_h[istab] * 1.58 * (
-                        1. - np.exp(-1.0 * 20. / VDI_INVERSION_HEIGHT[istab]))
-            for iz, z in enumerate(levels):
-                if z < (ww.z0 + ww.d):
-                    ff = 0
-                elif z > h_ref:
-                    ff = ww.u(h_ref)
-                else:
-                    ff = ww.u(z)
-                d_z = d_h[istab] * 1.58 * (
-                            1. - np.exp(-1.0 * z / VDI_INVERSION_HEIGHT[istab]))
-                dd = wdir - d_20 + d_z
-                logger.debug(str([istab, idir, z, ff, dd]))
-                (u_ref[iz, istab, idir],
-                 v_ref[iz, istab, idir]
-                 ) = meteolib.wind.dir2uv(ff, dd)
-    write_ref("Ref1d.dat", levels, dirs, u_ref, v_ref,
-              (levels, [x for x in range(N_CLASS)], dirs))
-    return u_ref, v_ref
+def calc_ref_adapted(levels: list[float], dirs: list[float],
+                     working_dir: str | None = None,
+                     z0: float | None = None,
+                     overwrite: bool = False) -> (np.ndarray, np.ndarray):
+    logger.info("calculating adapted wind reference profile")
+
+    if z0 is None:
+        z0 = VDI_DEFAULT_ROUGHNESS
+    if working_dir is None:
+        working_dir = os.getcwd()
+
+    austxt = _tools.get_austxt()
+    azfile = austxt['az']
+    if isinstance(azfile, list):
+        azfile = azfile[0]
+    if 'az' in austxt:
+        try:
+            az = readmet.akterm.DataFile(os.path.join(working_dir,azfile))
+        except FileNotFoundError:
+            raise FileNotFoundError(f"In austal.txt the timeseries "
+                                    f"file (az) is defined but the "
+                                    f"file does not exists: "
+                                    f"{austxt['az']}")
+    else:
+        raise ValueError('adapted wind reference profile can only be'
+                         'calculated if a timeseries file (az) is defined'
+                         'in austal.txt')
+
+    ha = az.get_h_anemo(z0)
+    h_a_classes = [ha]*N_CLASS
+
+    u_a_classes = [np.nan]*N_CLASS
+    for i in range(N_CLASS):
+        u_a_classes[i] = np.nanmean(az.data['FF'][az.data['KM'] == i + 1])
+
+    logger.debug(f"class anemomtr heights: {h_a_classes}")
+    logger.debug(f"class mean wind speeds: {u_a_classes}")
+
+    # Ensure all classes have values:
+    nan_classes = [x == np.nan for x in u_a_classes]
+    if all(nan_classes):
+        raise ValueError("all wind data are invalid, cannot calculate"
+                         "adapted wind reference profile")
+    elif any(nan_classes):
+        factor = np.nanmean((u_a_classes/np.array(VDI_GEOSTROPIC_WIND)))
+        for i in range(N_CLASS):
+            if np.isnan(u_a_classes[i]):
+                u_a_classes[i] = factor * VDI_GEOSTROPIC_WIND[i]
+
+    logger.info(f"effective anemo height: {ha}")
+    pp = {_dispersion.KM2021.name(i + 1): u_a_classes[i]
+          for i in range(N_CLASS)}
+    logger.info(f"class mean wind speeds: {pp}")
+
+    return calc_vdi3783_8(levels, dirs, z0=z0,
+                          u_a_classes=u_a_classes,
+                          h_a_classes=h_a_classes,
+                          overwrite=overwrite)
 
 
 # -------------------------------------------------------------------------
 # -------------------------------------------------------------------------
 
-def calc_vdi3783_8(levels, dirs, z0=None, overwrite=False):
+def calc_vdi3783_8(levels: list, dirs: list, z0: float = None,
+                   u_a_classes: list[float] | None = None,
+                   h_a_classes: list[float] | None = None,
+                   overwrite: bool = False):
     """
     Calculate reference wind profiles according to VDI 3783 Blatt 8.
 
@@ -873,6 +900,10 @@ def calc_vdi3783_8(levels, dirs, z0=None, overwrite=False):
     # Set defaults
     if z0 is None:
         z0 = VDI_DEFAULT_ROUGHNESS
+    if u_a_classes is None:
+        u_a_classes = VDI_GEOSTROPIC_WIND
+    if h_a_classes is None:
+        h_a_classes = VDI_INVERSION_HEIGHT
 
     levels = np.asarray(levels, dtype=float)
     dirs = np.asarray(dirs, dtype=float)
@@ -885,29 +916,39 @@ def calc_vdi3783_8(levels, dirs, z0=None, overwrite=False):
 
     # Get Obukhov lengths for all stability classes (depends on z0)
     l_obukhov = [_dispersion.KM2021.get_center(x, z0=z0) for x in
-            range(N_CLASS)]
-
-    for i in range(6):
-        print(i, _dispersion.KM2021.name(i+1), l_obukhov[i])
+                 range(N_CLASS)]
 
     for istab in range(N_CLASS):
         L = l_obukhov[istab]
-        v_g = VDI_GEOSTROPIC_WIND[istab]
+        u_a = u_a_classes[istab]
+        h_a = h_a_classes[istab]
         h_m = VDI_INVERSION_HEIGHT[istab]
 
         # Calculate layer interface height h1
         h1 = _calc_h1(L, h_m)
 
-        # Calculate friction velocity and Ekman parameter
-        # from geostrophic wind
-        u_star, A, a = _calc_u_star_from_vg(h1, v_g, z0, L, h_m)
+        if h_a > h1:
+            # Calculate friction velocity and Ekman parameter
+            # from geostrophic wind
+            u_star, A, a = _calc_u_star_from_vg(h1, u_a, h_a, z0, L, h_m)
 
-        # Create diabatic wind profile object with calculated u_star
-        wind_profile = meteolib.wind.DiabaticWind(
-            ust=u_star,
-            z0=z0,
-            LOb=L
-        )
+            # Create diabatic wind profile object with calculated u_star
+            wind_profile = meteolib.wind.DiabaticWind(
+                ust=u_star,
+                z0=z0,
+                LOb=L
+            )
+        else:
+            wind_profile = meteolib.wind.DiabaticWind(
+                u=u_a,
+                z=h_a,
+                z0=z0,
+                LOb=L
+            )
+            u_star = wind_profile.ust
+            K = _calc_Km(h1, u_star, L, h_m)
+            A = np.sqrt(np.abs(F_C) / (2 * K))
+            a = -0.2 * A
 
         for idir in range(ndir):
             dd_ref = dirs[idir]
@@ -940,7 +981,7 @@ def calc_vdi3783_8(levels, dirs, z0=None, overwrite=False):
     return u_ref, v_ref
 
 
-def _calc_u_star_from_vg(h1, v_g, z0, L, h_m, alpha=None):
+def _calc_u_star_from_vg(h1, u_a, h_a, z0, L, h_m, alpha=None):
     """
     Calculate friction velocity u_star from geostrophic wind v_g.
     """
@@ -952,41 +993,53 @@ def _calc_u_star_from_vg(h1, v_g, z0, L, h_m, alpha=None):
     phi_m_h1 = meteolib.wind.phi_m(zeta_h1)
 
     # Initial guess
-    u_star = KAPPA * v_g / np.log(h_m / z0)
+    u_star = KAPPA * u_a / np.log(h_a / z0)
     A = None
     a = None
+    # assume wind at h_a aligned with u since
+    # we are only interested in wind velocity
+    alpha_a = 0
 
     for _ in range(20):
-        # u_1(h_1) from u_star via (A3)
-        u1_h1 = (u_star / KAPPA) * (np.log(h1 / z0) - psi_m_h1)
-
         # K, A, a from u_star
         K = _calc_Km(h1, u_star, L, h_m)
         A = np.sqrt(np.abs(F_C) / (2 * K))
         a = -0.2 * A
 
-        # du1/dz at h1
+        # Values at h1
+        u1_h1 = (u_star / KAPPA) * (np.log(h1 / z0) - psi_m_h1) # (A3)
         du1_dz_h1 = u_star * phi_m_h1 / (KAPPA * h1)
 
-        # Asymptotic wind (z → ∞)
-        c1, s1 = 1.0, 0.0
-        w_plus, w_minus = 1.0, 1.0
+        # Direction at h1
+        c1 = np.cos(alpha_a + a * (h1 - h_a))  # (A10)
+        s1 = np.sin(alpha_a + a * (h1 - h_a))  # (A11)
+
+        # Auxiliary quantities
+        w_plus = c1 + s1  # (A14)
+        w_minus = c1 - s1  # (A15)
 
         p = du1_dz_h1 * w_plus + a * u1_h1 * w_minus
         q = du1_dz_h1 * w_minus - a * u1_h1 * w_plus
 
-        u_inf = u1_h1 * c1 + p / (2 * A)
-        v_inf = u1_h1 * s1 - q / (2 * A)
-        vg_calc = np.sqrt(u_inf ** 2 + v_inf ** 2)
+        # Ekman spiral functions
+        c_z = np.exp(-A * (h_a - h1)) * np.cos(A * (h_a - h1))  # (A16)
+        s_z = np.exp(-A * (h_a - h1)) * np.sin(A * (h_a - h1))  # (A17)
+
+        # Wind components in upper layer
+        u_tilde = u1_h1 * c1 + 1 / (2 * A) * ((1 - c_z) * p + s_z * q)  # (A8)
+        v_tilde = u1_h1 * s1 + 1 / (2 * A) * ((c_z - 1) * q + s_z * p)  # (A9)
+
+        v_a_calc = np.sqrt(u_tilde ** 2 + v_tilde ** 2)
 
         # Update u_star
-        u_star_new = u_star * (v_g / vg_calc)
+        u_star_new = u_star * (u_a / v_a_calc)
 
         if np.abs(u_star_new - u_star) < 1e-6:
             break
         u_star = u_star_new
 
     return u_star, A, a
+
 
 def _calc_h1(L, h_m, alpha=None):
     """
@@ -1115,6 +1168,7 @@ def _calc_ekman_layer(z, h1, wind_profile, L, dd_ref, a, h_ref, A):
 
     return u, v
 
+
 # -------------------------------------------------------------------------
 # -------------------------------------------------------------------------
 
@@ -1209,7 +1263,7 @@ def write_ref(file: str, out_levels: list[float] | np.ndarray,
                   list[float] | np.ndarray,
                   list[float] | np.ndarray
               ],
-              overwrite:bool|None = None):
+              overwrite: bool | None = None):
     """
     Write a set of windprofiles (one for each stability calass and each
     wind direction) into a file in the format of the example file
@@ -1252,9 +1306,8 @@ def write_ref(file: str, out_levels: list[float] | np.ndarray,
                 logger.critical('aborting')
                 sys.exit(0)
         elif not overwrite:
-            
-            raise FileExistsError('file %s already exists'  % file)
 
+            raise FileExistsError('file %s already exists' % file)
 
     logger.debug("writing wind reference file")
     levels, stabs, dirs = axes_ref
@@ -1404,11 +1457,12 @@ def main(args):
     #
     vdi = args.get('vdi', False)
     overwrite = args.get('overwrite', None)
-    if args['reference'] == 'simple':
-        u_ref, v_ref = calc_ref(axes['z'], directions, overwrite=overwrite)
-    elif args['reference'] == 'vdi':
-        u_ref, v_ref = calc_vdi3783_8(axes['z'], directions,
-                                overwrite=overwrite)
+    if args['reference'] == 'general':
+        u_ref, v_ref = calc_ref_geostrophic(axes['z'], directions,
+                                            overwrite=overwrite)
+    elif args['reference'] == 'simple':
+        u_ref, v_ref = calc_ref_adapted(axes['z'], directions,
+                                        overwrite=overwrite)
     elif args['reference'] == 'file':
         u_ref, v_ref = read_ref('Ref1d.dat', axes['z'], directions,
                                 linear_interpolation=vdi)
@@ -1445,7 +1499,7 @@ def main(args):
         except (IOError, FileNotFoundError) as e:
             logger.error('cannot determine h_eff from configuration. '
                          'Use -z to give height manually.')
-            
+
             raise e
     else:
         wind_height = float(args['height'])
@@ -1462,10 +1516,13 @@ def main(args):
     # write to austal config
     #
     if args['austal']:
-        _tools.put_austxt(data={
-            'xa': [axes['x'][eaps[selected_level][0][0]]],
-            'ya': [axes['y'][eaps[selected_level][0][1]]]
-        })
+        _tools.put_austxt(
+            path=args['working_dir'] / "austal.txt",
+            data={
+                'xa': [axes['x'][eaps[selected_level][0][0]]],
+                'ya': [axes['y'][eaps[selected_level][0][1]]]
+            }
+        )
 
     #
     # create plot
@@ -1529,7 +1586,7 @@ def add_options(subparsers):
                           help='show detailed results')
     pars_eap.add_argument('-r', '--reference',
                           default='austal',
-                          choices=['vdi', 'simple', 'file', 'austal'],
+                          choices=['general', 'simple', 'file', 'austal'],
                           help='choose kind of reference profile. '
                                '`simple` produces a log wind profile, '
                                '`file` reads reference profile from file. '
