@@ -44,7 +44,10 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 KAPPA = meteolib.constants.kappa  # von Kármán constant
 F_C = 1.1e-4  # Coriolis parameter at mid-latitudes (rad/s)
 
-VDI_GEOSTROPIC_WIND = [1.6, 2.5, 7.8, 5.6, 4.2, 3.8]
+# VDI
+#VDI_GEOSTROPIC_WIND = [1.6, 2.5, 7.8, 5.6, 4.2, 3.8]
+# AUSTAL
+VDI_GEOSTROPIC_WIND = [5.27, 7.08, 10.86, 5.49, 3.86, 3.78]
 """
 Geostrophic wind speed v_g 
 for each stability class from VDI 3783 Blatt 16, Table 1.
@@ -732,7 +735,7 @@ def austal_ref(workdir, levels, dirs, tmproot=None, overwrite=False):
       (<number of `levels`>, <number of stabilty classes>,
       <number of `dirs`>)
     """
-    logger.debug("calculating refernce wind fields")
+    logger.debug("calculating reference wind fields")
     u_tmp, v_tmp, ax_tmp = run_austal(workdir, tmproot)
     z_tmp = ax_tmp['z']
     d_tmp = ax_tmp['dir']
@@ -843,8 +846,7 @@ def calc_ref(levels: list[float], dirs: list[float],
 # -------------------------------------------------------------------------
 # -------------------------------------------------------------------------
 
-def calc_vdi3783_8(levels, dirs, z0=None, h_a=None, h_m=None,
-                   overwrite=False):
+def calc_vdi3783_8(levels, dirs, z0=None, overwrite=False):
     """
     Calculate reference wind profiles according to VDI 3783 Blatt 8.
 
@@ -858,12 +860,6 @@ def calc_vdi3783_8(levels, dirs, z0=None, h_a=None, h_m=None,
         Roughness length (m). Default 0.02 for LBM-DE class 231
         "Wiesen und Weiden" (meadows and pastures).
     :type z0: float|None, optional
-    :param h_a:
-        Reference/anemometer height (m). Default 10.0.
-    :type h_a: float|None, optional
-    :param h_m:
-        Mixing layer height (m). Default 800.0.
-    :type h_m: float|None, optional
     :param overwrite:
         Whether to overwrite existing output file. Default False.
     :type overwrite: bool|None
@@ -902,36 +898,20 @@ def calc_vdi3783_8(levels, dirs, z0=None, h_a=None, h_m=None,
         # Calculate layer interface height h1
         h1 = _calc_h1(L, h_m)
 
-        # Calculate interface-height wind from geostrophic wind
-        _,_,u1,_ = _calc_u1_from_vg(v_g, z0, L, h_m, alpha=None)
+        # Calculate friction velocity and Ekman parameter
+        # from geostrophic wind
+        u_star, A, a = _calc_u_star_from_vg(h1, v_g, z0, L, h_m)
 
-        # # Calculate u_star from geostrophic wind and stability
-        # u_star = _calc_u_star_from_vg(v_g, z0, L, h_m)
-        #
-        # # Create diabatic wind profile object with calculated u_star
-        # wind_profile = meteolib.wind.DiabaticWind(
-        #     ust=u_star,
-        #     z0=z0,
-        #     LOb=L
-        # )
         # Create diabatic wind profile object with calculated u_star
         wind_profile = meteolib.wind.DiabaticWind(
-            u=u1,
+            ust=u_star,
             z0=z0,
-            z=h1,
             LOb=L
         )
-        u_star = wind_profile.ust
-
-        # Calculate eddy diffusivity K at h1
-        K = _calc_Km(h1, u_star, L, h_m)
-
-        # Calculate Ekman parameter A and direction gradient a (A18, A21)
-        A = np.sqrt(np.abs(F_C) / (2 * K))
-        a = -0.2 * A  # rad/m, negative = veering (CW with height in NH)
 
         for idir in range(ndir):
             dd_ref = dirs[idir]
+            h_ref = 0.  # apparently AUSTAL uses surface wind direction
 
             for iz in range(nz):
                 z = levels[iz]
@@ -940,14 +920,14 @@ def calc_vdi3783_8(levels, dirs, z0=None, h_a=None, h_m=None,
                     # Lower layer: surface layer with linear direction turning
                     ff_z = wind_profile.u(z)
                     dd_z = dd_ref - np.rad2deg(
-                        a * (z - h1))  # met convention
+                        a * (z - h_ref))  # met convention
                     dd_z = dd_z % 360
 
                     u, v = meteolib.wind.dir2uv(ff_z, dd_z)
                 else:
                     # Upper layer: Ekman solution
                     u, v = _calc_ekman_layer(
-                        z, h1, wind_profile, L, dd_ref, a, h1, A
+                        z, h1, wind_profile, L, dd_ref, a, h_ref, A
                     )
 
                 u_ref[iz, istab, idir] = u
@@ -960,131 +940,53 @@ def calc_vdi3783_8(levels, dirs, z0=None, h_a=None, h_m=None,
     return u_ref, v_ref
 
 
-def _calc_u1_from_vg(v_g, z0, L, h_m, alpha=None):
+def _calc_u_star_from_vg(h1, v_g, z0, L, h_m, alpha=None):
     """
-    Calculate wind speed u_1 at height h_1 from geostrophic wind v_g.
-
-    Uses iterative solution since h_1 depends on L, K depends on u_star,
-    and the Ekman layer solution connects u_1(h_1) to v_g.
-
-    According to VDI 3783-8, the geostrophic wind v_g is prescribed at
-    the mixing layer height h_m. We need to find u_1(h_1) such that
-    the two-layer profile reaches v_g at the top.
-
-    Parameters
-    ----------
-    v_g : float
-        Geostrophic wind speed (m/s) at mixing layer height
-    z0 : float
-        Roughness length (m)
-    L : float
-        Obukhov length (m)
-    h_m : float
-        Mixing layer height (m)
-    alpha : float, optional
-        Parameter in h1 formula. Default 1.0.
-
-    Returns
-    -------
-    u1_h1 : float
-        Wind speed at layer interface height h_1 (m/s)
-    u_star : float
-        Friction velocity (m/s)
-    h1 : float
-        Layer interface height (m)
-    A : float
-        Ekman parameter (1/m)
+    Calculate friction velocity u_star from geostrophic wind v_g.
     """
     if alpha is None:
         alpha = 1.0
 
-    # Calculate h1 (doesn't depend on u_star)
-    h1 = _calc_h1(L, h_m, alpha)
+    zeta_h1 = h1 / L if np.abs(L) < 1e9 else 0.0
+    psi_m_h1 = meteolib.wind.psi_m(zeta_h1)
+    phi_m_h1 = meteolib.wind.phi_m(zeta_h1)
 
-    # Initial guess: assume u_1(h_1) ≈ 0.5 * v_g
-    u1_h1 = 0.5 * v_g
+    # Initial guess
+    u_star = KAPPA * v_g / np.log(h_m / z0)
+    A = None
+    a = None
 
-    # Iterate to find u_1(h_1) such that wind reaches v_g at h_m
-    for _ in range(50):
-        # Calculate u_star from u_1(h_1) using the surface layer profile
-        # From (A3): u_1(z) = (u_star/κ) * [ln(z/z0) - ψ_m(z/L)]  for L < 0
-        #            u_1(z) = (u_star/κ) * ψ_0(z/L)                for L >= 0
-        zeta_h1 = h1 / L if np.abs(L) < 1e9 else 0.0
+    for _ in range(20):
+        # u_1(h_1) from u_star via (A3)
+        u1_h1 = (u_star / KAPPA) * (np.log(h1 / z0) - psi_m_h1)
 
-        if L < 0:
-            # Unstable: u_1 = (u*/κ) * [ln(h1/z0) - ψ_m(ζ)]
-            psi_m_h1 = meteolib.wind.psi_m(zeta_h1)
-            profile_factor = np.log(h1 / z0) - psi_m_h1
-        else:
-            # Stable/neutral: u_1 = (u*/κ) * ψ_0(ζ) where ψ_0 = ln(z/L) + 5(z-z0)/L
-            # But for practical purposes, use the standard form
-            psi_m_h1 = meteolib.wind.psi_m(zeta_h1)
-            profile_factor = np.log(h1 / z0) - psi_m_h1
-
-        u_star = u1_h1 * KAPPA / profile_factor
-
-        # Calculate K at h1
+        # K, A, a from u_star
         K = _calc_Km(h1, u_star, L, h_m)
-
-        # Calculate Ekman parameter A
         A = np.sqrt(np.abs(F_C) / (2 * K))
+        a = -0.2 * A
 
-        # Calculate wind speed at h_m using Ekman layer solution
-        # At z = h_m, c(z) and s(z) decay towards zero for large (h_m - h1)
-        # The geostrophic wind is approached as z → ∞
-        # From (A8), (A9): as z→∞, c(z)→0, s(z)→0
-        # ũ(∞) = u_1(h1)*c_1 + (1/(2A)) * p
-        # ṽ(∞) = u_1(h1)*s_1 + (1/(2A)) * (-q)  [note sign from (c(z)-1)→-1]
-
-        # For the magnitude at h_m (which should equal v_g):
-        # We need to evaluate the Ekman solution at z = h_m
-
-        # Get derivative du1/dz at h1
-        phi_m_h1 = meteolib.wind.phi_m(zeta_h1)
+        # du1/dz at h1
         du1_dz_h1 = u_star * phi_m_h1 / (KAPPA * h1)
 
-        # Direction gradient
-        a = -0.2 * A  # Northern hemisphere
-
-        # For this calculation, assume wind aligned with x-axis at h1
-        # (direction doesn't affect magnitude calculation)
-        # c_1 = cos(α_a + a(h1 - h_a)) ≈ 1, s_1 ≈ 0 for small turning
-        # Actually, we need to be more careful here.
-
-        # Simplified: assume small direction change, so |wind| ≈ u component
-        # w_+ = c_1 + s_1, w_- = c_1 - s_1
-        # For α ≈ 0: c_1 ≈ 1, s_1 ≈ 0, so w_+ ≈ 1, w_- ≈ 1
-
-        # p = du1/dz * w_+ + a * u1 * w_- ≈ du1/dz + a * u1
-        # q = du1/dz * w_- - a * u1 * w_+ ≈ du1/dz - a * u1
-
-        w_plus = 1.0  # simplified
-        w_minus = 1.0
+        # Asymptotic wind (z → ∞)
+        c1, s1 = 1.0, 0.0
+        w_plus, w_minus = 1.0, 1.0
 
         p = du1_dz_h1 * w_plus + a * u1_h1 * w_minus
         q = du1_dz_h1 * w_minus - a * u1_h1 * w_plus
 
-        # Ekman solution at z = h_m
-        dz = h_m - h1
-        exp_decay = np.exp(-A * dz)
-        c_hm = exp_decay * np.cos(A * dz)
-        s_hm = exp_decay * np.sin(A * dz)
+        u_inf = u1_h1 * c1 + p / (2 * A)
+        v_inf = u1_h1 * s1 - q / (2 * A)
+        vg_calc = np.sqrt(u_inf ** 2 + v_inf ** 2)
 
-        # Wind components at h_m (simplified, assuming α_h1 ≈ 0)
-        u_hm = u1_h1 + (1 / (2 * A)) * ((1 - c_hm) * p + s_hm * q)
-        v_hm = (1 / (2 * A)) * ((c_hm - 1) * q + s_hm * p)
+        # Update u_star
+        u_star_new = u_star * (v_g / vg_calc)
 
-        # Wind speed at h_m
-        ff_hm = np.sqrt(u_hm ** 2 + v_hm ** 2)
-
-        # Update u_1(h_1) to match v_g
-        u1_h1_new = u1_h1 * (v_g / ff_hm)
-
-        if np.abs(u1_h1_new - u1_h1) < 1e-6:
+        if np.abs(u_star_new - u_star) < 1e-6:
             break
-        u1_h1 = u1_h1_new
+        u_star = u_star_new
 
-    return u1_h1, u_star, h1, A
+    return u_star, A, a
 
 def _calc_h1(L, h_m, alpha=None):
     """
@@ -1148,7 +1050,7 @@ def _calc_Km(z, u_star, L, h_m):
     return Km
 
 
-def _calc_ekman_layer(z, h1, wind_profile, L, dd_ref, a, h_a, A):
+def _calc_ekman_layer(z, h1, wind_profile, L, dd_ref, a, h_ref, A):
     """
     Calculate wind components in upper (Ekman) layer.
     Equations (A8)-(A17)
@@ -1164,11 +1066,11 @@ def _calc_ekman_layer(z, h1, wind_profile, L, dd_ref, a, h_a, A):
     L : float
         Obukhov length (m)
     dd_ref : float
-        Reference wind direction at h_a (degrees, meteorological)
+        Reference wind direction at h_ref (degrees, meteorological)
     a : float
         Direction gradient (rad/m)
-    h_a : float
-        Reference/anemometer height (m)
+    h_ref : float
+        Reference height (m)
     A : float
         Ekman parameter (1/m)
 
@@ -1187,7 +1089,7 @@ def _calc_ekman_layer(z, h1, wind_profile, L, dd_ref, a, h_a, A):
     du1_dz_h1 = u_star * phi_m_h1 / (KAPPA * h1)
 
     # Direction at h1 (meteorological convention)
-    dd_h1 = dd_ref - np.rad2deg(a * (h1 - h_a))
+    dd_h1 = dd_ref - np.rad2deg(a * (h1 - h_ref))
     alpha_h1 = np.deg2rad(270 - dd_h1)  # convert to math angle
 
     c1 = np.cos(alpha_h1)
