@@ -46,19 +46,24 @@ F_C = 1.1e-4  # Coriolis parameter at mid-latitudes (rad/s)
 
 VDI_GEOSTROPIC_WIND = [1.6, 2.5, 7.8, 5.6, 4.2, 3.8]
 """
-Geostrophic wind speed v_g for each stability class (Table 1, VDI 3783-8)
+Geostrophic wind speed v_g 
+for each stability class from VDI 3783 Blatt 16, Table 1.
 Index 0: Class I (very stable), Index 5: Class V (very unstable)
 """
 VDI_THETA_GRADIENT = [0.0080, 0.0057, 0.0032, 0.0012, 0.0003, 0.0000]
 """
-Potential temperature vertical gradient for each stability class (Table 1)
+Potential temperature vertical gradient 
+for each stability class from VDI 3783 Blatt 16, Table 1.
+Index 0: Class I (very stable), Index 5: Class V (very unstable)
 """
 VDI_INVERSION_HEIGHT = [250, 250, 800, 800, 1100, 1100]
 """
-Inversion heights after VDI 3783 Blatt 8 (2002) Tab.4
+Inversion heights after 
+for each stability class from VDI 3783 Blatt 8 (2002) Table 4.
+Index 0: Class I (very stable), Index 5: Class V (very unstable)
 """
 
-# VDI_DFEAULT_ROUGHNESS = 0.02
+# VDI_DEFAULT_ROUGHNESS = 0.02
 # value for LBM-DE landcover class 231 (Wiesen und Weiden)
 # as required by VDI 3783 Blatt 8 sect. 6.1
 VDI_DEFAULT_ROUGHNESS = 0.1
@@ -872,10 +877,6 @@ def calc_vdi3783_8(levels, dirs, z0=None, h_a=None, h_m=None,
     # Set defaults
     if z0 is None:
         z0 = VDI_DEFAULT_ROUGHNESS
-    if h_a is None:
-        h_a = 10.0  # Anemometer height
-    if h_m is None:
-        h_m = 800.0  # Mixing layer height
 
     levels = np.asarray(levels, dtype=float)
     dirs = np.asarray(dirs, dtype=float)
@@ -890,22 +891,39 @@ def calc_vdi3783_8(levels, dirs, z0=None, h_a=None, h_m=None,
     l_obukhov = [_dispersion.KM2021.get_center(x, z0=z0) for x in
             range(N_CLASS)]
 
+    for i in range(6):
+        print(i, _dispersion.KM2021.name(i+1), l_obukhov[i])
+
     for istab in range(N_CLASS):
         L = l_obukhov[istab]
         v_g = VDI_GEOSTROPIC_WIND[istab]
-
-        # Calculate u_star from geostrophic wind and stability
-        u_star = _calc_u_star_from_vg(v_g, z0, L, h_m)
-
-        # Create diabatic wind profile object with calculated u_star
-        wind_profile = meteolib.wind.DiabaticWind(
-            u_star=u_star,
-            z0=z0,
-            L=L
-        )
+        h_m = VDI_INVERSION_HEIGHT[istab]
 
         # Calculate layer interface height h1
         h1 = _calc_h1(L, h_m)
+        u1 = _calc_u1_from_vg()
+
+        # Calculate interface-height wind from geostrophic wind
+
+
+        # # Calculate u_star from geostrophic wind and stability
+        # u_star = _calc_u_star_from_vg(v_g, z0, L, h_m)
+        #
+        # # Create diabatic wind profile object with calculated u_star
+        # wind_profile = meteolib.wind.DiabaticWind(
+        #     ust=u_star,
+        #     z0=z0,
+        #     LOb=L
+        # )
+        # Create diabatic wind profile object with calculated u_star
+        wind_profile = meteolib.wind.DiabaticWind(
+            u=u1,
+            z0=z0,
+            z=h1,
+            LOb=L
+        )
+        u_star = wind_profile.ust
+
 
         # Calculate eddy diffusivity K at h1
         K = _calc_Km(h1, u_star, L, h_m)
@@ -922,7 +940,7 @@ def calc_vdi3783_8(levels, dirs, z0=None, h_a=None, h_m=None,
 
                 if z <= h1:
                     # Lower layer: surface layer with linear direction turning
-                    ff_z = wind_profile.ff(z)
+                    ff_z = wind_profile.u(z)
                     dd_z = dd_ref - np.rad2deg(
                         a * (z - h_a))  # met convention
                     dd_z = dd_z % 360
@@ -1087,8 +1105,8 @@ def _calc_ekman_layer(z, h1, wind_profile, L, dd_ref, a, h_a, A):
         Wind components (m/s)
     """
     # Values at h1
-    u1_h1 = wind_profile.ff(h1)
-    u_star = wind_profile.u_star
+    u1_h1 = wind_profile.u(h1)
+    u_star = wind_profile.ust
 
     # Derivative du1/dz at h1 using phi_m (A7)
     zeta_h1 = h1 / L if np.abs(L) < 1e9 else 0.0
@@ -1458,7 +1476,7 @@ def main(args):
         wind_height = float(args['height'])
     dz_old = np.nanmax(axes['z'])
     selected_level = -1
-    for lvl in range(mx_lvl):
+    for lvl in range(mx_lvl + 1):
         dz = abs(axes['z'][lvl] - wind_height)
         if len(eaps[lvl]) > 0 and dz < dz_old:
             selected_level = lvl

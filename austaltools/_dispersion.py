@@ -46,10 +46,11 @@ class StabiltyClass:
         values of the Obukhov lenght for 1st, 2nd, 3rd, ... class
         Mutually exclusive with `bounds`.
     :type centers: list[tuple[list]]
-    :param inverted: False if the bounds or center values should
+    :param tabbed_values_inverted:
+        False if the bounds or center values should
         be taken as they are. True if values shoud be inverted
         i.e. :math:`1/x`. Defaults to False.
-    :type inverted: bool
+    :type tabbed_values_inverted: bool
     :param reverse_index: False if the numric class index is acsending.
         True if it is decending. Defaults to False.
     :type reverse_index:
@@ -66,7 +67,7 @@ class StabiltyClass:
 
     def __init__(self, bounds: list | tuple | None = None,
                  centers: list | tuple | None = None,
-                 inverted: bool = False,
+                 tabbed_values_inverted: bool = False,
                  reverse_index: bool = True,
                  names: list[str] | tuple[str] | None = None) -> None:
         if bounds is not None and centers is not None:
@@ -88,14 +89,14 @@ class StabiltyClass:
             if any([sorted(x[0]) != x[0] for x in bounds]):
                 raise ValueError('lists in bounds elements must ' +
                                  'be sorted by ascending z0')
-            if inverted:
+            if tabbed_values_inverted:
                 self._bounds = bounds
             else:
                 self._bounds = []
                 for b in bounds:
                     self._bounds.append([b[0], [1 / x for x in b[1]]])
             self.count = len(bounds) + 1
-            self._bounds = self._sort(self._bounds)
+            # self._bounds = self._sort(self._bounds)
             self._bounds2centers()
         elif centers is not None:
             if type(centers) not in [list, tuple]:
@@ -114,14 +115,14 @@ class StabiltyClass:
             if any([sorted(x[0]) != x[0] for x in centers]):
                 raise ValueError('lists in centers elements must ' +
                                  'be sorted by ascending z0')
-            if inverted:
+            if tabbed_values_inverted:
                 self._centers = centers
             else:
                 self._centers = []
                 for b in centers:
                     self._centers.append([b[0], [1 / x for x in b[1]]])
             self.count = len(centers)
-            self._centers = self._sort(self._centers)
+            # self._centers = self._sort(self._centers)
             self._centers2bounds()
         if names is not None:
             if not type(names) in [list, tuple]:
@@ -327,7 +328,7 @@ KM2021 = StabiltyClass(centers=[
     ([0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 1.00, 1.50, 2.00],
      [-6, -8, -11, -15, -20, -33, -52, -70, -89]),
 ],
-    inverted=False,
+    tabbed_values_inverted=False,
     reverse_index=True,
     names=['I', 'II', 'III1', 'III2', 'IV', 'V'])
 """
@@ -355,7 +356,7 @@ KM2002 = StabiltyClass(centers=[
     ([0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 1.00, 1.50, 2.00],
      [-4, -5, -7, -10, -14, -22, -34, -45, -56]),
 ],
-    inverted=False,
+    tabbed_values_inverted=False,
     reverse_index=True,
     names=['I', 'II', 'III1', 'III2', 'IV', 'V'])
 """
@@ -407,7 +408,7 @@ PG1972 = StabiltyClass(bounds=[
     ([0.005, 0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 2.00],
      [0.068, 0.058, 0.049, 0.039, 0.033, 0.028, 0.023, 0.006]),
 ],
-    inverted=True,
+    tabbed_values_inverted=True,
     reverse_index=False,
     names=['A', 'B', 'C', 'D', 'E', 'F', 'G'])
 """
