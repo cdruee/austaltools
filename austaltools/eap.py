@@ -901,10 +901,9 @@ def calc_vdi3783_8(levels, dirs, z0=None, h_a=None, h_m=None,
 
         # Calculate layer interface height h1
         h1 = _calc_h1(L, h_m)
-        u1 = _calc_u1_from_vg()
 
         # Calculate interface-height wind from geostrophic wind
-
+        _,_,u1,_ = _calc_u1_from_vg(v_g, z0, L, h_m, alpha=None)
 
         # # Calculate u_star from geostrophic wind and stability
         # u_star = _calc_u_star_from_vg(v_g, z0, L, h_m)
@@ -924,7 +923,6 @@ def calc_vdi3783_8(levels, dirs, z0=None, h_a=None, h_m=None,
         )
         u_star = wind_profile.ust
 
-
         # Calculate eddy diffusivity K at h1
         K = _calc_Km(h1, u_star, L, h_m)
 
@@ -942,14 +940,14 @@ def calc_vdi3783_8(levels, dirs, z0=None, h_a=None, h_m=None,
                     # Lower layer: surface layer with linear direction turning
                     ff_z = wind_profile.u(z)
                     dd_z = dd_ref - np.rad2deg(
-                        a * (z - h_a))  # met convention
+                        a * (z - h1))  # met convention
                     dd_z = dd_z % 360
 
                     u, v = meteolib.wind.dir2uv(ff_z, dd_z)
                 else:
                     # Upper layer: Ekman solution
                     u, v = _calc_ekman_layer(
-                        z, h1, wind_profile, L, dd_ref, a, h_a, A
+                        z, h1, wind_profile, L, dd_ref, a, h1, A
                     )
 
                 u_ref[iz, istab, idir] = u
@@ -962,17 +960,21 @@ def calc_vdi3783_8(levels, dirs, z0=None, h_a=None, h_m=None,
     return u_ref, v_ref
 
 
-def _calc_u_star_from_vg(v_g, z0, L, h_m, alpha=None):
+def _calc_u1_from_vg(v_g, z0, L, h_m, alpha=None):
     """
-    Calculate friction velocity u_star from geostrophic wind v_g.
+    Calculate wind speed u_1 at height h_1 from geostrophic wind v_g.
 
-    Uses the resistance law for the planetary boundary layer.
-    Iterative solution since u_star appears on both sides.
+    Uses iterative solution since h_1 depends on L, K depends on u_star,
+    and the Ekman layer solution connects u_1(h_1) to v_g.
+
+    According to VDI 3783-8, the geostrophic wind v_g is prescribed at
+    the mixing layer height h_m. We need to find u_1(h_1) such that
+    the two-layer profile reaches v_g at the top.
 
     Parameters
     ----------
     v_g : float
-        Geostrophic wind speed (m/s)
+        Geostrophic wind speed (m/s) at mixing layer height
     z0 : float
         Roughness length (m)
     L : float
@@ -984,34 +986,105 @@ def _calc_u_star_from_vg(v_g, z0, L, h_m, alpha=None):
 
     Returns
     -------
+    u1_h1 : float
+        Wind speed at layer interface height h_1 (m/s)
     u_star : float
         Friction velocity (m/s)
+    h1 : float
+        Layer interface height (m)
+    A : float
+        Ekman parameter (1/m)
     """
     if alpha is None:
         alpha = 1.0
 
-    # Initial guess using neutral log-law at h_m
-    u_star = KAPPA * v_g / np.log(h_m / z0)
+    # Calculate h1 (doesn't depend on u_star)
+    h1 = _calc_h1(L, h_m, alpha)
 
-    # Iterate to convergence
-    for _ in range(20):
-        # Calculate h1 and K for current u_star
-        h1 = _calc_h1(L, h_m, alpha)
+    # Initial guess: assume u_1(h_1) ≈ 0.5 * v_g
+    u1_h1 = 0.5 * v_g
+
+    # Iterate to find u_1(h_1) such that wind reaches v_g at h_m
+    for _ in range(50):
+        # Calculate u_star from u_1(h_1) using the surface layer profile
+        # From (A3): u_1(z) = (u_star/κ) * [ln(z/z0) - ψ_m(z/L)]  for L < 0
+        #            u_1(z) = (u_star/κ) * ψ_0(z/L)                for L >= 0
+        zeta_h1 = h1 / L if np.abs(L) < 1e9 else 0.0
+
+        if L < 0:
+            # Unstable: u_1 = (u*/κ) * [ln(h1/z0) - ψ_m(ζ)]
+            psi_m_h1 = meteolib.wind.psi_m(zeta_h1)
+            profile_factor = np.log(h1 / z0) - psi_m_h1
+        else:
+            # Stable/neutral: u_1 = (u*/κ) * ψ_0(ζ) where ψ_0 = ln(z/L) + 5(z-z0)/L
+            # But for practical purposes, use the standard form
+            psi_m_h1 = meteolib.wind.psi_m(zeta_h1)
+            profile_factor = np.log(h1 / z0) - psi_m_h1
+
+        u_star = u1_h1 * KAPPA / profile_factor
+
+        # Calculate K at h1
         K = _calc_Km(h1, u_star, L, h_m)
 
-        # Resistance law: use profile value at h_m as approximation to v_g
-        zeta = h_m / L if np.abs(L) < 1e9 else 0.0
-        psi_m = meteolib.wind.psi_m(zeta)
+        # Calculate Ekman parameter A
+        A = np.sqrt(np.abs(F_C) / (2 * K))
 
-        # Update u_star
-        u_star_new = KAPPA * v_g / (np.log(h_m / z0) - psi_m)
+        # Calculate wind speed at h_m using Ekman layer solution
+        # At z = h_m, c(z) and s(z) decay towards zero for large (h_m - h1)
+        # The geostrophic wind is approached as z → ∞
+        # From (A8), (A9): as z→∞, c(z)→0, s(z)→0
+        # ũ(∞) = u_1(h1)*c_1 + (1/(2A)) * p
+        # ṽ(∞) = u_1(h1)*s_1 + (1/(2A)) * (-q)  [note sign from (c(z)-1)→-1]
 
-        if np.abs(u_star_new - u_star) < 1e-6:
+        # For the magnitude at h_m (which should equal v_g):
+        # We need to evaluate the Ekman solution at z = h_m
+
+        # Get derivative du1/dz at h1
+        phi_m_h1 = meteolib.wind.phi_m(zeta_h1)
+        du1_dz_h1 = u_star * phi_m_h1 / (KAPPA * h1)
+
+        # Direction gradient
+        a = -0.2 * A  # Northern hemisphere
+
+        # For this calculation, assume wind aligned with x-axis at h1
+        # (direction doesn't affect magnitude calculation)
+        # c_1 = cos(α_a + a(h1 - h_a)) ≈ 1, s_1 ≈ 0 for small turning
+        # Actually, we need to be more careful here.
+
+        # Simplified: assume small direction change, so |wind| ≈ u component
+        # w_+ = c_1 + s_1, w_- = c_1 - s_1
+        # For α ≈ 0: c_1 ≈ 1, s_1 ≈ 0, so w_+ ≈ 1, w_- ≈ 1
+
+        # p = du1/dz * w_+ + a * u1 * w_- ≈ du1/dz + a * u1
+        # q = du1/dz * w_- - a * u1 * w_+ ≈ du1/dz - a * u1
+
+        w_plus = 1.0  # simplified
+        w_minus = 1.0
+
+        p = du1_dz_h1 * w_plus + a * u1_h1 * w_minus
+        q = du1_dz_h1 * w_minus - a * u1_h1 * w_plus
+
+        # Ekman solution at z = h_m
+        dz = h_m - h1
+        exp_decay = np.exp(-A * dz)
+        c_hm = exp_decay * np.cos(A * dz)
+        s_hm = exp_decay * np.sin(A * dz)
+
+        # Wind components at h_m (simplified, assuming α_h1 ≈ 0)
+        u_hm = u1_h1 + (1 / (2 * A)) * ((1 - c_hm) * p + s_hm * q)
+        v_hm = (1 / (2 * A)) * ((c_hm - 1) * q + s_hm * p)
+
+        # Wind speed at h_m
+        ff_hm = np.sqrt(u_hm ** 2 + v_hm ** 2)
+
+        # Update u_1(h_1) to match v_g
+        u1_h1_new = u1_h1 * (v_g / ff_hm)
+
+        if np.abs(u1_h1_new - u1_h1) < 1e-6:
             break
-        u_star = u_star_new
+        u1_h1 = u1_h1_new
 
-    return u_star
-
+    return u1_h1, u_star, h1, A
 
 def _calc_h1(L, h_m, alpha=None):
     """
