@@ -398,7 +398,7 @@ class TestModuleConstants(unittest.TestCase):
 
     def test_z0_reference_value(self):
         """Test Z0_REFERENCE constant."""
-        self.assertEqual(eap.Z0_REFERENCE, 0.0100)
+        self.assertEqual(eap.AUSTAL_ROUGHNESS, 0.0100)
 
 
 class TestAddOptions(unittest.TestCase):
