@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Welcome to austaltools documentation! &#8212; Unknown 2.8.26 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/nature.css?v=279e0f84" />
+    <script src="_static/documentation_options.js?v=19584997"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Installation" href="install.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="install.html" title="Installation"
+             accesskey="N">next</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">Unknown 2.8.26 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Welcome to austaltools documentation!</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="welcome-to-austaltools-documentation">
+<h1>Welcome to austaltools documentation!<a class="headerlink" href="#welcome-to-austaltools-documentation" title="Link to this heading">¶</a></h1>
+<p>This documentation is currently being built up.
+Please do not expect it to be complete.</p>
+</section>
+<section id="general">
+<h1>General<a class="headerlink" href="#general" title="Link to this heading">¶</a></h1>
+<p>This module contains tools for use with Langrangian dispersion model
+AUSTAL (AUSbreitungsmodell nach TA Luft)</p>
+<section id="installation">
+<h2>Installation:<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h2>
+<p>Austaltools can be installed by</p>
+<blockquote>
+<div><p>pip install austaltools</p>
+</div></blockquote>
+<p>in principle. For more detailed instructions, see <a class="reference internal" href="install.html"><span class="doc">Installation</span></a></p>
+</section>
+<section id="command-line-scripts">
+<h2>Command-line scripts:<a class="headerlink" href="#command-line-scripts" title="Link to this heading">¶</a></h2>
+<p>The module contains the following scripts</p>
+<dl>
+<dt><a class="reference internal" href="austaltools.html"><span class="doc">austaltools</span></a></dt><dd><p>The main comand that provides all user-facing functionality.</p>
+<p>Additional, more detailed user guides:</p>
+<dl class="simple">
+<dt><a class="reference internal" href="fill-timeseries.html"><span class="doc">austaltools fill-timeseries</span></a></dt><dd><p>explains the Syntax of the cycle file <code class="docutils literal notranslate"><span class="pre">cycle.yaml</span></code></p>
+</dd>
+<dt><a class="reference internal" href="heating.html"><span class="doc">austaltools heating</span></a></dt><dd><p>explains the Syntax of the cycle file <code class="docutils literal notranslate"><span class="pre">heating.yaml</span></code></p>
+</dd>
+</dl>
+</dd>
+<dt><a class="reference internal" href="configure-austaltools.html"><span class="doc">configure-austaltools</span></a></dt><dd><p>Download dataset for use with austaltools (or assemble them from the original sources)</p>
+</dd>
+<dt><a class="reference internal" href="#austal-input">austal-input</a></dt><dd><p>Convenience command for easy creation of AUSTAL input data</p>
+</dd>
+</dl>
+</section>
+<section id="licenses">
+<h2>Licenses<a class="headerlink" href="#licenses" title="Link to this heading">¶</a></h2>
+<p>This package is licensed under the EUROPEAN UNION PUBLIC LICENCE v. 1.2.
+See <cite>LICENSE</cite> for the license text or navugate to <a class="reference external" href="https://eupl.eu/1.2/en/">https://eupl.eu/1.2/en/</a></p>
+<p>The topography data that can be downloaded are licensed by the original providers
+under various other licenses:</p>
+<table class="docutils align-default">
+<thead>
+<tr class="row-odd"><th class="head"><p>code</p></th>
+<th class="head"><p>license</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>GLO-30</p></td>
+<td><p>Licence for Copernicus DEM instance COP-DEM-GLO-30-F Global 30m Full, Free &amp; Open</p></td>
+</tr>
+<tr class="row-odd"><td><p>GTOPO30</p></td>
+<td><p>Creative Commons Attribution 4.0 International License.</p></td>
+</tr>
+<tr class="row-even"><td><p>DGM25-RP</p></td>
+<td><p>Datenlizenz Deutschland – Namensnennung – Version 2.0</p></td>
+</tr>
+<tr class="row-odd"><td><p>DGM10-BB
+DGM10-BE
+DGM10-BW
+DGM10-RP
+DGM10-SL
+DGM10-SN
+DGM10-ST
+DGM10-TH</p></td>
+<td><p>Datenlizenz Deutschland – Namensnennung – Version 2.0</p></td>
+</tr>
+<tr class="row-even"><td><p>DGM10-BY
+DGM10-HB
+DGM10-MV
+DGM10-NI
+DGM10-SH</p></td>
+<td><p>Creative Commons Attribution 4.0 International License.</p></td>
+</tr>
+<tr class="row-odd"><td><p>DGM10-HE</p></td>
+<td><p>Public domain (no explicit licencse)</p></td>
+</tr>
+<tr class="row-even"><td><p>DGM10-HH</p></td>
+<td><p>Creative Commons zero 1.0</p></td>
+</tr>
+<tr class="row-odd"><td><p>DGM10-NW</p></td>
+<td><p>Datenlizenz Deutschland – Zero – Version 2.0</p></td>
+</tr>
+</tbody>
+</table>
+<p>See files containing <cite>LICENSE.*</cite> for the individual licence texts.</p>
+</section>
+</section>
+<section id="provide-input-for-austal-or-austal2000">
+<h1>Provide input for AUSTAL (or AUSTAL2000)<a class="headerlink" href="#provide-input-for-austal-or-austal2000" title="Link to this heading">¶</a></h1>
+<section id="austal-input">
+<h2>austal-input<a class="headerlink" href="#austal-input" title="Link to this heading">¶</a></h2>
+<p>This is the most simple way to create input data for AUSTAL.
+For example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">austal</span><span class="o">-</span><span class="nb">input</span> <span class="mf">49.75</span> <span class="mf">6.75</span> <span class="n">Kundelbach</span>
+</pre></div>
+</div>
+<p>will produce the files <code class="docutils literal notranslate"><span class="pre">Kundelbach.gird</span></code> and  <code class="docutils literal notranslate"><span class="pre">Kundelbach.akterm</span></code>.
+It calls <code class="docutils literal notranslate"><span class="pre">austal-weather</span></code> and <code class="docutils literal notranslate"><span class="pre">austal-terrain</span></code> internally,
+selcting standard options (year 2000, default sources).</p>
+<p>Its full command-line options are as the following:</p>
+<p><p>Convenience command to produce AUSTAL input</p>
+</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">usage</span><span class="p">:</span> <span class="n">austal</span><span class="o">-</span><span class="nb">input</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">version</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">debug</span> <span class="o">|</span> <span class="o">-</span><span class="n">v</span><span class="p">]</span> <span class="n">LAT</span> <span class="n">LON</span> <span class="n">NAME</span>
+</pre></div>
+</div>
+<section id="austaltools.austal_input-cli_parser-positional-arguments">
+<h3>Positional Arguments<a class="headerlink" href="#austaltools.austal_input-cli_parser-positional-arguments" title="Link to this heading">¶</a></h3>
+<dl class="option-list">
+<dt><kbd>LAT</kbd></dt>
+<dd><p>Center position latitude</p>
+</dd>
+<dt><kbd>LON</kbd></dt>
+<dd><p>Center position longitude</p>
+</dd>
+<dt><kbd>NAME</kbd></dt>
+<dd><p>Stem for file names.</p>
+</dd>
+</dl>
+</section>
+<section id="austaltools.austal_input-cli_parser-named-arguments">
+<h3>Named Arguments<a class="headerlink" href="#austaltools.austal_input-cli_parser-named-arguments" title="Link to this heading">¶</a></h3>
+<dl class="option-list">
+<dt><kbd>--version</kbd></dt>
+<dd><p>show program’s version number and exit</p>
+</dd>
+<dt><kbd>--debug</kbd></dt>
+<dd><p>show informative output</p>
+</dd>
+<dt><kbd>-v, --verbose</kbd></dt>
+<dd><p>show detailed output</p>
+</dd>
+</dl>
+</section>
+</section>
+</section>
+<section id="detailed-info">
+<h1>Detailed info<a class="headerlink" href="#detailed-info" title="Link to this heading">¶</a></h1>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="install.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_commands.html">commands</a></li>
+<li class="toctree-l1"><a class="reference internal" href="api_internal.html">internal modules</a></li>
+<li class="toctree-l1"><a class="reference internal" href="references.html">References</a></li>
+</ul>
+</div>
+</section>
+<section id="indices-and-tables">
+<h1>Indices and tables<a class="headerlink" href="#indices-and-tables" title="Link to this heading">¶</a></h1>
+<ul class="simple">
+<li><p><a class="reference internal" href="genindex.html"><span class="std std-ref">Index</span></a></p></li>
+<li><p><a class="reference internal" href="py-modindex.html"><span class="std std-ref">Module Index</span></a></p></li>
+<li><p><a class="reference internal" href="search.html"><span class="std std-ref">Search Page</span></a></p></li>
+</ul>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="#">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Welcome to austaltools documentation!</a></li>
+<li><a class="reference internal" href="#general">General</a><ul>
+<li><a class="reference internal" href="#installation">Installation:</a></li>
+<li><a class="reference internal" href="#command-line-scripts">Command-line scripts:</a></li>
+<li><a class="reference internal" href="#licenses">Licenses</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#provide-input-for-austal-or-austal2000">Provide input for AUSTAL (or AUSTAL2000)</a><ul>
+<li><a class="reference internal" href="#austal-input">austal-input</a><ul>
+<li><a class="reference internal" href="#austaltools.austal_input-cli_parser-positional-arguments">Positional Arguments</a></li>
+<li><a class="reference internal" href="#austaltools.austal_input-cli_parser-named-arguments">Named Arguments</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#detailed-info">Detailed info</a></li>
+<li><a class="reference internal" href="#indices-and-tables">Indices and tables</a></li>
+</ul>
+
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="install.html"
+                          title="next chapter">Installation</a></p>
+  </div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="install.html" title="Installation"
+             >next</a> |</li>
+        <li class="nav-item nav-item-0"><a href="#">Unknown 2.8.26 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Welcome to austaltools documentation!</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright (C) 2022-2026 Clemens Drüe.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.0.
+    </div>
+  </body>
+</html>

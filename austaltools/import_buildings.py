@@ -16,17 +16,9 @@ import austaltools._geo
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
 
-try:
-    from . import _tools
-    from . import _plotting
-except ImportError:
-    import _tools
-    import _plotting
-
-try:
-    from ._metadata import __version__
-except ImportError:
-    from _version import __version__
+from . import _tools
+from . import _plotting
+from ._metadata import __version__
 
 logging.basicConfig()
 logger = logging.getLogger()

@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>austaltools heating &#8212; Unknown 2.8.26 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/nature.css?v=279e0f84" />
+    <script src="_static/documentation_options.js?v=19584997"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Unknown 2.8.26 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">austaltools heating</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="austaltools-heating">
+<h1>austaltools heating<a class="headerlink" href="#austaltools-heating" title="Link to this heading">¶</a></h1>
+<section id="heating-description-file-heating-yaml">
+<h2>heating description file <code class="docutils literal notranslate"><span class="pre">heating.yaml</span></code><a class="headerlink" href="#heating-description-file-heating-yaml" title="Link to this heading">¶</a></h2>
+<p><strong>The basic structure:</strong></p>
+<p>The top tag is <code class="docutils literal notranslate"><span class="pre">buildings</span></code>. Below this, there is a named list
+of one or multiple buildings. The keys are the user-given building names;
+the names must be unique and not contain spaces.</p>
+<p>Each builting must contain an associative array containing the tags
+<code class="docutils literal notranslate"><span class="pre">hvac</span></code>, <code class="docutils literal notranslate"><span class="pre">room</span></code>, and <code class="docutils literal notranslate"><span class="pre">walls</span></code>.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">buildings</span><span class="p">:</span>
+  <span class="n">mybuilding</span><span class="p">:</span>
+    <span class="n">hvac</span><span class="p">:</span>
+      <span class="o">...</span>
+    <span class="n">rooms</span><span class="p">:</span>
+      <span class="o">...</span>
+    <span class="n">walls</span><span class="p">:</span>
+      <span class="o">...</span>
+
+  <span class="mi">2</span><span class="n">ndbuilding</span><span class="p">:</span>
+    <span class="n">t_out</span><span class="p">:</span> <span class="mf">0.</span>
+    <span class="n">t_soil</span><span class="p">:</span> <span class="mf">9.</span>
+    <span class="n">hvac</span><span class="p">:</span>
+      <span class="o">...</span>
+    <span class="n">rooms</span><span class="p">:</span>
+      <span class="o">...</span>
+    <span class="n">walls</span><span class="p">:</span>
+      <span class="o">...</span>
+</pre></div>
+</div>
+<dl class="simple">
+<dt>Optionally, for each building</dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">t_out</span></code> (number) the initial air temperature in °C,</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">t_soil</span></code> (number) the initial soil temperature in °C</p></li>
+</ul>
+</dd>
+</dl>
+<p>may be given. If not given, the starting values are intialized
+as <code class="xref py py-class docutils literal notranslate"><span class="pre">numpy.nan</span></code></p>
+<p><strong>hvac (Heating, Ventilation and Airconditioning Control):</strong></p>
+<p>Contains an associative array containing the tags
+<code class="docutils literal notranslate"><span class="pre">modes</span></code>, and <code class="docutils literal notranslate"><span class="pre">timers</span></code>. Both must contain at least one entry.</p>
+<dl>
+<dt><code class="docutils literal notranslate"><span class="pre">modes</span></code> is a named list of one or multiple heating settings.</dt><dd><p>The keys are the user-given names of the modes;
+the names must be unique and not contain spaces.
+Each entry in <code class="docutils literal notranslate"><span class="pre">modes</span></code> contains an associative
+array containing the tags:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">roomtemp</span></code> (optional) ist the room target temperature in °C.
+If missing, the room temperature is not limited
+(i.e. the heating always operates at constant power)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">throttle</span></code> (optional) is the available fraction in %
+of the maximum heating power installed in a room.
+If missing, 100% is assumed
+(i.e. the heating uses the full installed power)</p></li>
+</ul>
+</div></blockquote>
+<p>Both tags may contain either one number
+<strong>or</strong> an associtative list. In the latter case, the keys of this list
+are the names of the rooms defined in the section <code class="docutils literal notranslate"><span class="pre">rooms</span></code>.
+One, multiple or all names may be missing, if the list contains the
+key (i.e. pseudo room name) <code class="docutils literal notranslate"><span class="pre">_default</span></code>.
+This value is applied to all rooms not listed explicitly.</p>
+</dd>
+<dt><code class="docutils literal notranslate"><span class="pre">timers</span></code> is a named list of one or multiple timer configuration.</dt><dd><p>The keys are the user-given names of the timers;
+the names must be unique and not contain spaces.
+Each entry in <code class="docutils literal notranslate"><span class="pre">timers</span></code> contains an associative
+array containing the tags:</p>
+<blockquote>
+<div><ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">start</span></code> (optional, string) is the first date,
+on which the timer is applied. The format ist <code class="docutils literal notranslate"><span class="pre">mm-dd</span></code>,
+where <code class="docutils literal notranslate"><span class="pre">mm</span></code> is the thwo-digit month and
+<code class="docutils literal notranslate"><span class="pre">dd</span></code> the two-digit day of month.</p>
+<p><code class="docutils literal notranslate"><span class="pre">start</span></code> is <strong>required</strong>, if more than one timer is defined.</p>
+</li>
+<li><p><code class="docutils literal notranslate"><span class="pre">switch</span></code> (required) is the list of switching times.
+Each list entry must contain the tags:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">mode</span></code> (required, string) is the name of the mode -
+defined under <code class="docutils literal notranslate"><span class="pre">modes</span></code> - that is activated at this time.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">hhmm</span></code> (required, string) the time at which the mode
+is to be activated. The format ist <code class="docutils literal notranslate"><span class="pre">hhmm</span></code>,
+where <code class="docutils literal notranslate"><span class="pre">hh</span></code> is the thwo-digit hour and
+<code class="docutils literal notranslate"><span class="pre">mm</span></code> the two-digit minute.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">week</span></code> (optional, string) a string representig the weekdays
+that indicates, on which days of week the item is applied.
+<code class="docutils literal notranslate"><span class="pre">mtwtfss</span></code> indicates it is applied on all week days.
+Each day replaced by a minus (<code class="docutils literal notranslate"><span class="pre">-</span></code>) the item is deactivated.
+For example <code class="docutils literal notranslate"><span class="pre">mtwtf--</span></code> signalys “only Monday to Friday” or
+<code class="docutils literal notranslate"><span class="pre">-----ss</span></code> is “Weekend only”.</p></li>
+</ul>
+</div></blockquote>
+</li>
+</ul>
+</div></blockquote>
+</dd>
+</dl>
+<p>example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">buildings</span><span class="p">:</span>
+  <span class="n">mybuilding</span><span class="p">:</span>
+    <span class="n">hvac</span><span class="p">:</span>
+      <span class="n">modes</span><span class="p">:</span>
+        <span class="n">high</span><span class="p">:</span>
+          <span class="n">roomtemp</span><span class="p">:</span>
+            <span class="n">bathroom</span><span class="p">:</span> <span class="mi">24</span>
+            <span class="n">_default</span><span class="p">:</span> <span class="mi">20</span>
+          <span class="n">throttle</span><span class="p">:</span> <span class="mi">100</span>
+        <span class="n">low</span><span class="p">:</span>
+          <span class="n">roomtemp</span><span class="p">:</span> <span class="mi">15</span>
+          <span class="n">throttle</span><span class="p">:</span> <span class="mi">25</span>
+      <span class="n">timers</span><span class="p">:</span>
+        <span class="n">winter</span><span class="p">:</span>
+          <span class="n">start</span><span class="p">:</span> <span class="mi">10</span><span class="o">-</span><span class="mi">01</span>
+          <span class="n">switch</span><span class="p">:</span>
+            <span class="o">-</span> <span class="n">mode</span><span class="p">:</span> <span class="n">high</span>
+              <span class="n">hhmm</span><span class="p">:</span> <span class="mi">0900</span>
+            <span class="o">-</span> <span class="n">mode</span><span class="p">:</span> <span class="n">low</span>
+              <span class="n">hhmm</span><span class="p">:</span> <span class="mi">1800</span>
+        <span class="n">summer</span><span class="p">:</span>
+          <span class="n">start</span><span class="p">:</span> <span class="mi">05</span><span class="o">-</span><span class="mi">01</span>
+          <span class="n">switch</span><span class="p">:</span>
+            <span class="o">-</span> <span class="n">mode</span><span class="p">:</span> <span class="n">low</span>
+              <span class="n">hhmm</span><span class="p">:</span> <span class="mi">0000</span>
+
+    <span class="o">...</span>
+</pre></div>
+</div>
+<p><strong>walls (also including floors and ceiling):</strong></p>
+<dl>
+<dt><code class="docutils literal notranslate"><span class="pre">walls</span></code> is a named list of the wall elements.</dt><dd><p>The keys are the user-given names of the wall elements;
+the names must be unique and not contain spaces.</p>
+<dl>
+<dt>Each entry is an associtative list containing the following tags:</dt><dd><ul>
+<li><p><code class="docutils literal notranslate"><span class="pre">d</span></code> (required, number) thickness of the wall in m.
+The minimum value is <code class="xref py py-const docutils literal notranslate"><span class="pre">austaltools.heating.WALL_SLAB</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">room_w</span></code> (required, string) name of the room on the warm side
+of the wall. I.e. a positive sign of the heat flux density
+corresponds to a heat loss in this room.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">room_c</span></code> (required, string) name of the room on the cold side
+of the wall.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">width</span></code> (optional, number) length of the wall in m,
+meant to represent the horizontal extent in case of
+vertical or slanted walls.
+If missing, <code class="docutils literal notranslate"><span class="pre">area</span></code> is required.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">length</span></code> (optional, number) height of the wall in m,
+meant to represent the length along the wall
+(not vertical projection) in case of slanted walls.
+If missing, <code class="docutils literal notranslate"><span class="pre">area</span></code> is required.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">area</span></code> (optional, number) area of the wall in <span class="math notranslate nohighlight">\(m^2\)</span>,
+including contained other wall elements (e.g. windows),
+overrides the product of <code class="docutils literal notranslate"><span class="pre">width</span></code> and <code class="docutils literal notranslate"><span class="pre">length</span></code>.
+If missing, <code class="docutils literal notranslate"><span class="pre">width</span></code> and <code class="docutils literal notranslate"><span class="pre">length</span></code> are required.</p></li>
+<li><p>c (optional, number) heat capacity of the wall in
+<span class="math notranslate nohighlight">\(J kg^{-1}K^{-1}\)</span>,
+defaults to <span class="math notranslate nohighlight">\(836 J kg^{-1}K^{-1}\)</span> (massive brick wall).</p></li>
+<li><p>k (optional, number) heat conductivity of the wall in
+<span class="math notranslate nohighlight">\(W m^{-1}K^{-1}\)</span>,
+defaults to <span class="math notranslate nohighlight">\(0.58 Wm^{-1}K^{-1}\)</span> (massive brick wall).</p></li>
+<li><p>rho (optional, number) density of the wall in
+<span class="math notranslate nohighlight">\(kg m^{-3}\)</span>,
+defaults to <span class="math notranslate nohighlight">\(1400 kg m^{-3}\)</span> (massive brick wall).</p></li>
+<li><p>partof (optional, string) name of another wall emelent that
+fully contains this wall element (e.g. in case of a window).
+The area of the containing wall element is reduced by the
+area of thins wall ement.</p>
+<p>The containing wall ement must be defined before this
+wall element. The area of the containing wall ement must be
+larger than the area of this wall element.</p>
+</li>
+<li><p>t_start (optional, number) initial temperature of the
+whole wall. If missing, a linear profile between the
+temperatures in rooms <code class="docutils literal notranslate"><span class="pre">room_w</span></code> and  <code class="docutils literal notranslate"><span class="pre">room_c</span></code> is assumed.</p></li>
+</ul>
+</dd>
+</dl>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">buildings</span><span class="p">:</span>
+  <span class="n">mybuilding</span><span class="p">:</span>
+    <span class="n">hvac</span><span class="p">:</span>
+      <span class="o">...</span>
+    <span class="n">rooms</span><span class="p">:</span>
+      <span class="n">myroom</span><span class="p">:</span>
+        <span class="o">...</span>
+    <span class="n">walls</span><span class="p">:</span>
+      <span class="n">front_wall</span><span class="p">:</span>
+        <span class="n">d</span><span class="p">:</span> <span class="mf">0.3</span>
+        <span class="n">h</span><span class="p">:</span> <span class="mf">2.5</span>
+        <span class="n">l</span><span class="p">:</span> <span class="mf">5.0</span>
+        <span class="n">room_c</span><span class="p">:</span> <span class="n">outside</span>
+        <span class="n">room_w</span><span class="p">:</span> <span class="n">myroom</span>
+      <span class="n">front_door</span><span class="p">:</span>
+        <span class="n">partof</span><span class="p">:</span> <span class="n">front_wall</span>
+        <span class="n">d</span><span class="p">:</span> <span class="mf">0.04</span>
+        <span class="n">area</span><span class="p">:</span> <span class="mf">2.</span>
+        <span class="n">room_c</span><span class="p">:</span> <span class="n">outside</span>
+        <span class="n">room_w</span><span class="p">:</span> <span class="n">myroom</span>
+      <span class="n">ceiling</span><span class="p">:</span>
+        <span class="n">c</span><span class="p">:</span> <span class="mi">1500</span>
+        <span class="n">d</span><span class="p">:</span> <span class="mf">0.1</span>
+        <span class="n">h</span><span class="p">:</span> <span class="mf">5.0</span>
+        <span class="n">k</span><span class="p">:</span> <span class="mf">0.15</span>
+        <span class="n">l</span><span class="p">:</span> <span class="mf">5.0</span>
+        <span class="n">rho</span><span class="p">:</span> <span class="mf">600.0</span>
+        <span class="n">room_c</span><span class="p">:</span> <span class="n">soil</span>
+        <span class="n">room_w</span><span class="p">:</span> <span class="n">myroom</span>
+</pre></div>
+</div>
+<p><strong>rooms (and special pseudo rooms):</strong></p>
+<dl>
+<dt><code class="docutils literal notranslate"><span class="pre">room</span></code> is a named list of the room.</dt><dd><p>The keys are the user-given names of the rooms;
+the names must be unique and not contain spaces.</p>
+<dl class="simple">
+<dt>Each entry is an associtative list containing the follwing tags:</dt><dd><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">width</span></code> (optional, number) width of the room in m.
+If missing, <code class="docutils literal notranslate"><span class="pre">area</span></code> is required.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">length</span></code> (optional, number) lenght of the room in m,
+orthogonal to <code class="docutils literal notranslate"><span class="pre">width</span></code> in case of non-square rooms.
+If missing, <code class="docutils literal notranslate"><span class="pre">area</span></code> is required.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">height</span></code> (optional, number) height of the room in m,
+If missing, <code class="docutils literal notranslate"><span class="pre">volume</span></code> is required.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">area</span></code> (optional, number) area of the wall in <span class="math notranslate nohighlight">\(m^2\)</span>,
+overrides the product of <code class="docutils literal notranslate"><span class="pre">width</span></code> and <code class="docutils literal notranslate"><span class="pre">length</span></code>.
+If missing, <code class="docutils literal notranslate"><span class="pre">width</span></code> and <code class="docutils literal notranslate"><span class="pre">length</span></code> are required.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">volume</span></code> (optional, number) volume of the room in <span class="math notranslate nohighlight">\(m^3\)</span>,
+overrides the product of either <code class="docutils literal notranslate"><span class="pre">width</span></code> and <code class="docutils literal notranslate"><span class="pre">length</span></code>
+or <code class="docutils literal notranslate"><span class="pre">area</span></code>, and <code class="docutils literal notranslate"><span class="pre">height</span></code>.
+If missing, either <code class="docutils literal notranslate"><span class="pre">width</span></code> and <code class="docutils literal notranslate"><span class="pre">length</span></code>
+or <code class="docutils literal notranslate"><span class="pre">area</span></code>, and <code class="docutils literal notranslate"><span class="pre">height</span></code> are required.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">maxpower</span></code> (optional, number) the maximum power of the heating
+installed in the room in <span class="math notranslate nohighlight">\(W\)</span>.
+<strong>Required</strong> for all rooms except special rooms.
+If missing <span class="math notranslate nohighlight">\(0. W\)</span>, i.e. unheated room, is assumed.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">p_set</span></code> (optional, number) the power throttling in %
+of the heater in the room. If missing <code class="xref py py-class docutils literal notranslate"><span class="pre">numpy.nan</span></code> is assumed,
+i.e. no temperature regulation.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">t_set</span></code> (optional, number) the target temperature In °C
+for the room. If missing 100 % is assumed,
+i.e. the heater can use its full power.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">special</span></code> (optional, boolean) is True if the room is
+not a real room, but a time-invariant heat reservoir.
+In every building the special rooms <cite>outside</cite> and <cite>soil</cite>
+are created automatically.</p></li>
+</ul>
+</dd>
+</dl>
+</dd>
+</dl>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">buildings</span><span class="p">:</span>
+  <span class="n">mybuilding</span><span class="p">:</span>
+    <span class="n">hvac</span><span class="p">:</span>
+      <span class="o">...</span>
+    <span class="n">rooms</span><span class="p">:</span>
+      <span class="n">room</span><span class="p">:</span>
+        <span class="n">width</span><span class="p">:</span> <span class="mf">5.0</span>
+        <span class="n">height</span><span class="p">:</span> <span class="mf">2.5</span>
+        <span class="n">lenght</span><span class="p">:</span> <span class="mf">5.0</span>
+        <span class="n">maxpower</span><span class="p">:</span> <span class="mf">13000.</span>
+        <span class="n">t_set</span><span class="p">:</span> <span class="mf">20.</span>
+        <span class="n">t_start</span><span class="p">:</span> <span class="mf">20.</span>
+    <span class="n">walls</span><span class="p">:</span>
+      <span class="o">...</span>
+</pre></div>
+</div>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">austaltools heating</a><ul>
+<li><a class="reference internal" href="#heating-description-file-heating-yaml">heating description file <code class="docutils literal notranslate"><span class="pre">heating.yaml</span></code></a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Unknown 2.8.26 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">austaltools heating</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright (C) 2022-2026 Clemens Drüe.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.0.
+    </div>
+  </body>
+</html>

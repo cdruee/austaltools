@@ -1,0 +1,893 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>austaltools &#8212; Unknown 2.8.26 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/nature.css?v=279e0f84" />
+    <script src="_static/documentation_options.js?v=19584997"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <script defer="defer" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-mml-chtml.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Unknown 2.8.26 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">austaltools</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="austaltools">
+<h1>austaltools<a class="headerlink" href="#austaltools" title="Link to this heading">¶</a></h1>
+<p><p>austaltools</p>
+</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">usage</span><span class="p">:</span> <span class="n">austaltools</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">version</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">debug</span> <span class="o">|</span> <span class="o">-</span><span class="n">v</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">d</span> <span class="n">PATH</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">temp</span><span class="o">-</span><span class="nb">dir</span> <span class="n">PATH</span><span class="p">]</span>
+                   <span class="n">COMMAND</span> <span class="o">...</span>
+</pre></div>
+</div>
+<section id="austaltools.command_line-cli_parser-positional-arguments">
+<h2>Positional Arguments<a class="headerlink" href="#austaltools.command_line-cli_parser-positional-arguments" title="Link to this heading">¶</a></h2>
+<dl class="option-list">
+<dt><kbd>COMMAND</kbd></dt>
+<dd><p>Possible choices: import-buildings, bg, eap, fill-timeseries, ft, heating, plot, simple, steepness, terrain, transform, weather, windfield, windrose</p>
+<p>sub-commands help</p>
+</dd>
+</dl>
+</section>
+<section id="austaltools.command_line-cli_parser-named-arguments">
+<h2>Named Arguments<a class="headerlink" href="#austaltools.command_line-cli_parser-named-arguments" title="Link to this heading">¶</a></h2>
+<dl class="option-list">
+<dt><kbd>--version</kbd></dt>
+<dd><p>show program’s version number and exit</p>
+</dd>
+<dt><kbd>--debug</kbd></dt>
+<dd><p>show informative output</p>
+</dd>
+<dt><kbd>-v, --verbose</kbd></dt>
+<dd><p>show detailed output</p>
+</dd>
+<dt><kbd>-d, --working-dir</kbd></dt>
+<dd><p>woking directory [.]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'.'</span></code></p>
+</dd>
+<dt><kbd>--temp-dir</kbd></dt>
+<dd><p>directory where temporary filesare stored. None means use systemtemporary files dir. [None]</p>
+</dd>
+</dl>
+</section>
+<section id="Sub-commands">
+<h2>Sub-commands<a class="headerlink" href="#Sub-commands" title="Link to this heading">¶</a></h2>
+<section id="import-buildings (bg)">
+<h3>import-buildings (bg)<a class="headerlink" href="#import-buildings (bg)" title="Link to this heading">¶</a></h3>
+<p>get buildings from geojson and write to <cite>austal.txt</cite></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">austaltools</span> <span class="n">import</span><span class="o">-</span><span class="n">buildings</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">g</span> <span class="n">FILE</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">n</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">t</span> <span class="n">TOLERANCE</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">z</span> <span class="n">ZVALUE</span> <span class="o">|</span>
+                             <span class="o">-</span><span class="n">Z</span> <span class="n">HEIGHT</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">b</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">l</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">c</span> <span class="n">COLORMAP</span><span class="p">]</span>
+                             <span class="p">[</span><span class="o">-</span><span class="n">k</span> <span class="p">{</span><span class="n">contour</span><span class="p">,</span><span class="n">grid</span><span class="p">}]</span> <span class="p">[</span><span class="o">-</span><span class="n">p</span> <span class="p">[</span><span class="n">FILE</span><span class="p">]]</span> <span class="p">[</span><span class="o">-</span><span class="n">f</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="named-arguments">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-g, --geojson</kbd></dt>
+<dd><p>file containing building info[haeuser.geojson]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'haeuser.geojson'</span></code></p>
+</dd>
+<dt><kbd>-n, --dry-run</kbd></dt>
+<dd><p>do not change austal.txt, show changes instead.</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+<dt><kbd>-t, --tolerance</kbd></dt>
+<dd><p>limit for accepting a polygon as rectangle (max difference of the lenght of the diagonals) [0.50]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">0.5</span></code></p>
+</dd>
+<dt><kbd>-z, --zvalue</kbd></dt>
+<dd><p>name of property that gives building height[height]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'height'</span></code></p>
+</dd>
+<dt><kbd>-Z, --height</kbd></dt>
+<dd><p>height of all buildings</p>
+</dd>
+<dt><kbd>-b, --no-buildings</kbd></dt>
+<dd><p>do not show the buildings defined in config file</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code></p>
+</dd>
+<dt><kbd>-l, --low-colors</kbd></dt>
+<dd><p>use only few discrete colors for better print results</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+<dt><kbd>-c, --colormap</kbd></dt>
+<dd><p>name of colormap to use. Defaults to “YlOrRd”</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'YlOrRd'</span></code></p>
+</dd>
+<dt><kbd>-k, --kind</kbd></dt>
+<dd><p>Possible choices: contour, grid</p>
+<p>choose kind of display. <cite>contour</cite> produces filled contours, <cite>grid</cite> produces coloured grid cells. Defaults to <cite>contour</cite></p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'contour'</span></code></p>
+</dd>
+<dt><kbd>-p, --plot</kbd></dt>
+<dd><p>save plot to a file. If <cite>FILE</cite> is “-” the plot is shown on screen. If <cite>FILE</cite> is missing, the file name defaults to the data file name with extension <cite>png</cite></p>
+</dd>
+<dt><kbd>-f, --force</kbd></dt>
+<dd><p>force overwriting plotfile if it exists.</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="eap">
+<h3>eap<a class="headerlink" href="#eap" title="Link to this heading">¶</a></h3>
+<p>find substitute anemometer position according to VDI 3783 Part 16 from a wind library generated by AUSTAL</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">austaltools</span> <span class="n">eap</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">a</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">g</span> <span class="p">[</span><span class="n">ID</span><span class="p">]]</span> <span class="p">[</span><span class="o">-</span><span class="n">o</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">q</span><span class="p">]</span>
+                <span class="p">[</span><span class="o">-</span><span class="n">r</span> <span class="p">{</span><span class="n">general</span><span class="p">,</span><span class="n">simple</span><span class="p">,</span><span class="n">file</span><span class="p">,</span><span class="n">austal</span><span class="p">}]</span> <span class="p">[</span><span class="o">-</span><span class="n">z</span> <span class="p">[</span><span class="n">METERS</span><span class="p">]]</span>
+                <span class="p">[</span><span class="o">--</span><span class="n">edge</span><span class="o">-</span><span class="n">nodes</span> <span class="p">[</span><span class="n">EDGE_NODES</span><span class="p">]]</span> <span class="p">[</span><span class="o">--</span><span class="nb">max</span><span class="o">-</span><span class="n">height</span> <span class="p">[</span><span class="n">MAX_HEIGHT</span><span class="p">]]</span>
+                <span class="p">[</span><span class="o">--</span><span class="nb">min</span><span class="o">-</span><span class="n">ff</span> <span class="p">[</span><span class="n">MIN_FF</span><span class="p">]]</span> <span class="p">[</span><span class="o">--</span><span class="n">vdi</span><span class="o">-</span><span class="n">reference</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">b</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">l</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">c</span> <span class="n">COLORMAP</span><span class="p">]</span>
+                <span class="p">[</span><span class="o">-</span><span class="n">k</span> <span class="p">{</span><span class="n">contour</span><span class="p">,</span><span class="n">grid</span><span class="p">}]</span> <span class="p">[</span><span class="o">-</span><span class="n">p</span> <span class="p">[</span><span class="n">FILE</span><span class="p">]]</span> <span class="p">[</span><span class="o">-</span><span class="n">f</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="named-arguments_repeat1">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments_repeat1" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-a, --austal</kbd></dt>
+<dd><p>write EAP as anemometer position intoAUSTAL config file <code class="docutils literal notranslate"><span class="pre">austal.txt</span></code></p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+<dt><kbd>-g, --grid</kbd></dt>
+<dd><p>ID (number) of the grid to evaluate. Defaults to 0</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">0</span></code></p>
+</dd>
+<dt><kbd>-o, --overwrite</kbd></dt>
+<dd><p>force overwriting wind reference file if it exists.</p>
+</dd>
+<dt><kbd>-q, --report</kbd></dt>
+<dd><p>show detailed results</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+<dt><kbd>-r, --reference</kbd></dt>
+<dd><p>Possible choices: general, simple, file, austal</p>
+<p>choose kind of reference profile. <cite>simple</cite> produces a log wind profile, <cite>file</cite> reads reference profile from file. Defaults to <cite>vdi</cite></p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'simple'</span></code></p>
+</dd>
+<dt><kbd>-z, --height</kbd></dt>
+<dd><p>effective anemometer height, i.e. height to evaluate EAP at in m. Defaults to 10.0</p>
+</dd>
+<dt><kbd>-b, --no-buildings</kbd></dt>
+<dd><p>do not show the buildings defined in config file</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code></p>
+</dd>
+<dt><kbd>-l, --low-colors</kbd></dt>
+<dd><p>use only few discrete colors for better print results</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+<dt><kbd>-c, --colormap</kbd></dt>
+<dd><p>name of colormap to use. Defaults to “YlOrRd”</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'YlOrRd'</span></code></p>
+</dd>
+<dt><kbd>-k, --kind</kbd></dt>
+<dd><p>Possible choices: contour, grid</p>
+<p>choose kind of display. <cite>contour</cite> produces filled contours, <cite>grid</cite> produces coloured grid cells. Defaults to <cite>contour</cite></p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'contour'</span></code></p>
+</dd>
+<dt><kbd>-p, --plot</kbd></dt>
+<dd><p>save plot to a file. If <cite>FILE</cite> is “-” the plot is shown on screen. If <cite>FILE</cite> is missing, the file name defaults to the data file name with extension <cite>png</cite></p>
+</dd>
+<dt><kbd>-f, --force</kbd></dt>
+<dd><p>force overwriting plotfile if it exists.</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+</dl>
+</section>
+<section id="advanced-options">
+<h4>advanced options<a class="headerlink" href="#advanced-options" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>--edge-nodes</kbd></dt>
+<dd><p>number of edge nodes along each side, where data are exluded. Defaults to 3</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">3</span></code></p>
+</dd>
+<dt><kbd>--max-height</kbd></dt>
+<dd><p>maximum height to evaluate EAP. Defaults to 100.000000</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">100.0</span></code></p>
+</dd>
+<dt><kbd>--min-ff</kbd></dt>
+<dd><p>minimum wind speed below which data are exluded. Defaults to 0.500000</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">0.5</span></code></p>
+</dd>
+<dt><kbd>--vdi-reference</kbd></dt>
+<dd><p>Use linear wind profile interpolation for comparison with VDI 3783 p 16 reference implementation.</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="fill-timeseries (ft)">
+<h3>fill-timeseries (ft)<a class="headerlink" href="#fill-timeseries (ft)" title="Link to this heading">¶</a></h3>
+<p>fill source-strength columns in “zeitreihe.dmna”</p>
+<p>Detailed userguide see: <a class="reference internal" href="fill-timeseries.html"><span class="doc">austaltools fill-timeseries</span></a></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">austaltools</span> <span class="n">fill</span><span class="o">-</span><span class="n">timeseries</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">(</span><span class="o">-</span><span class="n">l</span> <span class="o">|</span> <span class="o">-</span><span class="n">c</span> <span class="o">|</span> <span class="o">-</span><span class="n">w</span> <span class="o">|</span> <span class="o">-</span><span class="n">W</span><span class="p">)</span> <span class="p">[</span><span class="o">-</span><span class="n">b</span> <span class="n">HOUR</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">e</span> <span class="n">HOUR</span><span class="p">]</span>
+                            <span class="p">[</span><span class="o">-</span><span class="n">u</span> <span class="n">HOLIDAY_WEEK</span> <span class="p">[</span><span class="n">HOLIDAY_WEEK</span> <span class="o">...</span><span class="p">]</span> <span class="o">|</span>
+                            <span class="o">-</span><span class="n">U</span> <span class="n">HOLIDAY_MONTH</span> <span class="p">[</span><span class="n">HOLIDAY_MONTH</span> <span class="o">...</span><span class="p">]]</span>
+                            <span class="p">[</span><span class="o">-</span><span class="n">f</span> <span class="n">CYCLE_FILE</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">s</span> <span class="n">COLUMN_ID</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">o</span> <span class="n">OUTPUT</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="named-arguments_repeat2">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments_repeat2" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-l, --list</kbd></dt>
+<dd><p>list column column IDs in fileand exit without modifying “zeitreihe.dmna”. [default]</p>
+</dd>
+<dt><kbd>-c, --cycle</kbd></dt>
+<dd><p>use production cycle from file</p>
+</dd>
+<dt><kbd>-w, --week-5</kbd></dt>
+<dd><p>source active Mon-Fri</p>
+</dd>
+<dt><kbd>-W, --week-6</kbd></dt>
+<dd><p>source active Mon-Sat</p>
+</dd>
+<dt><kbd>-b, --hour-begin</kbd></dt>
+<dd><p>daily work begin time in hours 0-23. Only relevant with -w or -W. [08]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">8</span></code></p>
+</dd>
+<dt><kbd>-e, --hour-end</kbd></dt>
+<dd><p>daily work end time in hours, 0-23. Only relevant with -w or -W .[17]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">17</span></code></p>
+</dd>
+<dt><kbd>-u, --holiday-week</kbd></dt>
+<dd><p>work-free weeks 1-52 as space-delimited list. Only relevant with -w or -W. [25 26 27 28 29 30 52]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">[25,</span> <span class="pre">26,</span> <span class="pre">27,</span> <span class="pre">28,</span> <span class="pre">29,</span> <span class="pre">30,</span> <span class="pre">52]</span></code></p>
+</dd>
+<dt><kbd>-U, --holiday-month</kbd></dt>
+<dd><p>work-free months as space-delimited list(1-12). Only relevant with -w or -W. 7]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">[7]</span></code></p>
+</dd>
+<dt><kbd>-f, --cycle-file</kbd></dt>
+<dd><p>emission-cycle description file. only relevant with -c. [cycle.yaml]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'cycle.yaml'</span></code></p>
+</dd>
+<dt><kbd>-s, --column-id</kbd></dt>
+<dd><p>column ID. Required if more than one column. list IDs in file with -l.</p>
+</dd>
+<dt><kbd>-o, --output</kbd></dt>
+<dd><p>output for the column in g/s. -o is relevant with -w or -W.</p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="heating">
+<h3>heating<a class="headerlink" href="#heating" title="Link to this heading">¶</a></h3>
+<p>simulate a building with heating.</p>
+<p>For a description fo the heating description file ``
+see: <a class="reference internal" href="heating.html"><span class="doc">austaltools heating</span></a></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">austaltools</span> <span class="n">heating</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">f</span> <span class="n">FILE</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">b</span> <span class="n">BUILDING</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">x</span> <span class="n">EXTRACTED_WEATHER</span><span class="p">]</span>
+                    <span class="p">[</span><span class="o">-</span><span class="n">o</span> <span class="n">FILE</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">flush</span> <span class="n">FLUSH</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">radiation</span> <span class="n">RADIATION</span><span class="p">]</span>
+                    <span class="p">[</span><span class="o">--</span><span class="n">recording</span> <span class="n">FREQ</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">record</span><span class="o">-</span><span class="n">slabs</span> <span class="n">SLABOUT</span><span class="p">]</span>
+                    <span class="p">[</span><span class="o">--</span><span class="n">slabs</span> <span class="n">SLABS</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">spreadsheet</span><span class="o">-</span><span class="n">export</span> <span class="n">FILE</span> <span class="o">|</span>
+                    <span class="o">--</span><span class="n">spreadsheet</span><span class="o">-</span><span class="kn">import</span><span class="w"> </span><span class="nn">FILE</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">timestep</span> <span class="n">TIMESTEP</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="named-arguments_repeat3">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments_repeat3" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-f, --heating-file</kbd></dt>
+<dd><p>building/heating description file. [heating.yaml]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'heating.yaml'</span></code></p>
+</dd>
+<dt><kbd>-b, --building</kbd></dt>
+<dd><p>name of the building to simulate. [default]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'default'</span></code></p>
+</dd>
+<dt><kbd>-x, --extracted-weather</kbd></dt>
+<dd><p>name of the file containing the weather data [extracted_weather.csv].</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'extracted_weather.csv'</span></code></p>
+</dd>
+<dt><kbd>-o, --output</kbd></dt>
+<dd><p>name for the output file. [heating.csv]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'heating.csv'</span></code></p>
+</dd>
+</dl>
+</section>
+<section id="advanced-options_repeat1">
+<h4>advanced options<a class="headerlink" href="#advanced-options_repeat1" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>--flush</kbd></dt>
+<dd><p>enable or disable continuous writingof recorded data, applys only if <code class="docutils literal notranslate"><span class="pre">--recording</span></code> is enabled [True].</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code></p>
+</dd>
+<dt><kbd>--radiation</kbd></dt>
+<dd><p>enable or disable radiative heat gainon outside walls [True].</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code></p>
+</dd>
+<dt><kbd>--recording</kbd></dt>
+<dd><p>recording interval for internal modelvariables or <cite>None</cite> for no recording. Must be a valid pandas frequency string (<a class="reference external" href="https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#dateoffset-objects">see Pandas documentation</a>), for example <code class="docutils literal notranslate"><span class="pre">1min</span></code>. [None]</p>
+</dd>
+<dt><kbd>--record-slabs</kbd></dt>
+<dd><p>record internal model variables for each individual wall slab[False]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+<dt><kbd>--slabs</kbd></dt>
+<dd><p>change the default value how walls are partitioned into slabs [<code class="docutils literal notranslate"><span class="pre">even</span></code>].
+Possible selections are:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">even</span></code>: envenly spaced slabs, if the wall thickness is not a multiple of the slab size, the remainder is added to the slab in the middle</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">exponential</span></code>: slab size exponentially increases from the minimal width of 0.01m at the surfaces to the center. All slabs are muliples of 0.005m.</p></li>
+<li><p>a number: like <cite>even</cite> but this thickness in m is applied to all slabs, instead of the default value of 0.04 m</p></li>
+</ul>
+</div></blockquote>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'even'</span></code></p>
+</dd>
+<dt><kbd>--spreadsheet-export</kbd></dt>
+<dd><p>export rooms and walls from the yaml file specified by <cite>-f/–heating-file</cite> to a spreadsheet. The file format of the spreadsheet is inferred from the filename extension (.ods, .xls, or .xslx).The building name is <cite>default</cite> or must be given by <cite>-b/–building</cite>.
+The program exits after exporting the spreadsheet data.</p>
+</dd>
+<dt><kbd>--spreadsheet-import</kbd></dt>
+<dd><p>import rooms and walls from spreadsheet in .ods, .xls, or .xslx format and wirite them in the heating file specified by <cite>-f/–heating-file</cite>. Overwrites all rooms and walls in the heating file. The building name is <cite>default</cite> or must be given by <cite>-b/–building</cite>.
+The program exits after importing the spreadsheet data.</p>
+</dd>
+<dt><kbd>--timestep</kbd></dt>
+<dd><p>the model timestep in s[<code class="docutils literal notranslate"><span class="pre">1</span></code>].</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">1</span></code></p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="plot">
+<h3>plot<a class="headerlink" href="#plot" title="Link to this heading">¶</a></h3>
+<p>plot AUSTAL output data</p>
+<p>A simple plot for a quick overview (click to enlarge)
+<a class="reference internal" href="_images/plot_contour_2sigma.png"><img alt="plotcontour" class="align-bottom" src="_images/plot_contour_2sigma.png" style="width: 45%;" /></a></p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">austaltools</span> <span class="n">plot</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">s</span> <span class="p">[</span><span class="n">STDVs</span><span class="p">]]</span> <span class="p">[</span><span class="o">--</span><span class="n">scale</span> <span class="p">[</span><span class="n">VALUE</span><span class="p">]]</span> <span class="p">[</span><span class="o">-</span><span class="n">b</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">l</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">c</span> <span class="n">COLORMAP</span><span class="p">]</span>
+                 <span class="p">[</span><span class="o">-</span><span class="n">k</span> <span class="p">{</span><span class="n">contour</span><span class="p">,</span><span class="n">grid</span><span class="p">}]</span> <span class="p">[</span><span class="o">-</span><span class="n">p</span> <span class="p">[</span><span class="n">FILE</span><span class="p">]]</span> <span class="p">[</span><span class="o">-</span><span class="n">f</span><span class="p">]</span>
+                 <span class="n">DATA</span>
+</pre></div>
+</div>
+<section id="positional-arguments">
+<h4>Positional Arguments<a class="headerlink" href="#positional-arguments" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>DATA</kbd></dt>
+<dd><p>data file to plot.</p>
+</dd>
+</dl>
+</section>
+<section id="named-arguments_repeat4">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments_repeat4" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-s, --stdvs</kbd></dt>
+<dd><p>hash areas where the data are not significant. Sigingicant is defined as larder than <cite>STDVs</cite> times the standard deviation caculated by austal. If missing, <cite>STDVs</cite> defaults to 1.0.</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">0.0</span></code></p>
+</dd>
+<dt><kbd>-b, --no-buildings</kbd></dt>
+<dd><p>do not show the buildings defined in config file</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code></p>
+</dd>
+<dt><kbd>-l, --low-colors</kbd></dt>
+<dd><p>use only few discrete colors for better print results</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+<dt><kbd>-c, --colormap</kbd></dt>
+<dd><p>name of colormap to use. Defaults to “YlOrRd”</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'YlOrRd'</span></code></p>
+</dd>
+<dt><kbd>-k, --kind</kbd></dt>
+<dd><p>Possible choices: contour, grid</p>
+<p>choose kind of display. <cite>contour</cite> produces filled contours, <cite>grid</cite> produces coloured grid cells. Defaults to <cite>contour</cite></p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'contour'</span></code></p>
+</dd>
+<dt><kbd>-p, --plot</kbd></dt>
+<dd><p>save plot to a file. If <cite>FILE</cite> is “-” the plot is shown on screen. If <cite>FILE</cite> is missing, the file name defaults to the data file name with extension <cite>png</cite></p>
+</dd>
+<dt><kbd>-f, --force</kbd></dt>
+<dd><p>force overwriting plotfile if it exists.</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+</dl>
+</section>
+<section id="advanced-options_repeat2">
+<h4>advanced options<a class="headerlink" href="#advanced-options_repeat2" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>--scale</kbd></dt>
+<dd><p>Max value of the colour scale in plotted value units. Default is autoscale.</p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="simple">
+<h3>simple<a class="headerlink" href="#simple" title="Link to this heading">¶</a></h3>
+<p>simple-to-use interface to the most basic funtionality of <cite>austaltools</cite>:the creation of input files for simulations</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">austaltools</span> <span class="n">simple</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="n">LAT</span> <span class="n">LON</span> <span class="n">NAME</span>
+</pre></div>
+</div>
+<section id="positional-arguments_repeat1">
+<h4>Positional Arguments<a class="headerlink" href="#positional-arguments_repeat1" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>LAT</kbd></dt>
+<dd><p>Center position latitude</p>
+</dd>
+<dt><kbd>LON</kbd></dt>
+<dd><p>Center position longitude</p>
+</dd>
+<dt><kbd>NAME</kbd></dt>
+<dd><p>Stem for file names.</p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="steepness">
+<h3>steepness<a class="headerlink" href="#steepness" title="Link to this heading">¶</a></h3>
+<p>Plot AUSTAL topography steepness</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">austaltools</span> <span class="n">steepness</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">g</span> <span class="n">ID</span> <span class="o">|</span> <span class="o">-</span><span class="n">t</span> <span class="n">FILE</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">b</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">l</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">c</span> <span class="n">COLORMAP</span><span class="p">]</span>
+                      <span class="p">[</span><span class="o">-</span><span class="n">k</span> <span class="p">{</span><span class="n">contour</span><span class="p">,</span><span class="n">grid</span><span class="p">}]</span> <span class="p">[</span><span class="o">-</span><span class="n">p</span> <span class="p">[</span><span class="n">FILE</span><span class="p">]]</span> <span class="p">[</span><span class="o">-</span><span class="n">f</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="named-arguments_repeat5">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments_repeat5" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-g, --grid</kbd></dt>
+<dd><p>ID (number) of the grid to evaluate. Defaults to 0</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">0</span></code></p>
+</dd>
+<dt><kbd>-t, --topo</kbd></dt>
+<dd><p>Topography file to read instead of the AUSTAL topography files.</p>
+</dd>
+<dt><kbd>-b, --no-buildings</kbd></dt>
+<dd><p>do not show the buildings defined in config file</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code></p>
+</dd>
+<dt><kbd>-l, --low-colors</kbd></dt>
+<dd><p>use only few discrete colors for better print results</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+<dt><kbd>-c, --colormap</kbd></dt>
+<dd><p>name of colormap to use. Defaults to “YlOrRd”</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'YlOrRd'</span></code></p>
+</dd>
+<dt><kbd>-k, --kind</kbd></dt>
+<dd><p>Possible choices: contour, grid</p>
+<p>choose kind of display. <cite>contour</cite> produces filled contours, <cite>grid</cite> produces coloured grid cells. Defaults to <cite>contour</cite></p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'contour'</span></code></p>
+</dd>
+<dt><kbd>-p, --plot</kbd></dt>
+<dd><p>save plot to a file. If <cite>FILE</cite> is “-” the plot is shown on screen. If <cite>FILE</cite> is missing, the file name defaults to the data file name with extension <cite>png</cite></p>
+</dd>
+<dt><kbd>-f, --force</kbd></dt>
+<dd><p>force overwriting plotfile if it exists.</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="terrain">
+<h3>terrain<a class="headerlink" href="#terrain" title="Link to this heading">¶</a></h3>
+<p>generate terrain input for AUSTAL</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">austaltools</span> <span class="n">terrain</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">(</span><span class="o">-</span><span class="n">L</span> <span class="n">LAT</span> <span class="n">LON</span> <span class="o">|</span> <span class="o">-</span><span class="n">G</span> <span class="n">X</span> <span class="n">Y</span> <span class="o">|</span> <span class="o">-</span><span class="n">U</span> <span class="n">X</span> <span class="n">Y</span><span class="p">)</span> <span class="p">[</span><span class="o">-</span><span class="n">s</span> <span class="n">CODE</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">e</span> <span class="n">KM</span><span class="p">]</span> <span class="n">NAME</span>
+</pre></div>
+</div>
+<section id="positional-arguments_repeat2">
+<h4>Positional Arguments<a class="headerlink" href="#positional-arguments_repeat2" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>NAME</kbd></dt>
+<dd><p>file name to store data in.</p>
+</dd>
+</dl>
+</section>
+<section id="named-arguments_repeat6">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments_repeat6" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-L, --ll</kbd></dt>
+<dd><p>Center position given as Latitude and Longitude, respectively. This is the default.</p>
+</dd>
+<dt><kbd>-G, --gk</kbd></dt>
+<dd><p>Center position given in Gauß-Krüger zone 3coordinates: X = <cite>Rechtswert</cite>, Y = <cite>Hochwert</cite>.</p>
+</dd>
+<dt><kbd>-U, --utm</kbd></dt>
+<dd><p>Center position given in UTM Zone 32Ncoordinates: X = <cite>easting</cite>, Y = <cite>northing</cite>.</p>
+</dd>
+<dt><kbd>-s, --source</kbd></dt>
+<dd><p>code for the source digital elevation model (DEM).  Defaults to GTOPO30</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'GTOPO30'</span></code></p>
+</dd>
+<dt><kbd>-e, --extent</kbd></dt>
+<dd><p>extent of the extracted area in km (side length of the sqare)Defaults to 5.0</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">5.0</span></code></p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="transform">
+<h3>transform<a class="headerlink" href="#transform" title="Link to this heading">¶</a></h3>
+<p>transfrom coordinates into other projections</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">austaltools</span> <span class="n">transform</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">L</span> <span class="n">LAT</span> <span class="n">LON</span> <span class="o">|</span> <span class="o">-</span><span class="n">G</span> <span class="n">X</span> <span class="n">Y</span> <span class="o">|</span> <span class="o">-</span><span class="n">U</span> <span class="n">X</span> <span class="n">Y</span> <span class="o">|</span> <span class="o">-</span><span class="n">D</span> <span class="n">NUMBER</span> <span class="o">|</span>
+                      <span class="o">-</span><span class="n">W</span> <span class="n">NUMBER</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">M</span> <span class="n">x</span> <span class="n">y</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">f</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="named-arguments_repeat7">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments_repeat7" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-L, --ll</kbd></dt>
+<dd><p>Center position given as Latitude and Longitude, respectively. This is the default.</p>
+</dd>
+<dt><kbd>-G, --gk</kbd></dt>
+<dd><p>Center position given in Gauß-Krüger zone 3coordinates: X = <cite>Rechtswert</cite>, Y = <cite>Hochwert</cite>.</p>
+</dd>
+<dt><kbd>-U, --utm</kbd></dt>
+<dd><p>Center position given in UTM Zone 32Ncoordinates: X = <cite>easting</cite>, Y = <cite>northing</cite>.</p>
+</dd>
+<dt><kbd>-D, --dwd</kbd></dt>
+<dd><p>Weather station position with German weather service (DWD) ID <cite>NUMBER</cite></p>
+</dd>
+<dt><kbd>-W, --wmo</kbd></dt>
+<dd><p>Postion of weather station with World Meteorological Organization (WMO)station ID <cite>NUMBER</cite></p>
+</dd>
+<dt><kbd>-M, --model</kbd></dt>
+<dd><p>Transform position given in model coordinats x and y (relative to the model origin) into geographic coordinates.</p>
+</dd>
+<dt><kbd>-f, --float</kbd></dt>
+<dd><p>Print UTM and Gauss-Krüger coordinates as floating-point numbers with decimals for more precision (Note that using floating-point numbersfor the reference coordinateswill cause AUSTAL to crash).</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="weather">
+<h3>weather<a class="headerlink" href="#weather" title="Link to this heading">¶</a></h3>
+<p>Extract atmospheric time series for AUSTAL from various sources</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">austaltools</span> <span class="n">weather</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">(</span><span class="o">-</span><span class="n">L</span> <span class="n">LAT</span> <span class="n">LON</span> <span class="o">|</span> <span class="o">-</span><span class="n">G</span> <span class="n">X</span> <span class="n">Y</span> <span class="o">|</span> <span class="o">-</span><span class="n">U</span> <span class="n">X</span> <span class="n">Y</span> <span class="o">|</span> <span class="o">-</span><span class="n">D</span> <span class="n">NUMBER</span> <span class="o">|</span>
+                    <span class="o">-</span><span class="n">W</span> <span class="n">NUMBER</span><span class="p">)</span> <span class="p">[</span><span class="o">-</span><span class="n">s</span> <span class="n">CODE</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">y</span> <span class="n">YEAR</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">e</span> <span class="n">METERS</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">p</span><span class="p">]</span>
+                    <span class="p">[</span><span class="o">--</span><span class="n">class</span><span class="o">-</span><span class="n">scheme</span> <span class="p">{</span><span class="nb">all</span><span class="p">,</span><span class="n">kms</span><span class="p">,</span><span class="n">kmo</span><span class="p">,</span><span class="n">k2o</span><span class="p">,</span><span class="n">pts</span><span class="p">,</span><span class="n">kmc</span><span class="p">,</span><span class="n">pgc</span><span class="p">}]</span>
+                    <span class="p">[</span><span class="o">--</span><span class="n">inter</span><span class="o">-</span><span class="n">variant</span> <span class="p">{</span><span class="n">weighted</span><span class="p">,</span><span class="n">nearest</span><span class="p">,</span><span class="n">mean</span><span class="p">}]</span>
+                    <span class="p">[</span><span class="o">--</span><span class="n">read</span><span class="o">-</span><span class="n">extracted</span> <span class="n">FILE</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">x</span><span class="p">]</span>
+                    <span class="p">[</span><span class="o">--</span><span class="n">wind</span><span class="o">-</span><span class="n">variant</span> <span class="p">{</span><span class="n">fixed_057</span><span class="p">,</span><span class="n">fixed_010</span><span class="p">,</span><span class="n">model_mean</span><span class="p">,</span><span class="n">model_uv10</span><span class="p">,</span><span class="n">model_fsr</span><span class="p">}]</span>
+                    <span class="p">[</span><span class="o">--</span><span class="n">z0</span> <span class="n">Z0</span><span class="p">]</span>
+                    <span class="p">[</span><span class="n">NAME</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="positional-arguments_repeat3">
+<h4>Positional Arguments<a class="headerlink" href="#positional-arguments_repeat3" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>NAME</kbd></dt>
+<dd><p>file name to store data in.</p>
+</dd>
+</dl>
+</section>
+<section id="named-arguments_repeat8">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments_repeat8" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-L, --ll</kbd></dt>
+<dd><p>Center position given as Latitude and Longitude, respectively. This is the default.</p>
+</dd>
+<dt><kbd>-G, --gk</kbd></dt>
+<dd><p>Center position given in Gauß-Krüger zone 3coordinates: X = <cite>Rechtswert</cite>, Y = <cite>Hochwert</cite>.</p>
+</dd>
+<dt><kbd>-U, --utm</kbd></dt>
+<dd><p>Center position given in UTM Zone 32Ncoordinates: X = <cite>easting</cite>, Y = <cite>northing</cite>.</p>
+</dd>
+<dt><kbd>-D, --dwd</kbd></dt>
+<dd><p>Weather station position with German weather service (DWD) ID <cite>NUMBER</cite></p>
+</dd>
+<dt><kbd>-W, --wmo</kbd></dt>
+<dd><p>Postion of weather station with World Meteorological Organization (WMO)station ID <cite>NUMBER</cite></p>
+</dd>
+<dt><kbd>-s, --source</kbd></dt>
+<dd><p>Possible choices: ERA5, CERRA, HOSTRADA, DWD</p>
+<p>select the source for the weather data. Known <code class="docutils literal notranslate"><span class="pre">CODE</span></code> values are ERA5 CERRA HOSTRADA DWD Defaults to ERA5</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'ERA5'</span></code></p>
+</dd>
+<dt><kbd>-y, --year</kbd></dt>
+<dd><p>year of interest [2003]</p>
+</dd>
+<dt><kbd>-e, --elevation</kbd></dt>
+<dd><p>surface elevation. An approximate value is sufficientonly allowed with -L, -G, -U.</p>
+</dd>
+<dt><kbd>-p, --precip</kbd></dt>
+<dd><p>add precipitation columns to output file</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+</dl>
+</section>
+<section id="advanced-options_repeat3">
+<h4>advanced options<a class="headerlink" href="#advanced-options_repeat3" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>--class-scheme</kbd></dt>
+<dd><p>Possible choices: all, kms, kmo, k2o, pts, kmc, pgc</p>
+<dl class="simple">
+<dt>Choose the method how stability classesare derived from the weather data.Possible values: [‘all’, ‘kms’, ‘kmo’, ‘k2o’, ‘pts’, ‘kmc’, ‘pgc’]. [‘all’]</dt><dd><ul class="simple">
+<li><p>kms: Klug/Manier scheme (after VDI 3782 Part 6, issued Apr 2017) calculated from date, time, wind speed, total cloud cover, and cloud type of the lowest cloud layer</p></li>
+<li><p>kmo: Klug/Manier scheme (after VDI 3782 Part 1, issued 1992) calculated from date, time, wind speed, total cloud cover,and cloud type of the lowest cloud layer</p></li>
+<li><p>k2o: Klug/Manier scheme (after VDI 3782 Part 6, issued Apr 2017) calculated from date, time, wind speed, total cloud cover,and cloud base height (alternativelycloud type of the lowest cloud layer)</p></li>
+<li><p>pts: Pasquill/Turner scheme (after EPA-454/R-99-005, issued 2000) calculated from date, time, wind speed, total cloud cover, and cloud type of lowest cloud layer</p></li>
+<li><p>kmc: classify the model-derived Obukhovlength into stability classes using the class boundaries of the Klug/Manier scheme (after TA-Luft, 2021 issued 1992)</p></li>
+<li><p>pgc: classify the model-derived Obukhovlength into stability classes using the class boundaries of the Pasquill/Gifford stability classes (scraped from Golder, 1972)</p></li>
+</ul>
+</dd>
+</dl>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'all'</span></code></p>
+</dd>
+<dt><kbd>--inter-variant</kbd></dt>
+<dd><p>Possible choices: weighted, nearest, mean</p>
+<dl class="simple">
+<dt>Controls the interpolation of gridded data to the position specified. Possible values: [‘weighted’, ‘nearest’, ‘mean’]. [‘weighted’]</dt><dd><ul class="simple">
+<li><p>nearest: take model values from nearestgrid point</p></li>
+<li><p>mean: arithmetic mean of the model values at the three nearest grid poinst</p></li>
+<li><p>weighted: barycentric mean (weighted by distance) of the model values at the three nearest grid poinst</p></li>
+</ul>
+</dd>
+</dl>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'weighted'</span></code></p>
+</dd>
+<dt><kbd>--read-extracted</kbd></dt>
+<dd><p>Save time by re-reading extracted weather data form a saved file.</p>
+</dd>
+<dt><kbd>-x, --write-extracted</kbd></dt>
+<dd><p>write full extracted weather data to an extra file</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+<dt><kbd>--wind-variant</kbd></dt>
+<dd><p>Possible choices: fixed_057, fixed_010, model_mean, model_uv10, model_fsr</p>
+<dl>
+<dt>Controls how the 10-m wind is calculatedfrom ERA5 reanaysis data.possible values: [‘fixed_057’, ‘fixed_010’, ‘model_mean’, ‘model_uv10’, ‘model_fsr’]. [‘model_uv10’]</dt><dd><blockquote>
+<div><ul class="simple">
+<li><p>fixed_057: from friction velocity using a fixed roughness length <span class="math notranslate nohighlight">\(z_0\)</span> = 0.57 m</p></li>
+<li><p>fixed_010: from friction velocity using a fixed roughness length <span class="math notranslate nohighlight">\(z_0\)</span> = 0.10 m</p></li>
+</ul>
+</div></blockquote>
+<ul class="simple">
+<li><p>model_fsr: from friction velocity using the instant <code class="docutils literal notranslate"><span class="pre">forecast</span> <span class="pre">surface</span> <span class="pre">roughness</span></code> from the model for each hour</p></li>
+<li><p>model_mean: from friction velocity using the mean <code class="docutils literal notranslate"><span class="pre">forecast</span> <span class="pre">surface</span> <span class="pre">roughness</span></code> from the model, averaged over the whole data period</p></li>
+<li><p>model_uv10: use the <code class="docutils literal notranslate"><span class="pre">10-m</span> <span class="pre">wind</span></code> provided by the model</p></li>
+</ul>
+</dd>
+</dl>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'model_uv10'</span></code></p>
+</dd>
+<dt><kbd>--z0</kbd></dt>
+<dd><p>roughness length at the position of the measurement used for calculation of the effective anemometer height. Overrides the value provided by the data source. Ignored if value is None. [None]</p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="windfield">
+<h3>windfield<a class="headerlink" href="#windfield" title="Link to this heading">¶</a></h3>
+<p>Plot wind field</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">austaltools</span> <span class="n">windfield</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">b</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">c</span> <span class="n">COLORMAP</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">s</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">g</span> <span class="n">GRID</span><span class="p">]</span> <span class="p">(</span><span class="o">-</span><span class="n">a</span> <span class="n">ASL</span> <span class="o">|</span>
+                      <span class="o">-</span><span class="n">z</span> <span class="n">AGL</span> <span class="o">|</span> <span class="o">-</span><span class="n">l</span> <span class="n">NUMBER</span><span class="p">)</span> <span class="p">(</span><span class="o">-</span><span class="n">t</span> <span class="s2">&quot;YYY-MM-DD HH:MM:SS&quot;</span> <span class="o">|</span>
+                      <span class="o">-</span><span class="n">w</span> <span class="n">SPEED</span> <span class="n">DIR</span> <span class="n">AK</span> <span class="o">|</span> <span class="o">-</span><span class="n">W</span> <span class="n">U</span> <span class="n">V</span> <span class="n">AK</span><span class="p">)</span> <span class="p">[</span><span class="o">-</span><span class="n">p</span> <span class="p">[</span><span class="n">FILE</span><span class="p">]]</span> <span class="p">[</span><span class="o">--</span><span class="n">z0</span> <span class="n">Z0</span><span class="p">]</span>
+                      <span class="p">{</span><span class="n">stream</span><span class="p">,</span><span class="n">stream</span><span class="o">-</span><span class="n">color</span><span class="p">,</span><span class="n">arrows</span><span class="p">,</span><span class="n">arrows</span><span class="o">-</span><span class="n">color</span><span class="p">,</span><span class="n">barbs</span><span class="p">,</span><span class="n">barbs</span><span class="o">-</span><span class="n">color</span><span class="p">}</span>
+</pre></div>
+</div>
+<section id="positional-arguments_repeat4">
+<h4>Positional Arguments<a class="headerlink" href="#positional-arguments_repeat4" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>style</kbd></dt>
+<dd><p>Possible choices: stream, stream-color, arrows, arrows-color, barbs, barbs-color</p>
+<p>style of wind field plot</p>
+</dd>
+</dl>
+</section>
+<section id="named-arguments_repeat9">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments_repeat9" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-b, --no-buildings</kbd></dt>
+<dd><p>do not show the buildings defined in config file</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">True</span></code></p>
+</dd>
+<dt><kbd>-c, --colormap</kbd></dt>
+<dd><p>name of colormap to use. Defaults to “plasma”</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'plasma'</span></code></p>
+</dd>
+<dt><kbd>-s, --shade</kbd></dt>
+<dd><p>add hillshading in background</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+<dt><kbd>-g, --grid</kbd></dt>
+<dd><p>number of grid to plot. Defaults to 0</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">0</span></code></p>
+</dd>
+<dt><kbd>-a, --altitude</kbd></dt>
+<dd><p>display horizontal slice at <code class="docutils literal notranslate"><span class="pre">ASL</span></code> meters above sea level. Defaults to <cite>None</cite></p>
+</dd>
+<dt><kbd>-z, --height</kbd></dt>
+<dd><p>display horizontal slice at height <code class="docutils literal notranslate"><span class="pre">AGT</span></code> above ground level. Defaults to <cite>None</cite></p>
+</dd>
+<dt><kbd>-l, --level</kbd></dt>
+<dd><p>display horizontal slice at model level NUMBER (0-based). Defaults to <cite>None</cite></p>
+</dd>
+<dt><kbd>-t, --time</kbd></dt>
+<dd><p>display windfield corresponding to the wind and stability from akterm for the time given by <code class="docutils literal notranslate"><span class="pre">YYY-MM-DD</span> <span class="pre">HH:MM:SS</span></code>. Defaults to <cite>None</cite></p>
+</dd>
+<dt><kbd>-w, --wind</kbd></dt>
+<dd><p>display windfield corresponding to the wind <cite>SPEED</cite>, <cite>DIR`ection and stability class `AK</cite>. Defaults to <cite>None</cite></p>
+</dd>
+<dt><kbd>-W, --wind-vector</kbd></dt>
+<dd><p>display windfield corresponding to the wind vector (<cite>U</cite>, <cite>V</cite>) and stability class <cite>AK</cite>. Defaults to <cite>None</cite></p>
+</dd>
+<dt><kbd>-p, --plot</kbd></dt>
+<dd><p>save plot to a file. If <cite>FILE</cite> is “-” the plot is shown on screen. If <cite>FILE</cite> is missing, the file name defaults to the data file name with extension <cite>png</cite></p>
+</dd>
+</dl>
+</section>
+<section id="advanced-options_repeat4">
+<h4>advanced options<a class="headerlink" href="#advanced-options_repeat4" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>--z0</kbd></dt>
+<dd><p>roughness length at the position of the measurement used for calculation of the effective anemometer height. Overrides the value provided by the data source. Ignored if value is None. [None]</p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="windrose">
+<h3>windrose<a class="headerlink" href="#windrose" title="Link to this heading">¶</a></h3>
+<p>Plot wind rose</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">austaltools</span> <span class="n">windrose</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">k</span> <span class="p">{</span><span class="n">default</span><span class="p">,</span><span class="n">star</span><span class="p">,</span><span class="n">step</span><span class="p">,</span><span class="n">ring</span><span class="p">}]</span> <span class="p">[</span><span class="o">-</span><span class="n">n</span> <span class="n">SECTORS</span><span class="p">]</span>
+                     <span class="p">[</span><span class="o">-</span><span class="n">s</span> <span class="p">{</span><span class="n">beaufort</span><span class="p">,</span><span class="mi">2</span><span class="n">ms</span><span class="p">,</span><span class="n">quantile</span><span class="p">,</span><span class="n">stability</span><span class="p">,</span><span class="n">halfyear</span><span class="p">,</span><span class="n">season</span><span class="p">}]</span>
+                     <span class="p">[</span><span class="o">-</span><span class="n">c</span> <span class="n">COLORMAP</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">p</span> <span class="p">[</span><span class="n">FILE</span><span class="p">]]</span> <span class="p">[</span><span class="o">-</span><span class="n">w</span> <span class="n">WEATHER</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="named-arguments_repeat10">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments_repeat10" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-k, --kind</kbd></dt>
+<dd><p>Possible choices: default, star, step, ring</p>
+<p>style of wind field plot [‘default’])]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'default'</span></code></p>
+</dd>
+<dt><kbd>-n, --sectors</kbd></dt>
+<dd><p>number of sectors to plot [‘12’])]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'12'</span></code></p>
+</dd>
+<dt><kbd>-s, --scale</kbd></dt>
+<dd><p>Possible choices: beaufort, 2ms, quantile, stability, halfyear, season</p>
+<dl class="simple">
+<dt>How to classify the values [‘beaufort’]:</dt><dd><ul class="simple">
+<li><p><cite>beaufort</cite>: wind speed in beaufort</p></li>
+<li><p><cite>2ms</cite>: wind speed in steps of 2 m/s</p></li>
+<li><p><cite>quantile</cite>: wind speed quantiles</p></li>
+<li><p><cite>stability</cite>: stability class</p></li>
+<li><p><cite>halfyear</cite>: summer/winter half year</p></li>
+<li><p><cite>season</cite>: meteorological season</p></li>
+</ul>
+</dd>
+</dl>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'beaufort'</span></code></p>
+</dd>
+<dt><kbd>-c, --colormap</kbd></dt>
+<dd><p>name of colormap to use. The default depends on <cite>-k</cite>.</p>
+</dd>
+<dt><kbd>-p, --plot</kbd></dt>
+<dd><p>save plot to a file. If <cite>FILE</cite> is “-” the plot is shown on screen. If <cite>FILE</cite> is missing, the file name defaults to the data file name with extension <cite>png</cite></p>
+</dd>
+<dt><kbd>-w, --weather</kbd></dt>
+<dd><p>name of the weather data file toread. If this option is not given orNone, the name file is determined from austal.txt [None])].</p>
+</dd>
+</dl>
+</section>
+</section>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">austaltools</a><ul>
+<li><a class="reference internal" href="#austaltools.command_line-cli_parser-positional-arguments">Positional Arguments</a></li>
+<li><a class="reference internal" href="#austaltools.command_line-cli_parser-named-arguments">Named Arguments</a></li>
+<li><a class="reference internal" href="#Sub-commands">Sub-commands</a><ul>
+<li><a class="reference internal" href="#import-buildings (bg)">import-buildings (bg)</a><ul>
+<li><a class="reference internal" href="#named-arguments">Named Arguments</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#eap">eap</a><ul>
+<li><a class="reference internal" href="#named-arguments_repeat1">Named Arguments</a></li>
+<li><a class="reference internal" href="#advanced-options">advanced options</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#fill-timeseries (ft)">fill-timeseries (ft)</a><ul>
+<li><a class="reference internal" href="#named-arguments_repeat2">Named Arguments</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#heating">heating</a><ul>
+<li><a class="reference internal" href="#named-arguments_repeat3">Named Arguments</a></li>
+<li><a class="reference internal" href="#advanced-options_repeat1">advanced options</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#plot">plot</a><ul>
+<li><a class="reference internal" href="#positional-arguments">Positional Arguments</a></li>
+<li><a class="reference internal" href="#named-arguments_repeat4">Named Arguments</a></li>
+<li><a class="reference internal" href="#advanced-options_repeat2">advanced options</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#simple">simple</a><ul>
+<li><a class="reference internal" href="#positional-arguments_repeat1">Positional Arguments</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#steepness">steepness</a><ul>
+<li><a class="reference internal" href="#named-arguments_repeat5">Named Arguments</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#terrain">terrain</a><ul>
+<li><a class="reference internal" href="#positional-arguments_repeat2">Positional Arguments</a></li>
+<li><a class="reference internal" href="#named-arguments_repeat6">Named Arguments</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#transform">transform</a><ul>
+<li><a class="reference internal" href="#named-arguments_repeat7">Named Arguments</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#weather">weather</a><ul>
+<li><a class="reference internal" href="#positional-arguments_repeat3">Positional Arguments</a></li>
+<li><a class="reference internal" href="#named-arguments_repeat8">Named Arguments</a></li>
+<li><a class="reference internal" href="#advanced-options_repeat3">advanced options</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#windfield">windfield</a><ul>
+<li><a class="reference internal" href="#positional-arguments_repeat4">Positional Arguments</a></li>
+<li><a class="reference internal" href="#named-arguments_repeat9">Named Arguments</a></li>
+<li><a class="reference internal" href="#advanced-options_repeat4">advanced options</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#windrose">windrose</a><ul>
+<li><a class="reference internal" href="#named-arguments_repeat10">Named Arguments</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  </div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Unknown 2.8.26 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">austaltools</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright (C) 2022-2026 Clemens Drüe.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.0.
+    </div>
+  </body>
+</html>

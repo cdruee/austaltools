@@ -14,20 +14,12 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import matplotlib as mpl
     import matplotlib.pyplot as plt
 
-try:
-    from . import _dispersion
-    from . import _corine
-    from . import _plotting
-    from . import _tools
-    from ._metadata import __version__
-    from . import _windutil
-except ImportError:
-    import _dispersion
-    import _corine
-    import _plotting
-    import _tools
-    from _version import __version__
-    import _windutil
+from . import _dispersion
+from . import _corine
+from . import _plotting
+from . import _tools
+from ._metadata import __version__
+from . import _windutil
 
 logger = logging.getLogger(__name__)
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':

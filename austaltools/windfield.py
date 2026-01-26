@@ -6,6 +6,7 @@ This module ...
 import itertools
 import logging
 import os
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -15,20 +16,12 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import readmet
     import meteolib
 
-try:
-    from . import _corine
-    from . import _dispersion
-    from . import _plotting
-    from . import _tools
-    from ._metadata import __version__
-    from . import _windutil
-except ImportError:
-    import _corine
-    import _dispersion
-    import _plotting
-    import _tools
-    from _version import __version__
-    import _windutil
+from . import _corine
+from . import _dispersion
+from . import _plotting
+from . import _tools
+from ._metadata import __version__
+from . import _windutil
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +34,8 @@ DEFAULT_WIF_COLORMAP = 'plasma'
 
 # -------------------------------------------------------------------------
 
-def load_topo(path: str, variable: str = '') -> (list, list, np.ndarray):
+def load_topo(path: str, variable: str = ''
+              ) -> Tuple[list, list, np.ndarray]:
     """
     Get the AUSTAL model topography from the file `topo_path`
 
@@ -62,7 +56,7 @@ def load_topo(path: str, variable: str = '') -> (list, list, np.ndarray):
 # -------------------------------------------------------------------------
 
 def superpose(u_grid:np.ndarray, v_grid:np.ndarray, axes:dict,
-              dirs: np.ndarray,
+              dirs: list,
               ua:float, va:float, xa:float, ya:float, ha:float, ak:int):
     """
     Calculate the wind field by superposition of `u_grid` and `v_grid`
@@ -74,6 +68,8 @@ def superpose(u_grid:np.ndarray, v_grid:np.ndarray, axes:dict,
     :type v_grid: np.ndarray
     :param axes: x and y axes
     :type axes: dict[str, list[float]]
+    :param dirs: list of wind directions in lib
+    :type dirs: list
     :param ua: anemometer eastward wind component
     :type ua: float
     :param va: anemometer northward wind component
@@ -100,10 +96,10 @@ def superpose(u_grid:np.ndarray, v_grid:np.ndarray, axes:dict,
 
 
     n_dir = u_grid.shape[4]
-    ui = np.full((n_dir),np.nan)
-    vi = np.full((n_dir),np.nan)
-    dr = np.full((n_dir),np.nan)
-    rot = np.full((n_dir),np.nan)
+    ui = np.full(n_dir, np.nan)
+    vi = np.full(n_dir, np.nan)
+    dr = np.full(n_dir, np.nan)
+    rot = np.full(n_dir, np.nan)
     for i in range(n_dir):
         ui[i] = np.interp(ha, axes['z'], u_grid[ix, iy, :, ak, i])
         vi[i] = np.interp(ha, axes['z'], v_grid[ix, iy, :, ak, i])

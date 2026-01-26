@@ -22,22 +22,13 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 else:
     from ._mock import netCDF4
 
-try:
-    from ._metadata import __version__, __title__
-    from . import _corine
-    from . import _datasets
-    from . import _dispersion as dis
-    from . import _geo
-    from . import _storage
-    from . import _tools
-except ImportError:
-    from _version import __version__, __title__
-    import _corine
-    import _datasets
-    import _dispersion as dis
-    import _geo
-    import _storage
-    import _tools
+from ._metadata import __version__, __title__
+from . import _corine
+from . import _datasets
+from . import _dispersion as dis
+from . import _geo
+from . import _storage
+from . import _tools
 
 
 logging.basicConfig()
@@ -265,7 +256,10 @@ def grid_calulate_weights(pos: list, inter_variant=None) -> list[float]:
     logging.info('interpolation variant: %s' % inter_variant)
     w = [None, None, None]
     if inter_variant == 'weighted':
-        a = [1. / d if d > 0. else 1. for _, _, d in pos[0:3]]
+        if any([d == 0 for _, _, d in pos[0:3]]):
+            a = [0 if d > 0. else 1. for _, _, d in pos[0:3]]
+        else:
+            a = [1. / d for _, _, d in pos[0:3]]
         b = np.sum(a)
         w = [x / b for x in a]
     elif inter_variant == 'mean':

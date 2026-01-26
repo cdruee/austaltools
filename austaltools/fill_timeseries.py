@@ -16,12 +16,8 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import readmet
     import yaml
 
-try:
-    from . import _tools
-    from ._metadata import __version__
-except ImportError:
-    import _tools
-    from _version import __version__
+from . import _tools
+from ._metadata import __version__
 
 # ----------------------------------------------------
 

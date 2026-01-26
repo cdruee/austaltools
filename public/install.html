@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>Installation &#8212; Unknown 2.8.26 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/nature.css?v=279e0f84" />
+    <script src="_static/documentation_options.js?v=19584997"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="commands" href="api_commands.html" />
+    <link rel="prev" title="Welcome to austaltools documentation!" href="index.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="api_commands.html" title="commands"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Welcome to austaltools documentation!"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Unknown 2.8.26 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Installation</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="installation">
+<h1>Installation<a class="headerlink" href="#installation" title="Link to this heading">¶</a></h1>
+<section id="generic-installation">
+<h2>Generic installation:<a class="headerlink" href="#generic-installation" title="Link to this heading">¶</a></h2>
+<p>Users can install Austaltools from the Python Package Index (PyPI) by:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip</span> <span class="n">install</span> <span class="n">austaltools</span>
+</pre></div>
+</div>
+<p>Installing Austaltools using <code class="docutils literal notranslate"><span class="pre">pip</span></code> also installs
+all the necessary dependencies.</p>
+<p><strong>Note:</strong></p>
+<p>The Geospatial Data Abstraction Library (GDAL), which is used
+by AustalTools for geospatial data handling, may not have its
+full functionality if it was installed prior to AustalTools as
+a system package (Linux) or a binary distribution (Windows).
+In such cases, it is necessary to additionally install ‘libgdal’
+and its development headers
+(see the <a class="reference external" href="https://gdal.org/en/stable/download.html">GDAL download page</a>
+for instructions matching your system).</p>
+</section>
+<section id="ubuntu-debian-linux">
+<h2>Ubuntu / Debian Linux:<a class="headerlink" href="#ubuntu-debian-linux" title="Link to this heading">¶</a></h2>
+<p>Add needed components of the Python Installation</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">apt</span> <span class="n">install</span> <span class="n">python3</span><span class="o">-</span><span class="n">pip</span> <span class="n">python</span><span class="o">-</span><span class="ow">is</span><span class="o">-</span><span class="n">python3</span> <span class="n">python3</span><span class="o">-</span><span class="n">setuptools</span>
+</pre></div>
+</div>
+<p>Install required dependencies (note <code class="docutils literal notranslate"><span class="pre">libgdal-dev</span></code> that is required for
+the austaltools installation process):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">apt</span> <span class="n">install</span> <span class="n">python3</span><span class="o">-</span><span class="n">numpy</span> <span class="n">python3</span><span class="o">-</span><span class="n">pandas</span>
+<span class="n">sudo</span> <span class="n">apt</span> <span class="n">install</span> <span class="n">gdal</span><span class="o">-</span><span class="nb">bin</span> <span class="n">gdal</span><span class="o">-</span><span class="n">data</span> <span class="n">python3</span><span class="o">-</span><span class="n">gdal</span> <span class="n">libgdal</span><span class="o">-</span><span class="n">dev</span>
+</pre></div>
+</div>
+<p>Install recommended dependencies as you wish:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">sudo</span> <span class="n">apt</span> <span class="n">install</span> <span class="n">python3</span><span class="o">-</span><span class="n">tqdm</span> <span class="n">python3</span><span class="o">-</span><span class="n">matplotlib</span> <span class="n">python3</span><span class="o">-</span><span class="n">venv</span>
+</pre></div>
+</div>
+<p>Then install austaltools from Pypi:</p>
+<ol class="arabic">
+<li><p>Variant: install for user</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip3</span> <span class="n">install</span> <span class="o">--</span><span class="n">user</span> <span class="o">--</span><span class="k">break</span><span class="o">-</span><span class="n">system</span><span class="o">-</span><span class="n">packages</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">build</span><span class="o">-</span><span class="n">isolation</span> <span class="n">austaltools</span>
+</pre></div>
+</div>
+<p>This may probably produce a warning message
+<code class="docutils literal notranslate"><span class="pre">...installed</span> <span class="pre">in</span> <span class="pre">'/home/benutzer/.local/bin'</span> <span class="pre">which</span> <span class="pre">is</span> <span class="pre">not</span> <span class="pre">on</span> <span class="pre">PATH.</span></code>
+meaning that you cannot yet use AustalTools like normal commands.</p>
+<p>Fix this by eiter adding the following code to your <code class="docutils literal notranslate"><span class="pre">.profile</span></code>
+file:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="c1"># set PATH so it includes user&#39;s private bin if it exists</span>
+<span class="k">if</span> <span class="p">[</span> <span class="o">-</span><span class="n">d</span> <span class="s2">&quot;$HOME/.local/bin&quot;</span> <span class="p">]</span> <span class="p">;</span> <span class="n">then</span>
+    <span class="n">PATH</span><span class="o">=</span><span class="s2">&quot;$HOME/.local/bin:$PATH&quot;</span>
+<span class="n">fi</span>
+</pre></div>
+</div>
+<p>or  - <strong>if you do not already have a ``bin`` directory in your home directory</strong> - by orgissuing the command:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">ln</span> <span class="o">-</span><span class="n">s</span> <span class="o">~/.</span><span class="n">local</span><span class="o">/</span><span class="nb">bin</span> <span class="o">~/</span><span class="nb">bin</span>
+</pre></div>
+</div>
+<p>and logging out and in again.</p>
+</li>
+<li><p>Variant: install in a virtual environment</p>
+<p>Create a new virtual environment by:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">python3</span> <span class="o">-</span><span class="n">m</span> <span class="n">venv</span> <span class="n">my_venv</span>
+</pre></div>
+</div>
+<p>and ‘change into’ it by issuing the command</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="o">.</span> <span class="n">my_venv</span><span class="o">/</span><span class="nb">bin</span><span class="o">/</span><span class="n">activate</span>
+</pre></div>
+</div>
+<p>Then install austaltools inside the virtual environment:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">pip3</span> <span class="n">install</span> <span class="o">--</span><span class="n">no</span><span class="o">-</span><span class="n">build</span><span class="o">-</span><span class="n">isolation</span> <span class="n">austaltools</span>
+</pre></div>
+</div>
+<p>Note that although in a virtual environment, <code class="docutils literal notranslate"><span class="pre">--no-build-isolation</span></code>
+is needed because without this option, <code class="docutils literal notranslate"><span class="pre">pip3</span></code> updates the python gdal
+bindings to its newest version that does not match the gdal version
+installed on your system!</p>
+<p>Remember that everytime you want to use AustalTools, you need to
+activate the virtual environment. You can leave it anytime issuing
+the command <code class="docutils literal notranslate"><span class="pre">deactivate</span></code>.</p>
+</li>
+</ol>
+</section>
+<section id="requirements">
+<h2>Requirements:<a class="headerlink" href="#requirements" title="Link to this heading">¶</a></h2>
+<p>Austaltools uses the following python packages:</p>
+<blockquote>
+<div><dl class="simple">
+<dt>-<strong>cdsapi</strong>:</dt><dd><p>The <a class="reference external" href="https://cds.climate.copernicus.eu/how-to-api">Climate Data Store Application Program Interface
+(CDS API)</a>
+is a Python library which allows you to access data from the CDS
+programmatically</p>
+</dd>
+<dt>-<strong>GDAL</strong>:</dt><dd><p>The
+<a class="reference external" href="https://gdal.org/en/stable/">Geospatial Data Abstraction Library</a>
+is a library for translation and processing of raster and vector
+geospatial data.</p>
+</dd>
+<dt>-<strong>matplotlib</strong>:</dt><dd><p><a class="reference external" href="https://matplotlib.org/">Matplotlib</a> is a comprehensive
+library for creating visualizations in Python.</p>
+</dd>
+<dt>-<strong>meteolib</strong>:</dt><dd><p><a class="reference external" href="https://github.com/cdruee/meteolib">Meteolib</a> is a Python
+that standard equations, constants and conversions fully backed by
+citable refrences and/or recommendations of the
+World meteorological Organization (WMO), for general use in meteorology.</p>
+</dd>
+<dt>-<strong>netCDF4</strong>:</dt><dd><p>The <a class="reference external" href="https://unidata.github.io/netcdf4-python/">package netCDF4</a>
+is a Python interface to the library that implements
+access to files in the <a class="reference external" href="https://www.unidata.ucar.edu/software/netcdf/">NetCDF (Network Common Data Form)</a> format that
+is a community standard for sharing scientific data.</p>
+</dd>
+<dt>-<strong>numpy</strong>:</dt><dd><p><a class="reference external" href="https://numpy.org/">NumPy</a> is a widely-used Python libary
+offering comprehensive mathematical functions, etc.</p>
+</dd>
+<dt>-<strong>pandas</strong>:</dt><dd><p><a class="reference external" href="https://pandas.pydata.org/">Pandas</a> is a widely-used
+Python tool for data analysis and manipulation.</p>
+</dd>
+<dt>-<strong>PyYAML</strong>:</dt><dd><p><a class="reference external" href="https://pyyaml.org/">PyYAML</a> is a parser and emitter
+for Python. <a class="reference external" href="https://yaml.org/">YAML (yet another markup language)</a>
+a data description and serialization language that is easy to read
+for humans.</p>
+</dd>
+<dt>-<strong>readmet</strong>:</dt><dd><p><a class="reference external" href="https://github.com/cdruee/readmet">readmet</a> is a open-source Python
+library for reading and writing a selection of data formats used
+in atmospheric sciences.</p>
+</dd>
+<dt>-<strong>requests</strong>:</dt><dd><p><a class="reference external" href="https://requests.readthedocs.io/en/latest/">Requests</a>
+is a simple-to-use Python library for making web-requests.</p>
+</dd>
+<dt>-<strong>setuptools</strong>:</dt><dd><p><a class="reference external" href="https://setuptools.pypa.io">library</a>
+designed to facilitate packaging Python projects.</p>
+</dd>
+<dt>-<strong>urllib3</strong>:</dt><dd><p>Is is a requirement of <em>requests</em>, but it needs to be imported
+separately for better control of the excessive warnings emitted
+by <em>requests</em>.</p>
+</dd>
+</dl>
+</div></blockquote>
+<dl class="simple">
+<dt>To generate the documentation, AustalTools uses:</dt><dd><dl class="simple">
+<dt>-<strong>sphinx</strong>:</dt><dd><dl class="simple">
+<dt><a class="reference external" href="https://www.sphinx-doc.org/">Sphinx</a></dt><dd><p>is a documentation generator written and used by the Python community.</p>
+</dd>
+</dl>
+</dd>
+<dt>-<strong>sphinx-argparse</strong>:</dt><dd><p><a class="reference external" href="https://github.com/sphinx-doc/sphinx-argparse/">Sphinx extension</a>
+to automatically document argparse commands and options.</p>
+</dd>
+</dl>
+</dd>
+</dl>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">Installation</a><ul>
+<li><a class="reference internal" href="#generic-installation">Generic installation:</a></li>
+<li><a class="reference internal" href="#ubuntu-debian-linux">Ubuntu / Debian Linux:</a></li>
+<li><a class="reference internal" href="#requirements">Requirements:</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+  <div>
+    <h4>Previous topic</h4>
+    <p class="topless"><a href="index.html"
+                          title="previous chapter">Welcome to austaltools documentation!</a></p>
+  </div>
+  <div>
+    <h4>Next topic</h4>
+    <p class="topless"><a href="api_commands.html"
+                          title="next chapter">commands</a></p>
+  </div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="right" >
+          <a href="api_commands.html" title="commands"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="index.html" title="Welcome to austaltools documentation!"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Unknown 2.8.26 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">Installation</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright (C) 2022-2026 Clemens Drüe.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.0.
+    </div>
+  </body>
+</html>

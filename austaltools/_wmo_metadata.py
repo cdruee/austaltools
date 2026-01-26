@@ -8,12 +8,8 @@ https://oscar.wmo.int/surface
 import json
 import os
 
-try:
-    from ._metadata import __version__, __title__
-    from . import _storage
-except ImportError:
-    from _version import __version__, __title__
-    import _storage
+from ._metadata import __version__, __title__
+from . import _storage
 
 OSCARFILE = os.path.join(_storage.DIST_AUX_FILES, 'wmo_stationlist.json')
 """ File holding the WMO station data retrieved from WMO OSCAR database """
@@ -52,7 +48,7 @@ def _get_float(station: dict, field: str) -> float|None:
     if field in station:
         try:
             res = float(station[field])
-        except ValueError:
+        except (ValueError, TypeError):
             res = None
     else:
         res = None

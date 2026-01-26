@@ -3,10 +3,7 @@ import os
 
 import pandas as pd
 
-try:
-    from . import _tools
-except ImportError:
-    import _tools
+from . import _tools
 
 if os.getenv('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np

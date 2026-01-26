@@ -2782,6 +2782,10 @@ def merge_tiles(target: str, tile_files: list[str],
     :raises Exception: if gdal_merge aborts with error
 
     """
+    # Validate ullr parameter first, before any file operations
+    if ullr is not None:
+        if len(ullr) != 4:
+            raise ValueError("ullr must be a 4-tuple")
     if os.path.exists(target):
         logger.info("removing old source file")
         os.remove(target)
@@ -2814,8 +2818,6 @@ def merge_tiles(target: str, tile_files: list[str],
         raise ValueError(f"unsopported driver {driver}")
     gdal_merge_options = [""]
     if ullr is not None:
-        if len(ullr) != 4:
-            raise ValueError("ulr must be a 4-tuple")
         gdal_merge_options += ["-ul_lr"] + [str(x) for x in ullr]
     gdal_merge_options += ["-init", str(NODATA),
                            "-a_nodata", str(NODATA)

@@ -12,10 +12,7 @@ from importlib import resources
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import yaml
 
-try:
-    from ._metadata import __title__
-except ImportError:
-    from _version import __title__
+from ._metadata import __title__
 
 logger = logging.getLogger(__name__)
 

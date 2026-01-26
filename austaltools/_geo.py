@@ -255,11 +255,11 @@ def read_dwd_stationinfo(station: int, pos_lat: float | None = None,
     if station is not None:
         if station not in sf.index:
             raise ValueError('station not in datafile')
-        srow = sf[station]
+        srow = station
     else:
         sf['sdist'] = spheric_distance(
             sf['latitude'], sf['longitude'], pos_lat, pos_lon)
-        srow = sf['sdist'].argmin()
+        srow = sf['sdist'].idxmin()
 
     if srow is None:
         raise ValueError('station not found: %s' % station)

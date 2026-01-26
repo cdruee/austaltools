@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>configure-austaltools &#8212; Unknown 2.8.26 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/nature.css?v=279e0f84" />
+    <script src="_static/documentation_options.js?v=19584997"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Unknown 2.8.26 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">configure-austaltools</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="configure-austaltools">
+<h1>configure-austaltools<a class="headerlink" href="#configure-austaltools" title="Link to this heading">¶</a></h1>
+<p><p>Prepare modify datasets used by austaltools</p>
+</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">usage</span><span class="p">:</span> <span class="n">configure</span><span class="o">-</span><span class="n">austaltools</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">debug</span> <span class="o">|</span> <span class="o">-</span><span class="n">v</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">version</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">storage</span> <span class="n">PATH</span><span class="p">]</span>
+                             <span class="p">[</span><span class="o">--</span><span class="n">temp</span> <span class="n">PATH</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">noparallel</span><span class="p">]</span>
+                             <span class="n">COMMAND</span> <span class="o">...</span>
+</pre></div>
+</div>
+<section id="austaltools.configure_austaltools-cli_parser-positional-arguments">
+<h2>Positional Arguments<a class="headerlink" href="#austaltools.configure_austaltools-cli_parser-positional-arguments" title="Link to this heading">¶</a></h2>
+<dl class="option-list">
+<dt><kbd>COMMAND</kbd></dt>
+<dd><p>Possible choices: assemble, austal, download, list, scan, simple, stationlist</p>
+</dd>
+</dl>
+</section>
+<section id="austaltools.configure_austaltools-cli_parser-named-arguments">
+<h2>Named Arguments<a class="headerlink" href="#austaltools.configure_austaltools-cli_parser-named-arguments" title="Link to this heading">¶</a></h2>
+<dl class="option-list">
+<dt><kbd>--debug</kbd></dt>
+<dd><p>show informative output</p>
+</dd>
+<dt><kbd>-v, --verbose</kbd></dt>
+<dd><p>show detailed output</p>
+</dd>
+<dt><kbd>--version</kbd></dt>
+<dd><p>show program’s version number and exit</p>
+</dd>
+<dt><kbd>--storage</kbd></dt>
+<dd><p>custom location for data storage</p>
+</dd>
+<dt><kbd>--temp</kbd></dt>
+<dd><p>custom location for temp files [/tmp]</p>
+</dd>
+<dt><kbd>--noparallel</kbd></dt>
+<dd><p>disable parallel execution of downloads.</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+</dl>
+</section>
+<section id="Sub-commands">
+<h2>Sub-commands<a class="headerlink" href="#Sub-commands" title="Link to this heading">¶</a></h2>
+<section id="assemble">
+<h3>assemble<a class="headerlink" href="#assemble" title="Link to this heading">¶</a></h3>
+<p>assemble dataset from original data source.
+WARNING: This may take a LONG time and may require excessive memory and disk space.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">configure</span><span class="o">-</span><span class="n">austaltools</span> <span class="n">assemble</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">s</span> <span class="n">CODE</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">y</span> <span class="n">YEAR</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">p</span> <span class="n">PATH</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">f</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="named-arguments">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-s, --source</kbd></dt>
+<dd><p>Possible choices: DGM25-RP, DGM10-DE, DGM25-DE, DGM10-BB, DGM10-BE, DGM10-BW, DGM10-BY, DGM10-HB, DGM10-HE, DGM10-HH, DGM10-MV, DGM10-NI, DGM10-NW, DGM10-RP, DGM10-SH, DGM10-SL, DGM10-SN, DGM10-ST, DGM10-TH, GLO-30, GTOPO30, SRTM, AW3D30, ERA5, CERRA, HOSTRADA, DWD</p>
+<p>code for the source digital elevation model (DEM). Known DEMs are: DGM25-RP DGM10-DE DGM25-DE DGM10-BB DGM10-BE DGM10-BW DGM10-BY DGM10-HB DGM10-HE DGM10-HH DGM10-MV DGM10-NI DGM10-NW DGM10-RP DGM10-SH DGM10-SL DGM10-SN DGM10-ST DGM10-TH GLO-30 GTOPO30 SRTM AW3D30 Defaults to DGM25-RP</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'DGM25-RP'</span></code></p>
+</dd>
+<dt><kbd>-y, --years</kbd></dt>
+<dd><p>Year for which to generate weather data. A range of years may be given as &lt;start year&gt;-&lt;end year&gt;. No default, required with weather datasets.</p>
+</dd>
+<dt><kbd>-p, --path</kbd></dt>
+<dd><p>create files in PATH instead of one of the default locations. Note: data downloaded to a custom PATH are not considered by austaltools by default.</p>
+</dd>
+<dt><kbd>-f, --force</kbd></dt>
+<dd><p>overwrite dataset if it exists.If dataset exists in a system-wide installation, it might be downloaded to the user directory (again), where it takes higher preference.</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="austal">
+<h3>austal<a class="headerlink" href="#austal" title="Link to this heading">¶</a></h3>
+<p>set/show location of the austal installation. If none of <cite>path</cite> of <cite>find</cite> is given,the current setting is shwon.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">configure</span><span class="o">-</span><span class="n">austaltools</span> <span class="n">austal</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">p</span> <span class="n">PATH</span> <span class="o">|</span> <span class="o">-</span><span class="n">f</span> <span class="n">PATH</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="named-arguments_repeat1">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments_repeat1" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-p, --path</kbd></dt>
+<dd><p>directory where the austal executableis stored.</p>
+</dd>
+<dt><kbd>-f, --find</kbd></dt>
+<dd><p>recursively search this directory for the austal executable.</p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="download">
+<h3>download<a class="headerlink" href="#download" title="Link to this heading">¶</a></h3>
+<p>download pre-assembled dataset from a location configured for the dataset.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">configure</span><span class="o">-</span><span class="n">austaltools</span> <span class="n">download</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">s</span> <span class="n">CODE</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">y</span> <span class="n">YEAR</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">p</span> <span class="n">PATH</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">f</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="named-arguments_repeat2">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments_repeat2" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-s, --source</kbd></dt>
+<dd><p>Possible choices: DGM25-RP, DGM10-DE, DGM25-DE, DGM10-BB, DGM10-BE, DGM10-BW, DGM10-BY, DGM10-HB, DGM10-HE, DGM10-HH, DGM10-MV, DGM10-NI, DGM10-NW, DGM10-RP, DGM10-SH, DGM10-SL, DGM10-SN, DGM10-ST, DGM10-TH, GLO-30, GTOPO30, SRTM, AW3D30, ERA5, CERRA, HOSTRADA, DWD</p>
+<p>code for the source digital elevation model (DEM). Known DEMs are: DGM25-RP DGM10-DE DGM25-DE DGM10-BB DGM10-BE DGM10-BW DGM10-BY DGM10-HB DGM10-HE DGM10-HH DGM10-MV DGM10-NI DGM10-NW DGM10-RP DGM10-SH DGM10-SL DGM10-SN DGM10-ST DGM10-TH GLO-30 GTOPO30 SRTM AW3D30 Defaults to DGM25-RP</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'DGM25-RP'</span></code></p>
+</dd>
+<dt><kbd>-y, --years</kbd></dt>
+<dd><p>Year for which to download weather data. A range of years may be given as &lt;start year&gt;-&lt;end year&gt;. No default, required with weather datasets.</p>
+</dd>
+<dt><kbd>-p, --path</kbd></dt>
+<dd><p>download files to PATH instead of one of the default locations. Note: data downloaded to a custom PATH are not considered by austaltools by default.</p>
+</dd>
+<dt><kbd>-f, --force</kbd></dt>
+<dd><p>overwrite dataset if it exists.If dataset exists in a system-wide installation, it might be downloaded to the user directory (again), where it takes higher preference.</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="list">
+<h3>list<a class="headerlink" href="#list" title="Link to this heading">¶</a></h3>
+<p>list known datasets and show availability and storage locations</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">configure</span><span class="o">-</span><span class="n">austaltools</span> <span class="nb">list</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">w</span> <span class="o">|</span> <span class="o">-</span><span class="n">t</span> <span class="o">|</span> <span class="o">--</span><span class="nb">all</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">k</span> <span class="o">|</span> <span class="o">--</span><span class="n">available</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">l</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="named-arguments_repeat3">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments_repeat3" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-w, --weather</kbd></dt>
+<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">'all'</span></code></p>
+</dd>
+<dt><kbd>-t, --terrain</kbd></dt>
+<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">'all'</span></code></p>
+</dd>
+<dt><kbd>--all</kbd></dt>
+<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">'all'</span></code></p>
+</dd>
+<dt><kbd>-k, --known</kbd></dt>
+<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">'available'</span></code></p>
+</dd>
+<dt><kbd>--available</kbd></dt>
+<dd><p>Default: <code class="docutils literal notranslate"><span class="pre">'available'</span></code></p>
+</dd>
+<dt><kbd>-l, --long</kbd></dt>
+<dd><p>show verbose list instead of just codes</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">False</span></code></p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="scan">
+<h3>scan<a class="headerlink" href="#scan" title="Link to this heading">¶</a></h3>
+<p>search for known datasets, show availability and storage locations</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">configure</span><span class="o">-</span><span class="n">austaltools</span> <span class="n">scan</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span>
+</pre></div>
+</div>
+</section>
+<section id="simple">
+<h3>simple<a class="headerlink" href="#simple" title="Link to this heading">¶</a></h3>
+<p>change settings for austaltools simple / austal-input. If called without options, the current sinngs are shown.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">configure</span><span class="o">-</span><span class="n">austaltools</span> <span class="n">simple</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">weather</span> <span class="n">CODE</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">year</span> <span class="n">CODE</span><span class="p">]</span>
+                             <span class="p">[</span><span class="o">--</span><span class="n">terrain</span> <span class="n">CODE</span><span class="p">]</span> <span class="p">[</span><span class="o">--</span><span class="n">extent</span> <span class="n">CODE</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="named-arguments_repeat4">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments_repeat4" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>--weather</kbd></dt>
+<dd><p>select weather source</p>
+</dd>
+<dt><kbd>--year</kbd></dt>
+<dd><p>select weather year</p>
+</dd>
+<dt><kbd>--terrain</kbd></dt>
+<dd><p>select terrain source</p>
+</dd>
+<dt><kbd>--extent</kbd></dt>
+<dd><p>select terrain source</p>
+</dd>
+</dl>
+</section>
+</section>
+<section id="stationlist">
+<h3>stationlist<a class="headerlink" href="#stationlist" title="Link to this heading">¶</a></h3>
+<p>generate new stationlist for one of the weather sources</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">configure</span><span class="o">-</span><span class="n">austaltools</span> <span class="n">stationlist</span> <span class="p">[</span><span class="o">-</span><span class="n">h</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">s</span> <span class="n">CODE</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">f</span> <span class="n">CODE</span><span class="p">]</span> <span class="p">[</span><span class="o">-</span><span class="n">o</span> <span class="n">PATH</span><span class="p">]</span>
+</pre></div>
+</div>
+<section id="named-arguments_repeat5">
+<h4>Named Arguments<a class="headerlink" href="#named-arguments_repeat5" title="Link to this heading">¶</a></h4>
+<dl class="option-list">
+<dt><kbd>-s, --source</kbd></dt>
+<dd><p>Possible choices: DWD</p>
+<p>Select the respectice source from: [‘DWD’]. [‘DWD’]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'DWD'</span></code></p>
+</dd>
+<dt><kbd>-f, --format</kbd></dt>
+<dd><p>Possible choices: csv, json</p>
+<p>Select the output file format from: [‘csv’, ‘json’]. [‘json’]</p>
+<p>Default: <code class="docutils literal notranslate"><span class="pre">'json'</span></code></p>
+</dd>
+<dt><kbd>-o, --out</kbd></dt>
+<dd><p>File to write to or None for stdout. [None]</p>
+</dd>
+</dl>
+</section>
+</section>
+</section>
+<section id="dataset-definitions">
+<h2>Dataset definitions<a class="headerlink" href="#dataset-definitions" title="Link to this heading">¶</a></h2>
+<p>Datasets are defined in ‘data/dataset_definitions.json’:</p>
+<p>The file is a dict that contains the dataset codes as keys
+and a dict describing the dataset as value.</p>
+<p>Each dict has the follwing entries:</p>
+<dl>
+<dt>“storage”</dt><dd><p>(required, str) one of “terrain” or “weather”</p>
+</dd>
+<dt>“uri”</dt><dd><p>(optional, str) A location from where the dataset can be dowloaded.
+Supported uri schemes are “doi://”, “http://”, and “https://”.</p>
+</dd>
+<dt>“license”</dt><dd><p>(required, str) The license under which the orginal source
+supplies the data.
+The license full text will be stored as “&lt;dataset code&gt;.LICENSE.txt”
+in the same data as the dataset when it is downloaded or assembled.
+Licenses may be specified:</p>
+<ul class="simple">
+<li><p>by an idenfifier recogized by the
+Linux foundation <a class="reference external" href="https://spdx.org/">SPDX project</a>
+(see <a class="reference external" href="https://spdx.org/licenses/">this list</a>)
+prefixed by “spdx:”.
+For example: <code class="code highlight json docutils literal highlight-json"><span class="nt">&quot;license&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;spdx:DL-DE-BY-2.0&quot;</span></code></p></li>
+<li><p>in a file that should reside in <cite>austaltools/data</cite>.
+The filename must be prefixed by “file:”.
+If the filename is empty, the file “&lt;dataset code&gt;.LICENSE.txt”
+in <cite>austaltools/data</cite> will be used.
+For example: <code class="code highlight json docutils literal highlight-json"><span class="nt">&quot;license&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;file:&quot;</span></code></p></li>
+</ul>
+</dd>
+<dt>“notice”</dt><dd><p>(optional, str)
+The text of a notice that is shown to the user if data from
+the dataset are extracted, if and as requested by the
+original data suplier.
+The notice will be stored as “&lt;dataset code&gt;.NOTICE.txt”
+in the same data as the dataset when it is downloaded or assembled.</p>
+<p>Unless the value is <cite>null</cite> (without quotes!)
+the value is supplied to the
+For example: <code class="code highlight json docutils literal highlight-json"><span class="nt">&quot;notice&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;Buy coffe for Bob&quot;</span></code></p>
+</dd>
+<dt>“assemble”</dt><dd><p>(optional, str) The function in <cite>austaltools._dataset</cite> to call for
+assembling the dataset fromist original source.
+For available functions see <a class="reference internal" href="api_internal.html"><span class="doc">internal modules</span></a>
+(fundtion names start with “assemble”). For most cases,
+<a class="reference external" href="api_internal.html#austaltools._datasets.assemble_DGMxx">assemble_DGMxx</a>
+is suitable:
+Example: <code class="code highlight json docutils literal highlight-json"><span class="nt">&quot;assemble&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;assemble_DGMxx&quot;</span></code></p>
+</dd>
+<dt>“arguments”</dt><dd><p>(optional, dictionary) The arguments to the
+selected <cite>assemble</cite> function</p>
+<dl>
+<dt>“resolution”</dt><dd><p>(optional, integer)
+Horizontal resolution for the produced dataset, i.e.
+size of the pixels in units of the selected projection.
+Most commontly m in case of Gauß-Krüger or UTM coodinates.
+Should be euqal to the number following “DGM” in the
+dataset code. Defaults to 25.</p>
+</dd>
+<dt>“CRS”:</dt><dd><p>(optional, str)
+Geodetic refecence system of the downloaded data
+as EPSG-code, for example <code class="code highlight json docutils literal highlight-json"><span class="nt">&quot;CRS&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;EPSG:25832&quot;</span></code></p>
+</dd>
+<dt>“host”:</dt><dd><p>(optional, str)
+Hostname and protocol from where to download data.
+Supported protocols are <code class="code docutils literal notranslate"><span class="pre">&quot;http://...&quot;</span></code> and <code class="code docutils literal notranslate"><span class="pre">&quot;https://...&quot;</span></code>
+Data stored locally
+(e.g. if only available on physical media) may be
+specified by giving the absolute path
+as <code class="code docutils literal notranslate"><span class="pre">&quot;file:///...&quot;</span></code>.
+Example: <code class="code highlight json docutils literal highlight-json"><span class="nt">&quot;host&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://geodata.example.com&quot;</span></code></p>
+</dd>
+<dt>“check_cert”:</dt><dd><p>(optional, str)
+Wether to check the server certificates of <cite>host</cite> or not.
+To do so is a normal part of establishing a https connection
+and is done if the value is “true” or “yes”.
+But since some of the providers use certificates that,
+although accepted by popular browsers, fail a strict
+verification, it can be disables by setting this value to
+“no” or “false”. Defaults to “true”.</p>
+</dd>
+<dt>“path”:</dt><dd><p>(optional, str)
+The path to the data on the download server.
+Example: If the datafiles are available at
+<code class="code docutils literal notranslate"><span class="pre">&quot;https://geodata.example.com/foo/bar/baz/tile*.tif&quot;</span></code>
+give <code class="code docutils literal notranslate"><span class="pre">&quot;foo/bar/baz&quot;</span></code> here</p>
+</dd>
+<dt>“filelist”:</dt><dd><p>(optional, list[str] or str)
+The list of files to download.
+File names may be either given as filenames (optionally
+including a path). In this case the download url
+is build by appending <code class="code docutils literal notranslate"><span class="pre">&quot;&lt;host&gt;/&lt;path&gt;/&lt;filename&gt;&quot;</span></code>.
+Or they are given as urls. In this case <cite>host</cite> and <cite>path</cite>
+are ignored.</p>
+<p>If <cite>filelist</cite> is a list (of strings), each entry
+is downloaded from the respective ulr.
+Example: <code class="code highlight json docutils literal highlight-json"><span class="nt">&quot;filelist&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;data1.tif&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;data2.tif&quot;</span><span class="p">]</span></code></p>
+<p>If <cite>filelist</cite> is a filename (optionally including
+a path as prefix of http GET parameters as postfixes).
+The respective file is downloaded and parsed to yield
+the filenames to download (as if they were provided
+as list).
+Example: <code class="code highlight json docutils literal highlight-json"><span class="nt">&quot;filelist&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;atom/dem.xml&quot;</span></code></p>
+<p>If <cite>filelist</cite> is the special string “generate”, the list
+of files is generated using the <cite>format</cite> and <cite>values</cite>
+arguments.</p>
+<p>A downloaded <cite>filelist</cite> is parsed acording to its
+filename exension. Supported formats are ‘xml’, ‘meta4’,
+‘html’, ‘json’, and ‘geojson’.
+Which information is extracted must be defined
+by the arguments <cite>xmplath</cite> (xml and meta4), <cite>links</cite> (html),
+or <cite>jsonpath</cite> (json and geojson).
+If the value of <cite>filelist</cite>
+does not end with any of these, it may be postfixed by
+two colons followed by the desired filename extension.
+This postfix is removed from the string before
+building the url to download.
+Example: “atom_feed?id=awsomedata&amp;crs=25832::xml”</p>
+</dd>
+<dt>“localstore”:</dt><dd><p>(optional, str)
+Path where downloaded files are stored locally.
+If locally stored versions of some or all files in filelist
+are present, these copies are used. Only missing files are
+downloaded.
+Intended to reduce traffic an transfer time in case multiple
+datasets are assebled from the same original data.</p>
+</dd>
+<dt>“jsonpath”:</dt><dd><p>(required for json or geojson filelist, str)
+An path-like expression that selects filenames from a json-file.
+For the syntax see
+<a class="reference external" href="apidoc.html#austaltools._datasets.jsonpath">_datasets API documentation</a>.
+Example  <code class="code highlight json docutils literal highlight-json"><span class="nt">&quot;jsonpath&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/foo/*/bar/2/url&quot;</span></code></p>
+</dd>
+<dt>“links”:</dt><dd><p>(required for html filelist, regex)
+An <a class="reference external" href="https://docs.python.org/3/library/re.html#regular-expression-syntax">regular expression</a>
+that is used to select the desired links from all links
+that are found in the downloadad html document. All
+links that contain the given expression are put on the list
+to download.
+Example <code class="code docutils literal notranslate"><span class="pre">&quot;links&quot;:</span> <span class="pre">&quot;dgm.*zip&quot;</span></code></p>
+</dd>
+<dt>“xmlpath”:</dt><dd><p>(required for xml or meta4 filelist, str)
+An XPath expression that selects filenames from an xml-file.
+Note that only a small subset of the XPath specification
+is supported, see
+<a class="reference external" href="apidoc.html#austaltools._datasets.xmlpath">_datasets API documentation</a>.
+Example: <code class="code docutils literal notranslate"><span class="pre">&quot;xmlpath&quot;:</span> <span class="pre">&quot;/file[&#64;name=.tif$]/url&quot;</span></code></p>
+</dd>
+<dt>“format”:</dt><dd><p>(required with <cite>filelist</cite> = “generate”, str)
+A <a class="reference external" href="https://docs.python.org/3/library/string.html#format-specification-mini-language">C-sytle format string</a>
+that is filles using the values supplied in the <cite>values</cite> argument.</p>
+</dd>
+<dt>“values”</dt><dd><p>(required with <cite>filelist</cite> = “generate”, list)
+A list of strings or lists or a mixture thereof.
+The number of members of the list mus be equal to the
+field provided in the <cite>format</cite> string.
+The values in each member must match the type in the
+respective field of the format.</p>
+<p>If an entry is a sting of the form “&lt;start&gt;-&lt;stop&gt;/&lt;step&gt;”,
+it is expanded into a list of values. If &lt;step&gt; is missing,
+a step of 1 is used.
+Example: <cite>[“1-9/2” ]</cite> is expanded
+to: <code class="code highlight json docutils literal highlight-json"><span class="p">[[</span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="mi">3</span><span class="p">,</span><span class="w"> </span><span class="mi">5</span><span class="p">,</span><span class="w"> </span><span class="mi">7</span><span class="p">,</span><span class="w"> </span><span class="mi">9</span><span class="p">]</span><span class="w"> </span><span class="p">]</span></code>.
+After expanding strings, a (possibly long) list of possible
+combinations of the values for each field is generated and
+fed to the format. This gives the list of files to download.</p>
+<p>If not all of these are expected to exist, use the argument
+<cite>missing</cite></p>
+</dd>
+<dt>“missing”</dt><dd><p>(optional, str)
+If the value is “ok” or “ignore”, it is ignored if
+downloading a file from <cite>filelist</cite> fails with an
+error code 404 (“not found”).</p>
+<p>This option id particularly helpful with generated filelists.</p>
+</dd>
+<dt>“unpack”:</dt><dd><p>(optional, str)
+How to unpack downloaded files. The default is not to unpack.</p>
+<p>If the value is “tif” or “false” or ‘null’ and the filename
+ends with ‘.tif’, the file is taken as it is.</p>
+<p>If the value starts with “zip” or “unzip”, a zip archife is
+expected   from which files a extracted. The files a selected
+by a <a class="reference external" href="https://en.wikipedia.org/wiki/Glob_(programming)">glob pattern</a>
+(optionally including path), separated from the (un)zip keyword by
+“:”, “:/”, or “://”.</p>
+<p>Example: <code class="code highlight json docutils literal highlight-json"><span class="nt">&quot;unpack&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;zip://foo/*.tif&quot;</span></code></p>
+</dd>
+</dl>
+</dd>
+</dl>
+<p>Example:</p>
+<blockquote>
+<div><div class="highlight-json notranslate"><div class="highlight"><pre><span></span><span class="nt">&quot;DGM10-NW&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">&quot;storage&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;terrain&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;assemble&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;assemble_DGMxx&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;arguments&quot;</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">        </span><span class="nt">&quot;resolution&quot;</span><span class="p">:</span><span class="w"> </span><span class="mi">10</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;host&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;https://www.opengeodata.nrw.de&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;path&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;produkte/geobasis/hm/dgm1_tiff/dgm1_tiff&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;filelist&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;index.xml&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;xmlpath&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;/datasets/dataset[0]/files/file::name&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;datapath&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;&quot;</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">&quot;CRS&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;EPSG:25832&quot;</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">&quot;license&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;spdx:DL-DE-ZERO-2.0&quot;</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">&quot;notice&quot;</span><span class="p">:</span><span class="w"> </span><span class="s2">&quot;none&quot;</span>
+<span class="p">},</span>
+</pre></div>
+</div>
+</div></blockquote>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">configure-austaltools</a><ul>
+<li><a class="reference internal" href="#austaltools.configure_austaltools-cli_parser-positional-arguments">Positional Arguments</a></li>
+<li><a class="reference internal" href="#austaltools.configure_austaltools-cli_parser-named-arguments">Named Arguments</a></li>
+<li><a class="reference internal" href="#Sub-commands">Sub-commands</a><ul>
+<li><a class="reference internal" href="#assemble">assemble</a><ul>
+<li><a class="reference internal" href="#named-arguments">Named Arguments</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#austal">austal</a><ul>
+<li><a class="reference internal" href="#named-arguments_repeat1">Named Arguments</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#download">download</a><ul>
+<li><a class="reference internal" href="#named-arguments_repeat2">Named Arguments</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#list">list</a><ul>
+<li><a class="reference internal" href="#named-arguments_repeat3">Named Arguments</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#scan">scan</a></li>
+<li><a class="reference internal" href="#simple">simple</a><ul>
+<li><a class="reference internal" href="#named-arguments_repeat4">Named Arguments</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#stationlist">stationlist</a><ul>
+<li><a class="reference internal" href="#named-arguments_repeat5">Named Arguments</a></li>
+</ul>
+</li>
+</ul>
+</li>
+<li><a class="reference internal" href="#dataset-definitions">Dataset definitions</a></li>
+</ul>
+</li>
+</ul>
+
+  </div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Unknown 2.8.26 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">configure-austaltools</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright (C) 2022-2026 Clemens Drüe.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.0.
+    </div>
+  </body>
+</html>

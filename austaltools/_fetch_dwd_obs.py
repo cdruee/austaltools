@@ -11,21 +11,19 @@ import logging
 import os
 import re
 import shutil
+from typing import Any
 import zipfile
 
 import requests
 import numpy as np
 import pandas as pd
 
-try:
-    from . import _tools
-except ImportError:
-    import _tools
+from . import _tools
 
 logger = logging.getLogger(__name__)
 
 _PATH = "."
-"""operate in current working die by default"""
+"""operate in current working dir by default"""
 OLDEST = pd.to_datetime('1970-01-01', utc=True)
 """ remove observations before ...
 to avoid problems with odd observation timing in the very manual era) """
@@ -50,7 +48,7 @@ TO_COLLECT = [
 
 # -------------------------------------------------------------------------
 
-def fetch_dirlist(url, pattern='.*'):
+def fetch_dirlist(url: str, pattern : str = '.*') -> list[str]:
     """
     get directory listing from (opendata) server
 
@@ -69,8 +67,8 @@ def fetch_dirlist(url, pattern='.*'):
 
 # -------------------------------------------------------------------------
 
-def fetch_file(group: str, station: (int, str),
-               era=None, local_path='.'):
+def fetch_file(group: str, station: int | str,
+               era: str | None = None, local_path: str = '.') -> str:
     """
     download observation file from (opendata) server
 
@@ -210,7 +208,8 @@ def fetch_stationlist(years: list[int]|int|None = None, fullyear=True
 
 # -------------------------------------------------------------------------
 
-def fetch_station(station, store=True):
+def fetch_station(station: str, store: bool = True
+                  ) -> tuple[pd.DataFrame, pd.DataFrame] | tuple[str, str]:
     """
     Ensure that the DWD weather station data for station
     number `station` is available at `storage_path`.
@@ -281,7 +280,8 @@ def fetch_station(station, store=True):
     #return main frame
 
 # -------------------------------------------------------------------------
-def build_table(dat_df_in, meta_df_in, years):
+def build_table(dat_df_in: pd.DataFrame, meta_df_in: pd.DataFrame,
+                years: list) -> pd.DataFrame:
 
     if not years == [x for x in range(min(years), max(years) + 1)]:
         raise ValueError('years not contiguous')
@@ -317,7 +317,10 @@ def build_table(dat_df_in, meta_df_in, years):
 
 # -------------------------------------------------------------------------
 
-def get_meta_value(metadata, time_begin, time_end, par_name):
+def get_meta_value(metadata: str | pd.DataFrame,
+       time_begin: pd.DatetimeIndex | pd.Timestamp | np.datetime64 | str,
+       time_end: pd.DatetimeIndex | pd.Timestamp | np.datetime64| str,
+       par_name: str) -> Any:
     """
     get station metadata value for parameter `par_name` valid for
     the time period info from `time_begin` to `time_end`
@@ -341,10 +344,17 @@ def get_meta_value(metadata, time_begin, time_end, par_name):
     elif isinstance(metadata, pd.DataFrame):
         if 'time' in metadata.columns:
             metadata.set_index('time', inplace=True)
-        if metadata.index.dtype != 'datetime64[ns]':
-            raise ValueError('metadata index must have datetime64[ns]')
+        if metadata.index.dtype != 'datetime64[ns]' and \
+           metadata.index.dtype != 'datetime64[ns, UTC]':
+            raise ValueError('metadata index must have datetime64[ns]'
+                             ' or datetime64[ns, UTC]')
     else:
         raise ValueError('metadata must be filename or pandas dataframe')
+    
+    # Ensure metadata index is UTC-aware for comparison
+    if metadata.index.tz is None:
+        metadata.index = metadata.index.tz_localize('UTC')
+    
     time_begin = pd.to_datetime(time_begin, utc=True)
     time_end = pd.to_datetime(time_end, utc=True)
     if time_end < time_begin:
@@ -379,8 +389,8 @@ def get_meta_value(metadata, time_begin, time_end, par_name):
 
 # -------------------------------------------------------------------------
 
-def data_from_download(product_files: list, path_to_files: str) \
-        -> pd.DataFrame:
+def data_from_download(product_files: list[str], path_to_files: str
+                       ) -> pd.DataFrame:
     """
     Build one single table of weather data from the individual
     downloadad files
@@ -442,10 +452,11 @@ def data_from_download(product_files: list, path_to_files: str) \
     #
     # remove "-999" from cloud types:
     for i in [1, 2, 3, 4]:
-        dat['V_S%i_CSA' % i] = dat['V_S%i_CSA' % i].map(
-            (lambda x: x.replace('-999', '')
-            if isinstance(x, str) else x)
-        )
+        if ('V_S%i_CSA' % i) in dat.columns:
+            dat['V_S%i_CSA' % i] = dat['V_S%i_CSA' % i].map(
+                (lambda x: x.replace('-999', '')
+                if isinstance(x, str) else x)
+            )
 
 
     if dat.index[0] < OLDEST:
@@ -456,7 +467,8 @@ def data_from_download(product_files: list, path_to_files: str) \
 
 # -------------------------------------------------------------------------
 
-def meta_from_download(metadata_files, station, path_to_files):
+def meta_from_download(metadata_files: list[str], station: int,
+                       path_to_files: str) -> pd.DataFrame:
     """
     Build one single table of the metadata provided by the individual
     metadata files contained in the downloadad zip archives

@@ -5,7 +5,6 @@ from ._metadata import __license__, __copyright__
 from . import import_buildings
 from . import eap
 from . import fill_timeseries
-#from . import austal_input
 from . import plot
 from . import steepness
 from . import transform

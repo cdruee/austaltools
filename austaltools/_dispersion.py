@@ -46,10 +46,11 @@ class StabiltyClass:
         values of the Obukhov lenght for 1st, 2nd, 3rd, ... class
         Mutually exclusive with `bounds`.
     :type centers: list[tuple[list]]
-    :param inverted: False if the bounds or center values should
+    :param tabbed_values_inverted:
+        False if the bounds or center values should
         be taken as they are. True if values shoud be inverted
         i.e. :math:`1/x`. Defaults to False.
-    :type inverted: bool
+    :type tabbed_values_inverted: bool
     :param reverse_index: False if the numric class index is acsending.
         True if it is decending. Defaults to False.
     :type reverse_index:
@@ -64,10 +65,13 @@ class StabiltyClass:
     names = None
     reverse_index = False
 
-    def __init__(self, bounds=None, centers=None, inverted=False,
-                 reverse_index=True, names=None):
+    def __init__(self, bounds: list | tuple | None = None,
+                 centers: list | tuple | None = None,
+                 tabbed_values_inverted: bool = False,
+                 reverse_index: bool = True,
+                 names: list[str] | tuple[str] | None = None) -> None:
         if bounds is not None and centers is not None:
-            raise ValueError('bounds and centers are mutualy exclusive')
+            raise ValueError('bounds and centers are mutually exclusive')
         elif bounds is not None:
             if type(bounds) not in [list, tuple]:
                 raise ValueError('bounds must be list or tuple')
@@ -85,14 +89,14 @@ class StabiltyClass:
             if any([sorted(x[0]) != x[0] for x in bounds]):
                 raise ValueError('lists in bounds elements must ' +
                                  'be sorted by ascending z0')
-            if inverted:
+            if tabbed_values_inverted:
                 self._bounds = bounds
             else:
                 self._bounds = []
                 for b in bounds:
                     self._bounds.append([b[0], [1 / x for x in b[1]]])
             self.count = len(bounds) + 1
-            self._bounds = self._sort(self._bounds)
+            # self._bounds = self._sort(self._bounds)
             self._bounds2centers()
         elif centers is not None:
             if type(centers) not in [list, tuple]:
@@ -111,14 +115,14 @@ class StabiltyClass:
             if any([sorted(x[0]) != x[0] for x in centers]):
                 raise ValueError('lists in centers elements must ' +
                                  'be sorted by ascending z0')
-            if inverted:
+            if tabbed_values_inverted:
                 self._centers = centers
             else:
                 self._centers = []
                 for b in centers:
                     self._centers.append([b[0], [1 / x for x in b[1]]])
             self.count = len(centers)
-            self._centers = self._sort(self._centers)
+            # self._centers = self._sort(self._centers)
             self._centers2bounds()
         if names is not None:
             if not type(names) in [list, tuple]:
@@ -134,7 +138,7 @@ class StabiltyClass:
         else:
             self.reverse_index = False
 
-    def _sort(self, lines):
+    def _sort(self, lines: list) -> list:
         # get median z0
         all_z0 = sorted(set([y for x in lines for y in x[0]]))
         mz0 = all_z0[int(len(all_z0) / 2)]
@@ -142,7 +146,7 @@ class StabiltyClass:
         re = [x for _, x in sorted(zip(ils, lines))]
         return re
 
-    def _getval(self, z0, line):
+    def _getval(self, z0: float, line: list | tuple) -> float:
         # interpolate z0 along a line
         lz0, lil = line
         if z0 in lz0:
@@ -157,7 +161,7 @@ class StabiltyClass:
             il = np.interp(np.log(z0), np.log(lz0), lil)
         return il
 
-    def _bounds2centers(self):
+    def _bounds2centers(self) -> None:
         # calculate center values if bounds values are defined
         bz0, bil = self._bounds[0]
         lbounds = [[bz0, [1. / 9999. for x in bil]], ] + self._bounds[:-1]
@@ -173,7 +177,7 @@ class StabiltyClass:
                    for x in cz0]
             self._centers.append([cz0, cil])
 
-    def _centers2bounds(self):
+    def _centers2bounds(self) -> None:
         # calculate bounds values if center values are defined
         lcenters = self._centers[:-1]
         rcenters = self._centers[1:]
@@ -187,7 +191,7 @@ class StabiltyClass:
                    for x in bz0]
             self._bounds.append([bz0, bil])
 
-    def get_bound(self, num, z0, inverted=False):
+    def get_bound(self, num: int, z0: float, inverted: bool = False) -> float:
         """
         get the upper boundary value of Obukhov lentgh :math:`L` for the
         class with index `num` for roughness length `z0`.
@@ -212,7 +216,7 @@ class StabiltyClass:
         else:
             return 1 / il
 
-    def get_center(self, num, z0, inverted=False):
+    def get_center(self, num: int, z0: float, inverted: bool = False) -> float:
         """
         get the center value of Obukhov lentgh :math:`L` for the
         class with index `num` for roughness length `z0`.
@@ -235,7 +239,7 @@ class StabiltyClass:
         else:
             return 1 / il
 
-    def get_index(self, z0, lob, inverted=False):
+    def get_index(self, z0: float, lob: float, inverted: bool = False) -> int:
         """
         get the numeric class index for roughness length `z0` and
         Obukhov lentgh :math:`L`.
@@ -266,7 +270,7 @@ class StabiltyClass:
         else:
             return cl + 1
 
-    def get_name(self, z0, index, inverted=False):
+    def get_name(self, z0: float, index: int, inverted: bool = False) -> str:
         """
         get the class name for roughness length `z0` and
         Obukhov lentgh :math:`L`.
@@ -282,7 +286,7 @@ class StabiltyClass:
         """
         return self.names[self.get_index(z0, index, inverted) - 1]
 
-    def name(self, num):
+    def name(self, num: int) -> str:
         """
         get the class name for numeric class index
 
@@ -294,7 +298,7 @@ class StabiltyClass:
             raise ValueError('no class number #%i' % int(num))
         return self.names[int(num) - 1]
 
-    def index(self, name):
+    def index(self, name: str) -> int:
         """
         get the numeric class index for class name
 
@@ -324,7 +328,7 @@ KM2021 = StabiltyClass(centers=[
     ([0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 1.00, 1.50, 2.00],
      [-6, -8, -11, -15, -20, -33, -52, -70, -89]),
 ],
-    inverted=False,
+    tabbed_values_inverted=False,
     reverse_index=True,
     names=['I', 'II', 'III1', 'III2', 'IV', 'V'])
 """
@@ -352,7 +356,7 @@ KM2002 = StabiltyClass(centers=[
     ([0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 1.00, 1.50, 2.00],
      [-4, -5, -7, -10, -14, -22, -34, -45, -56]),
 ],
-    inverted=False,
+    tabbed_values_inverted=False,
     reverse_index=True,
     names=['I', 'II', 'III1', 'III2', 'IV', 'V'])
 """
@@ -404,7 +408,7 @@ PG1972 = StabiltyClass(bounds=[
     ([0.005, 0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 2.00],
      [0.068, 0.058, 0.049, 0.039, 0.033, 0.028, 0.023, 0.006]),
 ],
-    inverted=True,
+    tabbed_values_inverted=True,
     reverse_index=False,
     names=['A', 'B', 'C', 'D', 'E', 'F', 'G'])
 """
@@ -419,7 +423,10 @@ According to EPA (link?) class G is neglected for regulatory modeling
 
 # ----------------------------------------------------
 #
-def stabilty_class(classifyer, time, z0, L):
+def stabilty_class(classifyer: str,
+                   time: pd.DatetimeIndex | pd.Timestamp| np.datetime64 | list[str],
+                   z0: pd.Series | float,
+                   L: pd.Series | float) -> list[int]:
     """
     Returns the atmospheric stability class according to
      the selected classification scheme.
@@ -482,7 +489,11 @@ def stabilty_class(classifyer, time, z0, L):
 
 # =============================================================================
 
-def vdi_3872_6_sun_rise_set(time, lat, lon):
+def vdi_3872_6_sun_rise_set(
+        time: (pd.Timestamp | pd.DatetimeIndex | np.datetime64 |
+               str | list[str]),
+        lat: float,
+        lon: float) -> tuple[float, float] | tuple[pd.Series, pd.Series]:
     r"""
     Sunrise and sunset calculation
     according to VDI 3782 Part 6, Annex A
@@ -515,16 +526,16 @@ def vdi_3872_6_sun_rise_set(time, lat, lon):
     # check types
     if _isscalar(time):
         scalar = True
-        idx = [pd.to_datetime(time)]
+        idx = pd.DatetimeIndex([time])
     else:
-        idx = time
+        idx = pd.DatetimeIndex(time)
         scalar = False
     if not ((_isscalar(lat) and _isscalar(lon)) or
             (np.shape(time) == np.shape(lat) == np.shape(lon))):
         raise ValueError('lat, lon must be scalars or same shape as time')
     # check / adjust timezone
     # Etc/GMT-1 (fixed-offset timezone) equals CET without DST applied
-    if idx.tz is None:
+    if not hasattr(idx, 'tz') or idx.tz is None:
         idx_loc = idx.tz_localize('Etc/GMT-1')
     else:
         idx_loc = idx
@@ -568,7 +579,9 @@ def vdi_3872_6_sun_rise_set(time, lat, lon):
 
 # ----------------------------------------------------
 
-def vdi_3872_6_standard_wind(va, hap, z0p):
+def vdi_3872_6_standard_wind(va: float | np.ndarray,
+                             hap: float,
+                             z0p: float) -> float | np.ndarray:
     r"""
     Returns the Calculation value of wind speed
     according to VDI 3782 Part 6, Annex A
@@ -591,7 +604,8 @@ def vdi_3872_6_standard_wind(va, hap, z0p):
     :param z0p: (required,float) roughness lenght at the
         measurement site (:math:`z_0`) in m.
     """
-    va = np.array(va)
+    # Handle scalar vs array input for va
+    va_arr = np.atleast_1d(va)
     # hr = 100 m
     # For hap >100 m , the reference height h r should be
     # set to hap′.
@@ -606,14 +620,22 @@ def vdi_3872_6_standard_wind(va, hap, z0p):
     f_2 = np.log((ha - d0) / z0) / np.log((hr - d0) / z0)
     f = f_1 * f_2
 
-    v10 = np.array([np.round(f * x, 1) for x in va])
+    v10 = np.array([np.round(f * x, 1) for x in va_arr])
 
     return v10[()]  # Flatten 0d arrays to scalars
 
 
 # ----------------------------------------------------
 
-def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
+def klug_manier_scheme_1992(
+        time: (pd.Timestamp | pd.DatetimeIndex | np.datetime64 |
+               str | list[str]),
+        ff: float | list[float] | pd.Series,
+        tcc: float | list[float] | pd.Series,
+        lat: float,
+        lon: float,
+        cty: str | list[
+            float] | pd.Series | None = None) -> int | pd.Series:
     """
     Calulate stability class after Klug/Manier
     accroding to according to VDI 3782 Part 1 (issued 1992)
@@ -1017,9 +1039,17 @@ def klug_manier_scheme_1992(time: pd.Timestamp, ff, tcc, lat, lon, cty=None):
 
 # ----------------------------------------------------
 
-def klug_manier_scheme_2017(time: pd.DatetimeIndex, ff, tcc, lat, lon, ele,
-                            cty=None, cbh=None,
-                            _cloudout=False):
+def klug_manier_scheme_2017(
+        time: (pd.DatetimeIndex | pd.Timestamp | np.datetime64 |
+               str | list[str]),
+        ff: float | list[float] | pd.Series,
+        tcc: float | list[float] | pd.Series,
+        lat: float,
+        lon: float,
+        ele: float,
+        cty: float | list[float] | pd.Series | None = None,
+        cbh: float | list[float] | pd.Series | None = None,
+        _cloudout=False):
     """
     Calulate stability class after Klug/Manier
     according to according to VDI 3782 Part 6 (issued Apr 2017)
@@ -1621,7 +1651,14 @@ def klug_manier_scheme(*args, **kwargs):
 
 # =============================================================================
 
-def pasquill_taylor_scheme(time, ff, tcc, lat, lon, ceil):
+def pasquill_taylor_scheme(
+        time: (pd.DatetimeIndex | pd.Timestamp | np.datetime64 | str |
+               list[str]),
+        ff: float | list[float] | pd.Series,
+        tcc: float | list[float] | pd.Series,
+        lat: float,
+        lon: float,
+        ceil: float | list[float] | pd.Series):
     """
     Calulate stability class after Pasquill and Turner [EPA2000]_
 
@@ -1836,7 +1873,7 @@ def turners_key(ff: float, NRI:int) -> int:
     return key
 
 
-def taylor_insolation_class(solar_altitude):
+def taylor_insolation_class(solar_altitude: float) -> int:
     #                 Table 6-5
     #  Insolation Class as a Function of Solar Altitude
     #  Solar Altitude X (degrees)   Insolation   Insolation Class Number
@@ -1857,7 +1894,12 @@ def taylor_insolation_class(solar_altitude):
 
 # ========================================================================
 
-def obukhov_length(ust, rho, Tv, H, E, Kelvin=None):
+def obukhov_length(ust: float | pd.Series,
+                   rho: float | pd.Series,
+                   Tv: float | pd.Series,
+                   H: float | pd.Series,
+                   E: float | pd.Series,
+                   Kelvin: bool | None = None) -> float | np.ndarray:
     """
     Returns the Obuhkov lenght [GOL1972]_ from surface values
     of air density, virtual temperature, latent and sensible
@@ -1880,8 +1922,12 @@ def obukhov_length(ust, rho, Tv, H, E, Kelvin=None):
       Defaults to ``None``.
 
     """
-
-    TvK = [m.temperature._to_K(x, Kelvin) for x in np.array(Tv)]
+    # Handle scalar vs array input for Tv
+    Tv_arr = np.atleast_1d(Tv)
+    TvK = np.array([m.temperature._to_K(x, Kelvin) for x in Tv_arr])
+    # Flatten back to scalar if input was scalar
+    if np.ndim(Tv) == 0:
+        TvK = TvK[0]
     L = np.array(-(ust ** 3 * TvK * rho * 1004.) /
                  (kappa * gn * (H + 0.06 * E)))
 
@@ -1890,7 +1936,7 @@ def obukhov_length(ust, rho, Tv, H, E, Kelvin=None):
 
 # ----------------------------------------------------
 
-def h_eff(has, z0s):
+def h_eff(has: float | pd.Series, z0s: float | pd.Series) -> list[float]:
     """
     Calculate effective anemometer heights for all nine
      z0 class values used by AUSTAL [AST31]_
@@ -1923,7 +1969,11 @@ def h_eff(has, z0s):
 
 # ----------------------------------------------------
 
-def z0_verkaik(z, speed, gust, dirct, rose=False):
+def z0_verkaik(z: float,
+               speed: float | list | pd.Series,
+               gust: float | list | pd.Series,
+               dirct: float | list | pd.Series,
+               rose: bool = False) -> float | tuple[pd.DataFrame, pd.DataFrame]:
     """
     Calculates an estimate for the roughness lentgh of a site
     from the gustiness of the wind, according to the Method

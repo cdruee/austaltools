@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+
+<html lang="en" data-content_root="./">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>austaltools fill-timeseries &#8212; Unknown 2.8.26 documentation</title>
+    <link rel="stylesheet" type="text/css" href="_static/pygments.css?v=03e43079" />
+    <link rel="stylesheet" type="text/css" href="_static/nature.css?v=279e0f84" />
+    <script src="_static/documentation_options.js?v=19584997"></script>
+    <script src="_static/doctools.js?v=fd6eb6e6"></script>
+    <script src="_static/sphinx_highlight.js?v=6ffebe34"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" /> 
+  </head><body>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Unknown 2.8.26 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">austaltools fill-timeseries</a></li> 
+      </ul>
+    </div>  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          <div class="body" role="main">
+            
+  <section id="austaltools-fill-timeseries">
+<h1>austaltools fill-timeseries<a class="headerlink" href="#austaltools-fill-timeseries" title="Link to this heading">¶</a></h1>
+<section id="detailed-usage-guide">
+<h2>Detailed usage guide<a class="headerlink" href="#detailed-usage-guide" title="Link to this heading">¶</a></h2>
+<p>There are two ways to describe the emissions, fixed and variable values:</p>
+<section id="fixed-value">
+<h3>fixed value<a class="headerlink" href="#fixed-value" title="Link to this heading">¶</a></h3>
+<p>This type is used to characterize a source that is either on or off.
+The source output strength for each hour the source is active, is
+given in g/s using parameter <code class="docutils literal notranslate"><span class="pre">-o</span></code>,``–output``.</p>
+<p>Option <code class="docutils literal notranslate"><span class="pre">-w</span></code>/<code class="docutils literal notranslate"><span class="pre">--week-5</span></code> defines a source active Mon-Fri,
+<code class="docutils literal notranslate"><span class="pre">-W</span></code>/<code class="docutils literal notranslate"><span class="pre">--week-6</span></code> defines a source active Mon-Sat.</p>
+<p>Options <code class="docutils literal notranslate"><span class="pre">-b</span></code> and <code class="docutils literal notranslate"><span class="pre">-e</span></code> describe the start and end times of the
+emission on each day the source is active:</p>
+<p><code class="docutils literal notranslate"><span class="pre">-b</span></code>, <code class="docutils literal notranslate"><span class="pre">--hour-begin</span></code> defines the first active hour
+(0-23)  and defaults to 8.</p>
+<p>Only relevant with -w or -W. [08]
+<code class="docutils literal notranslate"><span class="pre">-e</span></code>, <code class="docutils literal notranslate"><span class="pre">--hour-end</span></code> defines the last active hour
+(0-23) and defaults to 16.</p>
+<p>Options <code class="docutils literal notranslate"><span class="pre">-u</span></code> and <code class="docutils literal notranslate"><span class="pre">-U</span></code> can be used to define
+weeks or months in which the source does not emit.
+<code class="docutils literal notranslate"><span class="pre">-u</span></code>,/<code class="docutils literal notranslate"><span class="pre">--holiday-week</span></code> can be given followed by one or multiple
+week numbers (0-52).
+<code class="docutils literal notranslate"><span class="pre">-U</span></code>/<code class="docutils literal notranslate"><span class="pre">--holiday-month</span></code> can be given followed by one or multiple
+month numbers (1-12).
+Options <code class="docutils literal notranslate"><span class="pre">-u</span></code> and <code class="docutils literal notranslate"><span class="pre">-U</span></code> may be used together
+to describe more complex patterns.</p>
+</section>
+<section id="variable-values">
+<h3>variable values<a class="headerlink" href="#variable-values" title="Link to this heading">¶</a></h3>
+<p>To use an emission cycle with variable values,
+use the variant <code class="docutils literal notranslate"><span class="pre">-c,</span> <span class="pre">--cycle</span></code>.
+For this you have to create a file called <code class="docutils literal notranslate"><span class="pre">cycle.yaml</span></code>
+in the same directory, where the control file <code class="docutils literal notranslate"><span class="pre">austal.txt</span></code> is located.
+In this file which you can describe the emission cycle for each
+indiviual source and pollutant in the
+[YAML](<a class="reference external" href="https://de.wikipedia.org/wiki/YAML">https://de.wikipedia.org/wiki/YAML</a>) language.</p>
+<p><strong>defining each pollutant explicitly</strong></p>
+<p>The file has the following structure (the indentations and hyphens are important!):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">myname</span><span class="p">:</span>
+  <span class="n">source</span><span class="p">:</span> <span class="mf">01.</span><span class="n">so2</span>
+  <span class="n">start</span><span class="p">:</span>
+    <span class="n">at</span><span class="p">:</span>
+      <span class="n">time</span><span class="p">:</span> <span class="mi">1</span><span class="o">-</span><span class="mi">11</span><span class="o">/</span><span class="mi">2</span>
+      <span class="n">unit</span><span class="p">:</span> <span class="n">month</span>
+    <span class="n">offset</span><span class="p">:</span>
+      <span class="n">time</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span><span class="mi">3</span>
+      <span class="n">unit</span><span class="p">:</span> <span class="n">week</span>
+  <span class="n">sequence</span><span class="p">:</span>
+  <span class="o">-</span> <span class="n">ramp</span><span class="p">:</span>
+      <span class="n">time</span><span class="p">:</span> <span class="mi">1</span>
+      <span class="n">unit</span><span class="p">:</span> <span class="n">day</span>
+      <span class="n">value</span><span class="p">:</span> <span class="mf">9.0</span>
+  <span class="o">-</span> <span class="n">const</span><span class="p">:</span>
+      <span class="n">time</span><span class="p">:</span> <span class="mi">36</span>
+      <span class="n">unit</span><span class="p">:</span> <span class="n">hour</span>
+      <span class="n">value</span><span class="p">:</span> <span class="mf">1.1</span>
+  <span class="n">unit</span><span class="p">:</span> <span class="n">g</span><span class="o">/</span><span class="n">h</span>
+</pre></div>
+</div>
+<ul>
+<li><p>Each cycle in the file has a name, here <code class="docutils literal notranslate"><span class="pre">meinname</span></code>.</p></li>
+<li><p>It is valid for source 1 and substance type sO2, thus <code class="docutils literal notranslate"><span class="pre">01.so2</span></code>.
+These names can be found as column names in the file
+<code class="docutils literal notranslate"><span class="pre">zeitreihe.dmna</span></code>, which austal creates.</p>
+<ul>
+<li><p>the block <code class="docutils literal notranslate"><span class="pre">start</span></code> specifies the start times:</p>
+<ul class="simple">
+<li><p>the start time is specified as number(s) <code class="docutils literal notranslate"><span class="pre">time</span></code> and unit <code class="docutils literal notranslate"><span class="pre">unit</span></code>.</p>
+<ul>
+<li><p>The number can be either a single number (<cite>5</cite>)
+or a comma-separated list without spaces (<cite>1,17,17</cite>).
+spaces (<cite>1,17,28,39</cite>) or a sequence “from” - “to” / “in steps of” (<cite>1-9/2</cite>).</p></li>
+<li><p>Possible units are <code class="docutils literal notranslate"><span class="pre">month</span></code>, <code class="docutils literal notranslate"><span class="pre">week</span></code>, <code class="docutils literal notranslate"><span class="pre">day</span></code> and <code class="docutils literal notranslate"><span class="pre">hour</span></code>.</p></li>
+</ul>
+</li>
+<li><p>Optionally you can add an <code class="docutils literal notranslate"><span class="pre">offset</span></code>, which is also defined by <code class="docutils literal notranslate"><span class="pre">time</span></code> and <code class="docutils literal notranslate"><span class="pre">unit</span></code>.
+is defined. This makes specifications of the form <code class="docutils literal notranslate"><span class="pre">every</span> <span class="pre">odd</span> <span class="pre">month</span> <span class="pre">in</span> <span class="pre">the</span> <span class="pre">2nd</span> <span class="pre">and</span> <span class="pre">4th</span> <span class="pre">week</span></code> possible,
+as in the example above, are possible.</p></li>
+</ul>
+</li>
+<li><p>The emission can be specified as either <code class="docutils literal notranslate"><span class="pre">list</span></code> or <code class="docutils literal notranslate"><span class="pre">sequence</span></code>.</p>
+<ul>
+<li><p>A <code class="docutils literal notranslate"><span class="pre">list</span></code> is a list of hourly values of the source strength.</p>
+<ul>
+<li><p>provide values as list of the form:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nb">list</span><span class="p">:</span> <span class="p">[</span><span class="mf">1.2</span><span class="p">,</span> <span class="mf">3.4</span><span class="p">,</span> <span class="mf">5.6</span><span class="p">]</span>
+</pre></div>
+</div>
+</li>
+<li><p>or as list of the form:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="nb">list</span><span class="p">:</span>
+  <span class="o">-</span> <span class="mf">1.2</span>
+  <span class="o">-</span> <span class="mf">2.3</span>
+  <span class="o">-</span> <span class="mf">4.5</span>
+</pre></div>
+</div>
+</li>
+</ul>
+</li>
+<li><p>A <code class="docutils literal notranslate"><span class="pre">sequence</span></code> consists of elements <code class="docutils literal notranslate"><span class="pre">ramp</span></code> and <code class="docutils literal notranslate"><span class="pre">const</span></code>, for each of which the duration
+and the source strength (the time unit <code class="docutils literal notranslate"><span class="pre">month</span></code> is not possible here).
+For <code class="docutils literal notranslate"><span class="pre">const</span></code> the value is valid for the whole time, for <code class="docutils literal notranslate"><span class="pre">ramp</span></code> the source strength changes linearly over the
+time linearly from the previous value (start = 0) to the specified value.</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">unit</span></code> can be given optionally, if the unit of the values given
+in the list or sequence is not <cite>g/s</cite> (the generic unit used by austal).
+<code class="docutils literal notranslate"><span class="pre">unit</span></code> may be given as a string in the form ‘<cite>mass</cite>/<cite>time</cite>’, where
+<cite>mass</cite> can be one of <cite>t</cite>, <cite>kg</cite>, <cite>g</cite>, <cite>mg</cite>, <cite>ug</cite>, or <cite>µg</cite> and
+<cite>time</cite> can be one of <cite>total</cite> (the whole simulation time),
+<cite>d</cite> (day), <cite>m</cite> or <cite>min</cite> (minute), or <cite>s</cite> or <cite>sec</cite> (second).
+Example <cite>kg/d</cite> for kilograms per day.</p></li>
+</ul>
+</li>
+<li><p>With <code class="docutils literal notranslate"><span class="pre">#</span></code> you can comment out lines in the file.</p></li>
+</ul>
+</li>
+</ul>
+<p><strong>using a pre-calulated timeseries</strong></p>
+<p>Instead of giving <code class="docutils literal notranslate"><span class="pre">start</span></code> and <code class="docutils literal notranslate"><span class="pre">sequence</span></code>,
+use the keyword <code class="docutils literal notranslate"><span class="pre">timeseries</span></code>.</p>
+<p>Under this keyword, either a file can be specified or
+the data can be given as a list.</p>
+<p>In case a file is used, <code class="docutils literal notranslate"><span class="pre">timeseries</span></code> must contain the value <code class="docutils literal notranslate"><span class="pre">file</span></code>.
+By default, the file must be in csv format:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>comma-separated lines,</p></li>
+<li><p>fist line contains comma-seprated list of column names,</p></li>
+<li><p>timestamps are in first column</p></li>
+</ul>
+</div></blockquote>
+<p>Optionally, the format may be selected by giving the additional
+value <code class="docutils literal notranslate"><span class="pre">format</span></code>. For the time being</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cycle_nox</span><span class="p">:</span>
+  <span class="n">column</span><span class="p">:</span> <span class="mf">01.</span><span class="n">nox</span>
+    <span class="n">timeseries</span><span class="p">:</span>
+      <span class="n">file</span><span class="p">:</span>
+        <span class="n">name</span><span class="p">:</span> <span class="n">emissiondata</span><span class="o">.</span><span class="n">csv</span>
+        <span class="n">var</span><span class="p">:</span> <span class="n">NOx</span>
+</pre></div>
+</div>
+<p>In case data are given as list, <code class="docutils literal notranslate"><span class="pre">timeseries</span></code> must contain
+the keyword <code class="docutils literal notranslate"><span class="pre">table</span></code>. Under this the keywords <code class="docutils literal notranslate"><span class="pre">data</span></code> and <code class="docutils literal notranslate"><span class="pre">var</span></code>
+must exist, <code class="docutils literal notranslate"><span class="pre">columns</span></code> may be given optionally.
+<code class="docutils literal notranslate"><span class="pre">data</span></code> has to contain the data as a list ofr records:</p>
+<blockquote>
+<div><ul class="simple">
+<li><p>one line per timestamp,</p></li>
+<li><p>comma-sepetrated columns,</p></li>
+<li><p>timestamps are in first column</p></li>
+</ul>
+</div></blockquote>
+<p><code class="docutils literal notranslate"><span class="pre">var</span></code> selects the columt to pick.
+<code class="docutils literal notranslate"><span class="pre">column</span></code> allows to specify the columns names as a seperate list,
+instead of the first row under <code class="docutils literal notranslate"><span class="pre">data</span></code>.</p>
+<p>Example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">cycle_so2</span><span class="p">:</span>
+  <span class="n">column</span><span class="p">:</span> <span class="mf">01.</span><span class="n">so2</span>
+    <span class="n">timeseries</span><span class="p">:</span>
+      <span class="n">data</span><span class="p">:</span>
+        <span class="n">var</span><span class="p">:</span> <span class="n">SO2</span>
+        <span class="n">data</span><span class="p">:</span>
+        <span class="o">-</span> <span class="mi">2000</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">01</span> <span class="mi">00</span><span class="p">:</span><span class="mi">00</span><span class="p">,</span><span class="mf">0.0003</span><span class="p">,</span><span class="mf">0.0010</span>
+        <span class="o">-</span> <span class="mi">2000</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">01</span> <span class="mi">01</span><span class="p">:</span><span class="mi">00</span><span class="p">,</span><span class="mf">0.0004</span><span class="p">,</span><span class="mf">0.0023</span>
+        <span class="o">-</span> <span class="mi">2000</span><span class="o">-</span><span class="mi">01</span><span class="o">-</span><span class="mi">01</span> <span class="mi">02</span><span class="p">:</span><span class="mi">00</span><span class="p">,</span><span class="mf">0.0005</span><span class="p">,</span><span class="mf">0.0034</span>
+<span class="o">...</span>
+        <span class="o">-</span> <span class="mi">2000</span><span class="o">-</span><span class="mi">12</span><span class="o">-</span><span class="mi">31</span> <span class="mi">22</span><span class="p">:</span><span class="mi">00</span><span class="p">,</span><span class="mf">0.0002</span><span class="p">,</span><span class="mf">0.0052</span>
+        <span class="o">-</span> <span class="mi">2000</span><span class="o">-</span><span class="mi">12</span><span class="o">-</span><span class="mi">31</span> <span class="mi">23</span><span class="p">:</span><span class="mi">00</span><span class="p">,</span><span class="mf">0.0001</span><span class="p">,</span><span class="mf">0.0019</span>
+        <span class="n">columns</span><span class="p">:</span> <span class="p">[</span><span class="n">time</span><span class="p">,</span> <span class="n">SO2</span><span class="p">,</span> <span class="n">PAK</span><span class="p">]</span>
+</pre></div>
+</div>
+<p><strong>using templates</strong></p>
+<p>If multiple pollutants from one source or pollutants from multiple sources
+are emitted following the same schedule. The schedule may be defined
+in a template that is referred to in one or more cycles:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">template1</span>
+  <span class="n">factors</span><span class="p">:</span>
+    <span class="n">nox</span><span class="p">:</span> <span class="mf">1.0</span>
+    <span class="n">so2</span><span class="p">:</span> <span class="mf">2.75</span>
+  <span class="n">start</span><span class="p">:</span>
+    <span class="n">at</span><span class="p">:</span>
+    <span class="n">time</span><span class="p">:</span> <span class="mi">1</span><span class="o">-</span><span class="mi">52</span>
+    <span class="n">unit</span><span class="p">:</span> <span class="n">week</span>
+  <span class="n">offset</span><span class="p">:</span>
+    <span class="n">time</span><span class="p">:</span> <span class="mi">1</span>
+    <span class="n">unit</span><span class="p">:</span> <span class="n">day</span>
+  <span class="n">sequence</span><span class="p">:</span>
+   <span class="o">-</span> <span class="n">const</span><span class="p">:</span>
+       <span class="n">time</span><span class="p">:</span> <span class="mi">24</span>
+       <span class="n">unit</span><span class="p">:</span> <span class="n">hour</span>
+       <span class="n">value</span><span class="p">:</span> <span class="mf">1.1</span>
+  <span class="n">unit</span><span class="p">:</span> <span class="n">g</span><span class="o">/</span><span class="n">h</span>
+
+<span class="n">cycle1</span><span class="p">:</span>
+  <span class="n">column</span><span class="p">:</span> <span class="mf">01.</span><span class="n">nox</span>
+  <span class="n">template</span><span class="p">:</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">template1</span>
+<span class="n">cycle2</span><span class="p">:</span>
+  <span class="n">column</span><span class="p">:</span> <span class="mf">01.</span><span class="n">so2</span>
+  <span class="n">template</span><span class="p">:</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">template1</span>
+<span class="n">cycle3</span>
+  <span class="n">column</span><span class="p">:</span> <span class="mf">02.</span><span class="n">xx</span>
+  <span class="n">template</span><span class="p">:</span>
+    <span class="n">name</span><span class="p">:</span> <span class="n">template1</span>
+    <span class="n">substance</span><span class="p">:</span> <span class="n">so2</span>
+    <span class="n">multiplier</span><span class="p">:</span> <span class="mf">2.5</span>
+</pre></div>
+</div>
+<p>In this example: <code class="docutils literal notranslate"><span class="pre">template1</span></code> defines a template, including the schedule
+and a substance-independent emission value (Here: <code class="docutils literal notranslate"><span class="pre">1.1</span> <span class="pre">g/s</span></code>). For
+each pollutant emitted, this value is multiplied by a substance-specific
+factor (here: 1.0 for nox, i.e. the substance-independen value in
+this example is actually the NOx output). All pullutants used late
+must be defined in this place.</p>
+<p><code class="docutils literal notranslate"><span class="pre">cycle1</span></code> the defines the cycle of NOx emission from source <cite>01</cite>
+that follows the schedule in <code class="docutils literal notranslate"><span class="pre">template1</span></code>.
+The pollutant substance (<code class="docutils literal notranslate"><span class="pre">nox</span></code>) is determined from the
+column name (<code class="docutils literal notranslate"><span class="pre">01.nox</span></code>)</p>
+<p><code class="docutils literal notranslate"><span class="pre">cycle2</span></code> the defines the cycle of SO2 emission from source <cite>01</cite>
+that follows the schedule in <code class="docutils literal notranslate"><span class="pre">template1</span></code>.
+The pollutant substance (<code class="docutils literal notranslate"><span class="pre">so2</span></code>) is determined from the
+column name (<code class="docutils literal notranslate"><span class="pre">01.nox</span></code>)</p>
+<p><code class="docutils literal notranslate"><span class="pre">cycle3</span></code> the defines the cycle of the emission of an unknown substance
+(<code class="docutils literal notranslate"><span class="pre">xx</span></code>) from source <cite>02</cite> that follows the schedule in <code class="docutils literal notranslate"><span class="pre">template1</span></code>.
+This emission is 2.5 times stronger than the SO2 release from
+source <cite>01</cite>.
+The pollutant substance (<code class="docutils literal notranslate"><span class="pre">so2</span></code>) is hence is
+explicitly selected using the keyword <code class="docutils literal notranslate"><span class="pre">substance</span></code>.
+To clarify: The emission at each time a <code class="docutils literal notranslate"><span class="pre">cycle3</span></code> is
+the product of: &lt;substance-independent emission value&gt; x
+&lt;substance-specific factor&gt; x &lt;multiplier&gt;</p>
+</section>
+<section id="how-to-apply">
+<h3>How to apply<a class="headerlink" href="#how-to-apply" title="Link to this heading">¶</a></h3>
+<p>You define the sources in <code class="docutils literal notranslate"><span class="pre">austal.txt</span></code> as normal, but specify the
+source strength as <code class="docutils literal notranslate"><span class="pre">?</span></code> instead of a number.</p>
+<p>Then you start Austal using the command <code class="docutils literal notranslate"><span class="pre">austal</span> <span class="pre">.</span> <span class="pre">-z</span></code>.
+It is important that <code class="docutils literal notranslate"><span class="pre">-z</span></code> is <em>behind</em> <code class="docutils literal notranslate"><span class="pre">.</span></code> (for whatever reason).</p>
+<p>This way you get the file <code class="docutils literal notranslate"><span class="pre">zeitreihe.dmna</span></code>.
+In this file, in the line with identifier <code class="docutils literal notranslate"><span class="pre">form</span></code>
+the identifiers of the sources can be found, e.g:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">form</span> <span class="s2">&quot;te%20lt&quot;</span> <span class="s2">&quot;ra</span><span class="si">%5.0f</span><span class="s2">&quot;</span> <span class="s2">&quot;ua</span><span class="si">%5.1f</span><span class="s2">&quot;</span> <span class="s2">&quot;lm</span><span class="si">%7.1f</span><span class="s2">&quot;</span> <span class="s2">&quot;01.so2</span><span class="si">%10.3e</span><span class="s2">&quot;</span>
+</pre></div>
+</div>
+<p>In this example, <code class="docutils literal notranslate"><span class="pre">01.so2</span></code> is the column for the SO2 emission from the first source.
+These identifiers must match the <code class="docutils literal notranslate"><span class="pre">source</span></code> entries in <code class="docutils literal notranslate"><span class="pre">cycle.yaml</span></code>.
+Each identifier needs exactly one cycle entry in <code class="docutils literal notranslate"><span class="pre">cycle.yaml</span></code>.
+If necessary, <code class="docutils literal notranslate"><span class="pre">cycle.yaml</span></code> must be adapted.</p>
+<p>Then call (<code class="docutils literal notranslate"><span class="pre">-c</span></code> = “take the cycle file”, <code class="docutils literal notranslate"><span class="pre">.</span></code> = “everything in the current directory”):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">austal</span><span class="o">-</span><span class="n">fill</span><span class="o">-</span><span class="n">timeseries</span> <span class="o">-</span><span class="n">c</span> <span class="o">.</span>
+</pre></div>
+</div>
+<p>This will overwrite <code class="docutils literal notranslate"><span class="pre">zeitreihe.dmna</span></code> with a new version <strong>with</strong> emission data.</p>
+<p>With this file, you can start the simulation normally
+(i.e. with <code class="docutils literal notranslate"><span class="pre">austal.txt</span></code> and the new <code class="docutils literal notranslate"><span class="pre">zeitreihe.dmna</span></code> in the current directory):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">austal</span> <span class="o">-</span><span class="n">D</span> <span class="o">.</span>
+</pre></div>
+</div>
+<p>Austal then will report (among other things):</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">The</span> <span class="n">specification</span> <span class="s2">&quot;az ....akterm&quot;</span> <span class="ow">is</span> <span class="n">ignored</span><span class="o">.</span>
+</pre></div>
+</div>
+</section>
+</section>
+</section>
+
+
+            <div class="clearer"></div>
+          </div>
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="Main">
+        <div class="sphinxsidebarwrapper">
+  <div>
+    <h3><a href="index.html">Table of Contents</a></h3>
+    <ul>
+<li><a class="reference internal" href="#">austaltools fill-timeseries</a><ul>
+<li><a class="reference internal" href="#detailed-usage-guide">Detailed usage guide</a><ul>
+<li><a class="reference internal" href="#fixed-value">fixed value</a></li>
+<li><a class="reference internal" href="#variable-values">variable values</a></li>
+<li><a class="reference internal" href="#how-to-apply">How to apply</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+  </div>
+<search id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"/>
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</search>
+<script>document.getElementById('searchbox').style.display = "block"</script>
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="related" role="navigation" aria-label="Related">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="py-modindex.html" title="Python Module Index"
+             >modules</a> |</li>
+        <li class="nav-item nav-item-0"><a href="index.html">Unknown 2.8.26 documentation</a> &#187;</li>
+        <li class="nav-item nav-item-this"><a href="">austaltools fill-timeseries</a></li> 
+      </ul>
+    </div>
+    <div class="footer" role="contentinfo">
+    &#169; Copyright (C) 2022-2026 Clemens Drüe.
+      Created using <a href="https://www.sphinx-doc.org/">Sphinx</a> 9.1.0.
+    </div>
+  </body>
+</html>

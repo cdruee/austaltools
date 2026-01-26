@@ -3,8 +3,6 @@ requires = [
     "setuptools>=45.0",
     "setuptools_scm[toml]>=6.2",
     "wheel",
-    "sphinx",
-    "sphinx-argparse",
 ]
 build-backend = "setuptools.build_meta"
 

@@ -5,16 +5,11 @@ create basic plot for austal result files
 import logging
 import os
 
-
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
 
-try:
-    from . import _plotting
-    from . import _tools
-except ImportError:
-    import _plotting
-    import _tools
+from . import _plotting
+from . import _tools
 
 logger = logging.getLogger(__name__)
 # -------------------------------------------------------------------------
