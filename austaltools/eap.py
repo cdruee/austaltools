@@ -60,7 +60,7 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 # -------------------------------------------------------------------------
 
 # Constants
-KAPPA = meteolib.constants.kappa  # von Kármán constant
+KAPPA = 0.4  # von Kármán constant
 F_C = 1.1e-4  # Coriolis parameter at mid-latitudes (rad/s)
 
 # VDI
