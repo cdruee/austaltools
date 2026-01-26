@@ -3,8 +3,6 @@ requires = [
     "setuptools>=45.0",
     "setuptools_scm[toml]>=6.2",
     "wheel",
-    "sphinx",
-    "sphinx-argparse",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -15,7 +13,7 @@ description = "Tools for use with the Lagrangian atmospheric pollutant dispersio
 authors = [
     {name = "Clemens Drüe", email = "druee@uni-trier.de"},
 ]
-license = {text = "EUPL-1.2"}
+license = "EUPL-1.2"
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
