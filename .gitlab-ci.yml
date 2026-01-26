@@ -102,70 +102,29 @@ build_deb:
 merge_github:
   # deploy only if a release (no ".devX" or "+"in version string):
   rules:
-    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG !~ /(\.dev|\+)/ && $SSH_PRIVATE_KEY
+    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG !~ /(\.dev|\+)/
   stage: package
   image: alpine
   variables:
-    GIT_DEPTH: 0  # Ensure full git history for tag pushing
+    GIT_DEPTH: 0  # Ensure full git history
   before_script:
-    # install ssh-agent if not already installed
-    - command -v ssh-agent >/dev/null || apk add --update openssh-client
-    # create the .ssh directory and set permissions
-    - mkdir -p ~/.ssh
-    - chmod 700 ~/.ssh
-    - cp $SSH_PRIVATE_KEY ~/.ssh/id_rsa
-    - chmod 400 ~/.ssh/id_rsa
-    - cp $SSH_PUBLIC_KEY ~/.ssh/id_rsa.pub
-    - chmod 444 ~/.ssh/id_rsa.pub
+    - apk add --update git
   script:
-   - apk add --update git
-   - git config --global user.email "$GITLAB_USER_EMAIL"
-   - git config --global user.name "$GITLAB_USER_NAME"
-   # Ensure we have full history including tags
-   - git fetch --unshallow --tags || echo "Already unshallow"
-   - echo remote set-url origin "https://ci_access_token:$CI_ACCESS_TOKEN@$CI_SERVER_HOST/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME.git"
-   - git remote set-url origin "https://ci_access_token:$CI_ACCESS_TOKEN@$CI_SERVER_HOST/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME.git"
-   - git branch -avv
-   - git pull --rebase origin main
-   # prepare access to github
-   - ssh-keygen -lf ~/.ssh/id_rsa
-   - ssh-keygen -lf ~/.ssh/id_rsa.pub
-   - ssh-keyscan -H github.com >> ~/.ssh/known_hosts
-   - ssh -T git@github.com || echo "no shell access is OK"
-   - git remote add -t github github "ssh://git@github.com/$GITHUB_USER/$CI_PROJECT_NAME.git"
-   - git branch -avv
-   # first synch repo and from github.com branches
-   - git fetch origin github || echo "nothing to fetch !?"
-   - git fetch --refetch -f github github || echo "nothing to fetch !?"
-   - git branch -avv
-   # Simple checkout: get latest from either local or remote
-   - |
-     # Ensure we're on the github branch
-     git checkout github 2>/dev/null || git checkout -b github origin/github
-     
-     # Pull latest from both remotes, preferring fast-forward
-     git pull --rebase origin github || echo "No updates from origin/github"
-     git pull --rebase github github || echo "No updates from github/github"  
-     
-     echo "Now on github branch with latest changes"
-   - git branch -avv
-   # push synched branches
-   - git push origin github
-   - git push github github
-   - git branch -avv
-   # then merge repo main branch into local working dir (github branch)
-   - git merge --squash origin/main -X theirs --allow-unrelated-histories 2>&1 | tee git.out
-   - git branch -avv
-   # if there was nothing new, exit graceful
-   - if grep -q "Already up to date" git.out ; then exit 0 ; else rm git.out; fi
-   # check if something is to commit (diff-index non-zero exit), commit if there is
-   - git diff-index --quiet --cached HEAD || git commit -a -m "Squash merge main into github"
-   - git branch -avv
-   # push working dir back into repo github branch
-   - git push origin github
-   # push working dir also to github.com
-   - git push github github
-   - if ! [[ "x$CI_COMMIT_TAG" == "x" ]]; then git push origin $CI_COMMIT_TAG; git push github $CI_COMMIT_TAG; fi
+    - git config --global user.email "$GITLAB_USER_EMAIL"
+    - git config --global user.name "$GITLAB_USER_NAME"
+    - git remote set-url origin "https://ci_access_token:$CI_ACCESS_TOKEN@$CI_SERVER_HOST/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME.git"
+    - git fetch origin github main --tags
+    # Checkout github branch
+    - git checkout github 2>/dev/null || git checkout -b github origin/github
+    # Squash merge main into github
+    - git merge --squash origin/main -X theirs --allow-unrelated-histories 2>&1 | tee git.out
+    # Exit gracefully if nothing new
+    - if grep -q "Already up to date" git.out; then echo "Nothing to merge"; exit 0; fi
+    # Commit and push if there are changes
+    - git diff-index --quiet --cached HEAD || git commit -m "Squash merge main into github ($CI_COMMIT_TAG)"
+    - git push origin github
+    # Push tag to github branch
+    - if [ -n "$CI_COMMIT_TAG" ]; then git push origin $CI_COMMIT_TAG; fi
 
 deploy_pages:
   # deploy only if a release (no ".devX" or "+"in version string):
