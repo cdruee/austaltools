@@ -117,10 +117,13 @@ merge_github:
     # Checkout github branch
     - git checkout github 2>/dev/null || git checkout -b github origin/github
     # Squash merge main into github
-    - git merge --squash origin/main -X theirs --allow-unrelated-histories 2>&1 | tee git.out
+    - git merge --squash origin/main -X theirs --allow-unrelated-histories 2>&1 | tee git.out || true
     # Exit gracefully if nothing new
     - if grep -q "Already up to date" git.out; then echo "Nothing to merge"; exit 0; fi
-    # Commit and push if there are changes
+    # Resolve any remaining conflicts by taking version from main
+    - git diff --name-only --diff-filter=U | xargs -r git checkout origin/main --
+    # Stage all changes and commit
+    - git add -A
     - git diff-index --quiet --cached HEAD || git commit -m "Squash merge main into github ($CI_COMMIT_TAG)"
     - git push origin github
     # Push tag to github branch
