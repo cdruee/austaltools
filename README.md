@@ -7,6 +7,11 @@ model AUSTAL (AUSbreitungsmodell nach TA Luft)
 ### Full documentation:
 https://druee.gitlab-pages.uni-trier.de/austaltools/
 
+[![EUPL License](https://img.shields.io/badge/license-EUPL-blue.svg)](https://eupl.eu/1.2/en/)  
+[![PyPi Version](https://img.shields.io/pypi/v/austaltools.svg)](https://pypi.python.org/pypi/austaltools/)
+![GitHub Release](https://img.shields.io/github/v/release/cdruee/austaltools)
+[![DOI](https://zenodo.org/badge/8131323.svg)](https://zenodo.org/badge/latestdoi/98131323)
+
 Installation:
 =============
 
@@ -37,6 +42,7 @@ The module contains the following scripts :
 
 ``austal-input``
     Convenience command for easy creation of AUSTAL input data
+
 
 Licenses
 ========
