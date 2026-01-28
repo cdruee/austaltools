@@ -1,0 +1,9 @@
+cff-version: 1.2.0
+title: "austaltools"
+authors:
+  - family-names: Drüe
+    given-names: Clemens
+    orcid: https://orcid.org/0000-0002-8240-9031
+repository-code: https://github.com/cdruee/austaltools
+url: https://github.com/cdruee/austaltools
+doi: 10.5281/zenodo.18404450
