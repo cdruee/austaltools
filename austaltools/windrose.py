@@ -47,6 +47,10 @@ def main(args):
     logger.debug(format(args))
 
     working_dir = args.get('working_dir', '.')
+
+    # determine output
+    plotfile = _plotting.consolidate_plotname(args['plot'],'windrose.png')
+
     weather = args.get('weather', None)
     if weather is not None:
         az = _windutil.load_weather(working_dir, file=weather)
@@ -193,20 +197,14 @@ def main(args):
     # save space
     fig.tight_layout()
 
-    # save figure
-    if args['plot'] is None or args['plot'] == '-':
-        args['plot'] = '__show__'
-    elif args['plot'] == '__default__':
-        args['plot'] = 'windrose.png'
-
-    if args["plot"] == "__show__":
+    if plotfile == "__show__":
         logger.info('showing plot')
         plt.show()
     else:
-        if os.path.sep in args["plot"]:
-            outname = args["plot"]
+        if os.path.sep in plotfile:
+            outname = plotfile
         else:
-            outname = os.path.join(args["working_dir"], args["plot"])
+            outname = os.path.join(args["working_dir"], plotfile)
         if not outname.endswith('.png'):
             outname = outname + '.png'
         logger.info('writing plot: %s' % outname)

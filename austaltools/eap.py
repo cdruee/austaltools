@@ -1730,6 +1730,9 @@ def main(args):
     working_dir = args["working_dir"]
     lib_dir = _tools.wind_library(working_dir)
     file_info = _tools.wind_files(lib_dir)
+
+    _plotting.consolidate_plotname(args['plot'], 'eap.png')
+
     directions = [float(x) * 10.
                   for x in sorted(list(set(file_info["wdir"])))]
     u_grid, v_grid, axes = _tools.read_wind(file_info,
@@ -1828,14 +1831,7 @@ def main(args):
         if dmin < 0.:
             dmin = 0.
         scale = (dmin, dmax)
-        if args['plot'] == '-':
-            args['plot'] = '__show__'
-            logger.debug('select to show plot')
-        elif args['plot'] == '__default__':
-            args['plot'] = "eap_quality_measure"
-            logger.debug('select to write plot to default filename')
-        else:
-            logger.debug('select to write plot to custom filename')
+
         _plotting.common_plot(args, dat=dat_dict, mark=pos_dict,
                               scale=scale)
     else:

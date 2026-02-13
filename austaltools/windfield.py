@@ -176,9 +176,11 @@ def main(args):
 
     working_dir = args["working_dir"]
     grid = int(args["grid"])
+    plotfile = _plotting.consolidate_plotname(args['plot'],
+                                              'windfield.png')
     #
     conf = _tools.get_austxt(_tools.find_austxt(working_dir))
-    #
+    # get reference wind
     if args['vector']:
         u, v, ak = [float(x) for x in args['vector']]
     elif args['wind']:
@@ -401,19 +403,14 @@ def main(args):
         raise ValueError(f'internal error: view={view}')
     fig.tight_layout()
 
-    if args['plot'] is None or args['plot'] == '-':
-        args['plot'] = '__show__'
-    elif args['plot'] == '__default__':
-        args['plot'] = 'windfield.png'
-
-    if args["plot"] == "__show__":
+    if plotfile == "__show__":
         logger.info('showing plot')
         plt.show()
     else:
-        if os.path.sep in args["plot"]:
-            outname = args["plot"]
+        if os.path.sep in plotfile:
+            outname = plotfile
         else:
-            outname = os.path.join(args["working_dir"], args["plot"])
+            outname = os.path.join(args["working_dir"], plotfile)
         if not outname.endswith('.png'):
             outname = outname + '.png'
         logger.info('writing plot: %s' % outname)
