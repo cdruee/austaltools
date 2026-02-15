@@ -6,14 +6,36 @@ workflow:
     - if: $CI_PIPELINE_SOURCE == "web" || $CI_JOB_MANUAL == "true"
 
 variables:
-  DISTRIBUTIONS: ""
-  GITHUB_USER: "cdruee"
+  GIT_DEPTH: 0  # Global for setuptools_scm
 
 stages:
-  - build
   - test
-  - package
-  - deploy
+  - build
+  - release
+
+cache:
+  paths:
+    - .cache/pip
+
+# Test stage - run on tags only
+test_latest:
+  image: python:latest
+  stage: test
+  before_script:
+    # Ensure git tags are available for setuptools_scm
+    - git fetch --tags
+    - pip install build setuptools_scm
+    # Install package with test dependencies
+    - pip install -e .[dev]
+  script:
+    - echo "Running syntax check on main modules..."
+    - python3 -m py_compile austaltools/*.py
+    - echo "Running flake8 file inspection..."
+    - flake8 austaltools --max-line-length=88 --ignore=E501,W503 || true
+    - echo "Running tests ..."
+    - python3 -m pytest tests/ -v || true
+  rules:
+    - if: '$CI_COMMIT_TAG'
 
 build_sdist:
   image: python:latest
@@ -45,27 +67,21 @@ build_pages:
       - docs/conf.py
   needs:
     - job: build_sdist
+      artifacts: true
+  before_script:
+    - git fetch --tags
   script:
-    - pip install setuptools importlib build
-    - pip install sphinx sphinx-argparse sphinx-rtd-theme
-    - pip install numpy pandas
-    - python -m build --wheel
+    - pip install build setuptools_scm
+    - pip install sphinx sphinx-argparse sphinx-rtd-theme numpy pandas
+    - pip install -e .  # Install package so docs can import it
     - BUILDING_SPHINX=true sphinx-build -b html docs build/sphinx/html
     - mv build/sphinx/html/ public/
   artifacts:
     paths:
       - public
 
-#TODO make this work
-test_latest:
-  image: python:latest
-  stage: test
-  script:
-    - echo pip install tox numpy pandas flake8
-    - echo tox
-
 build_deb:
-  stage: package
+  stage: build
   image: $PUBLISHER:$DISTRIB
   needs:
     - job: build_sdist
@@ -99,44 +115,14 @@ build_deb:
           - bookworm
           - trixie
 
-merge_github:
-  # deploy only if a release (no ".devX" or "+"in version string):
-  rules:
-    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG !~ /(\.dev|\+)/
-  stage: package
-  image: alpine
-  variables:
-    GIT_DEPTH: 0  # Ensure full git history
-  before_script:
-    - apk add --update git
-  script:
-    - git config --global user.email "$GITLAB_USER_EMAIL"
-    - git config --global user.name "$GITLAB_USER_NAME"
-    - git remote set-url origin "https://ci_access_token:$CI_ACCESS_TOKEN@$CI_SERVER_HOST/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME.git"
-    - git fetch origin github main --tags
-    # Checkout github branch
-    - git checkout github 2>/dev/null || git checkout -b github origin/github
-    # Squash merge main into github
-    - git merge --squash origin/main -X theirs --allow-unrelated-histories 2>&1 | tee git.out || true
-    # Exit gracefully if nothing new
-    - if grep -q "Already up to date" git.out; then echo "Nothing to merge"; exit 0; fi
-    # Resolve any remaining conflicts by taking version from main
-    - git diff --name-only --diff-filter=U | xargs -r git checkout origin/main --
-    # Stage all changes and commit
-    - git add -A
-    - git diff-index --quiet --cached HEAD || git commit -m "Squash merge main into github ($CI_COMMIT_TAG)"
-    - git push origin github
-    # Push tag to github branch
-    - if [ -n "$CI_COMMIT_TAG" ]; then git push origin $CI_COMMIT_TAG; fi
-
-deploy_pages:
+release_pages:
+  image: python:latest
+  stage: release
   # deploy only if a release (no ".devX" or "+"in version string):
   rules:
     - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG !~ /(\.dev|\+)/
       exists:
         - docs/conf.py
-  image: python:latest
-  stage: deploy
   needs:
     - job: build_pages
       artifacts: true
@@ -148,12 +134,49 @@ deploy_pages:
     paths:
     - public
 
-release:
-  # deploy only if a release (no ".devX" or "+"in version string):
+
+release_pypi:
+  image: python:latest
+  stage: release
   rules:
-    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG !~ /(\.dev|\+)/
+    # Release
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+      when: on_success
+  needs:
+    - job: build_deb
+    - job: build_sdist
+      artifacts: true
+  script:
+    - pip install twine
+    - twine check dist/*tar.gz
+    - twine upload --repository-url https://upload.pypi.org/legacy/ --username __token__ --password $PYPI_ID_TOKEN dist/*tar.gz
+
+test_pypi:
+  image: python:latest
+  stage: release
+  rules:
+    # Pre-releases: v1.2.3a1, v1.2.3-alpha1, v1.2.3b2, v1.2.3-beta2, v1.2.3rc3, v1.2.3-rc3
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(-(alpha|beta|rc|a|b)\d+|a\d+|b\d+|rc\d+)$/'
+      when: on_success
+  needs:
+    - job: build_deb
+    - job: build_sdist
+      artifacts: true
+  script:
+    - pip install twine
+    - twine check dist/*tar.gz
+    - twine upload --repository-url https://test.pypi.org/legacy/ --username __token__ --password $TEST_PYPI_ID_TOKEN dist/*tar.gz
+
+gitlab-release:
   image: ubuntu:latest
-  stage: deploy
+  stage: release
+  rules:
+    # Release
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+      when: on_success
+    # Pre-releases: v1.2.3a1, v1.2.3-alpha1, v1.2.3b2, v1.2.3-beta2, v1.2.3rc3, v1.2.3-rc3
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+(-(alpha|beta|rc|a|b)\d+|a\d+|b\d+|rc\d+)$/ && $CI_COMMIT_TAG !~ /dev/'
+      when: on_success
   needs:
     - job: build_sdist
       artifacts: true
@@ -200,12 +223,41 @@ release:
     - 'echo release-cli create --name "$CI_COMMIT_TAG" --tag-name "$CI_COMMIT_TAG" --description "$CI_COMMIT_MESSAGE" --ref "$CI_COMMIT_TAG" --assets-link "$( jq -c . <<< $ASSET_ARGS )"'
     - 'release-cli create --name "$CI_COMMIT_TAG" --tag-name "$CI_COMMIT_TAG" --description "$CI_COMMIT_MESSAGE" --ref "$CI_COMMIT_TAG" --assets-link "$( jq -c . <<< $ASSET_ARGS )"'
 
-deploy_deb:
-  # deploy only if a release (no ".devX" or "+"in version string):
+merge_github:
+  stage: release
+  image: alpine
   rules:
-    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG !~ /(\.dev|\+)/ && $SSH_PRIVATE_KEY
+    # Release
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+  before_script:
+    - apk add --update git
+  script:
+    - git config --global user.email "$GITLAB_USER_EMAIL"
+    - git config --global user.name "$GITLAB_USER_NAME"
+    - git remote set-url origin "https://ci_access_token:$CI_ACCESS_TOKEN@$CI_SERVER_HOST/$CI_PROJECT_NAMESPACE/$CI_PROJECT_NAME.git"
+    - git fetch origin github main --tags
+    # Checkout github branch
+    - git checkout github 2>/dev/null || git checkout -b github origin/github
+    # Squash merge main into github
+    - git merge --squash origin/main -X theirs --allow-unrelated-histories 2>&1 | tee git.out || true
+    # Exit gracefully if nothing new
+    - if grep -q "Already up to date" git.out; then echo "Nothing to merge"; exit 0; fi
+    # Resolve any remaining conflicts by taking version from main
+    - git diff --name-only --diff-filter=U | xargs -r git checkout origin/main --
+    # Stage all changes and commit
+    - git add -A
+    - git diff-index --quiet --cached HEAD || git commit -m "Squash merge main into github ($CI_COMMIT_TAG)"
+    - git push origin github
+    # Push tag to github branch
+    - if [ -n "$CI_COMMIT_TAG" ]; then git push origin $CI_COMMIT_TAG; fi
+
+release_deb:
   image: ubuntu:latest
-  stage: deploy
+  stage: release
+  rules:
+    # Release
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
+      when: on_success
   needs:
     - job: build_sdist
       artifacts: true
@@ -253,19 +305,3 @@ deploy_deb:
         popd
       done
     - echo "Ende"
-
-deploy_pypi:
-  # deploy only if a release (no ".devX" or "+"in version string):
-  rules:
-    - if: $CI_COMMIT_TAG && $CI_COMMIT_TAG !~ /(\.dev|\+)/ && $PYPI_ID_TOKEN
-  image: python:latest
-  stage: deploy
-  needs:
-    - job: build_deb
-    - job: build_sdist
-      artifacts: true
-  script:
-    - pip install twine
-    - twine check dist/*tar.gz
-    - twine upload --repository-url https://upload.pypi.org/legacy/ --username __token__ --password $PYPI_ID_TOKEN dist/*tar.gz
-
