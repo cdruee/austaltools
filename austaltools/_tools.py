@@ -23,8 +23,6 @@ if os.getenv('BUILDING_SPHINX', 'false') == 'false':
 
     import readmet
 
-from ._metadata import __version__, __title__
-
 logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------------
@@ -1179,83 +1177,6 @@ def read_wind(file_info: dict, path: str = '.', grid: int = 0,
         v_grid = v_ctr
 
     return u_grid, v_grid, axes
-
-# -------------------------------------------------------------------------
-
-def read_z0(working_dir, conf=None):
-    """
-    get roughness length z0 defined in austal.txt
-
-    :param working_dir: the working directoty of austal(2000),
-      where austal.txt resides
-    :type working_dir: str
-    :param conf: (optional) configuration file contents as dict
-    :type conf: dict
-
-    :return: effective anemometer height
-    :rtype: float
-
-    If `conf` is provided, this configuration is evaluated,
-    else the configuration file from `working_dir` is read.
-    This option is indended for situation in which `conf`
-    has already been read into memory for other purposes.
-    """
-    if conf is None:
-        austxt = find_austxt(working_dir)
-        conf = get_austxt(austxt)
-    if 'z0' in conf:
-        z0 = float(conf['z0'][0])
-    else:
-        logger.warning("no z0 defined in austal.txt")
-        z0 = None
-    return z0
-
-# -------------------------------------------------------------------------
-
-def read_heff(working_dir, conf=None, z0=None):
-    """
-    get effective anemometer height from
-    z0 defined in austal.txt and the heights
-    given in the akterm file (weather timeseries) given
-    as parameter 'az'
-
-    :param working_dir: the working directory of austal(2000),
-      where austal.txt resides
-    :type working_dir: str
-    :param conf: (optional) configuration file contents as dict
-    :type conf: dict
-    :param z0: (optional) override z0 defined in austal.txt
-    :type z0: float
-
-    :return: effective anemometer height
-    :rtype: float
-
-    If `conf` is provided, this configuration is evaluated,
-    else the configuration file from `working_dir` is read.
-    This option is indended for situation in which `conf`
-    has already been read into memory for other purposes.
-    """
-    if conf is None:
-        austxt = find_austxt(working_dir)
-        conf = get_austxt(austxt)
-    if 'az' in conf:
-        az_file = conf['az'][0]
-    else:
-        raise ValueError('no az defined, cannot read h_eff')
-    if z0:
-        # use supplied z0
-        z0 = float(z0)
-    else:
-        # default: get z= from austal.txt
-        z0 = read_z0(working_dir, conf)
-
-    if z0 is None:
-        raise ValueError('no z0 defined, cannot read h_eff')
-    logger.debug(f"using z0={z0}")
-    z0_class = find_z0_class(z0)
-    az = readmet.akterm.DataFile(file=os.path.join(working_dir, az_file))
-    heff = float(az.heights[z0_class])
-    return heff
 
 # -------------------------------------------------------------------------
 

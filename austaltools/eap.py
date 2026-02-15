@@ -53,6 +53,7 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 from . import _dispersion
 from . import _plotting
 from . import _tools
+from . import _windutil
 
 logger = logging.getLogger(__name__)
 
@@ -1783,7 +1784,7 @@ def main(args):
     #
     if args['height'] is None:
         try:
-            wind_height = _tools.read_heff(working_dir)
+            wind_height = _windutil.read_heff(working_dir)
         except (IOError, FileNotFoundError) as e:
             logger.error('cannot determine h_eff from configuration. '
                          'Use -z to give height manually.')

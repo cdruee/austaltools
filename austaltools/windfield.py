@@ -217,7 +217,7 @@ def main(args):
                   for x in sorted(list(set(file_info["wdir"])))]
     u_grid, v_grid, axes = _tools.read_wind(file_info, path=lib_dir,
                                      grid=grid, centers=True)
-    ha = _tools.read_heff(working_dir, conf=conf, z0=args.get('z0', None))
+    ha = _windutil.read_heff(working_dir, conf=conf, z0=args.get('z0', None))
     xa = conf.get('xa', 0)
     ya = conf.get('ya', 0)
 
