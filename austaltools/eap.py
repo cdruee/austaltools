@@ -1731,7 +1731,8 @@ def main(args):
     lib_dir = _tools.wind_library(working_dir)
     file_info = _tools.wind_files(lib_dir)
 
-    _plotting.consolidate_plotname(args['plot'], 'eap.png')
+    args['plot'] = _plotting.consolidate_plotname(
+        args['plot'], 'eap.png')
 
     directions = [float(x) * 10.
                   for x in sorted(list(set(file_info["wdir"])))]

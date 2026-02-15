@@ -56,7 +56,7 @@ class TestCommandLine(unittest.TestCase):
 
     def test_ut(self):
         command = CMD + [SUBCMD,
-                   '-U', '337921', '5513264',
+                   '-U', '32337921', '5513264',
                    TESTFILE.replace('.grid', '')]
         out, err, exitcode = capture(command)
         assert exitcode == 0
@@ -67,7 +67,7 @@ class TestCommandLine(unittest.TestCase):
     def test_mutex(self):
         command = CMD + [SUBCMD,
                    '-L', '49.75', '6.75',
-                   '-U', '337921', '5513264',
+                   '-U', '32337921', '5513264',
                    TESTFILE.replace('.grid', '')]
         out, err, exitcode = capture(command)
         assert exitcode != 0

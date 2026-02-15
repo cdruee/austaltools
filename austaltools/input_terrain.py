@@ -105,7 +105,6 @@ def main(args: dict):
     logger.debug("args: %s" % format(args))
 
     lat, lon, ele, stat_no, stat_nam = _geo.evaluate_location_opts(args)
-    rechts, hoch = _geo.ll2gk(lat, lon)
 
     available_dems = _datasets.find_terrain_data()
     if available_dems is None or len(available_dems) == 0:
@@ -125,7 +124,6 @@ def main(args: dict):
 
     storage_path = available_dems[ds_name]
 
-    logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
     logger.debug("lon: %s, lat: %s" % (lon, lat))
     size = float(args['extent']) * 1000  # km -> m
     logger.debug("size: %s m" % size)
@@ -150,12 +148,6 @@ def main(args: dict):
     # GT(5) n-s pixel resolution / pixel height (negative value for a north-up image).
     logger.debug("gt: %s" % format(gt))
 
-    bounds = (rechts - size / 2.,  # minX
-              hoch - size / 2.,  # minY
-              rechts + size / 2.,  # maxX,
-              hoch + size / 2.,  # maxY
-              )
-    logger.debug("bounds: %s" % format(bounds))
     tif_handle, tif_name = tempfile.mkstemp(suffix=".tif")
     # close file handle so that file is not open and there is
     # no permission issue when gdal tries to open it by name
@@ -163,10 +155,26 @@ def main(args: dict):
     # the file. we need to remove ist explicitly by os.remove!
     os.close(tif_handle)
     logger.debug("tempfile: %s" % tif_name)
-    gdal.Warp(tif_name, dataset,
-              dstSRS="EPSG:5677",
-              outputBounds=bounds,
+
+    if args['crs'] in [None, 'gk']:
+        rechts, hoch = _geo.ll2gk(lat, lon)
+        epsg_code = f"EPSG:{_geo.GK.GetAuthorityCode(None)}"
+    elif args['crs'] == 'ut':
+        rechts, hoch = _geo.ll2ut(lat, lon)
+        epsg_code = f"EPSG:{_geo.UT.GetAuthorityCode(None)}"
+    else:
+        raise ValueError("Unknown CRS: %s" % args['crs'])
+
+    bounds = (rechts - size / 2.,  # minX
+              hoch - size / 2.,  # minY
+              rechts + size / 2.,  # maxX,
+              hoch + size / 2.,  # maxY
               )
+    logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
+    logger.debug("bounds: %s" % format(bounds))
+
+    gdal.Warp(tif_name, dataset, dstSRS=epsg_code, outputBounds=bounds)
+
     out_name = '%s.grid' % args['output']
     logger.info("writing output to: %s" % out_name)
     gdal.Translate(out_name, tif_name,
@@ -193,30 +201,37 @@ def add_options(subparsers):
         name=SUBCOMMAND,
         help='generate terrain input for AUSTAL'
     )
-    pars_ter.add_argument(dest="output", metavar="NAME",
+    pars_ter.add_argument(dest='output', metavar='NAME',
                           help="file name to store data in.",
                           )
 
     pars_ter = _tools.add_location_opts(parser=pars_ter)
 
+    pars_ter.add_argument('-c', '--crs',
+                          metavar='CODE',
+                          nargs=None,
+                          choices=['ut', 'gk'],
+                          default='ut',
+                          help="coordinate reference system of the output: "
+                               "gk: Gauss-Krüger (zone 3), "
+                               "ut: UTM (zone 32U).  "
+                               "Defaults to %(default)s")
+    pars_ter.add_argument('-e', '--extent',
+                          metavar='KM',
+                          nargs=None,
+                          default=default_extent,
+                          help="extent of the extracted area in km "
+                               "(side length of the sqare)"
+                               "Defaults to %(default)s")
     pars_ter.add_argument('-s', '--source',
-                          metavar="CODE",
+                          metavar='CODE',
                           nargs=None,
                           # choices=AVAILABLE_DEMS,
                           default=default_dem,
-                          help='code for the source digital elevation ' +
-                               'model (DEM). '
-                               # 'Known DEMs are: ' +
-                               # ' '.join(AVAILABLE_DEMS) +
-                               ' Defaults to ' + str(default_dem)
+                          help="code for the source digital elevation " 
+                               "model (DEM). "
+                               " Defaults to %(default)s"
                           )
-    pars_ter.add_argument('-e', '--extent',
-                          metavar="KM",
-                          nargs=None,
-                          default=default_extent,
-                          help='extent of the extracted area in km ' +
-                               '(side length of the sqare)' +
-                               'Defaults to {}'.format(default_extent))
     return pars_ter
 
 # =========================================================================

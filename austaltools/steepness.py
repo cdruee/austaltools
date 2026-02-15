@@ -20,7 +20,7 @@ def main(args):
     #
     logger.debug("args: %s" % format(args))
 
-    _plotting.consolidate_plotname(args['plot'],
+    args['plot'] = _plotting.consolidate_plotname(args['plot'],
                                    "steepness_0%01d" % args["grid"])
 
     # try to load AUSTAL topography

@@ -85,7 +85,7 @@ class TestUt2Ll(unittest.TestCase):
     def test_ut2ll(self):
         # reference
         la, lo, z = (50.0, 9.0, 0.0)
-        (lat, lon) = austaltools._geo.ut2ll(500000, 5538630.70)
+        (lat, lon) = austaltools._geo.ut2ll(32500000, 5538630.70)
         # Assert
         self.assertAlmostEqual(lat, la, delta=0.0000001)
         self.assertAlmostEqual(lon, lo, delta=0.0000001)
@@ -94,7 +94,7 @@ class TestLl2Ut(unittest.TestCase):
 
     def test_ll2ut(self):
         # reference
-        r, h, z = (500000, 5538630.70, 0.)
+        r, h, z = (32500000, 5538630.70, 0.)
         re, ho  = austaltools._geo.ll2ut(50.0, 9.0)
         # Assert
         self.assertAlmostEqual(re, r, delta=0.01)

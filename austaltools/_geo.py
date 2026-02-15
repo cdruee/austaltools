@@ -34,9 +34,17 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     # DHDN / 3-degree Gauss-Kruger zone 3 (E-N), https://epsg.io/5677
     GK = osr.SpatialReference()
     GK.ImportFromEPSG(5677)
-    # ETRS89 / UTM zone 32N, https://epsg.io/25832
+    # # ETRS89 / UTM zone 32N, https://epsg.io/25832
+    # # has easting of 500000
+    # # -> yields x coordinates < 1.000.000
+    # # but coordinates < 1.000.000 in .grid terrain file
+    # # are not understood by austal
+    # ETRS89 / UTM zone 32N (zE-N), https://epsg.io/4647
+    # has easting of 32.500.000
+    # -> yields x coordinates > 32.000.000
+    # understood by austal
     UT = osr.SpatialReference()
-    UT.ImportFromEPSG(25832)
+    UT.ImportFromEPSG(4647)
 
 # -------------------------------------------------------------------------
 
