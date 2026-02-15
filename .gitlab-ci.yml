@@ -22,9 +22,9 @@ test_latest:
   image: ubuntu:latest
   stage: test
   before_script:
-    - apt-get install -y git
+    - apt-get update && apt-get install -y git
     # Install system dependencies for GDAL
-    - apt-get update && apt-get install -y gdal-bin libgdal-dev
+    - apt-get install -y gdal-bin libgdal-dev
     - apt-get install -y python3-build python3-setuptools-scm python3-gdal
     - export GDAL_CONFIG=/usr/bin/gdal-config  # Help pip find GDAL
     # Ensure git tags are available for setuptools_scm
