@@ -19,17 +19,17 @@ cache:
 
 # Test stage - run on tags only
 test_latest:
-  image: python:latest
+  image: ubuntu:latest
   stage: test
   before_script:
     # Install system dependencies for GDAL
     - apt-get update && apt-get install -y gdal-bin libgdal-dev
-    - export GDAL_CONFIG=/usr/bin/gdal-config
+    - apt-get install python3-build python3-setuptools-scm python3-gdal
+    - export GDAL_CONFIG=/usr/bin/gdal-config  # Help pip find GDAL
     # Ensure git tags are available for setuptools_scm
     - git fetch --tags
-    - pip install build setuptools_scm
     # Install package with test dependencies
-    - pip install -e .[dev]
+    - pip install -e .
   script:
     - echo "Running compile test..."
     - python3 -m py_compile austaltools/*.py
