@@ -30,7 +30,7 @@ test_latest:
     # Ensure git tags are available for setuptools_scm
     - git fetch --tags
     # Install package with test dependencies
-    - pip install -e .
+    - pip install --break-system-packages -e .
   script:
     - echo "Running compile test..."
     - python3 -m py_compile austaltools/*.py
