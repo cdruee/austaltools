@@ -22,17 +22,20 @@ test_latest:
   image: python:latest
   stage: test
   before_script:
+    # Install system dependencies for GDAL
+    - apt-get update && apt-get install -y gdal-bin libgdal-dev
+    - export GDAL_CONFIG=/usr/bin/gdal-config
     # Ensure git tags are available for setuptools_scm
     - git fetch --tags
     - pip install build setuptools_scm
     # Install package with test dependencies
     - pip install -e .[dev]
   script:
-    - echo "Running syntax check on main modules..."
+    - echo "Running compile test..."
     - python3 -m py_compile austaltools/*.py
-    - echo "Running flake8 file inspection..."
+    - echo "Running flake8 style check..."
     - flake8 austaltools --max-line-length=88 --ignore=E501,W503 || true
-    - echo "Running tests ..."
+    - echo "Running tests..."
     - python3 -m pytest tests/ -v || true
   rules:
     - if: '$CI_COMMIT_TAG'
