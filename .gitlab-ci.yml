@@ -22,7 +22,7 @@ test_latest:
   image: ubuntu:latest
   stage: test
   before_script:
-    - apt-get update && apt-get install -y git
+    - apt-get update && apt-get install -y git python3-pip
     # Install system dependencies for GDAL
     - apt-get install -y gdal-bin libgdal-dev
     - apt-get install -y python3-build python3-setuptools-scm python3-gdal
