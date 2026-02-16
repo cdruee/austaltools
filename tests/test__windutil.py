@@ -186,7 +186,7 @@ class TestLoadWeather(unittest.TestCase):
 class TestGetRoughnessLength(unittest.TestCase):
     """Tests for the get_roughness_length function."""
 
-    @patch('austaltools._windutil._tools.read_z0')
+    @patch('austaltools._windutil.read_z0')
     def test_get_roughness_length_from_config(self, mock_read_z0):
         """Test get_roughness_length returns z0 from config."""
         mock_read_z0.return_value = 0.5
@@ -196,7 +196,7 @@ class TestGetRoughnessLength(unittest.TestCase):
 
         self.assertEqual(result, 0.5)
 
-    @patch('austaltools._windutil._tools.read_z0')
+    @patch('austaltools._windutil.read_z0')
     @patch('austaltools._windutil._tools.find_austxt')
     @patch('austaltools._windutil._tools.get_austxt')
     @patch('austaltools._windutil._corine.roughness_austal')
@@ -219,7 +219,7 @@ class TestGetRoughnessLength(unittest.TestCase):
         self.assertEqual(result, 0.3)
         mock_roughness_austal.assert_called_once_with(3500000, 5500000, 15.0)
 
-    @patch('austaltools._windutil._tools.read_z0')
+    @patch('austaltools._windutil.read_z0')
     @patch('austaltools._windutil._tools.find_austxt')
     @patch('austaltools._windutil._tools.get_austxt')
     @patch('austaltools._windutil._geo.ut2gk')
@@ -245,7 +245,7 @@ class TestGetRoughnessLength(unittest.TestCase):
         self.assertEqual(result, 0.25)
         mock_ut2gk.assert_called_once_with(500000, 5500000)
 
-    @patch('austaltools._windutil._tools.read_z0')
+    @patch('austaltools._windutil.read_z0')
     @patch('austaltools._windutil._tools.find_austxt')
     @patch('austaltools._windutil._tools.get_austxt')
     @patch('austaltools._windutil._corine.roughness_austal')
@@ -271,7 +271,7 @@ class TestGetRoughnessLength(unittest.TestCase):
         self.assertEqual(result, 0.2)
         mock_roughness_web.assert_called_once_with(3500000, 5500000, 15.0)
 
-    @patch('austaltools._windutil._tools.read_z0')
+    @patch('austaltools._windutil.read_z0')
     @patch('austaltools._windutil._tools.find_austxt')
     @patch('austaltools._windutil._tools.get_austxt')
     def test_get_roughness_length_no_position_raises(self, mock_get_austxt,
@@ -287,7 +287,7 @@ class TestGetRoughnessLength(unittest.TestCase):
             self.assertIn('neither z0 nor position defined',
                           str(context.exception))
 
-    @patch('austaltools._windutil._tools.read_z0')
+    @patch('austaltools._windutil.read_z0')
     @patch('austaltools._windutil._tools.find_austxt')
     @patch('austaltools._windutil._tools.get_austxt')
     @patch('austaltools._windutil._corine.roughness_austal')
@@ -310,7 +310,7 @@ class TestGetRoughnessLength(unittest.TestCase):
         # hq should default to 10.0
         mock_roughness_austal.assert_called_once_with(3500000, 5500000, 10.)
 
-    @patch('austaltools._windutil._tools.read_z0')
+    @patch('austaltools._windutil.read_z0')
     @patch('austaltools._windutil._tools.DEFAULT_WORKING_DIR', '/default/path')
     def test_get_roughness_length_default_working_dir(self, mock_read_z0):
         """Test get_roughness_length uses DEFAULT_WORKING_DIR when None."""
@@ -320,7 +320,7 @@ class TestGetRoughnessLength(unittest.TestCase):
 
         mock_read_z0.assert_called_once_with('/default/path', None)
 
-    @patch('austaltools._windutil._tools.read_z0')
+    @patch('austaltools._windutil.read_z0')
     def test_get_roughness_length_with_conf_provided(self, mock_read_z0):
         """Test get_roughness_length uses provided conf."""
         mock_read_z0.return_value = 0.2
@@ -395,7 +395,7 @@ class TestPytestStyle:
 class TestEdgeCases(unittest.TestCase):
     """Tests for edge cases and boundary conditions."""
 
-    @patch('austaltools._windutil._tools.read_z0')
+    @patch('austaltools._windutil.read_z0')
     @patch('austaltools._windutil._tools.find_austxt')
     @patch('austaltools._windutil._tools.get_austxt')
     @patch('austaltools._windutil._corine.roughness_austal')
@@ -459,7 +459,7 @@ class TestIntegration(unittest.TestCase):
     @patch('austaltools._windutil.readmet')
     @patch('austaltools._windutil._tools.find_austxt')
     @patch('austaltools._windutil._tools.get_austxt')
-    @patch('austaltools._windutil._tools.read_z0')
+    @patch('austaltools._windutil.read_z0')
     @patch('os.listdir')
     def test_load_weather_complete_workflow(self, mock_listdir, mock_read_z0,
                                             mock_get_austxt, mock_find_austxt,

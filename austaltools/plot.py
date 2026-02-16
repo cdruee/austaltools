@@ -159,6 +159,11 @@ def main(args):
             'file does not contain load distribution: %s' % infile)
 
     infile_path = os.path.join(args['working_dir'], infile)
+
+    # configure output (path)
+    args['plot'] = _plotting.consolidate_plotname(
+        args['plot'], os.path.splitext(os.path.basename(infile_path))[0])
+
     logger.info('reading data from %s' % infile_path)
     datafile = readmet.dmna.DataFile(infile_path)
     dat = datafile.data[datafile.variables[0]]
@@ -201,12 +206,6 @@ def main(args):
         if conf and "gh" in conf:
             logging.warning('file not found: %s' % topo_path)
         topo = None
-
-    if args['plot'] is None or args['plot'] == '-':
-        args['plot'] = '__show__'
-    elif args['plot'] == '__default__':
-        args['plot'] = os.path.splitext(os.path.basename(infile_path))[0]
-
 
     if args.get('scale', None):
         scale = float(args['scale'])

@@ -47,6 +47,10 @@ def main(args):
     logger.debug(format(args))
 
     working_dir = args.get('working_dir', '.')
+
+    # determine output
+    plotfile = _plotting.consolidate_plotname(args['plot'],'windrose.png')
+
     weather = args.get('weather', None)
     if weather is not None:
         az = _windutil.load_weather(working_dir, file=weather)
@@ -54,11 +58,10 @@ def main(args):
         conf = _tools.get_austxt(_tools.find_austxt(working_dir))
         az = _windutil.load_weather(working_dir, conf=conf)
 
-    ff = az['FF']
-    dd = az['DD']
+    ff = az['FF'].mask((az['FF'] == 0) & (az['DD'] == 0), np.nan)
+    dd = az['DD'].mask((az['FF'] == 0) & (az['DD'] == 0), np.nan)
     ak = az['KM']
     mo = pd.to_datetime(az.index).month
-    # u, v = meteolib.wind.dir2uv(ff, dd)
 
     # AK (ak) in file and command line is 1-based,
     # ak0 is zero-based so it can be used as field index
@@ -82,7 +85,7 @@ def main(args):
         elif scale == QUANT:
             nbnds = 6
             step = 1. / float(nbnds - 1)
-            r_bnds = [np.quantile(ff, float(i) * step)
+            r_bnds = [np.nanquantile(ff, float(i) * step)
                        for i in range(nbnds)]
             r_bnds[0] = 0.
         else:
@@ -193,20 +196,14 @@ def main(args):
     # save space
     fig.tight_layout()
 
-    # save figure
-    if args['plot'] is None or args['plot'] == '-':
-        args['plot'] = '__show__'
-    elif args['plot'] == '__default__':
-        args['plot'] = 'windrose.png'
-
-    if args["plot"] == "__show__":
+    if plotfile == "__show__":
         logger.info('showing plot')
         plt.show()
     else:
-        if os.path.sep in args["plot"]:
-            outname = args["plot"]
+        if os.path.sep in plotfile:
+            outname = plotfile
         else:
-            outname = os.path.join(args["working_dir"], args["plot"])
+            outname = os.path.join(args["working_dir"], plotfile)
         if not outname.endswith('.png'):
             outname = outname + '.png'
         logger.info('writing plot: %s' % outname)

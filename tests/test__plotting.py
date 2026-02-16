@@ -504,7 +504,7 @@ class TestCommonPlot(unittest.TestCase):
             
             mock_plt.savefig.assert_called_once()
 
-    @patch('austaltools._plotting._HAVE_DISPLAY', False)
+    @patch('austaltools._plotting.HAVE_DISPLAY', False)
     @patch('austaltools._plotting.plt')
     @patch('austaltools._plotting.matplotlib')
     def test_common_plot_show_no_display_raises(self, mock_mpl, mock_plt):

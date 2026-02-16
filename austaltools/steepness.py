@@ -20,6 +20,8 @@ def main(args):
     #
     logger.debug("args: %s" % format(args))
 
+    args['plot'] = _plotting.consolidate_plotname(args['plot'],
+                                   "steepness_0%01d" % args["grid"])
 
     # try to load AUSTAL topography
     if args.get('topo', None) is not None:
@@ -44,11 +46,6 @@ def main(args):
     dots = np.full(np.shape(gammaz), 2.5)
     dots[gammaz > 100. / 20.] = 1.
     dots[gammaz > 100. / 5.] = -0.5
-
-    if args['plot'] is None or args['plot'] == '-':
-        args['plot'] = '__show__'
-    elif args['plot'] == '__default__':
-        args['plot'] = "steepness0%01d" % args["grid"]
 
     _plotting.common_plot(args, gamma, unit="%", topo=topo_path, dots=dots)
 

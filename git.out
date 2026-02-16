@@ -1,34 +1,20 @@
+Auto-merging .github/workflows/release.yml
 Auto-merging .gitlab-ci.yml
-Auto-merging LICENSE.txt
-Auto-merging austaltools/__init__.py
-Auto-merging austaltools/_corine.py
-Auto-merging austaltools/_datasets.py
-CONFLICT (add/add): Merge conflict in austaltools/_datasets.py
-Auto-merging austaltools/_dispersion.py
-Auto-merging austaltools/_fetch_dwd_obs.py
+Auto-merging README.md
 Auto-merging austaltools/_geo.py
-Auto-merging austaltools/_netcdf.py
 Auto-merging austaltools/_plotting.py
-Auto-merging austaltools/_storage.py
 Auto-merging austaltools/_tools.py
 Auto-merging austaltools/_windutil.py
-Auto-merging austaltools/_wmo_metadata.py
-Auto-merging austaltools/austal_input.py
-Auto-merging austaltools/command_line.py
 Auto-merging austaltools/eap.py
-CONFLICT (add/add): Merge conflict in austaltools/eap.py
-Auto-merging austaltools/fill_timeseries.py
-Auto-merging austaltools/heating.py
-Auto-merging austaltools/import_buildings.py
 Auto-merging austaltools/input_terrain.py
-Auto-merging austaltools/input_weather.py
 Auto-merging austaltools/plot.py
-Auto-merging austaltools/simple.py
 Auto-merging austaltools/steepness.py
-Auto-merging austaltools/transform.py
 Auto-merging austaltools/windfield.py
 Auto-merging austaltools/windrose.py
-Auto-merging pyproject.toml
-Auto-merging tests/test_fill_timeseries.py
+Auto-merging tests/test__geo.py
+Auto-merging tests/test__plotting.py
+Auto-merging tests/test__tools.py
+Auto-merging tests/test__windutil.py
+Auto-merging tests/test_input_terrain.py
+Automatic merge went well; stopped before committing as requested
 Squash commit -- not updating HEAD
-Automatic merge failed; fix conflicts and then commit the result.

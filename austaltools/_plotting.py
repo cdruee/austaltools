@@ -1,5 +1,6 @@
 import logging
 import os
+import sys
 
 import pandas as pd
 
@@ -12,9 +13,9 @@ if os.getenv('BUILDING_SPHINX', 'false') == 'false':
     import matplotlib
     if os.name == 'posix' and "DISPLAY" not in os.environ:
         matplotlib.use('Agg')
-        _HAVE_DISPLAY = False
+        HAVE_DISPLAY = False
     else:
-        _HAVE_DISPLAY = True
+        HAVE_DISPLAY = True
     import matplotlib.colors as colors
     import matplotlib.patches as patches
     import matplotlib.pyplot as plt
@@ -60,6 +61,27 @@ def plot_add_topo(ax, topo, working_dir='.'):
                      )
     ax.clabel(con, con.levels, inline=True, fontsize=10)
     return con
+
+# -------------------------------------------------------------------------
+
+def consolidate_plotname(argument, default: str | None = None):
+    # determine output
+    if argument == '-':
+        argument = '__show__'
+    elif argument is None or argument == '__default__':
+        if default:
+            argument = default
+        else:
+            '__default__'
+
+    if argument == '__show__' and not HAVE_DISPLAY:
+        sys.tracebacklimit = 0
+        raise EnvironmentError(f"No plotting window available, "
+                               f"cannot show plot. Please give a "
+                               f"-p/--plot <filename> or remove "
+                               f"-p option for default plot file name"
+                               f" ({default}).")
+    return argument
 
 # -------------------------------------------------------------------------
 
@@ -132,7 +154,7 @@ def common_plot(args: dict,
 
 
     """
-    if args["plot"] == "__show__" and not _HAVE_DISPLAY:
+    if args["plot"] == "__show__" and not HAVE_DISPLAY:
         raise EnvironmentError('no display, cannot show plot')
 
     matplotlib.rcParams.update({'font.size': 16})

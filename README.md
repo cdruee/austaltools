@@ -4,8 +4,14 @@ austaltools
 This module conatins tools for use with Langrangian dispersion 
 model AUSTAL (AUSbreitungsmodell nach TA Luft)
 
+Current versions:
+[![PyPi Version](https://img.shields.io/pypi/v/austaltools.svg?logo=python)](https://pypi.python.org/pypi/austaltools/)
+[![GitHub Release](https://img.shields.io/github/v/release/cdruee/austaltools?logo=github&label=Github)](https://github.com/cdruee/austaltools/releases/latest)
+[![DOI](https://zenodo.org/badge/968131323.svg)](https://doi.org/10.5281/zenodo.18404450)
+
 ### Full documentation:
 https://druee.gitlab-pages.uni-trier.de/austaltools/
+
 
 Installation:
 =============
@@ -37,6 +43,7 @@ The module contains the following scripts :
 
 ``austal-input``
     Convenience command for easy creation of AUSTAL input data
+
 
 Licenses
 ========

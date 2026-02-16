@@ -37,7 +37,7 @@ class TestCoordinateTransformations(unittest.TestCase):
 
     def test_ut2ll_returns_tuple(self):
         """Test ut2ll returns a tuple of two floats."""
-        result = _geo.ut2ll(500000, 5500000)
+        result = _geo.ut2ll(32500000, 5500000)
         self.assertIsInstance(result, tuple)
         self.assertEqual(len(result), 2)
 
@@ -49,7 +49,7 @@ class TestCoordinateTransformations(unittest.TestCase):
 
     def test_ut2gk_returns_tuple(self):
         """Test ut2gk returns a tuple of two floats."""
-        result = _geo.ut2gk(500000, 5500000)
+        result = _geo.ut2gk(32500000, 5500000)
         self.assertIsInstance(result, tuple)
         self.assertEqual(len(result), 2)
 
@@ -77,7 +77,7 @@ class TestCoordinateTransformations(unittest.TestCase):
 
     def test_ut2ll_roundtrip(self):
         """Test UTM to LL and back gives original values."""
-        east_orig, north_orig = 500000, 5500000
+        east_orig, north_orig = 32500000, 5500000
         lat, lon = _geo.ut2ll(east_orig, north_orig)
         east_back, north_back = _geo.ll2ut(lat, lon)
         self.assertAlmostEqual(east_orig, east_back, delta=1.0)
@@ -93,7 +93,7 @@ class TestCoordinateTransformations(unittest.TestCase):
 
     def test_ut2gk_roundtrip(self):
         """Test UTM to GK and back gives original values."""
-        east_orig, north_orig = 500000, 5500000
+        east_orig, north_orig = 32500000, 5500000
         rechts, hoch = _geo.ut2gk(east_orig, north_orig)
         east_back, north_back = _geo.gk2ut(rechts, hoch)
         self.assertAlmostEqual(east_orig, east_back, delta=1.0)
@@ -285,7 +285,7 @@ class TestEvaluateLocationOpts(unittest.TestCase):
 
     def test_evaluate_location_opts_ut(self):
         """Test evaluate_location_opts with UTM coords."""
-        args = {'ut': ['500000', '5500000']}
+        args = {'ut': ['32500000', '5500000']}
         lat, lon, ele, station, nam = _geo.evaluate_location_opts(args)
         self.assertIsNotNone(lat)
         self.assertIsNotNone(lon)
@@ -380,7 +380,7 @@ class TestPytestStyle:
     @pytest.mark.parametrize("args,expected_keys", [
         ({'ll': ['50', '8']}, ('lat', 'lon')),
         ({'gk': ['3500000', '5500000']}, ('lat', 'lon')),
-        ({'ut': ['500000', '5500000']}, ('lat', 'lon')),
+        ({'ut': ['32500000', '5500000']}, ('lat', 'lon')),
         ({}, ('none', 'none')),
     ])
     def test_evaluate_location_opts_various(self, args, expected_keys):
