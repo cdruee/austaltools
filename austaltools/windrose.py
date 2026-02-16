@@ -58,11 +58,10 @@ def main(args):
         conf = _tools.get_austxt(_tools.find_austxt(working_dir))
         az = _windutil.load_weather(working_dir, conf=conf)
 
-    ff = az['FF']
-    dd = az['DD']
+    ff = az['FF'].mask((az['FF'] == 0) & (az['DD'] == 0), np.nan)
+    dd = az['DD'].mask((az['FF'] == 0) & (az['DD'] == 0), np.nan)
     ak = az['KM']
     mo = pd.to_datetime(az.index).month
-    # u, v = meteolib.wind.dir2uv(ff, dd)
 
     # AK (ak) in file and command line is 1-based,
     # ak0 is zero-based so it can be used as field index
@@ -86,7 +85,7 @@ def main(args):
         elif scale == QUANT:
             nbnds = 6
             step = 1. / float(nbnds - 1)
-            r_bnds = [np.quantile(ff, float(i) * step)
+            r_bnds = [np.nanquantile(ff, float(i) * step)
                        for i in range(nbnds)]
             r_bnds[0] = 0.
         else:
