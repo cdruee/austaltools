@@ -230,6 +230,7 @@ gitlab-release:
 merge_github:
   stage: release
   image: alpine
+  dependencies: []  # don't download artifacts from other jobs
   rules:
     # Release
     - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/'
