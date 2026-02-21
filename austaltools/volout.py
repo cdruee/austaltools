@@ -54,50 +54,57 @@ def plot_isometric(grid, xmin, ymin, delt, hh,
     if zoom is None:
         zoom = 'out'
 
+    # Ensure hh is a float numpy array to avoid dtype/itemsize errors
+    hh = np.asarray(hh, dtype=float)
+
     fig = plt.figure(figsize=(10, 8))
     ax = fig.add_subplot(111, projection='3d')
 
     ni, nj, nk = grid.shape
 
     # Precompute all voxel faces for filled cells
-    verts_list = []
     filled = np.argwhere(grid == 1)
 
+    if len(filled) == 0:
+        logger.warning('Grid is entirely empty — nothing to plot.')
+        plt.tight_layout()
+        return
+
+    verts_list = []
+
     for (i, j, k) in filled:
-        x0 = xmin + i * delt
-        x1 = x0 + delt
-        y0 = ymin + j * delt
-        y1 = y0 + delt
-        z0 = hh[k]
-        z1 = hh[k + 1] if k + 1 < nk else hh[k] + (
-            hh[1] - hh[0] if nk > 1 else delt)
+        x0 = float(xmin + i * delt)
+        x1 = float(x0 + delt)
+        y0 = float(ymin + j * delt)
+        y1 = float(y0 + delt)
+        z0 = float(hh[k])
+        z1 = float(hh[k + 1] if k + 1 < nk else hh[k] + (
+            hh[1] - hh[0] if nk > 1 else delt))
 
-        # 6 faces of the voxel cube
-        faces = [
-            [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]],
-            # bottom
-            [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]],
-            # top
-            [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],
-            # front
-            [[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]],
-            # back
-            [[x0, y0, z0], [x0, y1, z0], [x0, y1, z1], [x0, y0, z1]],
-            # left
-            [[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]],
-            # right
-        ]
-        verts_list.extend(faces)
+        # 6 faces as explicit float arrays — required to avoid the
+        # "data type must provide an itemsize" error in proj3d
+        faces = np.array([
+            [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]],  # bottom
+            [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]],  # top
+            [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],  # front
+            [[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]],  # back
+            [[x0, y0, z0], [x0, y1, z0], [x0, y1, z1], [x0, y0, z1]],  # left
+            [[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]],  # right
+        ], dtype=float)
+        verts_list.append(faces)
 
-    if verts_list:
-        poly = Poly3DCollection(
-            verts_list,
-            facecolor='steelblue',
-            edgecolor='navy',
-            alpha=0.7,
-            linewidth=0.3
-        )
-        ax.add_collection3d(poly)
+    # Stack into a single (N*6, 4, 3) float array — avoids the mixed-type
+    # list that causes "data type must provide an itemsize" in proj3d
+    all_faces = np.concatenate(verts_list, axis=0)
+
+    poly = Poly3DCollection(
+        all_faces,
+        facecolor='steelblue',
+        edgecolor='navy',
+        alpha=0.7,
+        linewidth=0.3
+    )
+    ax.add_collection3d(poly)
 
     # Isometric-style view angle
     ax.view_init(elev=30, azim=45)
@@ -108,15 +115,31 @@ def plot_isometric(grid, xmin, ymin, delt, hh,
     ax.set_zlabel('Z')
     ax.set_title('Isometric Grid View')
 
-    # Auto-scale axes
-    # if zoom == 'out':
-    if True:
-        ax.auto_scale_xyz(
-            [xmin, xmin + ni * delt],
-            [ymin, ymin + nj * delt],
-            [hh[0], hh[-1]]
-        )
-    # else ...
+    # Explicit axis limits — more reliable than auto_scale_xyz for
+    # Poly3DCollection which doesn't update the auto-scaling machinery.
+    if zoom == 'in':
+        pass
+    elif zoom == 'center':
+        pass
+    else:
+        xmax = xmin + ni * delt
+        ymax = ymin + nj * delt
+        zmin_val = float(hh[0])
+        zmax_val = float(hh[-1])
+
+    ax.set_xlim(xmin, xmax)
+    ax.set_ylim(ymin, ymax)
+    ax.set_zlim(zmin_val, zmax_val)
+
+    # Proportional box aspect so buildings don't look squashed.
+    # set_box_aspect is available from matplotlib 3.3 onward.
+    x_range = xmax - xmin
+    y_range = ymax - ymin
+    z_range = zmax_val - zmin_val if zmax_val != zmin_val else 1.0
+    try:
+        ax.set_box_aspect((x_range, y_range, z_range))
+    except AttributeError:
+        pass  # older matplotlib: proportions will not be exact
 
     plt.tight_layout()
     return
