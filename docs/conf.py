@@ -38,7 +38,10 @@ try:
 except FileNotFoundError:
     __title__ = __author__ = __email__ = __description__ = 'Unknown'
 
-from austaltools._version import __version__
+try:
+    from austaltools._version import __version__
+except ImportError:
+    __version__ = 'local'
 from austaltools._metadata import __copyright__
 
 

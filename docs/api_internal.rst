@@ -46,6 +46,13 @@ _plotting
    :undoc-members:
    :member-order: groupwise
 
+_metadata
+---------
+.. automodule:: austaltools._metadata
+   :members:
+   :undoc-members:
+   :member-order: groupwise
+
 _netcdf
 -----------
 .. automodule:: austaltools._netcdf
@@ -63,13 +70,6 @@ _storage
 _tools
 ------
 .. automodule:: austaltools._tools
-   :members:
-   :undoc-members:
-   :member-order: groupwise
-
-_version
---------
-.. automodule:: austaltools._version
    :members:
    :undoc-members:
    :member-order: groupwise
