@@ -18,6 +18,7 @@ from . import steepness
 from . import simple
 from . import transform
 from . import plot
+from . import volout
 from . import windfield
 from . import windrose
 
@@ -74,6 +75,7 @@ def cli_parser():
         input_terrain,
         transform,
         input_weather,
+        volout,
         windfield,
         windrose,
     ]:
@@ -164,6 +166,8 @@ def main(args=None):
             input_terrain.main(args)
         elif args['command'] == 'transform':
             transform.main(args)
+        elif args['command'] == 'volout':
+            volout.main(args)
         elif args['command'] == 'weather':
             input_weather.main(args)
         elif args['command'] == 'windfield':
