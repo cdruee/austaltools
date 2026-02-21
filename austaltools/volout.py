@@ -14,6 +14,7 @@ import readmet.dmna
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import matplotlib as mpl
     import matplotlib.pyplot as plt
+    import matplotlib.colors as mcolors
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 
 from . import _dispersion
@@ -29,6 +30,44 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
 # -------------------------------------------------------------------------
 
+def face_lighting(grid, light=None, base_color='steelblue', ambient=0.3):
+    """
+    Build a flat (N_faces, 4) RGBA array for simulated directional lighting,
+    compatible with the facecolors argument of ax.voxels().
+
+    ax.voxels() lays out faces in the order:
+        -x, +x, -y, +y, -z, +z  (6 groups, each of size n_filled voxels)
+
+    :param grid: boolean or 0/1 ndarray, shape (ni, nj, nk)
+    :param light: light direction vector (x, y, z); defaults to [1, 1, 2]
+    :param base_color: any matplotlib color string
+    :param ambient: minimum brightness for faces pointing away from light [0..1]
+    :returns: (N_faces, 4) float32 RGBA array
+    """
+    if light is None:
+        light = np.array([1.0, 1.0, 2.0])
+    light = np.asarray(light, dtype=float)
+    light = light / np.linalg.norm(light)
+
+    # face order used internally by ax.voxels
+    normals = [[-1, 0, 0], [1, 0, 0],
+               [0, -1, 0], [0, 1, 0],
+               [0, 0, -1], [0, 0, 1]]
+
+    base_rgb = np.array(mcolors.to_rgb(base_color))
+    n_filled = int(grid.astype(bool).sum())
+
+    colors = []
+    for normal in normals:
+        diffuse = max(0.0, np.dot(light, normal))
+        factor = ambient + (1.0 - ambient) * diffuse
+        rgba = np.append(base_rgb * factor, 0.9)
+        colors.append(np.tile(rgba, (n_filled, 1)))
+
+    # concatenate: (face0_vox0..voxN, face1_vox0..voxN, ...) → (6*n_filled, 4)
+    return np.concatenate(colors, axis=0).astype(np.float32)
+
+# -------------------------------------------------------------------------
 
 def plot_isometric(grid, xmin, ymin, delt, hh,
                    zoom=None):
@@ -54,95 +93,89 @@ def plot_isometric(grid, xmin, ymin, delt, hh,
     if zoom is None:
         zoom = 'out'
 
-    # Ensure hh is a float numpy array to avoid dtype/itemsize errors
     hh = np.asarray(hh, dtype=float)
-
-    fig = plt.figure(figsize=(10, 8))
-    ax = fig.add_subplot(111, projection='3d')
-
     ni, nj, nk = grid.shape
-
-    # Precompute all voxel faces for filled cells
     filled = np.argwhere(grid == 1)
 
     if len(filled) == 0:
         logger.warning('Grid is entirely empty — nothing to plot.')
-        plt.tight_layout()
         return
 
-    verts_list = []
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection='3d')
 
-    for (i, j, k) in filled:
-        x0 = float(xmin + i * delt)
-        x1 = float(x0 + delt)
-        y0 = float(ymin + j * delt)
-        y1 = float(y0 + delt)
-        z0 = float(hh[k])
-        z1 = float(hh[k + 1] if k + 1 < nk else hh[k] + (
-            hh[1] - hh[0] if nk > 1 else delt))
+    # Build coordinate arrays for ax.voxels()
+    # x, y are uniform; z follows hh (possibly irregular)
+    x = xmin + np.arange(ni + 1) * delt
+    y = ymin + np.arange(nj + 1) * delt
 
-        # 6 faces as explicit float arrays — required to avoid the
-        # "data type must provide an itemsize" error in proj3d
-        faces = np.array([
-            [[x0, y0, z0], [x1, y0, z0], [x1, y1, z0], [x0, y1, z0]],  # bottom
-            [[x0, y0, z1], [x1, y0, z1], [x1, y1, z1], [x0, y1, z1]],  # top
-            [[x0, y0, z0], [x1, y0, z0], [x1, y0, z1], [x0, y0, z1]],  # front
-            [[x0, y1, z0], [x1, y1, z0], [x1, y1, z1], [x0, y1, z1]],  # back
-            [[x0, y0, z0], [x0, y1, z0], [x0, y1, z1], [x0, y0, z1]],  # left
-            [[x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [x1, y0, z1]],  # right
-        ], dtype=float)
-        verts_list.append(faces)
+    # z edges: check if hh already has nk+1 entries (includes top edge)
+    # or nk entries (lower edges only, need to append one more)
+    if len(hh) == nk + 1:
+        z = hh  # already cell edges
+    elif len(hh) == nk:
+        dz_last = hh[1] - hh[0] if nk > 1 else delt
+        z = np.append(hh, hh[-1] + dz_last)  # append top edge
+    else:
+        raise ValueError(f"hh length {len(hh)} incompatible with nk={nk} "
+                         f"(expected {nk} or {nk + 1})")
 
-    # Stack into a single (N*6, 4, 3) float array — avoids the mixed-type
-    # list that causes "data type must provide an itemsize" in proj3d
-    all_faces = np.concatenate(verts_list, axis=0)
+    # ax.voxels needs coordinate meshes of shape (ni+1, nj+1, nk+1)
+    X, Y, Z = np.meshgrid(x, y, z, indexing='ij')
 
-    poly = Poly3DCollection(
-        all_faces,
-        facecolor='steelblue',
-        edgecolor='navy',
-        alpha=0.7,
-        linewidth=0.3
-    )
-    ax.add_collection3d(poly)
 
-    # Isometric-style view angle
+    facecolors = face_lighting(grid)
+
+    ax.voxels(X, Y, Z, grid.astype(bool),
+              facecolors=facecolors,
+              edgecolors='navy',
+              shade=False,       # disable matplotlib's own shading — we do it ourselves
+              linewidth=0.75)
+
     ax.view_init(elev=30, azim=45)
-    ax.set_proj_type('ortho')  # true isometric (no perspective distortion)
-
+    # ax.set_proj_type('ortho')
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z')
     ax.set_title('Isometric Grid View')
 
-    # Explicit axis limits — more reliable than auto_scale_xyz for
-    # Poly3DCollection which doesn't update the auto-scaling machinery.
-    if zoom == 'in':
-        pass
-    elif zoom == 'center':
-        pass
-    else:
-        xmax = xmin + ni * delt
-        ymax = ymin + nj * delt
-        zmin_val = float(hh[0])
-        zmax_val = float(hh[-1])
+    # --- zoom ---
+    i_min, j_min, k_min = filled.min(axis=0)
+    i_max, j_max, k_max = filled.max(axis=0)
 
-    ax.set_xlim(xmin, xmax)
-    ax.set_ylim(ymin, ymax)
+    bx_min, bx_max = x[i_min], x[i_max + 1]
+    by_min, by_max = y[j_min], y[j_max + 1]
+    bz_min, bz_max = z[k_min], z[k_max + 1]
+
+    if zoom == 'in':
+        xmin_val, xmax_val = bx_min, bx_max
+        ymin_val, ymax_val = by_min, by_max
+        zmin_val, zmax_val = bz_min, bz_max
+    elif zoom == 'center':
+        cx, cy = xmin + ni * delt / 2.0, ymin + nj * delt / 2.0
+        half_x = max(cx - bx_min, bx_max - cx)
+        half_y = max(cy - by_min, by_max - cy)
+        xmin_val, xmax_val = cx - half_x, cx + half_x
+        ymin_val, ymax_val = cy - half_y, cy + half_y
+        zmin_val, zmax_val = float(z[0]), bz_max
+    else:  # 'out'
+        xmin_val, xmax_val = float(x[0]), float(x[-1])
+        ymin_val, ymax_val = float(y[0]), float(y[-1])
+        zmin_val, zmax_val = float(z[0]), float(z[-1])
+
+    ax.set_xlim(xmin_val, xmax_val)
+    ax.set_ylim(ymin_val, ymax_val)
     ax.set_zlim(zmin_val, zmax_val)
 
-    # Proportional box aspect so buildings don't look squashed.
-    # set_box_aspect is available from matplotlib 3.3 onward.
-    x_range = xmax - xmin
-    y_range = ymax - ymin
+    x_range = xmax_val - xmin_val
+    y_range = ymax_val - ymin_val
     z_range = zmax_val - zmin_val if zmax_val != zmin_val else 1.0
     try:
         ax.set_box_aspect((x_range, y_range, z_range))
     except AttributeError:
-        pass  # older matplotlib: proportions will not be exact
+        pass
 
     plt.tight_layout()
-    return
 
     # # --- Example usage ---
     # ni, nj, nk = 10, 10, 5
@@ -174,7 +207,8 @@ def main(args):
     hh = [float(x) for x in volume.header['hh'].split()]
     grid = volume.data['']
 
-    plot_isometric(grid, xmin, ymin, delt, hh)
+    plot_isometric(grid, xmin, ymin, delt, hh,
+                   zoom=args.get('zoom', None))
 
 
     if plotfile == "__show__":
@@ -224,3 +258,12 @@ def add_options(subparsers):
                               default = None,
                               help = 'Name of the file to read '
                                      '[%(default)s])].')
+    pars_wrs.add_argument('-z', '--zoom',
+                          dest = 'zoom',
+                          default='in',
+                          choices=['in', 'center', 'out'],
+                          help=r'Zoom level for plotting: \n'
+                               r'  - "out": view full grid\n'
+                               r'  - "center": zoom to grid center\n'
+                               r'  - "in": zoom closest to buildings\n'
+                               r'Defaults to [%(default)s])].')
