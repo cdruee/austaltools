@@ -9,7 +9,6 @@ import sys
 
 import numpy as np
 import pandas as pd
-import readmet.dmna
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import matplotlib as mpl
@@ -19,6 +18,8 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from mpl_toolkits.mplot3d.art3d import Poly3DCollection
     logging.getLogger('matplotlib.font_manager').setLevel(logging.ERROR)
 
+    import readmet
+
 from . import _dispersion
 from . import _corine
 from . import _plotting
@@ -27,8 +28,7 @@ from ._metadata import __version__
 from . import _windutil
 
 logger = logging.getLogger(__name__)
-if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    logging.getLogger('readmet.dmna').setLevel(logging.ERROR)
+
 
 # -------------------------------------------------------------------------
 

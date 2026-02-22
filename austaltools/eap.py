@@ -168,7 +168,7 @@ def same_sense_rotation(val, ref):
         This function is used in the EAP algorithm to reject grid points 
         where the wind does not rotate consistently with the reference 
         profile as required by VDI 3783 Part 16, Section 6.1, criterion 2
-        [vdi3783p16]_ .
+        [VDI3783p16]_ .
     """
 
     def angdiff(ang: np.ndarray) -> np.ndarray:
@@ -324,7 +324,7 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
         dimensions are incompatible with the wind library.
 
     .. note::
-        The algorithm follows VDI 3783 Part 16, Section 6.1 [vdi3783p16]_ :
+        The algorithm follows VDI 3783 Part 16, Section 6.1 [VDI3783p16]_ :
         
         1. Exclude edge nodes (``nedge`` from each boundary).
         2. Reject points where wind doesn't rotate consistently or
