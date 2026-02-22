@@ -8,6 +8,10 @@ austaltools
    :width: 45%
    :align: bottom
 
+.. |plotvolout| image:: img/volout_basilika.png
+   :width: 45%
+   :align: bottom
+
 .. argparse::
    :module: austaltools.command_line
    :func: cli_parser
@@ -24,4 +28,6 @@ austaltools
         A simple plot for a quick overview (click to enlarge)
         |plotcontour|
 
-
+   volout
+        Example plot of a buildings volume plot  (click to enlarge)
+        |plotvolout|
