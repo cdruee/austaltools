@@ -2,9 +2,9 @@
 # -*- coding: utf-8 -*-
 """
 This module implements the process described in VDI 3783 Part 16
-:cite:`VDI3783p16` to find a substitute anemometer position (EAP)
+[VDI3783p16]_ to find a substitute anemometer position (EAP)
 when wind measurements provided as input to the dispersion model
-AUSTAL :cite:`AST31` are **not** taken by an anemometer inside the
+AUSTAL [AST31]_ are **not** taken by an anemometer inside the
 AUSTAL model domain (i.e., on a nearby weather station or taken from
 a weather model).
 
@@ -168,7 +168,7 @@ def same_sense_rotation(val, ref):
         This function is used in the EAP algorithm to reject grid points 
         where the wind does not rotate consistently with the reference 
         profile as required by VDI 3783 Part 16, Section 6.1, criterion 2
-        [vdi3783p16]_ .
+        [VDI3783p16]_ .
     """
 
     def angdiff(ang: np.ndarray) -> np.ndarray:
@@ -324,7 +324,7 @@ def calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
         dimensions are incompatible with the wind library.
 
     .. note::
-        The algorithm follows VDI 3783 Part 16, Section 6.1 [vdi3783p16]_ :
+        The algorithm follows VDI 3783 Part 16, Section 6.1 [VDI3783p16]_ :
         
         1. Exclude edge nodes (``nedge`` from each boundary).
         2. Reject points where wind doesn't rotate consistently or
@@ -1066,7 +1066,7 @@ def calc_vdi3783_8(levels: list, dirs: list, z0: float = None,
     :rtype: tuple(numpy.ndarray, numpy.ndarray)
 
     .. note::
-        The two-layer model from VDI 3783 Part 8 :cite:`VDI3783p8` consists of:
+        The two-layer model from VDI 3783 Part 8 [VDI3783p8]_ consists of:
         
         **Lower layer** (:math:`z \\leq h_1`):
             Surface layer following Monin-Obukhov similarity with wind speed:

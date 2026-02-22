@@ -1,20 +1,9 @@
 Auto-merging .github/workflows/release.yml
-Auto-merging .gitlab-ci.yml
-Auto-merging README.md
-Auto-merging austaltools/_geo.py
-Auto-merging austaltools/_plotting.py
-Auto-merging austaltools/_tools.py
-Auto-merging austaltools/_windutil.py
+Auto-merging austaltools/command_line.py
 Auto-merging austaltools/eap.py
-Auto-merging austaltools/input_terrain.py
-Auto-merging austaltools/plot.py
-Auto-merging austaltools/steepness.py
-Auto-merging austaltools/windfield.py
-Auto-merging austaltools/windrose.py
-Auto-merging tests/test__geo.py
-Auto-merging tests/test__plotting.py
-Auto-merging tests/test__tools.py
-Auto-merging tests/test__windutil.py
-Auto-merging tests/test_input_terrain.py
+Auto-merging docs/api_commands.rst
+Auto-merging docs/api_internal.rst
+Auto-merging docs/austaltools.rst
+Auto-merging docs/conf.py
 Automatic merge went well; stopped before committing as requested
 Squash commit -- not updating HEAD

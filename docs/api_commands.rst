@@ -68,9 +68,23 @@ transform
    :undoc-members:
    :member-order: groupwise
 
+volout
+---------
+.. automodule:: austaltools.volout
+   :members:
+   :undoc-members:
+   :member-order: groupwise
+
 windfield
 ---------
 .. automodule:: austaltools.windfield
+   :members:
+   :undoc-members:
+   :member-order: groupwise
+
+windrose
+---------
+.. automodule:: austaltools.windrose
    :members:
    :undoc-members:
    :member-order: groupwise
