@@ -12,6 +12,15 @@ austaltools
    :width: 45%
    :align: bottom
 
+.. |plotwindrose| image:: img/windrose.png
+   :width: 45%
+   :align: bottom
+
+.. |plotwindfield| image:: img/windfield.png
+   :width: 45%
+   :align: bottom
+
+
 .. argparse::
    :module: austaltools.command_line
    :func: cli_parser
@@ -31,3 +40,11 @@ austaltools
    volout
         Example plot of a buildings volume plot  (click to enlarge)
         |plotvolout|
+
+   windfield
+        Example plot of a windfield (click to enlarge)
+        |plotwindfield|
+
+   windrose
+        Example plot of a windrose classified by wind speed quantiles         (click to enlarge)
+        |plotwindrose|
