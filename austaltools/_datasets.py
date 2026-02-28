@@ -2143,7 +2143,7 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
         return False
     # get list of stations
     logger.info("fetching stationlists")
-    stations_dict = _fetch_dwd_obs.fetch_stationlist(years)
+    stations_dict = _fetch_dwd.DWDStationinfo().data
     station_numbers = stations_dict.keys()
 
     # download and process all stations
