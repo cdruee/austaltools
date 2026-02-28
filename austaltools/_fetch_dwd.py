@@ -11,14 +11,16 @@ import logging
 import os
 import re
 import shutil
-from typing import Any
 import zipfile
+from typing import Any
 
-import requests
 import numpy as np
 import pandas as pd
+import requests
 
 from . import _tools
+from . import _storage
+from . import _geo
 
 logger = logging.getLogger(__name__)
 
@@ -35,9 +37,9 @@ METAFILE_DWD = 'metadata_%05i.csv'
 #
 TO_COLLECT = [
     ['air_temperature', 'TU', 'tu'],
-    #['cloudiness', 'N', 'n'],
+    # ['cloudiness', 'N', 'n'],  # included in CS
     ['cloud_type', 'CS', 'cs'],
-    ['extreme_wind', 'FX', 'fx'],
+    # ['extreme_wind', 'FX', 'fx'],  # not needed
     ['precipitation', 'RR', 'rr'],
     ['pressure', 'P0', 'p0'],
     ['soil_temperature', 'EB', 'eb'],
@@ -46,9 +48,161 @@ TO_COLLECT = [
 ]
 """parameter groups to collect from opendata file tree"""
 
-# -------------------------------------------------------------------------
+# =========================================================================
 
-def fetch_dirlist(url: str, pattern : str = '.*') -> list[str]:
+class DWDStationinfo():
+    """
+    Class that holds information about a weather stations from a dataset.
+
+     This function retrieves metadata about a specific weather station from
+     a dataset that is either provided or located in a default location. The
+     dataset is expected to be a JSON file containing information about multiple
+     weather stations, including their geographical coordinates, elevation, and
+     names.
+
+     :param stationfile: The path to the JSON file containing
+        station information. If `None`, a default path is used.
+        Defaults to `None`.
+     :type stationfile: str | None
+
+     This class can be used as a context manager.
+
+     Example::
+
+        with DWDStationinfo() as si:
+            lat, lon, ele = si.position(1234)
+    """
+    data = pd.DataFrame()
+
+    # -------------------------------------
+
+    def __init__(self, stationfile=None):
+        if stationfile is None:
+            stationfile = os.path.join(_storage.DIST_AUX_FILES,
+                                       'dwd_stationlist.json')
+
+        logging.info('dwd station data from; %s' % stationfile)
+        with open(stationfile, mode='r') as f:
+            self.data = pd.read_json(f, orient='index', convert_dates=True)
+
+    # -------------------------------------
+
+    def __enter__(self):
+        return self
+
+    # -------------------------------------
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        return False  # don't suppress exceptions
+
+    # -------------------------------------
+
+    def _ensure_valid(self, station: Any, silent: bool = False) -> bool:
+        """
+        Make sure station with that number exists
+        :param station: station number candicate
+        :type station: int
+        :param silent: (optional)
+          If the function should silently return `False`
+          or raise an error if `station` is invalid.
+        :type silent: bool
+        :return: True if station exists, False otherwise
+        :rtype: bool
+        """
+        msg = None
+        if station is None or not isinstance(station, int):
+            msg = f"no station number: {str(station)}"
+        if station not in self.data.index:
+            msg = f"station not in stationinfo file: {station}"
+        if msg:
+            if silent:
+                return False
+            else:
+                raise ValueError(msg)
+        return True
+
+    # -------------------------------------
+
+    def position(self, station: int) -> tuple[float, float, float]:
+        """
+        Retrieves the position of a specific weather station 
+        identified by the station number
+        
+        Returns latitude, longitude, elevation, and name
+        :param station: 
+        :type station: 
+        :return: lat, lon, ele
+        :rtype: (float, float, float)
+        """
+        self._ensure_valid(station)
+        lat = self.data['latitude'][station]
+        lon = self.data['longitude'][station]
+        ele = self.data['elevation'][station]
+        return lat, lon, ele
+
+    # -------------------------------------
+
+    def name(self, station: int) -> str:
+        """
+        Retrieves the name of a specific weather station
+        identified by the station number
+        :param station:
+        :type station:
+        :return: name
+        :rtype: str
+        """
+        self._ensure_valid(station)
+        return self.data['name'][station]
+
+    # -------------------------------------
+
+    def roughness(self, station: int) -> str:
+        """
+        Retrieves the surface roughness $z_0$ at a specific weather station
+        identified by the station number
+        :param station:
+        :type station:
+        :return: roughness length in m
+        :rtype: float
+        """
+        self._ensure_valid(station)
+        return self.data['roughness'][station]
+
+    # -------------------------------------
+
+    def nearest(self, lat: float, lon: float, radius: float| None=None
+                ) -> int | None:
+        """
+        Returns the number of the nearest station in the stationinfo file.
+        
+        If limit is given, a station is only returned, if one if found
+        within the given radius around the position.
+        
+        :param lat: latitude in degrees 
+        :type lat: float
+        :param lon: longitude in degrees
+        :type lon: float
+        :param radius: Max distance toe station returned in km
+        :type radius: float
+        :return: station number 
+          or None if no station inside the search radius
+        :rtype: int | None
+        """
+        sdist = pd.Series(
+            {k: _geo.spheric_distance(
+                v['latitude'], v['longitude'], lat, lon)
+             for k, v in self.data.iterrows()}
+        )  # km
+        candidate = sdist.idxmin()
+        if radius and sdist[candidate] > radius:
+            return None
+        return int(candidate)  # type: ignore[arg-type]
+
+    # -------------------------------------
+
+# =========================================================================
+
+def fetch_dirlist(url: str, pattern: str = '.*') -> list[str]:
     """
     get directory listing from (opendata) server
 
@@ -64,6 +218,7 @@ def fetch_dirlist(url: str, pattern : str = '.*') -> list[str]:
         links = [x for x in re.findall(r'href="(.+?)"', text)]
         files = [x for x in links if bool(re.match(pattern, x))]
     return files
+
 
 # -------------------------------------------------------------------------
 
@@ -107,7 +262,8 @@ def fetch_file(group: str, station: int | str,
         flist = fetch_dirlist(
             baseurl, r"stundenwerte_%s_%05i_.*\.zip" % (gtl, stnr))
         if len(flist) != 1:
-            logger.warning('filename on server not unique: %s' % str(flist))
+            logger.warning(
+                'filename on server not unique: %s' % str(flist))
         fname = sorted(flist)[-1]
 
     local_name = os.path.join(local_path, fname)
@@ -118,8 +274,8 @@ def fetch_file(group: str, station: int | str,
 
 # -------------------------------------------------------------------------
 
-def fetch_stationlist(years: list[int]|int|None = None, fullyear=True
-                      ) -> dict[str,dict]:
+def fetch_stationlist(years: list[int] | int | None = None, fullyear=True
+                      ) -> dict[str, dict]:
     """
     compile the station list from (opendata) server
 
@@ -135,10 +291,10 @@ def fetch_stationlist(years: list[int]|int|None = None, fullyear=True
     logger.debug(f"fetch_stationlist: years = {years}")
     if years is not None and not isinstance(years, list):
         years = [years]
-    stations={}
+    stations = {}
     for (groupname, gtl, groupabbr) in TO_COLLECT:
         listfile = fetch_file(gtl, 'stations')
-        stations[gtl]={}
+        stations[gtl] = {}
         with open(listfile, 'r', encoding="latin-1") as f:
             # skip header
             f.readline()
@@ -146,56 +302,71 @@ def fetch_stationlist(years: list[int]|int|None = None, fullyear=True
             for line in f.readlines():
                 s_id = int(line[0:5])
                 stations[gtl][s_id] = {
-                    "start": pd.to_datetime(line[6:14], format="%Y%m%d"),
-                    "end": pd.to_datetime(line[15:23], format="%Y%m%d"),
+                    "start": pd.to_datetime(line[6:14],
+                                            format="%Y%m%d", utc=True),
+                    "end": pd.to_datetime(line[15:23],
+                                          format="%Y%m%d", utc=True),
                     "elevation": float(line[31:40]),
                     "latitude": float(line[41:50]),
                     "longitude": float(line[51:60]),
                     "name": (line[61:102]).strip()
                 }
     # get all station IDs
-    sids = list(set([x for k,v in stations.items() for x in v.keys()]))
+    sids = list(set([x for k, v in stations.items() for x in v.keys()]))
     # find stations that provide all parameters
-    complete_stations=dict(dict())
+    complete_stations = dict(dict())
     for sid in sids:
         # skip stations not listed in all groups
-        if not all([sid in v.keys() for k,v in stations.items()]):
+        if not all([sid in v.keys() for k, v in stations.items()]):
             continue
         # last start date
-        s_start = max([v[sid]['start'] for k,v in stations.items()])
+        s_start = max([v[sid]['start'] for k, v in stations.items()])
+        logger.debug({k: v[sid]['start'] for k, v in stations.items()})
         # first end date
-        s_end = min([v[sid]['end'] for k,v in stations.items()])
-        # check elevation
-        s_ele = stations[list(stations.keys())[0]][sid]['elevation']
-        if not all([s_ele == v[sid]['elevation'] for k,v in stations.items()]):
-            logger.warning(f'multiple elevations for station {sid}')
-        # check latitude
-        s_lat = stations[list(stations.keys())[0]][sid]['latitude']
-        if not all([s_lat == v[sid]['latitude'] for k,v in stations.items()]):
-            logger.warning(f'multiple latitudes for station {sid}')
-        s_lon = stations[list(stations.keys())[0]][sid]['longitude']
-        if not all([s_lon == v[sid]['longitude'] for k,v in stations.items()]):
-            logger.warning(f'multiple longitudes for station {sid}')
-        # check longitude
+        s_end = min([v[sid]['end'] for k, v in stations.items()])
+        logger.debug({k: v[sid]['end'] for k, v in stations.items()})
+        # station name
         s_nam = stations[list(stations.keys())[0]][sid]['name']
         if not all(
                 [s_nam == v[sid]['name'] for k, v in stations.items()]):
             logger.warning(f'multiple name for station {sid}')
 
+        logger.debug(f"{sid:-5d} ({s_nam:16s}): {s_start} - {s_end}")
+
+        # check elevation
+        s_ele = stations[list(stations.keys())[0]][sid]['elevation']
+        if not all([s_ele == v[sid]['elevation'] for k, v in
+                    stations.items()]):
+            logger.warning(f'multiple elevations for station {sid}')
+        # check latitude
+        s_lat = stations[list(stations.keys())[0]][sid]['latitude']
+        if not all([s_lat == v[sid]['latitude'] for k, v in
+                    stations.items()]):
+            logger.warning(f'multiple latitudes for station {sid}')
+        # check longitude
+        s_lon = stations[list(stations.keys())[0]][sid]['longitude']
+        if not all([s_lon == v[sid]['longitude'] for k, v in
+                    stations.items()]):
+            logger.warning(f'multiple longitudes for station {sid}')
+
         if years is None:
             # earliest and last time python can produce
-            start_limit = datetime.datetime.max
-            end_limit = datetime.datetime.min
+            start_limit = pd.Timestamp.min.tz_localize('UTC')
+            end_limit = pd.Timestamp.max.tz_localize('UTC')
         else:
             if fullyear:
-                start_limit = pd.Timestamp(years[0], 1, 1, 0, 0, 0)
-                end_limit = pd.Timestamp(years[-1], 12, 31, 23, 59, 59)
+                start_limit = pd.Timestamp(
+                    years[0], 1, 1, 0, 0, 0).tz_localize('UTC')
+                end_limit = pd.Timestamp(
+                    years[-1], 12, 31, 23, 59, 59).tz_localize('UTC')
             else:
-                start_limit = pd.Timestamp(years[0], 1, 1, 0, 0, 0)
-                end_limit = pd.Timestamp(years[-1], 12, 31, 23, 59, 59)
+                start_limit = pd.Timestamp(
+                    years[0], 1, 1, 0, 0, 0).tz_localize('UTC')
+                end_limit = pd.Timestamp(
+                    years[-1], 12, 31, 23, 59, 59).tz_localize('UTC')
 
         # if time overlaps window:
-        if s_start <= start_limit and s_end >= end_limit:
+        if s_start <= end_limit and s_end >= start_limit:
             complete_stations[sid] = {
                 "start": s_start,
                 "end": s_end,
@@ -206,18 +377,40 @@ def fetch_stationlist(years: list[int]|int|None = None, fullyear=True
             }
     return complete_stations
 
+
 # -------------------------------------------------------------------------
 
-def fetch_station(station: str, store: bool = True
-                  ) -> tuple[pd.DataFrame, pd.DataFrame] | tuple[str, str]:
+def fetch_station_data(
+        station: int, store: bool = True,
+        time_start: pd.Timestamp | str | None = None,
+        time_end: pd.Timestamp | str | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame] | tuple[str, str]:
     """
     Ensure that the DWD weather station data for station
     number `station` is available at `storage_path`.
     If not, data is downloaded and stored in the `storage_path`.
 
-    :param storage_path: data storage directory
-
+    :param station: DWD station number
+    :type station: int
+    :param store: If `True` data are be saved to files,
+      if `False` data are returned as data frames
+    :type store:
+    :param time_start: start of desired time window or None
+      for getting earliest available data
+    :type time_start: pd.Timestamp | str
+    :param time_end: end of desired time window or None
+      for getting latest available data
+    :type time_end: pd.Timestamp | str
+    :returns: data file name or DataFrame and
+      metadata file name or DataFrame
+    :rtype: tuple[pd.DataFrame, pd.DataFrame] | tuple[str, str]
     """
+    # default: do not limit time
+    if time_start is None:
+        time_start = pd.Timestamp.min.tz_localize('UTC')
+    if time_end is None:
+        time_end = pd.Timestamp.max.tz_localize('UTC')
+
     # for each file to collect:
     # 1. subdir where it resides: .../<subdir>/hourly/*.zip
     # 2. ID of the zip archive:
@@ -257,17 +450,26 @@ def fetch_station(station: str, store: bool = True
     #
     os.chdir(cwd)
     # parse data files and store data locally
-    dat_df_in = data_from_download(product_files, tempdir)
+    dat_df_in = data_from_download(
+        product_files, tempdir, oldest=pd.Timestamp.min.tz_localize('UTC'))
+    meta_df_in = meta_from_download(metadata_files, station, tempdir)
+
+    # limit time if desired:
+    dat_df_in = dat_df_in[(dat_df_in.index > time_start)
+                          & (dat_df_in.index < time_end)]
+    meta_df_in = meta_df_in[(meta_df_in.index > time_start)
+                            & (meta_df_in.index < time_end)]
+
     if store:
         dat_file = os.path.join(_PATH, OBSFILE_DWD % station)
         logging.debug('storing data locally in: %s' % dat_file)
         dat_df_in.to_csv(dat_file, sep=',', na_rep='NA')
 
-    meta_df_in = meta_from_download(metadata_files, station, tempdir)
-    if store:
         meta_file = os.path.join(_PATH, METAFILE_DWD % station)
         logging.debug('storing metadata in   : %s' % meta_file)
         meta_df_in.to_csv(meta_file, sep=',', na_rep='NA')
+    else:
+        dat_file = meta_file = None
     #
     # clean up tempdir
     shutil.rmtree(tempdir)
@@ -276,13 +478,15 @@ def fetch_station(station: str, store: bool = True
     else:
         return dat_df_in, meta_df_in
 
-    #main_frame = build_table(dat_df_in, meta_df_in, years)
-    #return main frame
+    # main_frame = build_table(dat_df_in, meta_df_in, years)
+    # return main frame
+
 
 # -------------------------------------------------------------------------
 def build_table(dat_df_in: pd.DataFrame, meta_df_in: pd.DataFrame,
-                years: list) -> pd.DataFrame:
-
+                years: list) -> pd.DataFrame | None:
+    if len(years) == 0:
+        return None
     if not years == [x for x in range(min(years), max(years) + 1)]:
         raise ValueError('years not contiguous')
 
@@ -296,31 +500,26 @@ def build_table(dat_df_in: pd.DataFrame, meta_df_in: pd.DataFrame,
     dat_frame = pd.DataFrame(np.nan, index=hr_idx, columns=dat_cols)
     for c in dat_df_in.columns:
         dat_frame[c] = dat_df_in[c].reindex(hr_idx)
-        #dat_frame[c] = dat_frame[c].astype(dat_df_in[c].dtype)
-        #for i in dat_df_in.index:
-        #    dat_frame.loc[i, c] = dat_df_in.loc[i, c]
 
     meta_frame = pd.DataFrame(np.nan,
                               index=hr_idx, columns=meta_cols)
     meta_df_in.ffill(inplace=True)
-    #meta_df_in = meta_df_in[meta_df_in.index.isin(hr_idx)]
     for c in meta_df_in.columns:
         meta_frame[c] = meta_df_in[c].reindex(hr_idx)
     meta_frame.ffill(inplace=True)
-        # meta_frame[c] = meta_frame[c].astype(meta_df_in[c].dtype)
-        # for i in meta_df_in.index:
-        #     dat_frame.loc[i, c] = meta_df_in.loc[i, c]
 
     main_frame = dat_frame.join(meta_frame, how='outer')
+    main_frame.index.name = 'time'
 
     return main_frame
+
 
 # -------------------------------------------------------------------------
 
 def get_meta_value(metadata: str | pd.DataFrame,
-       time_begin: pd.DatetimeIndex | pd.Timestamp | np.datetime64 | str,
-       time_end: pd.DatetimeIndex | pd.Timestamp | np.datetime64| str,
-       par_name: str) -> Any:
+                   time_begin: pd.DatetimeIndex | pd.Timestamp | np.datetime64 | str,
+                   time_end: pd.DatetimeIndex | pd.Timestamp | np.datetime64 | str,
+                   par_name: str) -> Any:
     """
     get station metadata value for parameter `par_name` valid for
     the time period info from `time_begin` to `time_end`
@@ -337,24 +536,24 @@ def get_meta_value(metadata: str | pd.DataFrame,
     if isinstance(metadata, str):
         if os.path.isfile(metadata):
             metadata = pd.read_csv(metadata,
-                       index_col='time', parse_dates=True,
-                       sep=',', na_values='NA')
+                                   index_col='time', parse_dates=True,
+                                   sep=',', na_values='NA')
         else:
             raise ValueError('file not found: %s' % metadata)
     elif isinstance(metadata, pd.DataFrame):
         if 'time' in metadata.columns:
             metadata.set_index('time', inplace=True)
         if metadata.index.dtype != 'datetime64[ns]' and \
-           metadata.index.dtype != 'datetime64[ns, UTC]':
+                metadata.index.dtype != 'datetime64[ns, UTC]':
             raise ValueError('metadata index must have datetime64[ns]'
                              ' or datetime64[ns, UTC]')
     else:
         raise ValueError('metadata must be filename or pandas dataframe')
-    
+
     # Ensure metadata index is UTC-aware for comparison
     if metadata.index.tz is None:
         metadata.index = metadata.index.tz_localize('UTC')
-    
+
     time_begin = pd.to_datetime(time_begin, utc=True)
     time_end = pd.to_datetime(time_end, utc=True)
     if time_end < time_begin:
@@ -373,6 +572,7 @@ def get_meta_value(metadata: str | pd.DataFrame,
             break
     # remove lines giving no new info:
     new = []
+    old = None
     for i, v in value.items():
         if len(new) == 0:
             new.append(True)
@@ -387,9 +587,11 @@ def get_meta_value(metadata: str | pd.DataFrame,
     value = value[new]
     return value
 
+
 # -------------------------------------------------------------------------
 
-def data_from_download(product_files: list[str], path_to_files: str
+def data_from_download(product_files: list[str], path_to_files: str,
+                       oldest: pd.Timestamp | datetime.datetime | str | None = None
                        ) -> pd.DataFrame:
     """
     Build one single table of weather data from the individual
@@ -403,6 +605,11 @@ def data_from_download(product_files: list[str], path_to_files: str
       the time of the measurement as `datetime64`.
     :rtype: pandas.DataFrame
     """
+    if oldest is None:
+        oldest = OLDEST
+    elif not isinstance(oldest, pd.Timestamp):
+        oldest = pd.to_datetime(oldest, utc=True)
+
     dat = None
     for name in product_files:
         # read it into DataFrame
@@ -458,12 +665,12 @@ def data_from_download(product_files: list[str], path_to_files: str
                 if isinstance(x, str) else x)
             )
 
-
-    if dat.index[0] < OLDEST:
-        logging.info('remove values before ' + OLDEST.strftime('%Y-%m-%d'))
-        dat = dat[dat.index >= OLDEST]
+    if dat.index[0] < oldest:
+        logging.info('remove values before ' + oldest.strftime('%Y-%m-%d'))
+        dat = dat[dat.index >= oldest]
 
     return dat
+
 
 # -------------------------------------------------------------------------
 
@@ -546,12 +753,12 @@ def meta_from_download(metadata_files: list[str], station: int,
         # convert dates
         df1 = df.copy()
         df1['time'] = pd.to_datetime(df1['von_datum'],
-                                    format="%Y%m%d", utc=True)
+                                     format="%Y%m%d", utc=True)
         df1 = df1.set_index('time')
         df1.drop(['von_datum', 'bis_datum'], axis=1, inplace=True)
         df2 = df.copy()
         df2['time'] = (pd.to_datetime(df2['bis_datum'],
-                                     format="%Y%m%d", utc=True)
+                                      format="%Y%m%d", utc=True)
                        + pd.Timedelta('23h'))
 
         df2 = df2.set_index('time')
@@ -582,3 +789,4 @@ def meta_from_download(metadata_files: list[str], station: int,
     meta = meta[~meta.index.duplicated(keep='last')]
     #
     return meta
+

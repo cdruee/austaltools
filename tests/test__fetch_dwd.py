@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Comprehensive test suite for austaltools._fetch_dwd_obs module.
+Comprehensive test suite for austaltools._fetch_dwd module.
 
 This module tests DWD (German Weather Service) observation data
 fetching, parsing, and processing functionality.
@@ -18,8 +18,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import austaltools._fetch_dwd_obs
-from austaltools import _fetch_dwd_obs
+from austaltools import _fetch_dwd
 
 
 class TestModuleConstants(unittest.TestCase):
@@ -27,38 +26,38 @@ class TestModuleConstants(unittest.TestCase):
 
     def test_oldest_is_timestamp(self):
         """Test OLDEST is a pandas Timestamp."""
-        self.assertIsInstance(_fetch_dwd_obs.OLDEST, pd.Timestamp)
+        self.assertIsInstance(_fetch_dwd.OLDEST, pd.Timestamp)
 
     def test_oldest_is_1970(self):
         """Test OLDEST is set to 1970-01-01."""
-        self.assertEqual(_fetch_dwd_obs.OLDEST.year, 1970)
-        self.assertEqual(_fetch_dwd_obs.OLDEST.month, 1)
-        self.assertEqual(_fetch_dwd_obs.OLDEST.day, 1)
+        self.assertEqual(_fetch_dwd.OLDEST.year, 1970)
+        self.assertEqual(_fetch_dwd.OLDEST.month, 1)
+        self.assertEqual(_fetch_dwd.OLDEST.day, 1)
 
     def test_obsfile_dwd_format(self):
         """Test OBSFILE_DWD is a format string with station placeholder."""
-        self.assertIsInstance(_fetch_dwd_obs.OBSFILE_DWD, str)
-        self.assertIn('%05i', _fetch_dwd_obs.OBSFILE_DWD)
+        self.assertIsInstance(_fetch_dwd.OBSFILE_DWD, str)
+        self.assertIn('%05i', _fetch_dwd.OBSFILE_DWD)
         # Test formatting works
-        result = _fetch_dwd_obs.OBSFILE_DWD % 1234
+        result = _fetch_dwd.OBSFILE_DWD % 1234
         self.assertIn('01234', result)
 
     def test_metafile_dwd_format(self):
         """Test METAFILE_DWD is a format string with station placeholder."""
-        self.assertIsInstance(_fetch_dwd_obs.METAFILE_DWD, str)
-        self.assertIn('%05i', _fetch_dwd_obs.METAFILE_DWD)
+        self.assertIsInstance(_fetch_dwd.METAFILE_DWD, str)
+        self.assertIn('%05i', _fetch_dwd.METAFILE_DWD)
         # Test formatting works
-        result = _fetch_dwd_obs.METAFILE_DWD % 5678
+        result = _fetch_dwd.METAFILE_DWD % 5678
         self.assertIn('05678', result)
 
     def test_to_collect_is_list(self):
         """Test TO_COLLECT is a non-empty list."""
-        self.assertIsInstance(_fetch_dwd_obs.TO_COLLECT, list)
-        self.assertGreater(len(_fetch_dwd_obs.TO_COLLECT), 0)
+        self.assertIsInstance(_fetch_dwd.TO_COLLECT, list)
+        self.assertGreater(len(_fetch_dwd.TO_COLLECT), 0)
 
     def test_to_collect_structure(self):
         """Test TO_COLLECT entries have correct structure."""
-        for entry in _fetch_dwd_obs.TO_COLLECT:
+        for entry in _fetch_dwd.TO_COLLECT:
             self.assertIsInstance(entry, list)
             self.assertEqual(len(entry), 3)
             # [name, gtl, abbr] - all strings
@@ -68,7 +67,7 @@ class TestModuleConstants(unittest.TestCase):
 
     def test_to_collect_contains_required_groups(self):
         """Test TO_COLLECT contains essential parameter groups."""
-        group_names = [entry[0] for entry in _fetch_dwd_obs.TO_COLLECT]
+        group_names = [entry[0] for entry in _fetch_dwd.TO_COLLECT]
         # Check for essential weather parameters
         self.assertIn('air_temperature', group_names)
         self.assertIn('wind', group_names)
@@ -77,8 +76,8 @@ class TestModuleConstants(unittest.TestCase):
 
     def test_to_collect_gtl_codes(self):
         """Test TO_COLLECT has valid two-letter group codes."""
-        gtl_codes = [entry[1] for entry in _fetch_dwd_obs.TO_COLLECT]
-        expected_codes = ['TU', 'CS', 'FX', 'RR', 'P0', 'EB', 'VV', 'FF']
+        gtl_codes = [entry[1] for entry in _fetch_dwd.TO_COLLECT]
+        expected_codes = ['TU', 'CS', 'RR', 'P0', 'EB', 'VV', 'FF']
         for code in expected_codes:
             self.assertIn(code, gtl_codes)
 
@@ -94,7 +93,7 @@ class TestFetchDirlist(unittest.TestCase):
         mock_get.return_value.__enter__ = MagicMock(return_value=mock_response)
         mock_get.return_value.__exit__ = MagicMock(return_value=False)
 
-        result = _fetch_dwd_obs.fetch_dirlist('https://example.com')
+        result = _fetch_dwd.fetch_dirlist('https://example.com')
         self.assertIsInstance(result, list)
 
     @patch('requests.get')
@@ -109,7 +108,7 @@ class TestFetchDirlist(unittest.TestCase):
         mock_get.return_value.__enter__ = MagicMock(return_value=mock_response)
         mock_get.return_value.__exit__ = MagicMock(return_value=False)
 
-        result = _fetch_dwd_obs.fetch_dirlist('https://example.com')
+        result = _fetch_dwd.fetch_dirlist('https://example.com')
         self.assertIn('file1.zip', result)
         self.assertIn('file2.txt', result)
         self.assertIn('data.csv', result)
@@ -126,7 +125,7 @@ class TestFetchDirlist(unittest.TestCase):
         mock_get.return_value.__enter__ = MagicMock(return_value=mock_response)
         mock_get.return_value.__exit__ = MagicMock(return_value=False)
 
-        result = _fetch_dwd_obs.fetch_dirlist('https://example.com', pattern=r'.*\.zip')
+        result = _fetch_dwd.fetch_dirlist('https://example.com', pattern=r'.*\.zip')
         self.assertIn('file1.zip', result)
         self.assertIn('data.zip', result)
         self.assertNotIn('file2.txt', result)
@@ -139,7 +138,7 @@ class TestFetchDirlist(unittest.TestCase):
         mock_get.return_value.__enter__ = MagicMock(return_value=mock_response)
         mock_get.return_value.__exit__ = MagicMock(return_value=False)
 
-        result = _fetch_dwd_obs.fetch_dirlist('https://example.com')
+        result = _fetch_dwd.fetch_dirlist('https://example.com')
         self.assertEqual(result, [])
 
     @patch('requests.get')
@@ -155,7 +154,7 @@ class TestFetchDirlist(unittest.TestCase):
         mock_get.return_value.__enter__ = MagicMock(return_value=mock_response)
         mock_get.return_value.__exit__ = MagicMock(return_value=False)
 
-        result = _fetch_dwd_obs.fetch_dirlist(
+        result = _fetch_dwd.fetch_dirlist(
             'https://example.com',
             pattern=r'stundenwerte_TU_.*\.zip'
         )
@@ -170,51 +169,51 @@ class TestFetchFile(unittest.TestCase):
     def test_fetch_file_invalid_era(self):
         """Test fetch_file raises for invalid era."""
         with self.assertRaises(ValueError) as context:
-            _fetch_dwd_obs.fetch_file('TU', 12345, era='invalid')
+            _fetch_dwd.fetch_file('TU', 12345, era='invalid')
         self.assertIn('era', str(context.exception).lower())
 
     def test_fetch_file_invalid_group(self):
         """Test fetch_file raises for unknown group."""
         with self.assertRaises(ValueError) as context:
-            _fetch_dwd_obs.fetch_file('XX', 12345)
+            _fetch_dwd.fetch_file('XX', 12345)
         self.assertIn('group', str(context.exception).lower())
 
-    @patch('austaltools._fetch_dwd_obs._tools.download')
-    @patch('austaltools._fetch_dwd_obs.fetch_dirlist')
+    @patch('austaltools._fetch_dwd._tools.download')
+    @patch('austaltools._fetch_dwd.fetch_dirlist')
     def test_fetch_file_valid_group(self, mock_dirlist, mock_download):
         """Test fetch_file with valid group code."""
         mock_dirlist.return_value = ['stundenwerte_TU_12345_hist.zip']
         mock_download.return_value = 'stundenwerte_TU_12345_hist.zip'
 
-        result = _fetch_dwd_obs.fetch_file('TU', 12345)
+        result = _fetch_dwd.fetch_file('TU', 12345)
         mock_download.assert_called_once()
 
-    @patch('austaltools._fetch_dwd_obs._tools.download')
+    @patch('austaltools._fetch_dwd._tools.download')
     def test_fetch_file_stations_list(self, mock_download):
         """Test fetch_file for stations list file."""
         mock_download.return_value = 'TU_Stundenwerte_Beschreibung_Stationen.txt'
 
-        result = _fetch_dwd_obs.fetch_file('TU', 'stations')
+        result = _fetch_dwd.fetch_file('TU', 'stations')
         self.assertIn('Stationen', mock_download.call_args[0][0])
 
-    @patch('austaltools._fetch_dwd_obs._tools.download')
+    @patch('austaltools._fetch_dwd._tools.download')
     def test_fetch_file_stationen_alias(self, mock_download):
         """Test fetch_file accepts 'stationen' as alias for stations."""
         mock_download.return_value = 'TU_Stundenwerte_Beschreibung_Stationen.txt'
 
-        result = _fetch_dwd_obs.fetch_file('TU', 'stationen')
+        result = _fetch_dwd.fetch_file('TU', 'stationen')
         self.assertIn('Stationen', mock_download.call_args[0][0])
 
     def test_fetch_file_all_groups_valid(self):
         """Test all groups in TO_COLLECT are recognized."""
-        for name, gtl, abbr in _fetch_dwd_obs.TO_COLLECT:
+        for name, gtl, abbr in _fetch_dwd.TO_COLLECT:
             # Should not raise ValueError for group
             try:
-                with patch('austaltools._fetch_dwd_obs.fetch_dirlist') as mock_dirlist:
-                    with patch('austaltools._fetch_dwd_obs._tools.download') as mock_download:
+                with patch('austaltools._fetch_dwd.fetch_dirlist') as mock_dirlist:
+                    with patch('austaltools._fetch_dwd._tools.download') as mock_download:
                         mock_dirlist.return_value = [f'stundenwerte_{gtl}_00001_hist.zip']
                         mock_download.return_value = f'stundenwerte_{gtl}_00001_hist.zip'
-                        _fetch_dwd_obs.fetch_file(gtl, 1)
+                        _fetch_dwd.fetch_file(gtl, 1)
             except ValueError as e:
                 if 'group' in str(e).lower():
                     self.fail(f"Group {gtl} should be recognized")
@@ -223,7 +222,7 @@ class TestFetchFile(unittest.TestCase):
 class TestFetchStationlist(unittest.TestCase):
     """Tests for the fetch_stationlist function."""
 
-    @patch('austaltools._fetch_dwd_obs.fetch_file')
+    @patch('austaltools._fetch_dwd.fetch_file')
     def test_fetch_stationlist_returns_dict(self, mock_fetch_file):
         """Test fetch_stationlist returns a dictionary."""
         # Create mock station list file
@@ -236,12 +235,12 @@ class TestFetchStationlist(unittest.TestCase):
         mock_fetch_file.return_value = temp_file
 
         try:
-            result = _fetch_dwd_obs.fetch_stationlist(years=None)
+            result = _fetch_dwd.fetch_stationlist(years=None)
             self.assertIsInstance(result, dict)
         finally:
             os.unlink(temp_file)
 
-    @patch('austaltools._fetch_dwd_obs.fetch_file')
+    @patch('austaltools._fetch_dwd.fetch_file')
     def test_fetch_stationlist_with_years_list(self, mock_fetch_file):
         """Test fetch_stationlist accepts years as list."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
@@ -253,12 +252,12 @@ class TestFetchStationlist(unittest.TestCase):
         mock_fetch_file.return_value = temp_file
 
         try:
-            result = _fetch_dwd_obs.fetch_stationlist(years=[2020, 2021, 2022])
+            result = _fetch_dwd.fetch_stationlist(years=[2020, 2021, 2022])
             self.assertIsInstance(result, dict)
         finally:
             os.unlink(temp_file)
 
-    @patch('austaltools._fetch_dwd_obs.fetch_file')
+    @patch('austaltools._fetch_dwd.fetch_file')
     def test_fetch_stationlist_with_single_year(self, mock_fetch_file):
         """Test fetch_stationlist converts single year to list."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
@@ -270,7 +269,7 @@ class TestFetchStationlist(unittest.TestCase):
         mock_fetch_file.return_value = temp_file
 
         try:
-            result = _fetch_dwd_obs.fetch_stationlist(years=2020)
+            result = _fetch_dwd.fetch_stationlist(years=2020)
             self.assertIsInstance(result, dict)
         finally:
             os.unlink(temp_file)
@@ -282,7 +281,7 @@ class TestGetMetaValue(unittest.TestCase):
     def test_get_meta_value_file_not_found(self):
         """Test get_meta_value raises for non-existent file."""
         with self.assertRaises(ValueError) as context:
-            _fetch_dwd_obs.get_meta_value(
+            _fetch_dwd.get_meta_value(
                 '/nonexistent/file.csv',
                 '2020-01-01', '2020-12-31', 'param'
             )
@@ -291,7 +290,7 @@ class TestGetMetaValue(unittest.TestCase):
     def test_get_meta_value_invalid_metadata_type(self):
         """Test get_meta_value raises for invalid metadata type."""
         with self.assertRaises(ValueError):
-            _fetch_dwd_obs.get_meta_value(
+            _fetch_dwd.get_meta_value(
                 12345,  # Invalid type
                 '2020-01-01', '2020-12-31', 'param'
             )
@@ -306,7 +305,7 @@ class TestGetMetaValue(unittest.TestCase):
         df.index = df.index.tz_localize('UTC')
 
         with self.assertRaises(ValueError) as context:
-            _fetch_dwd_obs.get_meta_value(
+            _fetch_dwd.get_meta_value(
                 df, '2020-12-31', '2020-01-01', 'param'
             )
         self.assertIn('time_end', str(context.exception))
@@ -321,7 +320,7 @@ class TestGetMetaValue(unittest.TestCase):
         df.index = df.index.tz_localize('UTC')
 
         with self.assertRaises(ValueError) as context:
-            _fetch_dwd_obs.get_meta_value(
+            _fetch_dwd.get_meta_value(
                 df, '2020-01-01', '2020-12-31', 'missing_param'
             )
         self.assertIn('not found', str(context.exception))
@@ -335,7 +334,7 @@ class TestGetMetaValue(unittest.TestCase):
         df.set_index('time', inplace=True)
         df.index = df.index.tz_localize('UTC')
 
-        result = _fetch_dwd_obs.get_meta_value(
+        result = _fetch_dwd.get_meta_value(
             df, '2020-01-01', '2020-12-31', 'elevation'
         )
         self.assertIsInstance(result, pd.Series)
@@ -350,7 +349,7 @@ class TestGetMetaValue(unittest.TestCase):
             temp_file = f.name
 
         try:
-            result = _fetch_dwd_obs.get_meta_value(
+            result = _fetch_dwd.get_meta_value(
                 temp_file, '2020-01-01', '2020-12-31', 'elevation'
             )
             self.assertIsInstance(result, pd.Series)
@@ -367,7 +366,7 @@ class TestBuildTable(unittest.TestCase):
         meta_df = pd.DataFrame()
 
         with self.assertRaises(ValueError) as context:
-            _fetch_dwd_obs.build_table(dat_df, meta_df, [2020, 2022])
+            _fetch_dwd.build_table(dat_df, meta_df, [2020, 2022])
         self.assertIn('contiguous', str(context.exception))
 
     def test_build_table_contiguous_years(self):
@@ -383,7 +382,7 @@ class TestBuildTable(unittest.TestCase):
             index=idx
         )
 
-        result = _fetch_dwd_obs.build_table(dat_df, meta_df, [2020, 2021])
+        result = _fetch_dwd.build_table(dat_df, meta_df, [2020, 2021])
         self.assertIsInstance(result, pd.DataFrame)
 
     def test_build_table_single_year(self):
@@ -398,7 +397,7 @@ class TestBuildTable(unittest.TestCase):
             index=idx
         )
 
-        result = _fetch_dwd_obs.build_table(dat_df, meta_df, [2020])
+        result = _fetch_dwd.build_table(dat_df, meta_df, [2020])
         self.assertIsInstance(result, pd.DataFrame)
 
     def test_build_table_output_index(self):
@@ -407,7 +406,7 @@ class TestBuildTable(unittest.TestCase):
         dat_df = pd.DataFrame({'temp': [20.0] * len(idx)}, index=idx)
         meta_df = pd.DataFrame({'elevation': [100.0] * len(idx)}, index=idx)
 
-        result = _fetch_dwd_obs.build_table(dat_df, meta_df, [2020])
+        result = _fetch_dwd.build_table(dat_df, meta_df, [2020])
 
         # Check index spans full year
         self.assertEqual(result.index[0].year, 2020)
@@ -432,7 +431,7 @@ class TestDataFromDownload(unittest.TestCase):
                 f.write("00001;2020010101;5.2;82;eor\n")
                 f.write("00001;2020010102;4.8;85;eor\n")
 
-            result = _fetch_dwd_obs.data_from_download([product_file], tmpdir)
+            result = _fetch_dwd.data_from_download([product_file], tmpdir)
             self.assertIsInstance(result, pd.DataFrame)
 
     def test_data_from_download_converts_time(self):
@@ -444,7 +443,7 @@ class TestDataFromDownload(unittest.TestCase):
                 f.write("00001;2020010100;5.5;80;eor\n")
                 f.write("00001;2020010101;5.2;82;eor\n")
 
-            result = _fetch_dwd_obs.data_from_download([product_file], tmpdir)
+            result = _fetch_dwd.data_from_download([product_file], tmpdir)
             self.assertEqual(result.index.name, 'time')
             self.assertTrue(pd.api.types.is_datetime64_any_dtype(result.index))
 
@@ -456,7 +455,7 @@ class TestDataFromDownload(unittest.TestCase):
                 f.write("STATIONS_ID;MESS_DATUM;TT_TU;RF_TU;eor\n")
                 f.write("00001;2020010100;5.5;80;eor\n")
 
-            result = _fetch_dwd_obs.data_from_download([product_file], tmpdir)
+            result = _fetch_dwd.data_from_download([product_file], tmpdir)
             self.assertNotIn('STATIONS_ID', result.columns)
             self.assertNotIn('MESS_DATUM', result.columns)
             self.assertNotIn('eor', result.columns)
@@ -470,7 +469,7 @@ class TestDataFromDownload(unittest.TestCase):
                 f.write("00001;2020010100;-999;80;eor\n")
                 f.write("00001;2020010101;5.2;-999;eor\n")
 
-            result = _fetch_dwd_obs.data_from_download([product_file], tmpdir)
+            result = _fetch_dwd.data_from_download([product_file], tmpdir)
             # Check -999 values are replaced with NaN
             self.assertTrue(pd.isna(result['TT_TU'].iloc[0]))
             self.assertTrue(pd.isna(result['RF_TU'].iloc[1]))
@@ -489,7 +488,7 @@ class TestDataFromDownload(unittest.TestCase):
                 f.write("STATIONS_ID;MESS_DATUM;F;eor\n")
                 f.write("00001;2020010100;3.2;eor\n")
 
-            result = _fetch_dwd_obs.data_from_download(
+            result = _fetch_dwd.data_from_download(
                 [product_file1, product_file2], tmpdir
             )
             self.assertIn('TT_TU', result.columns)
@@ -503,7 +502,7 @@ class TestDataFromDownload(unittest.TestCase):
                 f.write("STATIONS_ID;MESS_DATUM;TT_TU;eor\n")
                 f.write("00001;2020010100;5.5;eor\n")
 
-            result = _fetch_dwd_obs.data_from_download([product_file], tmpdir)
+            result = _fetch_dwd.data_from_download([product_file], tmpdir)
             self.assertEqual(result.index[0].year, 2020)
             self.assertEqual(result.index[0].month, 1)
             self.assertEqual(result.index[0].day, 1)
@@ -518,9 +517,9 @@ class TestDataFromDownload(unittest.TestCase):
                 f.write("00001;1960010100;5.5;eor\n")  # Before OLDEST
                 f.write("00001;2020010100;6.0;eor\n")  # After OLDEST
 
-            result = _fetch_dwd_obs.data_from_download([product_file], tmpdir)
+            result = _fetch_dwd.data_from_download([product_file], tmpdir)
             # Should only contain data from 2020
-            self.assertTrue(all(result.index >= _fetch_dwd_obs.OLDEST))
+            self.assertTrue(all(result.index >= _fetch_dwd.OLDEST))
 
 
 class TestMetaFromDownload(unittest.TestCase):
@@ -536,7 +535,7 @@ class TestMetaFromDownload(unittest.TestCase):
                         "von_datum;bis_datum;Stationsname;eor\n")
                 f.write("00001;100;51.0;7.0;19500101;20231231;TestStation;eor\n")
 
-            result = _fetch_dwd_obs.meta_from_download(
+            result = _fetch_dwd.meta_from_download(
                 [meta_file], 1, tmpdir
             )
             self.assertIsInstance(result, pd.DataFrame)
@@ -552,7 +551,7 @@ class TestMetaFromDownload(unittest.TestCase):
                 f.write("00001;100;51.0;7.0;19500101;20231231;TestStation;eor\n")
 
             # Pass same file twice
-            result = _fetch_dwd_obs.meta_from_download(
+            result = _fetch_dwd.meta_from_download(
                 [meta_file, meta_file], 1, tmpdir
             )
             self.assertIsInstance(result, pd.DataFrame)
@@ -567,16 +566,16 @@ class TestMetaFromDownload(unittest.TestCase):
                 f.write("00001;19500101;20231231;eor\n")
 
             with self.assertRaises(ValueError) as context:
-                _fetch_dwd_obs.meta_from_download([meta_file], 1, tmpdir)
+                _fetch_dwd.meta_from_download([meta_file], 1, tmpdir)
             self.assertIn('unknown', str(context.exception).lower())
 
 
 class TestFetchStation(unittest.TestCase):
     """Tests for the fetch_station function."""
 
-    @patch('austaltools._fetch_dwd_obs.meta_from_download')
-    @patch('austaltools._fetch_dwd_obs.data_from_download')
-    @patch('austaltools._fetch_dwd_obs.fetch_file')
+    @patch('austaltools._fetch_dwd.meta_from_download')
+    @patch('austaltools._fetch_dwd.data_from_download')
+    @patch('austaltools._fetch_dwd.fetch_file')
     @patch('shutil.rmtree')
     @patch('os.chdir')
     @patch('os.mkdir')
@@ -585,8 +584,9 @@ class TestFetchStation(unittest.TestCase):
                                              mock_data, mock_meta):
         """Test fetch_station creates temporary directory for station."""
         mock_fetch_file.return_value = 'test.zip'
-        mock_data.return_value = pd.DataFrame()
-        mock_meta.return_value = pd.DataFrame()
+        idx = pd.DatetimeIndex([], tz='UTC', name='time')
+        mock_data.return_value = pd.DataFrame(index=idx)
+        mock_meta.return_value = pd.DataFrame(index=idx)
 
         # Mock zipfile
         with patch('zipfile.ZipFile') as mock_zip:
@@ -597,13 +597,13 @@ class TestFetchStation(unittest.TestCase):
             )
             mock_zip.return_value.__exit__ = MagicMock(return_value=False)
 
-            _fetch_dwd_obs.fetch_station(12345, store=False)
+            _fetch_dwd.fetch_station_data(12345, store=False)
 
         mock_mkdir.assert_called_with('12345')
 
-    @patch('austaltools._fetch_dwd_obs.meta_from_download')
-    @patch('austaltools._fetch_dwd_obs.data_from_download')
-    @patch('austaltools._fetch_dwd_obs.fetch_file')
+    @patch('austaltools._fetch_dwd.meta_from_download')
+    @patch('austaltools._fetch_dwd.data_from_download')
+    @patch('austaltools._fetch_dwd.fetch_file')
     @patch('shutil.rmtree')
     @patch('os.chdir')
     @patch('os.mkdir')
@@ -612,8 +612,9 @@ class TestFetchStation(unittest.TestCase):
             mock_fetch_file, mock_data, mock_meta):
         """Test fetch_station returns DataFrames when store=False."""
         mock_fetch_file.return_value = 'test.zip'
-        expected_data = pd.DataFrame({'col': [1, 2, 3]})
-        expected_meta = pd.DataFrame({'meta': ['a', 'b', 'c']})
+        idx = pd.date_range('2020-01-01', periods=3, freq='h', tz='UTC')
+        expected_data = pd.DataFrame({'col': [1, 2, 3]}, index=idx)
+        expected_meta = pd.DataFrame({'meta': ['a', 'b', 'c']}, index=idx)
         mock_data.return_value = expected_data
         mock_meta.return_value = expected_meta
 
@@ -625,7 +626,7 @@ class TestFetchStation(unittest.TestCase):
             )
             mock_zip.return_value.__exit__ = MagicMock(return_value=False)
 
-            dat, meta = _fetch_dwd_obs.fetch_station(12345, store=False)
+            dat, meta = _fetch_dwd.fetch_station_data(12345, store=False)
 
         self.assertIsInstance(dat, pd.DataFrame)
         self.assertIsInstance(meta, pd.DataFrame)
@@ -636,23 +637,23 @@ class TestEdgeCases(unittest.TestCase):
 
     def test_obsfile_format_zero_padding(self):
         """Test OBSFILE_DWD correctly zero-pads station numbers."""
-        result = _fetch_dwd_obs.OBSFILE_DWD % 1
+        result = _fetch_dwd.OBSFILE_DWD % 1
         self.assertIn('00001', result)
 
-        result = _fetch_dwd_obs.OBSFILE_DWD % 99999
+        result = _fetch_dwd.OBSFILE_DWD % 99999
         self.assertIn('99999', result)
 
     def test_metafile_format_zero_padding(self):
         """Test METAFILE_DWD correctly zero-pads station numbers."""
-        result = _fetch_dwd_obs.METAFILE_DWD % 1
+        result = _fetch_dwd.METAFILE_DWD % 1
         self.assertIn('00001', result)
 
-        result = _fetch_dwd_obs.METAFILE_DWD % 99999
+        result = _fetch_dwd.METAFILE_DWD % 99999
         self.assertIn('99999', result)
 
     def test_oldest_is_utc(self):
         """Test OLDEST timestamp is UTC."""
-        self.assertIsNotNone(_fetch_dwd_obs.OLDEST.tzinfo)
+        self.assertIsNotNone(_fetch_dwd.OLDEST.tzinfo)
 
 
 # Pytest-style parametrized tests
@@ -663,35 +664,35 @@ class TestPytestStyle:
     @pytest.mark.parametrize("era", [None, 'recent', 'historical'])
     def test_fetch_file_valid_eras(self, era):
         """Test fetch_file accepts valid era values."""
-        with patch('austaltools._fetch_dwd_obs.fetch_dirlist') as mock_dirlist:
-            with patch('austaltools._fetch_dwd_obs._tools.download') as mock_dl:
+        with patch('austaltools._fetch_dwd.fetch_dirlist') as mock_dirlist:
+            with patch('austaltools._fetch_dwd._tools.download') as mock_dl:
                 mock_dirlist.return_value = ['stundenwerte_TU_00001_hist.zip']
                 mock_dl.return_value = 'file.zip'
                 # Should not raise
-                _fetch_dwd_obs.fetch_file('TU', 1, era=era)
+                _fetch_dwd.fetch_file('TU', 1, era=era)
 
     @pytest.mark.parametrize("invalid_era", ['future', 'past', 'current', ''])
     def test_fetch_file_invalid_eras(self, invalid_era):
         """Test fetch_file rejects invalid era values."""
         with pytest.raises(ValueError):
-            _fetch_dwd_obs.fetch_file('TU', 1, era=invalid_era)
+            _fetch_dwd.fetch_file('TU', 1, era=invalid_era)
 
-    @pytest.mark.parametrize("group_code", ['TU', 'CS', 'FX', 'RR', 'P0', 'EB', 'VV', 'FF'])
+    @pytest.mark.parametrize("group_code", ['TU', 'CS', 'RR', 'P0', 'EB', 'VV', 'FF'])
     def test_fetch_file_all_group_codes(self, group_code):
         """Test fetch_file recognizes all TO_COLLECT group codes."""
-        with patch('austaltools._fetch_dwd_obs.fetch_dirlist') as mock_dirlist:
-            with patch('austaltools._fetch_dwd_obs._tools.download') as mock_dl:
+        with patch('austaltools._fetch_dwd.fetch_dirlist') as mock_dirlist:
+            with patch('austaltools._fetch_dwd._tools.download') as mock_dl:
                 mock_dirlist.return_value = [f'stundenwerte_{group_code}_00001_hist.zip']
                 mock_dl.return_value = 'file.zip'
                 # Should not raise ValueError for group
-                _fetch_dwd_obs.fetch_file(group_code, 1)
+                _fetch_dwd.fetch_file(group_code, 1)
 
     @pytest.mark.parametrize("station_alias", ['stations', 'stationen'])
     def test_fetch_file_station_aliases(self, station_alias):
         """Test fetch_file accepts both station list aliases."""
-        with patch('austaltools._fetch_dwd_obs._tools.download') as mock_dl:
+        with patch('austaltools._fetch_dwd._tools.download') as mock_dl:
             mock_dl.return_value = 'stations.txt'
-            result = _fetch_dwd_obs.fetch_file('TU', station_alias)
+            result = _fetch_dwd.fetch_file('TU', station_alias)
             assert 'Stationen' in mock_dl.call_args[0][0]
 
     @pytest.mark.parametrize("years", [
@@ -708,7 +709,7 @@ class TestPytestStyle:
         dat_df = pd.DataFrame({'temp': np.random.randn(len(idx))}, index=idx)
         meta_df = pd.DataFrame({'elevation': [100.0] * len(idx)}, index=idx)
 
-        result = _fetch_dwd_obs.build_table(dat_df, meta_df, years)
+        result = _fetch_dwd.build_table(dat_df, meta_df, years)
         assert isinstance(result, pd.DataFrame)
         assert result.index[0].year == years[0]
         assert result.index[-1].year == years[-1]
@@ -729,7 +730,7 @@ class TestIntegration(unittest.TestCase):
                 f.write("         1;2020010102;    3; -999;   85;eor\n")
                 f.write("         1;2020010103;    3;  4.5; -999;eor\n")
 
-            result = _fetch_dwd_obs.data_from_download([product_file], tmpdir)
+            result = _fetch_dwd.data_from_download([product_file], tmpdir)
 
             # Verify structure
             self.assertIn('TT_TU', result.columns)

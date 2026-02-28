@@ -14,7 +14,6 @@ import urllib.error
 import numpy as np
 import pytest
 
-import austaltools._corine
 from austaltools import _corine
 
 

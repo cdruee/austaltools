@@ -24,6 +24,7 @@ else:
 
 from ._metadata import __version__, __title__
 from . import _corine
+from . import _fetch_dwd
 from . import _datasets
 from . import _dispersion as dis
 from . import _geo
@@ -1253,18 +1254,21 @@ def get_dwd_weather(lat: float, lon: float, year:int,
     """
     ds = _datasets.dataset_get("DWD")
     if not ds.available:
-        
         raise ValueError(f"Dataset not available: {ds.name}")
+
     if datafile is None:
-        datafile = os.path.join(ds.path, ds.file_data)
-    logging.info('reading data from; %s' % datafile)
-    if station is None:
-        _, _, _, nam, station = _geo.read_dwd_stationinfo(
-            station=None, pos_lat=lat, pos_lon=lon, datafile=datafile)
-        logger.info(f"selected nearest station {nam}")
-    else:
-        _, _, _, nam = _geo.read_dwd_stationinfo(
-            station, datafile=datafile)
+        datafile = str(os.path.join(ds.path, ds.file_data))
+    logging.info('weather data from; %s' % datafile)
+
+    with _fetch_dwd.DWDStationinfo() as si:
+        if not station:
+            station = si.nearest(lat, lon)
+            logger.debug(f"nearest station is #{station}")
+        nam = si.name(station)
+        z0 = si.roughness(station)
+    logger.info(f"selected station: {nam}")
+    logger.info(f"roughness length: {z0}")
+
     with zipfile.ZipFile(datafile,
                          mode='r') as zf:
         df = pd.read_csv(filepath_or_buffer=zf.open(
@@ -1277,11 +1281,17 @@ def get_dwd_weather(lat: float, lon: float, year:int,
     #
     # select data from year
     df = df[df.index.year == year]
+    if len(df.index) == 0:
+        sys.tracebacklimit = 0
+        raise ValueError(f"No data in year {year} from #{station} ({nam})")
+    elif len(df.index) < 0.90 * 24 * 366:
+        logger.warning((f"Year {year} not fully covered by data "
+                        f"from #{station} ({nam})"))
     #
     # rename / convert units
     data = pd.DataFrame(index=df.index)
     # wind direction 990 means "undetermined"/"umlaufender Wind"
-    data['dd'] = df['D'].df(data['D'] == 990., np.nan)  # deg
+    data['dd'] = df['D'].mask(df['D'] == 990., np.nan)  # deg
     data['ff'] = df['F']  # m/s
     data['sp'] = df['P0'] * 100.  # hPa -> Pa
     data['t2m'] = df['TT_TU']  # °C
@@ -1291,26 +1301,8 @@ def get_dwd_weather(lat: float, lon: float, year:int,
     data['cty'] = ['//' if (pd.isna(x) or x == '-1') else x
                    for x in df['V_S1_CSA']]  # SNYOP key
     data['tp'] = df['R1']  # mm
-    #
-    #  treat the metadata --------------------------------------------
-    #
-    # get wind sensor height from metadata
-    za = df['windgeschwindigkeit_geberhoehe ueber grund [m]']
-    za_values = set(list(za))
-    # if sensor height changed that year:
-    if len(za_values) > 1:
-        raise ValueError('change in anemometer setup in year: %d' % year)
-    elif pd.notna(za.values[0]):
-        z_a = za.values[0]
-    else:
-        logging.warning('wind measurement height unknown, ' +
-                        'assuming 10m standard height')
-        z_a = 10.
 
-    z0 = dis.z0_verkaik(z_a, speed=df['F'],
-                                gust=df['FX_911'], dirct=df['D'])
-    logging.info("roughness length: %5f" % z0)
-
+    # strip columns that are not needed
     data = data.filter(['time',  # UTC
                         'ff',  # m/s
                         'dd',  # deg
@@ -1327,7 +1319,6 @@ def get_dwd_weather(lat: float, lon: float, year:int,
     logger.debug("got: %s" % data.keys())
     logger.debug("z0 : %s" % z0)
     return data, z0
-
 
 # -------------------------------------------------------------------------
 def austal_weather(args):
@@ -1391,7 +1382,9 @@ def austal_weather(args):
             if not _datasets.dataset_get(source).available:
                 raise ValueError(f"source {source} not available")
             path = _datasets.dataset_get(source).path
-            obs, z0 = get_dwd_weather(lat, lon, year, stat_no, path)
+            datafile = os.path.join(path, _datasets.OBS_FMT % source)
+            obs, z0 = get_dwd_weather(lat, lon, year, stat_no,
+                                      datafile=datafile)
         else:
             raise ValueError("source not implemented: %s" % source)
 
@@ -1794,10 +1787,10 @@ def main(args):
             logger.error("No available weather data found.")
             sys.exit(1)
 
-    ds_name = _datasets.name_yearly(args['source'], int(args['year']))
-    if not ds_name in available_weather:
-        logger.critical(f"dataset not available: {ds_name}")
-        sys.exit(1)
+    # ds_name = _datasets.name_yearly(args['source'], int(args['year']))
+    # if not ds_name in available_weather:
+    #     logger.critical(f"dataset not available: {ds_name}")
+    #     sys.exit(1)
 
 
     logger.info(os.path.basename(__file__) + ' version: ' + __version__)

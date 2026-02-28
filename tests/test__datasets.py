@@ -17,7 +17,6 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import austaltools._datasets
 from austaltools import _datasets
 
 
