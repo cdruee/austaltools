@@ -58,7 +58,9 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     from osgeo_utils import gdal_merge
     from osgeo import osr
 
-from . import _fetch_dwd_obs
+from . import _fetch_dwd
+from . import _corine
+from . import _geo
 from . import _netcdf
 from . import _storage
 from . import _tools
@@ -448,7 +450,7 @@ def _available_scan(locs : list = None) -> dict:
                 datafile = os.path.join(path, ds.file_data)
                 if os.path.exists(datafile):
                     available_datasets[ds.name] =  path
-                    logger.debug(f"                      {path}")
+                    logger.debug(f"                     {path}")
                 else:
                     logger.debug(f"                      ---")
     sp.end()
@@ -2141,29 +2143,35 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
         return False
     # get list of stations
     logger.info("fetching stationlists")
-    stations = _fetch_dwd_obs.fetch_stationlist(years)
-    station_numbers = stations.keys()
+    stations_dict = _fetch_dwd.DWDStationinfo().data
+    station_numbers = stations_dict.keys()
 
     # download and process all stations
     #zip = zipfile.ZipFile(target)
     logger.info("writing stationlist")
-    sf = pd.DataFrame.from_dict(stations, orient='index')
+    sf = pd.DataFrame.from_dict(stations_dict, orient='index')
     with zipfile.ZipFile(target,
                          mode='a',
                          compression=zipfile.ZIP_DEFLATED) as zf:
-        sf.to_csv(path_or_buf=zf.open('stationlist.csv',
-                                          mode='w'))
+        sf.to_csv(path_or_buf=zf.open('stationlist.csv', mode='w'))
 
-    for station in _tools.progress(station_numbers, "fetching files"):
-        dat_in, meta_in =_fetch_dwd_obs.fetch_station(station,
-                                                      store=False)
-        df = _fetch_dwd_obs.build_table(dat_in, meta_in, years)
+    logger.info("writing station data")
+    for sid in _tools.progress(station_numbers, "fetching files"):
+        dat_in, meta_in =_fetch_dwd.fetch_station_data(sid,
+                                                       store=False)
+        # limit stationdata to period where all needed
+        # values are available
+        sid_start = pd.to_datetime(stations_dict[sid]['start'])
+        sid_end = pd.to_datetime(stations_dict[sid]['end'])
+        sid_years = list(range(sid_start.year, sid_end.year + 1))
 
-        with zipfile.ZipFile(target,
-                             mode='a',
-                             compression=zipfile.ZIP_DEFLATED) as zf:
-            df.to_csv(path_or_buf=zf.open("%05i.csv" % station,
-                                          mode='w'))
+        # if there are data, store them
+        if sid_years:
+            df = _fetch_dwd.build_table(dat_in, meta_in, sid_years)
+            with zipfile.ZipFile(target, mode='a',
+                                 compression=zipfile.ZIP_DEFLATED) as zf:
+                df.to_csv(path_or_buf=zf.open("%05i.csv" % sid,
+                                              mode='w'))
 
     return True
 
@@ -2298,8 +2306,8 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
 
 # -------------------------------------------------------------------------
 
-def provide_weather(source: str, path: str = None,
-                    years: list = None,
+def provide_weather(source: str, path: str | None = None,
+                    years: list | None = None,
                     force: bool = False, method: str = 'download'):
     """
     Manages the downloading and organizing of weather data from
@@ -2359,8 +2367,13 @@ def provide_weather(source: str, path: str = None,
     if path is None:
         path = _storage.find_writeable_storage(path,
                                       _storage.STORAGE_WAETHER)
-    for year in years:
-        dataset = dataset_get(name_yearly(source, year))
+    if years is None:
+        yearly_names = [source]
+    else:
+        yearly_names = [name_yearly(source, y) for y in years]
+
+    for yn in yearly_names:
+        dataset = dataset_get(yn)
         if method == 'download':
             logger.info("downloading weather source %s" % source)
             if dataset.uri is None:
@@ -2392,6 +2405,8 @@ def provide_weather(source: str, path: str = None,
                     assemble_hostrada(path, years=years, replace=force)
                 elif source == "DWD":
                     dataset = dataset_get(source)
+                    years = _tools.expand_sequence(
+                        dataset.arguments['years'])
                     assemble_DWD(path, years=years, replace=force,
                                  args=dataset.arguments)
                 else:
@@ -2410,7 +2425,8 @@ def provide_weather(source: str, path: str = None,
 
 
 # -------------------------------------------------------------------------
-def stationlist_DWD(path: str = None, fmt: str = None):
+def stationlist_DWD(path: str = None, fmt: str = None,
+                    h: float | None = None):
     """
     Downloads, extracts, and merges DWD station lists.
 
@@ -2419,6 +2435,9 @@ def stationlist_DWD(path: str = None, fmt: str = None):
     :type path: str
     :param fmt: file format or generate (csv or json)
     :type fmt: str
+    :param h: (optional) height of wind measurements in m,
+      mut be gerater than 1. Defaults to standard heigth (10)
+    :type h: float
 
     - This function assumes that a global `_tools.TEMP` variable is defined and
       points to a valid temporary directory for intermediate files.
@@ -2426,14 +2445,54 @@ def stationlist_DWD(path: str = None, fmt: str = None):
     """
     if fmt is None:
         fmt = 'csv'
+    if h is None:
+        h = 10
+    if h < 1:
+        raise ValueError("standard wind measurement height must "
+                         "be greater than 1(m)")
     # get list of stations
     logger.info("fetching stationlists")
     # get list without date checking
-    stations = _fetch_dwd_obs.fetch_stationlist(years=None)
+    stations = _fetch_dwd.fetch_stationlist(years=None)
     station_numbers = stations.keys()
-    sf = pd.DataFrame.from_dict(stations, orient='index')
+
+    # get roughness length
+    have_corine = True
+    have_web = True
+    for sid in _tools.progress(station_numbers, "calulating z0"):
+        name = stations[sid]['name']
+        xg, yg = _geo.ll2gk(stations[sid]['latitude'],
+                            stations[sid]['longitude'])
+        z0 = None
+        if have_corine:
+            logger.debug(f"z0 from corine  for #{sid} ({name})")
+            try: 
+                z0 = _corine.mean_roughness('austal', xg, yg, h, fac=3)
+            except Exception as e:
+                have_corine = False
+                logger.warning("Please install the CORINE roughness"
+                               " dataset bundeled with AUSTAL is not"
+                               " found. Trying EU API lookup for "
+                               " roughness length.")
+                logger.info("Error text: " + str(e))
+        if have_web:
+            logger.debug(f"z0 from EU API  for #{sid} ({name})")
+            try:
+                z0 = _corine.mean_roughness('web', xg, yg, h, fac=3)
+            except Exception as e:
+                have_web = False
+                logger.error(
+                    f"Could use EU API to lookup roughness length."
+                    f" (Error:{str(e)}."
+                    f" Assuming WMO standard value (0.03m).")
+        if not z0:
+            logger.debug(f"z0 from default for #{sid} ({name})")
+            z0 = 0.03  # m (standard WMO station, cut grass)
+
+        stations[sid]['roughness'] = z0
 
     logger.info("writing stationlist")
+    sf = pd.DataFrame.from_dict(stations, orient='index')
     if path is None:
         fid = sys.stdout
     else:

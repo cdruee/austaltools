@@ -408,7 +408,7 @@
       "area": [71.0, 33.0, -12.0, 36.0]
     },
     "position": "grid",
-    "years_available": "1941-2024"
+    "years_available": "1941-2025"
   },
   "CERRA": {
     "storage": "weather",
@@ -433,14 +433,14 @@
     },
     "assemble": "assemble_hostrada",
     "position": "grid",
-    "years_available": "1995-2024"
+    "years_available": "1995-2025"
   },
   "DWD": {
     "storage": "weather",
     "assemble": "assemble_DWD",
     "position": "station",
     "arguments": {
-      "years": "1949-2024"
+      "years": "1996-2025"
     }
   }
 }

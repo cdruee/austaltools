@@ -1,9 +1,14 @@
-Auto-merging .github/workflows/release.yml
-Auto-merging austaltools/command_line.py
-Auto-merging austaltools/eap.py
-Auto-merging docs/api_commands.rst
+Auto-merging austaltools/_corine.py
+Auto-merging austaltools/_datasets.py
+Auto-merging austaltools/_geo.py
+Auto-merging austaltools/configure_austaltools.py
+Auto-merging austaltools/data/dataset_definitions.json
+Auto-merging austaltools/data/dwd_stationlist.json
+Auto-merging austaltools/input_weather.py
+Auto-merging austaltools/transform.py
 Auto-merging docs/api_internal.rst
-Auto-merging docs/austaltools.rst
-Auto-merging docs/conf.py
+Auto-merging tests/test__corine.py
+Auto-merging tests/test__datasets.py
+Auto-merging tests/test__geo.py
 Automatic merge went well; stopped before committing as requested
 Squash commit -- not updating HEAD

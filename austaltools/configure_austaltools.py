@@ -511,30 +511,36 @@ def main():
                                force=args['force'],
                                method=args['action'])
         elif args['source'] in DS.SOURCES_WEATHER:
-            if 'years' not in args:
-                
-                raise ValueError('-y required with dataset: %s '
-                                 % args['source'])
-            else:
-                try:
-                    year_list = _tools.expand_sequence(args['years'])
-                except ValueError:
-                    raise ValueError("cannot argument to -y: %s" %
-                                         args["years"])
-                logger.debug('years parsed into int: %s',
-                             year_list)
             if args['source'] in DS.dataset_list():
+                # this dataset is NOT split into years
+
                 avl = DS.dataset_available(args['source'])
                 if avl and not args['force']:
-                    
                     raise ValueError(f"dataset exists: {args['source']} ")
+
+                year_list = None
             else:
+                # this dataset IS split into years
+
+                if 'years' not in args:
+                    raise ValueError('-y required with dataset: %s '
+                                     % args['source'])
+                else:
+                    try:
+                        year_list = _tools.expand_sequence(args['years'])
+                    except ValueError:
+                        raise ValueError("cannot understand argument to " +
+                                         "-y: %s" % args["years"])
+                    logger.debug('years parsed into int: %s', year_list)
+
+                # test if any of the years exists and is in the way
                 for yr in year_list:
                     yn = DS.name_yearly(args['source'], yr)
                     avl = DS.dataset_available(yn)
                     if avl and not args['force']:
-                        
                         raise ValueError(f"dataset exists: {yn} ")
+
+            # get the datasets(s)
             DS.provide_weather(args['source'],
                                path=args['path'],
                                years=year_list,

@@ -15,6 +15,7 @@ if os.getenv('BUILDING_SPHINX', 'false') == 'false':
     from osgeo import osr
 
 from . import _datasets
+from . import _fetch_dwd
 from . import _geo
 from . import _tools
 from . import _plotting
@@ -150,8 +151,8 @@ def main(args):
             raise ValueError("Dataset DWD is not available, "
                        "download or assemble it.")
         station = int(args["dwd"])
-        lat, lon, ele, nam = _geo.read_dwd_stationinfo(
-            station, datafile=storage_dwd)
+        with _fetch_dwd.DWDStationinfo(storage_dwd) as si:
+            lat, lon, ele = si.position(station)
         rechts, hoch = _geo.ll2gk(lat, lon)
         east, north = _geo.ll2ut(lat, lon)
     elif args["wmo"] is not None:

@@ -16,8 +16,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import austaltools._geo
-from austaltools import _geo
+from austaltools import _geo, _fetch_dwd
 
 
 class TestCoordinateTransformations(unittest.TestCase):
@@ -164,102 +163,118 @@ class TestSphericDistance(unittest.TestCase):
         self.assertEqual(len(result), 2)
 
 
-class TestReadDwdStationinfo(unittest.TestCase):
-    """Tests for the read_dwd_stationinfo function."""
+class TestDWDStationinfo(unittest.TestCase):
+    """Tests for the DWDStationinfo class."""
 
-    def test_read_dwd_stationinfo_station_and_coords_error(self):
-        """Test read_dwd_stationinfo raises when both station and coords given."""
-        with self.assertRaises(ValueError) as context:
-            _geo.read_dwd_stationinfo(
-                station=12345,
-                pos_lat=50.0,
-                pos_lon=8.0
-            )
-        self.assertIn('None', str(context.exception))
+    def _make_stationfile(self, data):
+        """Helper: write test data to a temp JSON file, return its path."""
+        f = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+        json.dump(data, f)
+        f.close()
+        return f.name
 
-    def test_read_dwd_stationinfo_with_station(self):
-        """Test read_dwd_stationinfo with station number."""
-        # Create mock data file
+    def test_stationinfo_position_known_station(self):
+        """Test DWDStationinfo.position returns correct lat/lon/ele."""
         test_data = {
             "12345": {
                 "latitude": 50.5,
                 "longitude": 8.5,
                 "elevation": 150,
-                "name": "Test Station"
+                "name": "Test Station",
+                "roughness": 0.1,
             }
         }
-
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json',
-                                          delete=False) as f:
-            json.dump(test_data, f)
-            temp_file = f.name
-
+        temp_file = self._make_stationfile(test_data)
         try:
-            lat, lon, ele, nam = _geo.read_dwd_stationinfo(
-                station=12345,
-                datafile=temp_file
-            )
+            with _fetch_dwd.DWDStationinfo(temp_file) as si:
+                lat, lon, ele = si.position(12345)
             self.assertEqual(lat, 50.5)
             self.assertEqual(lon, 8.5)
             self.assertEqual(ele, 150)
+        finally:
+            os.unlink(temp_file)
+
+    def test_stationinfo_name_known_station(self):
+        """Test DWDStationinfo.name returns correct station name."""
+        test_data = {
+            "12345": {
+                "latitude": 50.5,
+                "longitude": 8.5,
+                "elevation": 150,
+                "name": "Test Station",
+                "roughness": 0.1,
+            }
+        }
+        temp_file = self._make_stationfile(test_data)
+        try:
+            with _fetch_dwd.DWDStationinfo(temp_file) as si:
+                nam = si.name(12345)
             self.assertEqual(nam, "Test Station")
         finally:
             os.unlink(temp_file)
 
-    def test_read_dwd_stationinfo_station_not_found(self):
-        """Test read_dwd_stationinfo raises for non-existent station."""
+    def test_stationinfo_station_not_found_raises(self):
+        """Test DWDStationinfo raises ValueError for non-existent station."""
         test_data = {
             "12345": {
                 "latitude": 50.5,
                 "longitude": 8.5,
                 "elevation": 150,
-                "name": "Test Station"
+                "name": "Test Station",
+                "roughness": 0.1,
             }
         }
-
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json',
-                                          delete=False) as f:
-            json.dump(test_data, f)
-            temp_file = f.name
-
+        temp_file = self._make_stationfile(test_data)
         try:
-            with self.assertRaises(ValueError) as context:
-                _geo.read_dwd_stationinfo(station=99999, datafile=temp_file)
-            self.assertIn('not in datafile', str(context.exception))
+            with _fetch_dwd.DWDStationinfo(temp_file) as si:
+                with self.assertRaises(ValueError) as context:
+                    si.position(99999)
+            self.assertIn('station not in stationinfo file', str(context.exception))
         finally:
             os.unlink(temp_file)
 
-    def test_read_dwd_stationinfo_nearest_station(self):
-        """Test read_dwd_stationinfo finds nearest station by coords."""
+    def test_stationinfo_nearest_finds_closest(self):
+        """Test DWDStationinfo.nearest returns the closest station."""
         test_data = {
             "1": {
                 "latitude": 50.0,
                 "longitude": 8.0,
                 "elevation": 100,
-                "name": "Station 1"
+                "name": "Station 1",
+                "roughness": 0.1,
             },
             "2": {
                 "latitude": 52.0,
                 "longitude": 10.0,
                 "elevation": 200,
-                "name": "Station 2"
+                "name": "Station 2",
+                "roughness": 0.2,
             }
         }
-
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json',
-                                          delete=False) as f:
-            json.dump(test_data, f)
-            temp_file = f.name
-
+        temp_file = self._make_stationfile(test_data)
         try:
-            # Search near station 1
-            lat, lon, ele, nam, idx = _geo.read_dwd_stationinfo(
-                station=None,
-                pos_lat=50.1,
-                pos_lon=8.1,
-                datafile=temp_file
-            )
-            self.assertEqual(nam, "Station 1")
+            with _fetch_dwd.DWDStationinfo(temp_file) as si:
+                # Search near station 1 — should return station 1
+                nearest = si.nearest(50.1, 8.1, radius=1000)
+            self.assertEqual(nearest, 1)
+        finally:
+            os.unlink(temp_file)
+
+    def test_stationinfo_context_manager(self):
+        """Test DWDStationinfo works as a context manager."""
+        test_data = {
+            "1": {
+                "latitude": 50.0,
+                "longitude": 8.0,
+                "elevation": 100,
+                "name": "Station 1",
+                "roughness": 0.1,
+            }
+        }
+        temp_file = self._make_stationfile(test_data)
+        try:
+            with _fetch_dwd.DWDStationinfo(temp_file) as si:
+                self.assertIsNotNone(si)
         finally:
             os.unlink(temp_file)
 
@@ -308,10 +323,14 @@ class TestEvaluateLocationOpts(unittest.TestCase):
         self.assertEqual(ele, 100)
         self.assertEqual(nam, 'Test Station')
 
-    @patch('austaltools._geo.read_dwd_stationinfo')
-    def test_evaluate_location_opts_dwd(self, mock_dwd):
+    @patch('austaltools._geo._fetch_dwd.DWDStationinfo')
+    def test_evaluate_location_opts_dwd(self, mock_dwd_cls):
         """Test evaluate_location_opts with DWD station."""
-        mock_dwd.return_value = (50.0, 8.0, 100, 'Test Station')
+        mock_si = MagicMock()
+        mock_si.position.return_value = (50.0, 8.0, 100)
+        mock_si.name.return_value = 'Test Station'
+        mock_dwd_cls.return_value.__enter__ = MagicMock(return_value=mock_si)
+        mock_dwd_cls.return_value.__exit__ = MagicMock(return_value=False)
         args = {'dwd': '12345'}
         lat, lon, ele, station, nam = _geo.evaluate_location_opts(args)
         self.assertEqual(lat, 50.0)

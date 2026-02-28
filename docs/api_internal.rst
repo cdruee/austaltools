@@ -25,9 +25,9 @@ _dispersion
    :undoc-members:
    :member-order: groupwise
 
-_fetch_dwd_obs
+_fetch_dwd
 --------------
-.. automodule:: austaltools._fetch_dwd_obs
+.. automodule:: austaltools._fetch_dwd
    :members:
    :undoc-members:
    :member-order: groupwise

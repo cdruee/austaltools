@@ -26,7 +26,7 @@ try:
     from ._metadata import __title__
     from . import _storage
 except ImportError:
-    from _version import __title__
+    from _metadata import __title__
     import _storage
 
 logging.basicConfig()
