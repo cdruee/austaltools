@@ -74,6 +74,13 @@ _tools
    :undoc-members:
    :member-order: groupwise
 
+_windutil
+-------------
+.. automodule:: austaltools._windutil
+   :members:
+   :undoc-members:
+   :member-order: groupwise
+
 _wmo_metadata
 -------------
 .. automodule:: austaltools._wmo_metadata

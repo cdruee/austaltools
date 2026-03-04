@@ -1,3 +1,16 @@
+"""
+Wind measurement utility functions for AUSTAL dispersion modelling.
+
+Provides routines to retrieve, correct, and standardise wind observations
+for use with the AUSTAL / AUSTAL2000 atmospheric dispersion model:
+
+- Roughness length z0: read from configuration, log files, or CORINE data
+- Effective anemometer height: derived from z0 class and AKTERM file
+- Weather time series: load from DMNA or AKTERM files
+- Roughness correction: convert anemometer readings to standardised open-terrain
+  wind speed at 10 m using WMO, Eurocode 1, or DIN EN 1991-1-4 methods
+
+"""
 import logging
 import os
 import re
@@ -214,9 +227,40 @@ def read_heff(working_dir, conf=None, z0=None):
 
 def _to_series(value, name: str, ref_index=None) -> pd.Series:
     """
-    Convert scalar, list, or Series to pd.Series,
-    validating length against ref_index.
+    Convert a scalar, list-like, or :class:`pandas.Series` to a
+    :class:`pandas.Series`, optionally validating its length or index
+    against a reference index.
 
+    :param value: The value to convert. Accepted types are:
+
+      - ``int`` or ``float``: broadcast to a constant Series aligned to
+        *ref_index*
+      - list-like (but not Series): wrapped in a Series with *ref_index*;
+        must have the same length as *ref_index*, or length 1
+      - :class:`pandas.Series`: returned as-is if its index matches
+        *ref_index* (when provided)
+
+    :type value: int | float | list-like | pandas.Series
+    :param name: Human-readable parameter name used in error messages.
+    :type name: str
+    :param ref_index: Index to assign to the resulting Series and to
+      validate length/alignment against. If ``None``, no alignment check
+      is performed and scalars produce a length-1 Series.
+    :type ref_index: pandas.Index, optional
+
+    :return: *value* represented as a :class:`pandas.Series`.
+    :rtype: pandas.Series
+
+    :raises ValueError: If a list-like *value* has a length that is
+      neither 1 nor ``len(ref_index)``.
+    :raises ValueError: If a Series *value* has an index that does not
+      match *ref_index*.
+    :raises TypeError: If *value* is none of the accepted types.
+
+    .. note::
+       ``isinstance(value, pd.Series)`` is tested *before*
+       ``pd.api.types.is_list_like``, because a Series is also list-like
+       and must be handled separately to preserve its index.
     """
     if isinstance(value, pd.Series):
         if ref_index is not None and not value.index.equals(ref_index):
@@ -233,23 +277,51 @@ def _to_series(value, name: str, ref_index=None) -> pd.Series:
 
 def roughness_correction(ua, ha, z0a, method=None):
     """
-    The correction of wind readings for local exposure.
-    I.e. making them comparable to measurements over
-    open, level terrain with uniform, standardized roughness.
+    Correct wind speed readings for local surface roughness exposure.
 
-    WMO: [WMO8]_ Eurocode1: [EN1991]_ DIN: [DIN1991]_
+    Converts anemometer measurements taken over terrain with roughness
+    length *z0a* to the equivalent wind speed over open, level terrain
+    with standardised roughness at 10 m height, following one of three
+    established methods.
 
-    :param ua: wind speed measured by the anemometer
-    :type ua:
-    :param ha: height of the anemometer
-    :type ha:
-    :param z0a: roughness length at (upstream from) the anemometer
-    :type z0a:
-    :param method: correction method:
-      'wmo': accroding to Word Meteorological Organization guidelines
-    :type method:
-    :return:
-    :rtype:
+    Scalar inputs are accepted and return a scalar; array-like or Series
+    inputs return a :class:`pandas.Series`.  Mixed scalar / array inputs
+    are supported: scalars are broadcast to the length of the array
+    argument.
+
+    :param ua: Wind speed measured by the anemometer [m/s].
+    :type ua: int | float | list | pandas.Series
+    :param ha: Height of the anemometer above ground [m].
+    :type ha: int | float | list | pandas.Series
+    :param z0a: Roughness length of the terrain at (or upstream from)
+      the anemometer location [m].
+    :type z0a: int | float | list | pandas.Series
+    :param method: Correction method to apply:
+
+      - ``'wmo'`` *(default)*: WMO-No. 8 logarithmic profile with
+        extrapolation to 60 m and back [WMO8]_, equation (5.3).
+        Standard roughness z0 = 0.03 m (cut grass), standard height
+        z_std = 10 m, extrapolation height z_ext = 60 m.
+        Flow-distortion factor *cf* = 1 and topographic factor *ct* = 1
+        are assumed (free-standing mast, flat terrain).
+      - ``'en'``: Eurocode 1 EN 1991-1-4:2005 [EN1991]_, equations
+        (4.4) and (4.5). Reference roughness z0 = 0.05 m
+        (terrain category II). Topographic correction *co* = 1.
+      - ``'din'``: DIN EN 1991-1-4/NA:2010 [DIN1991]_, equation (NA.1).
+        Assigns each *z0a* value to the nearest terrain category
+        (I–IV) by minimising ``|log(z0_cat / z0a)|``, then applies the
+        corresponding power-law exponent *alpha*.
+
+    :type method: str, optional
+
+    :return: Corrected wind speed at 10 m over standard open terrain [m/s].
+      Returns a scalar ``float`` when all inputs are scalar, otherwise a
+      :class:`pandas.Series` aligned to the index of *ua*.
+    :rtype: float | pandas.Series
+
+    :raises ValueError: If *method* is not one of the accepted values.
+    :raises ValueError: If array-like arguments have incompatible lengths.
+
     """
     if method is None:
         method = 'wmo'
