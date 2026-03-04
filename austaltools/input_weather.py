@@ -23,7 +23,7 @@ else:
     from ._mock import netCDF4
 
 from ._metadata import __version__, __title__
-from . import _corine
+from . import _corine, _windutil
 from . import _fetch_dwd
 from . import _datasets
 from . import _dispersion as dis
@@ -1292,7 +1292,12 @@ def get_dwd_weather(lat: float, lon: float, year:int,
     data = pd.DataFrame(index=df.index)
     # wind direction 990 means "undetermined"/"umlaufender Wind"
     data['dd'] = df['D'].mask(df['D'] == 990., np.nan)  # deg
-    data['ff'] = df['F']  # m/s
+    data['ff'] = _windutil.roughness_correction(
+        df['F'],  # m/s
+        df['windgeschwindigkeit_geberhoehe ueber grund [m]'],  # m
+        z0,  # m
+        method='wmo'
+    )  # m/s
     data['sp'] = df['P0'] * 100.  # hPa -> Pa
     data['t2m'] = df['TT_TU']  # °C
     data['r2m'] = df['RF_TU'] / 100.  # % -> 1
