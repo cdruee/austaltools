@@ -113,7 +113,7 @@ nach TA Luft".
 # VDI 3783 part 8:
 N_CLASS = 6
 """int: Number of Klug-Manier stability classes (I through V, with III 
-split into III/1 and III/2).
+split into III1 and III2).
 """
 
 N_EGDE_NODES = 3
@@ -855,7 +855,7 @@ def austal_ref(workdir, levels, dirs, tmproot=None, overwrite=False):
             if diff_min == 360. or ui is None or vi is None:
                 raise ValueError('no reference profile for ' +
                                  'stability class: %s' %
-                                 _dispersion.KM2021.name(iso + 1))
+                                 _dispersion.KM2021.index2name(iso + 1))
             u_ref[:, iso, ido], v_ref[:, iso, ido] = \
                 interpolate_wind(ui, vi, z_tmp, levels)
 
@@ -1014,7 +1014,7 @@ def calc_ref_adapted(levels: list[float], dirs: list[float],
                 u_a_classes[i] = factor * VDI_GEOSTROPIC_WIND[i]
 
     logger.info(f"effective anemo height: {ha}")
-    pp = {_dispersion.KM2021.name(i + 1): u_a_classes[i]
+    pp = {_dispersion.KM2021.index2name(i + 1): u_a_classes[i]
           for i in range(N_CLASS)}
     logger.info(f"class mean wind speeds: {pp}")
 
@@ -1115,7 +1115,7 @@ def calc_vdi3783_8(levels: list, dirs: list, z0: float = None,
     v_ref = np.zeros((nz, N_CLASS, ndir))
 
     # Get Obukhov lengths for all stability classes (depends on z0)
-    l_obukhov = [_dispersion.KM2021.get_center(x, z0=z0) for x in
+    l_obukhov = [_dispersion.KM2021.class_center(x, z0=z0) for x in
                  range(N_CLASS)]
 
     for istab in range(N_CLASS):
@@ -1505,7 +1505,7 @@ def read_ref(file: str, levels: list[float], dirs: list[float],
             if diff_min == 360.:
                 raise ValueError('no reference profile for ' +
                                  'stability class: %s' %
-                                 _dispersion.KM2021.name(istab + 1))
+                                 _dispersion.KM2021.index2name(istab + 1))
             uf, vf = meteolib.wind.dir2uv(rf, rd)
 
             if linear_interpolation:

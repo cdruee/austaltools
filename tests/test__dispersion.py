@@ -132,49 +132,49 @@ class TestStabilityClassMethods(unittest.TestCase):
 
     def test_get_center_returns_float(self):
         """Test get_center returns a float."""
-        result = self.sc.get_center(0, 0.1)
+        result = self.sc.class_center(0, 0.1)
         self.assertIsInstance(result, float)
 
     def test_get_center_invalid_num(self):
         """Test get_center raises for invalid class number."""
         with self.assertRaises(ValueError):
-            self.sc.get_center(99, 0.1)
+            self.sc.class_center(99, 0.1)
 
     def test_get_bound_returns_float(self):
         """Test get_bound returns a float."""
-        result = self.sc.get_bound(0, 0.1)
+        result = self.sc.class_bound(0, 0.1)
         self.assertIsInstance(result, float)
 
     def test_get_bound_invalid_num(self):
         """Test get_bound raises for invalid boundary number."""
         with self.assertRaises(ValueError):
-            self.sc.get_bound(99, 0.1)
+            self.sc.class_bound(99, 0.1)
 
     def test_get_index_returns_int(self):
         """Test get_index returns an integer."""
-        result = self.sc.get_index(0.1, 50)
+        result = self.sc.lookup_index(0.1, 50)
         self.assertIsInstance(result, int)
 
     def test_name_returns_string(self):
         """Test name returns a string."""
-        result = self.sc.name(1)
+        result = self.sc.index2name(1)
         self.assertIsInstance(result, str)
         self.assertEqual(result, 'Stable')
 
     def test_name_invalid_num(self):
         """Test name raises for invalid class number."""
         with self.assertRaises(ValueError):
-            self.sc.name(99)
+            self.sc.index2name(99)
 
     def test_index_returns_int(self):
         """Test index returns an integer for valid name."""
-        result = self.sc.index('Stable')
+        result = self.sc.name2index('Stable')
         self.assertEqual(result, 1)
 
     def test_index_invalid_name(self):
         """Test index raises for invalid class name."""
         with self.assertRaises(ValueError):
-            self.sc.index('NonexistentClass')
+            self.sc.name2index('NonexistentClass')
 
 
 class TestPredefinedStabilityClasses(unittest.TestCase):
@@ -227,7 +227,7 @@ class TestStabilityClassFunction(unittest.TestCase):
         z0 = pd.Series([0.1], index=time)
         L = pd.Series([-100], index=time)
 
-        result = _dispersion.stabilty_class('KM2021', time, z0, L)
+        result = _dispersion.austal_class('KM2021', time, z0, L)
         self.assertIsInstance(result, list)
 
     def test_stabilty_class_shape_mismatch(self):
@@ -237,7 +237,7 @@ class TestStabilityClassFunction(unittest.TestCase):
         L = pd.Series([-100])
 
         with self.assertRaises(ValueError):
-            _dispersion.stabilty_class('KM2021', time, z0, L)
+            _dispersion.austal_class('KM2021', time, z0, L)
 
     def test_stabilty_class_km2021(self):
         """Test stabilty_class with KM2021 classifier."""
@@ -245,7 +245,7 @@ class TestStabilityClassFunction(unittest.TestCase):
         z0 = pd.Series([0.1], index=time)
         L = pd.Series([-100], index=time)
 
-        result = _dispersion.stabilty_class('KM2021', time, z0, L)
+        result = _dispersion.austal_class('KM2021', time, z0, L)
         self.assertIn(result[0], range(1, 10))  # Valid class or 9 (missing)
 
     def test_stabilty_class_km2002(self):
@@ -254,7 +254,7 @@ class TestStabilityClassFunction(unittest.TestCase):
         z0 = pd.Series([0.1], index=time)
         L = pd.Series([-100], index=time)
 
-        result = _dispersion.stabilty_class('KM2002', time, z0, L)
+        result = _dispersion.austal_class('KM2002', time, z0, L)
         self.assertIn(result[0], range(1, 10))
 
     def test_stabilty_class_pg1972(self):
@@ -263,7 +263,7 @@ class TestStabilityClassFunction(unittest.TestCase):
         z0 = pd.Series([0.1], index=time)
         L = pd.Series([-100], index=time)
 
-        result = _dispersion.stabilty_class('PG1972', time, z0, L)
+        result = _dispersion.austal_class('PG1972', time, z0, L)
         self.assertIn(result[0], range(1, 10))
 
     def test_stabilty_class_scalar_inputs(self):
@@ -272,7 +272,7 @@ class TestStabilityClassFunction(unittest.TestCase):
         z0 = 0.1
         L = -100
 
-        result = _dispersion.stabilty_class('KM2021', time, z0, L)
+        result = _dispersion.austal_class('KM2021', time, z0, L)
         self.assertIsInstance(result, list)
 
     def test_stabilty_class_with_datetime64(self):
@@ -281,7 +281,7 @@ class TestStabilityClassFunction(unittest.TestCase):
         z0 = 0.1
         L = -100
 
-        result = _dispersion.stabilty_class('KM2021', time, z0, L)
+        result = _dispersion.austal_class('KM2021', time, z0, L)
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 1)
 
@@ -291,7 +291,7 @@ class TestStabilityClassFunction(unittest.TestCase):
         z0 = [0.1, 0.1]
         L = [-100, -150]
 
-        result = _dispersion.stabilty_class('KM2021', time, z0, L)
+        result = _dispersion.austal_class('KM2021', time, z0, L)
         self.assertIsInstance(result, list)
         self.assertEqual(len(result), 2)
 
@@ -302,7 +302,7 @@ class TestStabilityClassFunction(unittest.TestCase):
         L = pd.Series([-100])
 
         with self.assertRaises(ValueError):
-            _dispersion.stabilty_class('KM2021', time, z0, L)
+            _dispersion.austal_class('KM2021', time, z0, L)
 
     def test_stabilty_class_km2021(self):
         """Test stabilty_class with KM2021 classifier."""
@@ -310,7 +310,7 @@ class TestStabilityClassFunction(unittest.TestCase):
         z0 = pd.Series([0.1], index=time)
         L = pd.Series([-100], index=time)
 
-        result = _dispersion.stabilty_class('KM2021', time, z0, L)
+        result = _dispersion.austal_class('KM2021', time, z0, L)
         self.assertIn(result[0], range(1, 10))  # Valid class or 9 (missing)
 
     def test_stabilty_class_km2002(self):
@@ -319,7 +319,7 @@ class TestStabilityClassFunction(unittest.TestCase):
         z0 = pd.Series([0.1], index=time)
         L = pd.Series([-100], index=time)
 
-        result = _dispersion.stabilty_class('KM2002', time, z0, L)
+        result = _dispersion.austal_class('KM2002', time, z0, L)
         self.assertIn(result[0], range(1, 10))
 
     def test_stabilty_class_pg1972(self):
@@ -328,7 +328,7 @@ class TestStabilityClassFunction(unittest.TestCase):
         z0 = pd.Series([0.1], index=time)
         L = pd.Series([-100], index=time)
 
-        result = _dispersion.stabilty_class('PG1972', time, z0, L)
+        result = _dispersion.austal_class('PG1972', time, z0, L)
         self.assertIn(result[0], range(1, 10))
 
     def test_stabilty_class_scalar_inputs(self):
@@ -337,7 +337,7 @@ class TestStabilityClassFunction(unittest.TestCase):
         z0 = 0.1
         L = -100
 
-        result = _dispersion.stabilty_class('KM2021', time, z0, L)
+        result = _dispersion.austal_class('KM2021', time, z0, L)
         self.assertIsInstance(result, list)
 
 
@@ -709,7 +709,7 @@ class TestPytestStyle:
         z0 = pd.Series([0.1], index=time)
         L = pd.Series([-100], index=time)
 
-        result = _dispersion.stabilty_class(classifier, time, z0, L)
+        result = _dispersion.austal_class(classifier, time, z0, L)
         assert isinstance(result, list)
         assert len(result) == 1
 
@@ -756,7 +756,7 @@ class TestPytestStyle:
     ])
     def test_stabilty_class_time_input_types(self, time_input):
         """Test stabilty_class with various scalar time input types."""
-        result = _dispersion.stabilty_class(
+        result = _dispersion.austal_class(
             'KM2021',
             time_input,
             0.1,
@@ -771,7 +771,7 @@ class TestPytestStyle:
     ])
     def test_stabilty_class_array_time_input_types(self, time_input):
         """Test stabilty_class with array-like time inputs."""
-        result = _dispersion.stabilty_class(
+        result = _dispersion.austal_class(
             'KM2021',
             time_input,
             [0.1, 0.1],
@@ -790,7 +790,7 @@ class TestEdgeCases(unittest.TestCase):
         z0 = pd.Series([0.1], index=time)
         L = pd.Series([-10], index=time)  # Very small negative L
 
-        result = _dispersion.stabilty_class('KM2021', time, z0, L)
+        result = _dispersion.austal_class('KM2021', time, z0, L)
         # Should return high index (unstable)
         self.assertIn(result[0], range(1, 10))
 
@@ -800,7 +800,7 @@ class TestEdgeCases(unittest.TestCase):
         z0 = pd.Series([0.1], index=time)
         L = pd.Series([10], index=time)  # Small positive L
 
-        result = _dispersion.stabilty_class('KM2021', time, z0, L)
+        result = _dispersion.austal_class('KM2021', time, z0, L)
         self.assertIn(result[0], range(1, 10))
 
     def test_stability_class_neutral(self):
@@ -809,7 +809,7 @@ class TestEdgeCases(unittest.TestCase):
         z0 = pd.Series([0.1], index=time)
         L = pd.Series([10000], index=time)  # Very large L = neutral
 
-        result = _dispersion.stabilty_class('KM2021', time, z0, L)
+        result = _dispersion.austal_class('KM2021', time, z0, L)
         self.assertIn(result[0], range(1, 10))
 
 

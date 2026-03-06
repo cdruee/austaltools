@@ -1421,7 +1421,7 @@ def austal_weather(args):
                     (lat, lon, ele, z0, source, format(stat_nam)))
             obs.to_csv(f, float_format='%.2f', index=False, na_rep='-999')
 
-    logger.debug(str(obs.iloc[0:2]))
+    logger.debug("\n%s" %str(obs.iloc[0:2]))
 
     methods_available = []
 
@@ -1477,10 +1477,6 @@ def austal_weather(args):
         obs['Lo'] = dis.obukhov_length(
             ust=obs['ust'], rho=obs['rho'], Tv=obs['Tv'],
             H=obs['sshf'], E=obs['slhf'])
-        #  if ...:
-        #     obs[['time', 'v10', 'rho', 'Tv', 'Lo', 'ust']].to_csv(
-        #         'calculated_L_%05i_%04i.csv' % (stat_no, year),
-        #         float_format='%.2f', index=False, na_rep='-999')
 
     #
     # kms -----------------------------
@@ -1493,20 +1489,23 @@ def austal_weather(args):
             cty = cloud_type_from_cover(tcc=obs['tcc'], lmcc=obs['lmcc'])
         else:
             cty = None
-        obs['kms'] = dis.klug_manier_scheme_2017(
+        classes = dis.klug_manier_scheme_2017(
             obs.index, obs['v10'], obs['tcc'],
             lat, lon, ele, cty=cty
         )
+        obs['kms'] = dis.KM2021.name2austal(classes)
+        del cty, classes
     #
     # kmo -----------------------------
     if all([x in obs.columns for x in ['v10', 'tcc']]):
         logger.info('Method: kmo')
         methods_available.append('kmo')
         cty = obs['cty'] if 'cty' in obs else None
-        obs['kmo'] = dis.klug_manier_scheme_1992(
+        classes = dis.klug_manier_scheme_1992(
             obs.index, obs['v10'], obs['tcc'],
             lat, lon, cty=cty)
-        del cty
+        obs['kmo'] = dis.KM2002.name2austal(classes)
+        del cty, classes
     #
     # k2o -----------------------------
     if (all([x in obs.columns for x in ['v10', 'tcc']]) and
@@ -1515,34 +1514,31 @@ def austal_weather(args):
         methods_available.append('k2o')
         cbh = obs['cbh'] if 'cbh' in obs else None
         cty = obs['cty'] if 'cty' in obs else None
-        obs['k2o'] = dis.klug_manier_scheme_2017(
+        classes = dis.klug_manier_scheme_2017(
             obs.index, obs['v10'], obs['tcc'],
             lat, lon, ele, cbh=cbh, cty=cty)
-        del cbh, cty
+        obs['k2o'] = dis.KM2021.name2austal(classes)
+        del cbh, cty, classes
     #
     # pts -----------------------------
     if all([x in obs.columns for x in ['ff', 'tcc', 'cbh']]):
         logger.info('Method: pts')
         methods_available.append('pts')
-        obs['pts'] = dis.pasquill_taylor_scheme(
+        classes = dis.pasquill_taylor_scheme(
             obs.index, obs['ff'], obs['tcc'], lat, lon, obs['cbh'])
+        obs['pts'] = dis.PG1972.name2austal(classes)
     #
     # kmc -----------------------------
     if all([x in obs.columns for x in ['fsr', 'Lo']]):
         logger.info('Method: kmc')
         methods_available.append('kmc')
-        obs['kmc'] = dis.stabilty_class(
-            'KM', obs.index, obs['fsr'], obs['Lo'].copy())
+        obs['kmc'] = dis.KM2021.lookup_austal(obs['fsr'], obs['Lo'])
     #
     # pgc -----------------------------
     if all([x in obs.columns for x in ['fsr', 'Lo']]):
         logger.info('Method: pgc')
         methods_available.append('pgc')
-        pg = dis.stabilty_class(
-            'PG', obs.index, obs['fsr'], obs['Lo'])
-        # convert to corresponding AK number (class F&G->1)
-        obs['pgc'] = [max((1, 7 - x)) for x in pg]
-
+        obs['pgc'] = dis.PG1972.lookup_austal(obs['fsr'], obs['Lo'])
     #
     # create hour-complete data frame for output
     logger.debug('create w')
