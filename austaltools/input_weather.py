@@ -1526,7 +1526,7 @@ def austal_weather(args):
         methods_available.append('pts')
         classes = dis.pasquill_taylor_scheme(
             obs.index, obs['ff'], obs['tcc'], lat, lon, obs['cbh'])
-        obs['pts'] = dis.PG1972.name2austal(classes)
+        obs['pts'] = dis.PT1972.name2austal(classes)
     #
     # kmc -----------------------------
     if all([x in obs.columns for x in ['fsr', 'Lo']]):
@@ -1538,7 +1538,7 @@ def austal_weather(args):
     if all([x in obs.columns for x in ['fsr', 'Lo']]):
         logger.info('Method: pgc')
         methods_available.append('pgc')
-        obs['pgc'] = dis.PG1972.lookup_austal(obs['fsr'], obs['Lo'])
+        obs['pgc'] = dis.PT1972.lookup_austal(obs['fsr'], obs['Lo'])
     #
     # create hour-complete data frame for output
     logger.debug('create w')

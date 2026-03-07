@@ -9,6 +9,7 @@ import os
 
 import numpy as np
 import pandas as pd
+from pandas import Series
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import meteolib as m
@@ -46,11 +47,11 @@ class StabiltyClass:
         values of the Obukhov lenght for 1st, 2nd, 3rd, ... class
         Mutually exclusive with `bounds`.
     :type centers: list[tuple[list]]
-    :param tabbed_values_inverted:
+    :param tabbed_is_inverse:
         False if the bounds or center values should
         be taken as they are. True if values shoud be inverted
         i.e. :math:`1/x`. Defaults to False.
-    :type tabbed_values_inverted: bool
+    :type tabbed_is_inverse: bool
     :param reverse_index: False if the numric class index is acsending.
         True if it is decending. Defaults to False.
     :type reverse_index:
@@ -67,7 +68,7 @@ class StabiltyClass:
 
     def __init__(self, bounds: list | tuple | None = None,
                  centers: list | tuple | None = None,
-                 tabbed_values_inverted: bool = False,
+                 tabbed_is_inverse: bool = False,
                  reverse_index: bool = True,
                  names: list[str] | tuple[str] | None = None,
                  austal: list[int] | tuple[int] | None = None) -> None:
@@ -90,15 +91,19 @@ class StabiltyClass:
             if any([sorted(x[0]) != x[0] for x in bounds]):
                 raise ValueError('lists in bounds elements must ' +
                                  'be sorted by ascending z0')
-            # StabilityClass object always contains L (not 1/L) values
-            if not tabbed_values_inverted:
+            # StabilityClass object always contains 1/L (not L) values
+            if tabbed_is_inverse:
                 self._bounds = bounds
             else:
                 self._bounds = []
                 for b in bounds:
                     self._bounds.append([b[0], [1 / x for x in b[1]]])
+
+            if reverse_index:
+                self._bounds = list(reversed(self._bounds))
             self.count = len(bounds) + 1
             self._bounds2centers()
+
         elif centers is not None:
             if type(centers) not in [list, tuple]:
                 raise ValueError('centers must be list or tuple')
@@ -116,15 +121,19 @@ class StabiltyClass:
             if any([sorted(x[0]) != x[0] for x in centers]):
                 raise ValueError('lists in centers elements must ' +
                                  'be sorted by ascending z0')
-            # StabilityClass object always contains L (not 1/L) values
-            if not tabbed_values_inverted:
+            # StabilityClass object always contains 1/L (not L) values
+            if tabbed_is_inverse:
                 self._centers = centers
             else:
                 self._centers = []
                 for b in centers:
                     self._centers.append([b[0], [1 / x for x in b[1]]])
+
+            if reverse_index:
+                self._centers = list(reversed(self._centers))
             self.count = len(centers)
             self._centers2bounds()
+
         if names is None:
             raise ValueError('names key missing in stability class data')
         else:
@@ -208,7 +217,7 @@ class StabiltyClass:
             self._bounds.append([bz0, bil])
 
     def class_bound(self, cls: int|str, z0: float,
-                    inverted: bool = False) -> float:
+                    inverse: bool = False) -> float:
         """
         get the upper boundary value of Obukhov lentgh :math:`L` for the
         class with index `num` for roughness length `z0`.
@@ -217,9 +226,9 @@ class StabiltyClass:
         :type num: int|str
         :param z0: roughness length in m
         :type z0: float
-        :param inverted: True if :math:`1/L` should be returned instead
+        :param inverse: True if :math:`1/L` should be returned instead
           of :math:`L`
-        :type inverted: bool (optional)
+        :type inverse: bool (optional)
         :return: Obukhov length :math:`L` in m
         :rtype: float
         """
@@ -230,14 +239,14 @@ class StabiltyClass:
             num = int(cls)
             if num not in range(self.count):
                 raise ValueError('no class number #%i' % int(num))
-        il = self._getval(z0, self._bounds[num])
-        if not inverted:
-            return il
+        zeta = self._getval(z0, self._bounds[num])
+        if inverse:
+            return zeta
         else:
-            return 1 / il
+            return 1 / zeta
 
     def class_center(self, cls: int | str, z0: float,
-                     inverted: bool = False) -> float:
+                     inverse: bool = False) -> float:
         """
         get the center value of Obukhov lentgh :math:`L` for the
         class with index `num` for roughness length `z0`.
@@ -246,9 +255,9 @@ class StabiltyClass:
         :type num: int|str
         :param z0: roughness length in m
         :type z0: float
-        :param inverted: True if :math:`1/L` should be returned instead
+        :param inverse: True if :math:`1/L` should be returned instead
           of :math:`L`
-        :type inverted:  bool (optional)
+        :type inverse:  bool (optional)
         :return: Obukhov length :math:`L` in m
         :rtype: float
         """
@@ -258,16 +267,16 @@ class StabiltyClass:
             num = int(cls)
             if num not in range(self.count):
                 raise ValueError('no class number #%i' % int(num))
-        il = self._getval(z0, self._centers[num])
-        if not inverted:
-            return il
+        zeta = self._getval(z0, self._centers[num])
+        if inverse:
+            return zeta
         else:
-            return 1 / il
+            return 1 / zeta
 
     def lookup_index(self,
                      z0: float | pd.Series,
                      lob: float | pd.Series,
-                     inverted: bool = False) -> int:
+                     inverse: bool = False) -> int:
         """
         get the numeric class index for roughness length `z0` and
         Obukhov lentgh :math:`L`.
@@ -276,9 +285,9 @@ class StabiltyClass:
         :type z0: float | ps.Series
         :param lob: Obukhov lentgh
         :type lob: float | pd.Series
-        :param inverted: True if `lob` is :math:`1/L` instead
+        :param inverse: True if `lob` is :math:`1/L` instead
           of :math:`L`
-        :type inverted:  bool (optional)
+        :type inverse:  bool (optional)
         :return: Numeric class index
         :rtype: int
         """
@@ -293,25 +302,28 @@ class StabiltyClass:
             raise ValueError('z0 and lob indexes do not match')
         cl = pd.Series(index=z0.index)
         for i in cl.index:
-            zeta_bounds = [self.class_bound(x, z0[i], inverted=True)
-                  for x in range(self.count - 1)]
-            if inverted:
-                zeta = lob[i]
+            if np.isnan(z0[i]) or not 1.E-9 < z0[i] < 1000.:
+                # z0 not present of has an impossible value
+                cl[i] = -1
             else:
-                zeta = 1. / lob[i]
-
-            for ib, zb in enumerate(zeta_bounds):
-                if zeta > zb:
-                    cl[i] = ib
-                    break
-            else:
-                cl[i] = self.count - 1
-        return cl + 1
+                if inverse:
+                    zeta = lob[i]
+                else:
+                    zeta = 1. / lob[i]
+                zeta_bounds = [self.class_bound(x, z0[i], inverse=True)
+                    for x in range(self.count - 1)]
+                cl[i] = 1
+                for zi, zb in enumerate(zeta_bounds):
+                    if zb < zeta:
+                        break
+                    else:
+                        cl[i] += 1
+        return cl
 
     def lookup_name(self,
                     z0: float | pd.Series,
                     lob: float | pd.Series,
-                    inverted: bool = False) -> str:
+                    inverse: bool = False) -> str:
         """
         get the class name for roughness length `z0` and
         Obukhov lentgh :math:`L`.
@@ -320,19 +332,19 @@ class StabiltyClass:
         :type z0: float | pd.Series
         :param lob: Obukhov lentgh
         :type lob: float | pd.Series
-        :param inverted: True if `lob` is :math:`1/L` instead
+        :param inverse: True if `lob` is :math:`1/L` instead
           of :math:`L`
-        :type inverted:  bool (optional)
+        :type inverse:  bool (optional)
         :return: Numeric class index
         :rtype: int
         """
         return self.index2name(
-            self.lookup_index(z0, lob, inverted=inverted))
+            self.lookup_index(z0, lob, inverse=inverse))
 
     def lookup_austal(self,
                       z0: float | pd.Series,
                       lob: float | pd.Series,
-                      inverted: bool = False) -> int:
+                      inverse: bool = False) -> int:
         """
         get the class name for roughness length `z0` and
         Obukhov lentgh :math:`L`.
@@ -341,14 +353,14 @@ class StabiltyClass:
         :type z0: float | pd.Series
         :param lob: Obukhov lentgh
         :type lob: float | pd.Series
-        :param inverted: True if `lob` is :math:`1/L` instead
+        :param inverse: True if `lob` is :math:`1/L` instead
           of :math:`L`
-        :type inverted:  bool (optional)
+        :type inverse:  bool (optional)
         :return: Numeric class index
         :rtype: int
         """
         return self.index2austal(
-            self.lookup_index(z0, lob, inverted=inverted))
+            self.lookup_index(z0, lob, inverse=inverse))
 
 
     def index2name(self, num: int) -> str:
@@ -372,22 +384,25 @@ class StabiltyClass:
         else:
             return res
 
-    def index2austal(self, num: int) -> int:
+    def index2austal(self, num: int) -> int | Series:
         """
         get the AUSTAL numeric class for numeric class index
 
         :param num: numeric class index
         :type num: int | list | pd.Series[int]
         :return: class name
-        :rtype: int | ps.Series
+        :rtype: int | pd.Series
         """
         scalar = (np.ndim(num) == 0)
         idx_series = pd.Series(num) - 1
-        if not all(idx_series.isin(range(self.count))):
-            invalid = idx_series[~idx_series.isin(range(self.count))] + 1
-            raise ValueError(f'invalid class number(s): {invalid.tolist()}')
-        res = pd.Series([self.austal[int(i)] for i in idx_series],
-                        index=idx_series.index)
+        # if not all(idx_series.isin(range(self.count))):
+        #     invalid = idx_series[~idx_series.isin(range(self.count))] + 1
+        #     raise ValueError(f'invalid class number(s): {invalid.tolist()}')
+        res = pd.Series([self.austal[int(i)]
+                         if np.isin(int(i),range(self.count))
+                         else 9
+                         for i in idx_series
+                         ], index=idx_series.index)
         if scalar:
             return int(res.iloc[0])
         else:
@@ -443,7 +458,7 @@ KM2021 = StabiltyClass(centers=[
     ([0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 1.00, 1.50, 2.00],
      [-6, -8, -11, -15, -20, -33, -52, -70, -89]),
     ],
-    tabbed_values_inverted=False,
+    tabbed_is_inverse=False,
     reverse_index=False,
     names=['I', 'II', 'III1', 'III2', 'IV', 'V'],
     austal=[1, 2, 3, 4, 5, 6]
@@ -473,7 +488,7 @@ KM2002 = StabiltyClass(centers=[
     ([0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 1.00, 1.50, 2.00],
      [-4, -5, -7, -10, -14, -22, -34, -45, -56]),
     ],
-    tabbed_values_inverted=False,
+    tabbed_is_inverse=False,
     reverse_index=False,
     names=['I', 'II', 'III1', 'III2', 'IV', 'V'],
     austal=[1, 2, 3, 4, 5, 6]
@@ -490,30 +505,52 @@ Tabelle 17: Bestimmung der Monin–Obukhov–Länge L_M
 # ----------------------------------------------------
 #
 PG1972 = StabiltyClass(bounds=[
-    #        ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
-    #           0.056587,   0.10508,   0.19514,   0.49384],
-    #         [-0.130121,  -0.12399, -0.114696, -0.108358, -0.098456,
-    #           -0.087685, -0.079713, -0.071017, -0.056878]),
-    #        ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
-    #           0.056587,   0.10508,   0.19514,   0.49384],
-    #         [-0.086466, -0.081043, -0.072786, -0.067090, -0.057879,
-    #           -0.047121, -0.039191, -0.031135, -0.015915]),
-    #        ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
-    #           0.056587,   0.10508,   0.19514,   0.49384],
-    #         [-0.036088, -0.032579, -0.027597, -0.024512, -0.019885,
-    #           -0.015090, -0.011871, -0.008705, -0.004281]),
-    #        ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
-    #           0.056587,   0.10508,   0.19514,   0.49384],
-    #         [ 0.012206,  0.009979,  0.007739,  0.006889,  0.006501,
-    #           0.004992,  0.004183,  0.003579,  0.002873]),
-    #        ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
-    #           0.056587,   0.10508,   0.19514,   0.49384],
-    #         [ 0.040156,  0.033523,  0.025014,  0.021329,  0.016380,
-    #           0.012502,  0.010628,  0.009159,  0.007393]),
-    #        ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
-    #           0.056587,   0.10508,   0.19514,   0.49384],
-    #         [ 0.095955,  0.085088,  0.069084,  0.059677,  0.047705,
-    #         0.038408,  0.032892,  0.028047,  0.022981]),
+       ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
+          0.056587,   0.10508,   0.19514,   0.49384],
+        [-0.130121,  -0.12399, -0.114696, -0.108358, -0.098456,
+          -0.087685, -0.079713, -0.071017, -0.056878]),
+       ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
+          0.056587,   0.10508,   0.19514,   0.49384],
+        [-0.086466, -0.081043, -0.072786, -0.067090, -0.057879,
+          -0.047121, -0.039191, -0.031135, -0.015915]),
+       ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
+          0.056587,   0.10508,   0.19514,   0.49384],
+        [-0.036088, -0.032579, -0.027597, -0.024512, -0.019885,
+          -0.015090, -0.011871, -0.008705, -0.004281]),
+       ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
+          0.056587,   0.10508,   0.19514,   0.49384],
+        [ 0.012206,  0.009979,  0.007739,  0.006889,  0.006501,
+          0.004992,  0.004183,  0.003579,  0.002873]),
+       ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
+          0.056587,   0.10508,   0.19514,   0.49384],
+        [ 0.040156,  0.033523,  0.025014,  0.021329,  0.016380,
+          0.012502,  0.010628,  0.009159,  0.007393]),
+       ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
+          0.056587,   0.10508,   0.19514,   0.49384],
+        [ 0.095955,  0.085088,  0.069084,  0.059677,  0.047705,
+        0.038408,  0.032892,  0.028047,  0.022981]),
+    ],
+    # values here are:
+    # least stable   ...  most stable
+    tabbed_is_inverse=True,
+    reverse_index=True,
+    names=['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+    # For EPA regulatory modeling applications, stability categories
+    # 6 and 7 (F and G) are combined and considered category 6 (G).
+    austal = [6, 5, 4, 3, 2, 1, 1]
+)
+"""
+Pasquill-*Gifford* stability classes.
+Class Boundaries scraped from [GOL1972]_ Fig *4*
+
+According to EPA [EPA2000]_ class G is neglected for regulatory modeling
+
+:meta hide-value:
+"""
+
+# ----------------------------------------------------
+#
+PT1972 = StabiltyClass(bounds=[
     ([0.005, 0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 2.00],
      [-0.114, -0.107, -0.099, -0.089, -0.081, -0.071, -0.057, -0.042]),
     ([0.005, 0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 2.00],
@@ -527,96 +564,24 @@ PG1972 = StabiltyClass(bounds=[
     ([0.005, 0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 2.00],
      [0.068, 0.058, 0.049, 0.039, 0.033, 0.028, 0.023, 0.006]),
     ],
-    tabbed_values_inverted=True,
+    # values here are:
+    # least stable   ...  most stable
+    tabbed_is_inverse=True,
     reverse_index=True,
     names=['A', 'B', 'C', 'D', 'E', 'F', 'G'],
     # For EPA regulatory modeling applications, stability categories
-    # 6 and 7 (F and G) are combined and considered category 6.
-    austal = [1, 2, 3, 4, 5, 6, 6]
+    # 6 and 7 (F and G) are combined and considered category 6 (G).
+    austal = [6, 5, 4, 3, 2, 1, 1]
 )
 """
-Pasquill-Gifford stability classes.
-Class Boundaries scraped from [GOL1972]_ Fig 5
+Pasquill-*Turner* stability classes.
+Class Boundaries scraped from [GOL1972]_ Fig *5*
 
 According to EPA [EPA2000]_ class G is neglected for regulatory modeling
 
 :meta hide-value:
 """
 
-
-# ----------------------------------------------------
-#
-# def austal_class(classifyer: str,
-#                  time: pd.DatetimeIndex | pd.Timestamp| np.datetime64 | list[str],
-#                  z0: pd.Series | float,
-#                  L: pd.Series | float) -> list[int]:
-#     """
-#     Returns the AUSTAL numeric value for
-#     atmospheric stability class according to
-#     the selected classification scheme.
-#
-#     :param str classifyer: The classification method
-#         ('Klug/Manier', 'KM2021', 'KM', 'TA Luft 2021',
-#         'KM2002', or 'TA Luft 2002').
-#     :param time: Date and time
-#     :type time: pandas.DatetimeIndex or datetime64
-#     :param z0: Roughness length(s)
-#     :type z0: pandas.Series or float
-#     :param L: Monin-Obukhov length(s) in m
-#     :type L: pd.Series or float
-#     :param numeric_austal: instead of the class name return the
-#       corresponding numeric value for use with the AUSTAL model
-#       1: Klug/Manier I or Pasquill F&G
-#       ...
-#       6: Klug/Manier V or Pasquill A
-#       9: no value
-#
-#     :return: Stability class indices (1-6; 9 for missing values)
-#     :rtype: list
-#
-#     :raises ValueError: If shapes of time, z0, and L are not equal.
-#     :raises ValueError: If an unknown classification method is provided.
-#
-#     :example:
-#         >>> import pandas as pd
-#         >>> time = pd.DatetimeIndex(['2024-08-02 12:00:00'])
-#         >>> z0 = pd.Series(0.1, index=time)
-#         >>> L = pd.Series(-100, index=time)  # Example Monin-Obukhov length
-#         >>> result = austal_class('KM2021', time, z0, L)
-#         >>> print("Stability class indices:", result)
-#         Stability class indices: [2]
-#
-#     """
-#     # check / adjust types
-#     if _isscalar(time):
-#         time = pd.DatetimeIndex([time])
-#     else:
-#         time = pd.DatetimeIndex(time)
-#     if _isscalar(z0):
-#         z0 = pd.Series(z0, index=time)
-#     else:
-#         z0 = pd.Series(z0)
-#     L = pd.Series(L)
-#     if not (np.shape(time) == np.shape(z0) == np.shape(L)):
-#         raise ValueError('shapes of time, z0, L are not equal')
-#
-#     if classifyer in ['Klug/Manier', 'KM2021', 'KM', 'TA Luft 2021']:
-#         scale = KM2021
-#     elif classifyer in ['KM2002', 'TA Luft 2002']:
-#         scale = KM2002
-#     elif classifyer in ['Pasquill/Gifford', 'PG1972', 'PG']:
-#         scale = PG1972
-#     else:
-#         raise ValueError('unknown classication :%s' % classifyer)
-#
-#     # 9 = missing value
-#     sclass = np.array([9] * len(time))
-#     for i, t in enumerate(time):
-#         sclass[i] = scale.get_austal(z0.iloc[i], L.iloc[i])
-#
-#     return sclass[()].tolist()
-#
-#
 # =============================================================================
 
 def vdi_3872_6_sun_rise_set(

@@ -203,19 +203,19 @@ class TestPredefinedStabilityClasses(unittest.TestCase):
         """Test KM2002 has 6 stability classes."""
         self.assertEqual(_dispersion.KM2002.count, 6)
 
-    def test_pg1972_exists(self):
-        """Test PG1972 stability class is defined."""
-        self.assertIsNotNone(_dispersion.PG1972)
-        self.assertIsInstance(_dispersion.PG1972, _dispersion.StabiltyClass)
+    def test_pt1972_exists(self):
+        """Test PT1972 stability class is defined."""
+        self.assertIsNotNone(_dispersion.PT1972)
+        self.assertIsInstance(_dispersion.PT1972, _dispersion.StabiltyClass)
 
-    def test_pg1972_has_7_classes(self):
-        """Test PG1972 has 7 stability classes (A-G)."""
-        self.assertEqual(_dispersion.PG1972.count, 7)
+    def test_PT1972_has_7_classes(self):
+        """Test PT1972 has 7 stability classes (A-G)."""
+        self.assertEqual(_dispersion.PT1972.count, 7)
 
-    def test_pg1972_class_names(self):
-        """Test PG1972 has correct class names."""
+    def test_PT1972_class_names(self):
+        """Test PT1972 has correct class names."""
         expected_names = ['A', 'B', 'C', 'D', 'E', 'F', 'G']
-        self.assertEqual(_dispersion.PG1972.names, expected_names)
+        self.assertEqual(_dispersion.PT1972.names, expected_names)
 
 
 class TestStabilityClassFunction(unittest.TestCase):
@@ -257,13 +257,13 @@ class TestStabilityClassFunction(unittest.TestCase):
         result = _dispersion.austal_class('KM2002', time, z0, L)
         self.assertIn(result[0], range(1, 10))
 
-    def test_stabilty_class_pg1972(self):
-        """Test stabilty_class with PG1972 classifier."""
+    def test_stabilty_class_PT1972(self):
+        """Test stabilty_class with PT1972 classifier."""
         time = pd.DatetimeIndex(['2024-01-01 12:00:00'])
         z0 = pd.Series([0.1], index=time)
         L = pd.Series([-100], index=time)
 
-        result = _dispersion.austal_class('PG1972', time, z0, L)
+        result = _dispersion.austal_class('PT1972', time, z0, L)
         self.assertIn(result[0], range(1, 10))
 
     def test_stabilty_class_scalar_inputs(self):
@@ -322,13 +322,13 @@ class TestStabilityClassFunction(unittest.TestCase):
         result = _dispersion.austal_class('KM2002', time, z0, L)
         self.assertIn(result[0], range(1, 10))
 
-    def test_stabilty_class_pg1972(self):
-        """Test stabilty_class with PG1972 classifier."""
+    def test_stabilty_class_PT1972(self):
+        """Test stabilty_class with PT1972 classifier."""
         time = pd.DatetimeIndex(['2024-01-01 12:00:00'])
         z0 = pd.Series([0.1], index=time)
         L = pd.Series([-100], index=time)
 
-        result = _dispersion.austal_class('PG1972', time, z0, L)
+        result = _dispersion.austal_class('PT1972', time, z0, L)
         self.assertIn(result[0], range(1, 10))
 
     def test_stabilty_class_scalar_inputs(self):
@@ -700,7 +700,7 @@ class TestPytestStyle:
         'KM2002',
         'TA Luft 2002',
         'Pasquill/Gifford',
-        'PG1972',
+        'PT1972',
         'PG',
     ])
     def test_stabilty_class_all_classifiers(self, classifier):
