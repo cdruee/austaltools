@@ -43,8 +43,8 @@ DEFAULT_WIND_VARIANT = os.environ.get('WIND_VARIANT', 'model_uv10')
  
   Overridden by environment variable "WIND_VARIANT"
  
-  Possible values are: 'fixed_057' 'fixed_010' 'model_mean' 
-  'model_uv10' 'model_fsr'
+  Possible values are: 'model_uv10' 'ustar_wmo' 'ustar_z0' 
+  'ustar_fsr'
 """
 DEFAULT_INTER_VARIANT = os.environ.get('INTER_VARIANT', 'weighted')
 """
@@ -357,11 +357,10 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
       Default is :py:const:`DEFAULT_WIND_VARIANT`.
       Supported options:
 
-        - `'fixed_057'` : Assumes fixed surface roughness z₀ = 0.57 m.
-        - `'fixed_010'` : Assumes fixed surface roughness z₀ = 0.10 m.
-        - `'model_mean'` : Uses mean surface roughness from model data.
         - `'model_uv10'` : Uses u10 and v10 without adjustment.
-        - `'model_fsr'` : Uses model-provided roughness field (fsr).
+        - `'ustar_wmo'` : Assumes fixed surface roughness z₀ = 0.03 m (WMO).
+        - `'ustar_z0'` : Uses mean surface roughness from model data.
+        - `'ustar_fsr'` : Uses model-provided roughness field (fsr).
 
     :type wind_variant: str
 
@@ -524,25 +523,20 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
     #   https://confluence.ecmwf.int/display/FUG/Section+9.3+Surface+Wind
     #
     #   Therefore: u10 = u*/k * ln(z/z0)
-    if wind_variant == 'fixed_057':
-        z0 = 0.57  # m
+    if wind_variant == 'model_uv10':
+        values['ff'] = np.sqrt(values['u10'] ** 2 +
+                               values['v10'] ** 2)  # m/s
+    elif wind_variant == 'ustar_wmo':
+        z0 = 0.03  # m
         values['fsr'] = z0  # m
         values['ff'] = (values['zust'] / kappa *
                         np.log((10. + 7. * z0) / z0))  # m/s
-    elif wind_variant == 'fixed_010':
-        z0 = 0.10  # m
-        values['fsr'] = z0  # m
-        values['ff'] = (values['zust'] / kappa *
-                        np.log((10. + 7. * z0) / z0))  # m/s
-    elif wind_variant == 'model_mean':
+    elif wind_variant == 'ustar_z0':
         z0 = np.nanmean(values['fsr'])  # m
         values['fsr'] = z0  # m
         values['ff'] = (values['zust'] / kappa *
                         np.log((10. + 7. * z0) / z0))  # m/s
-    elif wind_variant == 'model_uv10':
-        values['ff'] = np.sqrt(values['u10'] ** 2 +
-                               values['v10'] ** 2)  # m/s
-    elif wind_variant == 'model_fsr':
+    elif wind_variant == 'ustar_fsr':
         values['ff'] = (values['zust'] / kappa *
                         np.log((10. + 7. * values['fsr']) /
                                values['fsr']))  # m/s
@@ -1707,31 +1701,29 @@ def add_options(subparsers):
                                'to an extra file')
     adv_wea.add_argument('--wind-variant',
                           dest=DEFAULT_WIND_VARIANT,
-                          choices=['fixed_057', 'fixed_010', 'model_mean',
-                                   'model_uv10', 'model_fsr'],
+                          choices=['model_uv10', 'ustar_wmo',
+                                   'ustar_z0', 'ustar_fsr'],
                           default='model_uv10',
                           help=('Controls how the 10-m wind is calculated'
                                 'from ERA5 reanaysis data.'
                                 'possible values: %(choices)s. '
                                 '[%(default)s]\n'
-                                '  - fixed_057: '
+                                ' - model_uv10: '
+                                'use the ``10-m wind`` provided by the '
+                                'model\n'
+                                '  - ustar_wmo: '
                                 'from friction velocity using a fixed '
-                                'roughness length :math:`z_0` = 0.57 m\n'
-                                '  - fixed_010: '
-                                'from friction velocity using a fixed '
-                                'roughness length :math:`z_0` = 0.10 m\n'
-                                ' - model_fsr: '
-                                'from friction velocity using the instant '
-                                '``forecast surface roughness`` '
-                                'from the model for each hour\n'
-                                ' - model_mean: '
+                                'roughness length :math:`z_0` = 0.03 m\n'
+                                ' - ustar_z0: '
                                 'from friction velocity using the mean '
                                 '``forecast surface roughness`` '
                                 'from the model, averaged '
                                 'over the whole data period\n'
-                                ' - model_uv10: '
-                                'use the ``10-m wind`` provided by the '
-                                'model\n')
+                                ' - ustar_fsr: '
+                                'from friction velocity using the instant '
+                                '``forecast surface roughness`` '
+                                'from the model for each hour\n'
+                                )
                          )
     adv_wea.add_argument('--z0',
                          dest='z0',
