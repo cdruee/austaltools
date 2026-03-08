@@ -52,7 +52,7 @@ class StabiltyClass:
         be taken as they are. True if values shoud be inverted
         i.e. :math:`1/x`. Defaults to False.
     :type tabbed_is_inverse: bool
-    :param reverse_index: False if the numric class index is acsending.
+    :param reverse_index: False if the numeric class index is acsending.
         True if it is decending. Defaults to False.
     :type reverse_index:
     :param names: Names of the stability classes. Must be same lenght
@@ -189,9 +189,9 @@ class StabiltyClass:
     def _bounds2centers(self) -> None:
         # calculate center values if bounds values are defined
         bz0, bil = self._bounds[0]
-        lbounds = [[bz0, [1. / 9999. for x in bil]], ] + self._bounds[:-1]
+        lbounds = [[bz0, [1. / 9999. for x in bil]], ] + self._bounds
         bz0, bil = self._bounds[-1]
-        rbounds = self._bounds[1:] + [[bz0, [1. / 9999. for x in bil]], ]
+        rbounds = self._bounds + [[bz0, [1. / 9999. for x in bil]], ]
 
         self._centers = []
         for lb, rb in zip(lbounds, rbounds):
@@ -220,9 +220,11 @@ class StabiltyClass:
                     inverse: bool = False) -> float:
         """
         get the upper boundary value of Obukhov lentgh :math:`L` for the
-        class with index `num` for roughness length `z0`.
+        class with number `num` for roughness length `z0`.
 
-        :param cls: class (name or index)
+        Note: there is no such value for the class with the highest number.
+
+        :param cls: class name or number (1-based)
         :type num: int|str
         :param z0: roughness length in m
         :type z0: float
@@ -234,12 +236,14 @@ class StabiltyClass:
         """
 
         if isinstance(cls, str):
-            num = self.name2index(cls)
+            num = self.name2num(cls)
+            if num == self.count:
+                raise ValueError('no upper boundary for highest class #%i' % num)
         else:
             num = int(cls)
-            if num not in range(self.count):
+            if num not in range(1, self.count):
                 raise ValueError('no class number #%i' % int(num))
-        zeta = self._getval(z0, self._bounds[num])
+        zeta = self._getval(z0, self._bounds[num - 1])
         if inverse:
             return zeta
         else:
@@ -249,9 +253,9 @@ class StabiltyClass:
                      inverse: bool = False) -> float:
         """
         get the center value of Obukhov lentgh :math:`L` for the
-        class with index `num` for roughness length `z0`.
+        class with number `num` for roughness length `z0`.
 
-        :param cls: class (name or index)
+        :param cls: class name or number (1-based)
         :type num: int|str
         :param z0: roughness length in m
         :type z0: float
@@ -262,23 +266,23 @@ class StabiltyClass:
         :rtype: float
         """
         if isinstance(cls, str):
-            num = self.name2index(cls)
+            num = self.name2num(cls)
         else:
             num = int(cls)
-            if num not in range(self.count):
+            if num not in range(1, self.count + 1):
                 raise ValueError('no class number #%i' % int(num))
-        zeta = self._getval(z0, self._centers[num])
+        zeta = self._getval(z0, self._centers[num - 1])
         if inverse:
             return zeta
         else:
             return 1 / zeta
 
-    def lookup_index(self,
-                     z0: float | pd.Series,
-                     lob: float | pd.Series,
-                     inverse: bool = False) -> int:
+    def lookup_num(self,
+                   z0: float | pd.Series,
+                   lob: float | pd.Series,
+                   inverse: bool = False) -> int:
         """
-        get the numeric class index for roughness length `z0` and
+        get the numeric class for roughness length `z0` and
         Obukhov lentgh :math:`L`.
 
         :param z0: roughness length in m
@@ -311,7 +315,7 @@ class StabiltyClass:
                 else:
                     zeta = 1. / lob[i]
                 zeta_bounds = [self.class_bound(x, z0[i], inverse=True)
-                    for x in range(self.count - 1)]
+                    for x in range(1, self.count)]
                 cl[i] = 1
                 for zi, zb in enumerate(zeta_bounds):
                     if zb < zeta:
@@ -338,8 +342,8 @@ class StabiltyClass:
         :return: Numeric class index
         :rtype: int
         """
-        return self.index2name(
-            self.lookup_index(z0, lob, inverse=inverse))
+        return self.num2name(
+            self.lookup_num(z0, lob, inverse=inverse))
 
     def lookup_austal(self,
                       z0: float | pd.Series,
@@ -359,13 +363,13 @@ class StabiltyClass:
         :return: Numeric class index
         :rtype: int
         """
-        return self.index2austal(
-            self.lookup_index(z0, lob, inverse=inverse))
+        return self.num2austal(
+            self.lookup_num(z0, lob, inverse=inverse))
 
 
-    def index2name(self, num: int) -> str:
+    def num2name(self, num: int) -> str:
         """
-        get the class name for numeric class index
+        get the class name for numeric class
 
         :param num: numeric class index
         :type num: int | list | pd.Series[int]
@@ -384,9 +388,9 @@ class StabiltyClass:
         else:
             return res
 
-    def index2austal(self, num: int) -> int | Series:
+    def num2austal(self, num: int) -> int | Series:
         """
-        get the AUSTAL numeric class for numeric class index
+        get the AUSTAL numeric class for numeric class
 
         :param num: numeric class index
         :type num: int | list | pd.Series[int]
@@ -408,9 +412,9 @@ class StabiltyClass:
         else:
             return res
 
-    def name2index(self, name: str | list | pd.Series) -> int | pd.Series:
+    def name2num(self, name: str | list | pd.Series) -> int | pd.Series:
         """
-        Get the numeric class index for a class name.
+        Get the numeric class for a class name.
 
         :param name: class name(s)
         :type name: str | list | pd.Series
@@ -438,8 +442,8 @@ class StabiltyClass:
         :return: numeric class index
         :rtype: int | pd.Series
         """
-        idx = self.name2index(name)
-        return self.index2austal(idx)
+        idx = self.name2num(name)
+        return self.num2austal(idx)
 
 
 # ----------------------------------------------------
