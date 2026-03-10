@@ -809,10 +809,17 @@ def klug_manier_scheme_1992(
         logger.warning('Klug-Manier scheme is made for Central Europe, only.')
 
     logger.debug('klug_manier_scheme_1992 ---> %19s ...' % (time[0]))
-    # Einlesen
-    monat = pd.Series([x.month for x in time], index=time)
+
+    # The correction rules (a, b, and the day/night boundary)
+    # compare against hardcoded CET clock hours
+    # therefore wee need to determine monat and stund from time in CET:
+    if time.tz is None:
+        time_cet = time.tz_localize('Etc/GMT-1')
+    else:
+        time_cet = time.tz_convert('Etc/GMT-1')   # Etc/GMT-1 = fixed UTC+1, no DST
+    monat = pd.Series([x.month for x in time_cet], index=time)
     stund = pd.Series([(float(x.hour) + float(x.minute) / 60.)
-                       for x in time], index=time)
+                       for x in time_cet], index=time)
 
     # auf/unter UTC
     s_auf, _, s_unter = m.radiation.fast_rise_transit_set(time, lat, lon)
@@ -1275,10 +1282,16 @@ def klug_manier_scheme_2017(
 
     logger.debug('klug_manier_scheme_2017 ---> %19s ...' % (time[0]))
 
-    # Einlesen
-    monat = pd.Series([x.month for x in time], index=time)
+    # The correction rules (a, b, and the day/night boundary)
+    # compare against hardcoded CET clock hours
+    # therefore wee need to determine monat and stund from time in CET:
+    if time.tz is None:
+        time_cet = time.tz_localize('Etc/GMT-1')
+    else:
+        time_cet = time.tz_convert('Etc/GMT-1')   # Etc/GMT-1 = fixed UTC+1, no DST
+    monat = pd.Series([x.month for x in time_cet], index=time)
     stund = pd.Series([(float(x.hour) + float(x.minute) / 60.)
-                       for x in time], index=time)
+                       for x in time_cet], index=time)
 
     # Sunrise and sunset times are to be quoted in the
     # relevant zonetime. For Germany, CET should be
@@ -1289,7 +1302,15 @@ def klug_manier_scheme_2017(
     # termined in accordance with VDI 3789; further
     # information on calculating sunrise and sunset times
     # can be found in Annex A.
-    sr, ss = vdi_3872_6_sun_rise_set(time, lat, lon)
+    # Pass time_cet so that sr/ss are returned in CET hours, consistent
+    # with stund.  vdi_3872_6_sun_rise_set converts its output back to the
+    # caller's timezone, so it must receive the same CET index that stund
+    # was built from.
+    sr, ss = vdi_3872_6_sun_rise_set(time_cet, lat, lon)
+    # vdi_3872_6_sun_rise_set returns Series indexed on its input (time_cet);
+    # reset to the original time index so all Series remain aligned.
+    sr = pd.Series(sr.values, index=time)
+    ss = pd.Series(ss.values, index=time)
     if np.min(ss - sr) < 5:
         raise ValueError('scheme only defined where day length > 5h')
     for i, x, y in zip(stund, sr, ss):
