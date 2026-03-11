@@ -1326,9 +1326,11 @@ def get_dwd_weather(lat: float, lon: float, year:int,
     elif len(df.index) < 0.90 * 24 * 366:
         logger.warning((f"Year {year} not fully covered by data "
                         f"from #{station} ({nam})"))
+    df.index.name = 'time'
     #
     # rename / convert units
     data = pd.DataFrame(index=df.index)
+    data['time'] = data.index
     # wind direction 990 means "undetermined"/"umlaufender Wind"
     data['dd'] = df['D'].mask(df['D'] == 990., np.nan)  # deg
     # ensure constant aneomener height
