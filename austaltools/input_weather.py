@@ -524,19 +524,26 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
     #
     #   Therefore: u10 = u*/k * ln(z/z0)
     if wind_variant == 'model_uv10':
+        ha = 10.  # m
+        z0 = 0.03  # m
+        values['fsr'] = z0  # m
         values['ff'] = np.sqrt(values['u10'] ** 2 +
                                values['v10'] ** 2)  # m/s
     elif wind_variant == 'ustar_wmo':
+        ha = 10.  # m
         z0 = 0.03  # m
         values['fsr'] = z0  # m
         values['ff'] = (values['zust'] / kappa *
-                        np.log((10. + 7. * z0) / z0))  # m/s
+                        np.log(ha / z0))  # m/s
     elif wind_variant == 'ustar_z0':
         z0 = np.nanmean(values['fsr'])  # m
+        ha = 10. + 7. * z0  # m
         values['fsr'] = z0  # m
         values['ff'] = (values['zust'] / kappa *
-                        np.log((10. + 7. * z0) / z0))  # m/s
+                        np.log(ha / z0))  # m/s
     elif wind_variant == 'ustar_fsr':
+        ha = np.nanmean(10. + 7. * values['fsr'])  # m
+        z0 = np.nanmean(values['fsr'])  # m
         values['ff'] = (values['zust'] / kappa *
                         np.log((10. + 7. * values['fsr']) /
                                values['fsr']))  # m/s
@@ -546,7 +553,7 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
     values['dd'] = np.rad2deg(np.arctan2((-values['u10']),
                                          (-values['v10'])))  # deg
 
-    return values
+    return values, z0, ha
 
 # ----------------------------------------------------
 
@@ -601,7 +608,7 @@ def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
         datafile = os.path.join(ds.path, ds.file_data)
     logging.info('reading data from; %s' % datafile)
 
-    v = read_era5_nc(datafile, lat, lon, wind_variant)
+    v, z0, ha = read_era5_nc(datafile, lat, lon, wind_variant)
     v.index = v['time']
     v.sort_index(inplace=True)
 
@@ -611,7 +618,7 @@ def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
     else:
         v['lmcc'] = v['lcc']  # 1
 
-    z0 = v['fsr'].mean()
+    #z0 = v['fsr'].mean()
     logger.info("roughness length: %6f m" % z0)
 
     res = v.filter(['time',  # UTC
@@ -627,11 +634,11 @@ def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
                     ])
     logger.debug("got: %s" % res.keys())
     logger.debug("z0 : %s" % z0)
-    return res, z0
+    return res, z0, ha
 
 
 # ----------------------------------------------------
-def read_cerra_nc(ncfile, lat, lon):
+def read_cerra_nc(ncfile, lat, lon, wind_variant=None):
     """
     Read a CERRA NetCDF file and interpolate variables to a given
     position (lat, lon), converting units where necessary and
@@ -714,7 +721,10 @@ def read_cerra_nc(ncfile, lat, lon):
         Missing optional variables are skipped with a warning.
 
 
-   """
+    """
+    if wind_variant is None:
+        wind_variant = DEFAULT_WIND_VARIANT
+
     _VAR_NEEDED = [['wdir10','10wdir'], ['si10', '10si'],
                    ['r2', '2r'], ['t2m', '2t'], 'lcc',
                    'mcc', 'tisemf', 'tisnmf', 'slhf', 'sp',
@@ -882,7 +892,42 @@ def read_cerra_nc(ncfile, lat, lon):
         np.sqrt(values['tisemf'] ** 2 + values['tisnmf'] ** 2) / rho
     )
     values.drop(['tisemf', 'tisnmf'], axis=1)
+
+    # ECMWF's standard "10m wind components" - surface parameters - differ
+    # fundamentally from wind components on the lowest model levels,
+    # even if those are nominally at 10m.  These "10m wind components" are
+    # diagnostic quantities generally computed not by using the roughness
+    # length of the tile itself, but instead assuming a roughness length
+    # for short grass (=0.03m), the surface over which (by WMO convention)
+    # winds should be measured.
     #
+    if wind_variant == 'model_uv10':
+        ha = 10.  # m
+        z0 = 0.03  # m
+        # keep ff as is
+        pass
+    elif wind_variant == 'ustar_wmo':
+        ha = 10.  # m
+        z0 = 0.03  # m
+        values['fsr'] = z0  # m
+        values['ff'] = (values['zust'] / kappa *
+                        np.log(ha / z0))  # m/s
+    elif wind_variant == 'ustar_z0':
+        z0 = np.nanmean(values['fsr'])  # m
+        ha = 10. + 7. * z0  # m
+        values['fsr'] = z0  # m
+        values['ff'] = (values['zust'] / kappa *
+                        np.log(ha / z0))  # m/s
+    elif wind_variant == 'ustar_fsr':
+        ha = np.nanmean(10. + 7. * values['fsr'])  # m
+        z0 = np.nanmean(values['fsr'])  # m
+        values['ff'] = (values['zust'] / kappa *
+                        np.log((10. + 7. * values['fsr']) /
+                               values['fsr']))  # m/s
+    else:
+        raise ValueError('unknown wind variant: %s' % wind_variant)
+    logging.info('wind variant: %s' % wind_variant)
+
     # convert wind back into speed and direction
     values['ff'], values['dd'] = m.wind.uv2dir(
         values['u10'], values['v10'])
@@ -904,7 +949,7 @@ def read_cerra_nc(ncfile, lat, lon):
                                for c in values.columns})
         values = pd.concat([pd.DataFrame(first_rows), values],
                            ignore_index=True)
-    return values
+    return values, z0, ha
 
 # ----------------------------------------------------
 
@@ -955,7 +1000,7 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
         datafile = os.path.join(ds.path, ds.file_data)
     logging.info('reading data from; %s' % datafile)
 
-    v = read_cerra_nc(datafile, lat, lon)
+    v, z0, ha = read_cerra_nc(datafile, lat, lon)
     v.index = v['time']
     v.sort_index(inplace=True)
 
@@ -965,7 +1010,6 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
     else:
         v['lmcc'] = v['lcc']  # 1
 
-    z0 = v['fsr'].mean()
     logger.info("roughness length: %6f m" % z0)
 
     res = v.filter(['time',  # UTC
@@ -981,7 +1025,7 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
                     ])
     logger.debug("got: %s" % res.keys())
     logger.debug("z0 : %s" % z0)
-    return res, z0
+    return res, z0, ha
 
 # ----------------------------------------------------
 
@@ -1188,6 +1232,7 @@ def get_hostrada_weather(lat, lon, year, datafile=None) \
     if z0 is None:
         logger.error(f'cannot get any roughness length')
 
+    ha = 10.  # m  #FIXME
 
     res = v.filter(['time',  # UTC
                     'ff',  # m/s
@@ -1200,7 +1245,7 @@ def get_hostrada_weather(lat, lon, year, datafile=None) \
     logger.debug("got: %s" % res.keys())
     logger.debug("z0 : %s" % z0)
 
-    return res, z0
+    return res, z0, ha
 
 # ----------------------------------------------------
 
@@ -1259,7 +1304,7 @@ def get_dwd_weather(lat: float, lon: float, year:int,
             station = si.nearest(lat, lon)
             logger.debug(f"nearest station is #{station}")
         nam = si.name(station)
-        z0 = si.roughness(station)
+        z0 = float(si.roughness(station))
     logger.info(f"selected station: {nam}")
     logger.info(f"roughness length: {z0}")
 
@@ -1286,12 +1331,25 @@ def get_dwd_weather(lat: float, lon: float, year:int,
     data = pd.DataFrame(index=df.index)
     # wind direction 990 means "undetermined"/"umlaufender Wind"
     data['dd'] = df['D'].mask(df['D'] == 990., np.nan)  # deg
-    data['ff'] = _windutil.roughness_correction(
-        df['F'],  # m/s
-        df['windgeschwindigkeit_geberhoehe ueber grund [m]'],  # m
-        z0,  # m
-        method='wmo'
-    )  # m/s
+    # ensure constant aneomener height
+    ha_column = 'windgeschwindigkeit_geberhoehe ueber grund [m]'
+    ha_values = set(list(df[ha_column]))
+    if len(ha_values) == 1:
+        # if anemometer height was constant:
+        # return measured wind, and true ha and z0
+        data['ff'] = df['F']
+        ha = list(ha_values)[0]
+    else:
+        # if anemometer height changed during the time period:
+        # wind is corrected to WMO standard height an roughness
+        data['ff'] = _windutil.roughness_correction(
+            df['F'],  # m/s
+            df['windgeschwindigkeit_geberhoehe ueber grund [m]'],  # m
+            z0,  # m
+            method='wmo'
+        )  # m/s  (now as measured at z=10m and z0=0.03m)
+        z0 = 0.03
+        ha = 10
     data['sp'] = df['P0'] * 100.  # hPa -> Pa
     data['t2m'] = df['TT_TU']  # °C
     data['r2m'] = df['RF_TU'] / 100.  # % -> 1
@@ -1317,7 +1375,7 @@ def get_dwd_weather(lat: float, lon: float, year:int,
 
     logger.debug("got: %s" % data.keys())
     logger.debug("z0 : %s" % z0)
-    return data, z0
+    return data, z0, ha
 
 # -------------------------------------------------------------------------
 def austal_weather(args):
@@ -1367,11 +1425,11 @@ def austal_weather(args):
         source = args['source']
         if source == "ERA5":
             wind_variant = args.get('wind-variant', None)
-            obs, z0 = get_era5_weather(lat, lon, year, wind_variant)
+            obs, z0, ha = get_era5_weather(lat, lon, year, wind_variant)
         elif source == "CERRA":
-            obs, z0 = get_cerra_weather(lat, lon, year)
+            obs, z0, ha = get_cerra_weather(lat, lon, year)
         elif source == "HOSTRADA":
-            obs, z0 = get_hostrada_weather(lat, lon, year)
+            obs, z0, ha = get_hostrada_weather(lat, lon, year)
             if z0 is None and args.get('z0, None') is None:
                 raise RuntimeError(f'cannot determine roughness lenght '
                                    f'automatically.\n'
@@ -1382,7 +1440,7 @@ def austal_weather(args):
                 raise ValueError(f"source {source} not available")
             path = _datasets.dataset_get(source).path
             datafile = os.path.join(path, _datasets.OBS_FMT % source)
-            obs, z0 = get_dwd_weather(lat, lon, year, stat_no,
+            obs, z0, ha = get_dwd_weather(lat, lon, year, stat_no,
                                       datafile=datafile)
         else:
             raise ValueError("source not implemented: %s" % source)
@@ -1407,8 +1465,8 @@ def austal_weather(args):
     logger.debug("lat: %s, lon: %s" % (lat, lon))
     logger.debug("elevation: %s" % (ele))
 
-    if args.get('write-extracted', False):
-        csv_name = 'extracted_weather.csv'
+    if args.get('write-extracted', None):
+        csv_name = args.get('write-extracted', 'extracted_weather.csv')
         logger.info('writing raw weather data to: %s' % csv_name)
         with open(csv_name, 'w') as f:
             f.write('# %.4f %.4f %.1f %.3f %s, %s\n' %
@@ -1422,7 +1480,7 @@ def austal_weather(args):
     # 10-m wind speed for the correct roughness length
     logger.debug('v10')
     obs['v10'] = dis.vdi_3872_6_standard_wind(obs['ff'],
-                                              hap=10.0 + 7. * z0,
+                                              hap=ha,
                                               z0p=z0)
 
     # air density
@@ -1695,10 +1753,16 @@ def add_options(subparsers):
                               'data form a saved file. '
                               )
     adv_wea.add_argument('-x', '--write-extracted',
-                          dest='write-extracted',
-                          action='store_true',
-                          help='write full extracted weather data '
-                               'to an extra file')
+                         dest='write-extracted',
+                         nargs='?',
+                         # -x with no filename:
+                         const='extracted_weather.csv',
+                         # -x not given at all:
+                         default=None,
+                         metavar='FILE',
+                         help='write full extracted weather data '
+                              'to an extra file. '
+                              'Optional FILE name [%(const)s]')
     adv_wea.add_argument('--wind-variant',
                           dest=DEFAULT_WIND_VARIANT,
                           choices=['model_uv10', 'ustar_wmo',
