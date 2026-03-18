@@ -47,7 +47,7 @@ def expected_files(output):
     result = []
     for s in ['era5', 'dwd']:
         for y in range(2000, 2020):
-            for m in ['kms', 'kmo', 'k2o', 'pts', 'kmc', 'pgc']:
+            for m in ['kms', 'kmo', 'k2s', 'pts', 'kmc', 'pgc']:
                 result.append("%s_%s_%04i_%s.%s" %
                               (s, output, y, m, EXTENSION))
     return result

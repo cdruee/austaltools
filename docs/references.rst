@@ -64,6 +64,12 @@ References
     Methods for licensing procedures according to TA Luft.
     VDI/DIN-Kommission Reinhaltung der Luft (KRdL) - Normenausschuss (Ed.),
     Verein Deutscher Ingenieure, Düsseldorf, Germany
+.. [VDI3783p20] VDI (2017)
+    VDI 3783 part 20:
+    Environmental meteorology – Testing the transferability of meteorological
+    data for application within the context of TA Luft.
+    VDI/DIN-Kommission Reinhaltung der Luft (KRdL) - Normenausschuss (Ed.),
+    Verein Deutscher Ingenieure, Düsseldorf, Germany
 .. [WMO8] WMO (2017)
     Guide to Meteorological Instruments and Methods of Observation.
     WMO-No. 8, World Meteorological Organization, Geneva, Switzerland,
