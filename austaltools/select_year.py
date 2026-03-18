@@ -32,23 +32,24 @@ logger = logging.getLogger(__name__)
 def _classify_direction(dd: pd.Series, n_sectors: int = 12) -> pd.Series:
     """Classify wind direction into n_sectors equidistant 30° sectors (0-based)."""
     sector_width = 360.0 / n_sectors
-    return (((dd + sector_width / 2.0) % 360) // sector_width).astype(int)
+    class_no = (((dd + sector_width / 2.0) % 360) // sector_width)
+    return class_no.mask(np.isnan(class_no), -1).astype(int)
 
 # ---------------------------------------------------------------------------
 
 def _classify_speed(ff: pd.Series, edges: np.ndarray) -> pd.Series:
-    """Classify wind speed into bins defined by edges (right-open last bin)."""
-    return pd.Series(
-        np.searchsorted(edges[1:], ff.values, side="right"),
-        index=ff.index,
-        dtype=int,
-    )
+    nan_mask = ff.isna()
+    raw = np.searchsorted(edges[1:], ff.fillna(0).values, side="right")
+    class_no = pd.Series(raw, index=ff.index, dtype=int)
+    class_no[nan_mask] = -1
+    return class_no
 
 # ---------------------------------------------------------------------------
 
 def _classify_km(km: pd.Series) -> pd.Series:
-    """KM stability classes are already integers 1-6; use as-is."""
-    return km.astype(int)
+    nan_mask = km.isna()
+    class_no = km.fillna(-1).astype(int)
+    return class_no
 
 # ---------------------------------------------------------------------------
 
@@ -173,7 +174,7 @@ def method_A(
         ((hour >= nocturnal_hours[0]) | (hour < nocturnal_hours[1]))
         & (df["FF"] <= weak_wind_threshold)
     )
-    dir_sec_noc = dir_sec[noc_mask]
+    dir_sec_noc = dir_sec[noc_mask & (dir_sec >= 0)]
 
     # ------------------------------------------------------------------
     # 2. Multi-year MEAN absolute and relative frequencies per class
@@ -211,6 +212,8 @@ def method_A(
         Mx_rel  = Mx_abs / total_h if total_h > 0 else Mx_abs * 0
         return Mx_abs, Mx_rel, sigma
 
+    # values in the classification timeseries that are -1
+    # are disregarded since -1 is not included in *_classes
     Mx_dir_abs,   Mx_dir_rel,   sigma_dir   = _multiyear_stats(dir_sec,     dir_classes)
     Mx_noc_abs,   Mx_noc_rel,   sigma_noc   = _multiyear_stats_noc(dir_classes)
     Mx_spd_abs,   Mx_spd_rel,   sigma_spd   = _multiyear_stats(spd_sec,     speed_classes)
@@ -234,6 +237,8 @@ def method_A(
     for yr in years:
         mask_yr = df.index.year == yr
 
+        # values in the classification timeseries that are -1
+        # are disregarded since -1 is not included in *_classes
         x_dir = _freq_abs(dir_sec[mask_yr],                            dir_classes)
         x_noc = _freq_abs(dir_sec_noc[dir_sec_noc.index.year == yr],   dir_classes)
         x_spd = _freq_abs(spd_sec[mask_yr],                            speed_classes)
@@ -397,10 +402,6 @@ def method_B(
     # Wind direction: 12 sectors of 30° each, centred so that sector 1
     # covers 345°–15° (i.e. "North"), consistent with meteorological practice.
     # We shift DD by half a sector width before flooring.
-    sector_width = 360.0 / n_dir_sectors
-    half = sector_width / 2.0
-    dir_sector = (((df["DD"] + half) % 360) // sector_width).astype(int)
-    # labels 0 … n_dir_sectors-1
 
     # Wind speed: equidistant or user-supplied classes
     if speed_classes is None:
@@ -409,9 +410,9 @@ def method_B(
     else:
         edges = np.array([0.0] + list(speed_classes))
 
-    speed_sector = np.searchsorted(edges[1:], df["FF"].values, side="right")
-    # labels 0 … len(edges)-2  (last bin catches everything ≥ last edge)
-    speed_sector = pd.Series(speed_sector, index=df.index)
+    # keep full index, -1 values are simply absent from the valid classes range
+    dir_sector = _classify_direction(df["DD"], n_dir_sectors)
+    speed_sector = _classify_speed(df["FF"], edges)
 
     n_dir_classes = n_dir_sectors
     n_spd_classes = len(edges) - 1
@@ -419,15 +420,15 @@ def method_B(
     # ------------------------------------------------------------------
     # 2.  Multi-year (total) relative frequencies  x_{i,j,rel}
     # ------------------------------------------------------------------
-    total_hours = len(df)
-
     freq_dir_total = (
-        dir_sector.value_counts().reindex(range(n_dir_classes), fill_value=0)
-        / total_hours
+            dir_sector.value_counts()
+            .reindex(range(n_dir_classes), fill_value=0)
+            / (dir_sector >= 0).sum()  # denominator = valid hours only
     )
     freq_spd_total = (
-        speed_sector.value_counts().reindex(range(n_spd_classes), fill_value=0)
-        / total_hours
+            speed_sector.value_counts()
+            .reindex(range(n_spd_classes), fill_value=0)
+            / (speed_sector >= 0).sum()
     )
 
     # ------------------------------------------------------------------
@@ -439,17 +440,18 @@ def method_B(
 
     for yr in years:
         mask = df.index.year == yr
-        n_yr = mask.sum()
+        n_yr_valid_dir = (dir_sector[mask] >= 0).sum()
+        n_yr_valid_spd = (speed_sector[mask] >= 0).sum()
 
         freq_dir_yr = (
-            dir_sector[mask].value_counts()
-            .reindex(range(n_dir_classes), fill_value=0)
-            / n_yr
+                dir_sector[mask].value_counts()
+                .reindex(range(n_dir_classes), fill_value=0)
+                / n_yr_valid_dir
         )
         freq_spd_yr = (
-            speed_sector[mask].value_counts()
-            .reindex(range(n_spd_classes), fill_value=0)
-            / n_yr
+                speed_sector[mask].value_counts()
+                .reindex(range(n_spd_classes), fill_value=0)
+                / n_yr_valid_spd
         )
 
         # Eq. A5:  A_{i,n} = Σ_j ( x_{i,j,rel} − x_{i,j,n,rel} )²
