@@ -492,6 +492,130 @@ def method_B(
 
     return representative_year, ranking
 
+
+# -------------------------------------------------------------------------
+
+def method_T(
+        df: pd.DataFrame,
+        temp_col: str = "T",
+) -> tuple[int, pd.DataFrame]:
+    """
+    Select a representative year from a multi-year hourly (or sub-daily)
+    meteorological time series based on temperature alone.
+
+    Algorithm
+    ---------
+    1. Compute daily mean temperature for every day in the record.
+    2. Build a mean annual cycle: for each day-of-year (1–366) average the
+       daily means across all years.
+    3. For each individual year n compute three scores against the mean
+       annual cycle (MAC):
+
+       bias_n  = mean  (T_day - MAC_doy)              … systematic offset
+       rms_n   = rms   ((T_day-bias_n) - MAC_doy)     … day-by-day scatter
+       rms_m_n = rms   ((T_month-bias_n) - MAC_month) … monthly-mean scatter
+                 where T_month     = mean of daily means per calendar month
+                       MAC_month   = mean of MAC values for that month
+
+    4. Rank years by
+       score_n = |bias_n| + |rms_n - min(rms_n)| + |rms_m_n - min(rms_m_n)|
+       (ascending).
+
+       The year with the smallest score is the representative year.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DatetimeIndex (hourly or finer), column *temp_col* with air
+        temperature in °C (or K – unit does not matter).
+    temp_col : str
+        Name of the temperature column (default ``'T'``).
+
+    Returns
+    -------
+    (representative_year, ranking)
+        representative_year – int
+        ranking             – DataFrame indexed by year, columns
+                              ``bias``, ``rms_daily``, ``rms_monthly``,
+                              ``score``, sorted ascending by ``score``.
+    """
+    df = df.copy()
+    df.index = pd.to_datetime(df.index)
+
+    if temp_col not in df.columns:
+        raise KeyError(
+            f"Temperature column '{temp_col}' not found in DataFrame. "
+            f"Available columns: {list(df.columns)}")
+
+    # ------------------------------------------------------------------
+    # 1. Daily means
+    # ------------------------------------------------------------------
+    daily = (
+        df[temp_col]
+        .resample("D")
+        .mean()  # NaN days if all values were NaN → handled below
+    )
+    daily = daily.dropna()
+
+    daily_df = pd.DataFrame({
+        "T": daily,
+        "year": daily.index.year,
+        "doy": daily.index.day_of_year,
+        "month": daily.index.month,
+    })
+
+    years = sorted(daily_df["year"].unique())
+
+    # ------------------------------------------------------------------
+    # 2. Mean annual cycle  (average over all years per DOY)
+    # ------------------------------------------------------------------
+    mac = daily_df.groupby("doy")[
+        "T"].mean()  # Series indexed by DOY 1-366
+
+    # ------------------------------------------------------------------
+    # 3 & 4. Per-year scores
+    # ------------------------------------------------------------------
+    records = {}
+    for yr in years:
+        yr_df = daily_df[daily_df["year"] == yr].copy()
+        yr_df["mac"] = yr_df["doy"].map(mac)
+
+        diff = yr_df["T"] - yr_df["mac"]
+
+        # (2) mean bias
+        bias = float(diff.mean())
+
+        # (3) RMS of daily residuals
+        rms_daily = float(np.sqrt(((diff - bias) ** 2).mean()))
+
+        # (4) RMS of monthly-mean residuals
+        monthly_T = yr_df.groupby("month")["T"].mean()
+        # MAC monthly mean: average MAC values for days that fall in each
+        # month of *this* year (accounts for leap-year Feb correctly)
+        monthly_mac = yr_df.groupby("month")["mac"].mean()
+        monthly_diff = monthly_T - monthly_mac - bias
+        rms_monthly = float(np.sqrt((monthly_diff ** 2).mean()))
+
+
+        records[yr] = {
+            "bias": round(bias, 4),
+            "rms_daily": round(rms_daily, 4),
+            "rms_monthly": round(rms_monthly, 4),
+        }
+
+    ranking = pd.DataFrame.from_dict(records, orient="index")
+    ranking["score"] = (
+            abs(ranking['bias']) +
+            abs(ranking['rms_daily'] - ranking['rms_daily'].min()) +
+            abs(ranking['rms_monthly'] - ranking['rms_monthly'].min()))
+
+    ranking = ranking.sort_values("score")
+    ranking.index.name = "year"
+
+    representative_year = int(ranking.index[0])
+    return representative_year, ranking
+
+
 # -------------------------------------------------------------------------
 
 def main(args):
@@ -525,6 +649,8 @@ def main(args):
         method = 'a'
     elif method.lower() in ['b', 'timeseries']:
         method = 'b'
+    elif method.lower() in ['t', 'temperature']:
+        method = 't'
     else:
         raise ValueError(f"unknown method: {str(method)}")
 
@@ -564,10 +690,14 @@ def main(args):
     if method == 'a':
         selected_year, ranking_chi2, ranking_sigma = method_A(df)
         rankings=[ranking_chi2, ranking_sigma]
-    else:
+    elif method == 'b':
         selected_year, ranking = method_B(df)
+        rankings = [ranking]
+    elif method == 't':
+        selected_year, ranking = method_T(df)
         rankings=[ranking]
-
+    else:
+        raise RuntimeError(f"unknown method: {str(method)}")
 
     print("---------------------")
     print(f"selected year: {selected_year}")
@@ -594,7 +724,8 @@ def add_options(subparsers):
     pars_syr = _tools.add_location_opts(pars_syr, stations=True)
     pars_syr.add_argument('-m', '--method',
                           dest='method',
-                          choices=['a', 'akjahr', 'b', 'timeseries'],
+                          choices=['a', 'akjahr', 'b', 'timeseries',
+                                   't', 'temperature'],
                           default='b',
                           help="Method for selecting a representative"
                                "year:\n"
@@ -602,6 +733,8 @@ def add_options(subparsers):
                                " ($\Chi^2$ and $\sigma$ environment)\n"
                                "`b`/`timeseries`: method ``B``"
                                " (from meteorological timesries)\n"
+                               "`t`/`temperature`: method ``T`` "
+                               "(representative year by temperature cycle)\n"
                                "Defaults to [%(default)]")
     pars_syr.add_argument('-s', '--source',
                         metavar="CODE",

@@ -1655,6 +1655,10 @@ def austal_weather(args, return_data_frame: bool = False):
                 ak = readmet.akterm.DataFile(data=df, z0=z0)
             if return_data_frame:
                 response = df
+                if 't2m' in data.columns:
+                    response['T'] = data['t2m']
+                else:
+                    response['T'] = np.nan
             else:
                 outname = ('{:s}_{:s}_{:04d}_'.format(
                     _tools.slugify(source),
