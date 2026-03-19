@@ -1,14 +1,28 @@
 #!/bin/env python3
 # -*- coding: utf-8 -*-
 """
-This module implements the selection of a
-representative year according to
-VDI 3783 Part 20 [VDI3783p20]_ .
+Selection of a representative year from a multi-year meteorological
+time series, following VDI 3783 Part 20 [VDI3783p20]_.
 
-``representative year`` is defined as
-twelve-month period (typically a calendar year)
-which represents optimally the mean wind conditions
-of a multiyear period at a measuring station.
+A *representative year* is a twelve-month period
+(typically a calendar year) that best represents the
+mean meteorological conditions of a
+multi-year period at a measuring station.
+
+Three methods are provided:
+
+* :func:`method_A` – AKJahr
+  (:math:`\\chi^2` and :math:`\\sigma`-environment,
+  VDI 3783 Part 20, Annex A3.1).
+  For Details see see :func:`austaltools.select_year.method_A`
+* :func:`method_B` – selection from meteorological time series
+  (VDI 3783 Part 20, Annex A3.2).
+  For Details see see :func:`austaltools.select_year.method_B`
+* :func:`method_T` – selection based on temperature
+  annual cycle.
+  This is an extra method to find years that were not
+  exeptionally warm or cold in parst or as a whole.
+
 """
 import logging
 import os
@@ -25,12 +39,27 @@ from . import input_weather
 
 logger = logging.getLogger(__name__)
 
+SELECT_YEAR_PICKLE = 'select_year.pkl'
+
 
 # ---------------------------------------------------------------------------
 # helpers
 
 def _classify_direction(dd: pd.Series, n_sectors: int = 12) -> pd.Series:
-    """Classify wind direction into n_sectors equidistant 30° sectors (0-based)."""
+    """
+    Classify wind direction into equidistant sectors (0-based).
+
+    Each sector has width :math:`360° / n_{\\text{sectors}}`.  Sector 0 is
+    centred on North (0°).  ``NaN`` values are mapped to ``-1`` and are
+    therefore absent from any ``range(n_sectors)`` reindex.
+
+    :param dd: Wind direction in degrees (0–360).
+    :type dd: pandas.Series
+    :param n_sectors: Number of sectors (default 12 → 30° each).
+    :type n_sectors: int
+    :returns: Integer sector indices; ``-1`` for missing values.
+    :rtype: pandas.Series
+    """
     sector_width = 360.0 / n_sectors
     class_no = (((dd + sector_width / 2.0) % 360) // sector_width)
     return class_no.mask(np.isnan(class_no), -1).astype(int)
@@ -38,6 +67,21 @@ def _classify_direction(dd: pd.Series, n_sectors: int = 12) -> pd.Series:
 # ---------------------------------------------------------------------------
 
 def _classify_speed(ff: pd.Series, edges: np.ndarray) -> pd.Series:
+    """
+    Classify wind speed into bins defined by *edges*.
+
+    Bin *k* covers :math:`\\text{edges}[k] \\le u < \\text{edges}[k+1]`.
+    The last bin is right-open (catches all values above the last edge).
+    ``NaN`` values are mapped to ``-1``.
+
+    :param ff: Wind speed in m/s.
+    :type ff: pandas.Series
+    :param edges: Monotonically increasing bin boundaries including 0 as
+        the first element.
+    :type edges: numpy.ndarray
+    :returns: Integer bin indices (0-based); ``-1`` for missing values.
+    :rtype: pandas.Series
+    """
     nan_mask = ff.isna()
     raw = np.searchsorted(edges[1:], ff.fillna(0).values, side="right")
     class_no = pd.Series(raw, index=ff.index, dtype=int)
@@ -47,6 +91,17 @@ def _classify_speed(ff: pd.Series, edges: np.ndarray) -> pd.Series:
 # ---------------------------------------------------------------------------
 
 def _classify_km(km: pd.Series) -> pd.Series:
+    """
+    Pass through Klug/Manier stability classes (integer 1–6) unchanged.
+
+    ``NaN`` values are mapped to ``-1`` and are therefore absent from any
+    ``range(1, 7)`` reindex.
+
+    :param km: Klug/Manier stability class (1–6).
+    :type km: pandas.Series
+    :returns: Integer stability classes; ``-1`` for missing values.
+    :rtype: pandas.Series
+    """
     nan_mask = km.isna()
     class_no = km.fillna(-1).astype(int)
     return class_no
@@ -54,7 +109,20 @@ def _classify_km(km: pd.Series) -> pd.Series:
 # ---------------------------------------------------------------------------
 
 def _freq_abs(series: pd.Series, classes: range) -> pd.Series:
-    """Absolute frequency (hours) per class."""
+    """
+    Absolute frequency (hours) per class.
+
+    Values not in *classes* (e.g. the sentinel ``-1``) are silently
+    ignored because :pymeth:`pandas.Series.reindex` fills missing keys
+    with zero.
+
+    :param series: Classified integer time series.
+    :type series: pandas.Series
+    :param classes: Expected class labels to include in the output.
+    :type classes: range
+    :returns: Absolute counts indexed by class label.
+    :rtype: pandas.Series
+    """
     return series.value_counts().reindex(classes, fill_value=0).astype(float)
 
 
@@ -66,11 +134,26 @@ def _chi2_term(
     Mx_rel: pd.Series,     # multi-year mean relative freq
 ) -> float:
     """
-    chi² term  (Eq. A1)
-    
-    χ²_i = Σ_j  [(x_{i,j,abs} - Mx_{i,j,abs})² / Mx_{i,j,abs}]  ·  Mx_{i,j,rel}
+    Weighted :math:`\\chi^2` deviation term for one parameter (Eq. A1).
 
-    Classes where Mx_abs == 0 are skipped (undefined).
+    .. math::
+
+        \\chi^2_i = \\sum_{j=1}^{m}
+            \\frac{(x_{i,j,\\mathrm{abs}} - Mx_{i,j,\\mathrm{abs}})^2}
+                  {Mx_{i,j,\\mathrm{abs}}}
+            \\cdot Mx_{i,j,\\mathrm{rel}}
+
+    Classes where :math:`Mx_{i,j,\\mathrm{abs}} = 0` are skipped
+    (undefined denominator).
+
+    :param x_abs: Absolute frequency per class for the individual year.
+    :type x_abs: pandas.Series
+    :param Mx_abs: Multi-year mean absolute frequency per class.
+    :type Mx_abs: pandas.Series
+    :param Mx_rel: Relative share of *Mx_abs* in the total annual hours.
+    :type Mx_rel: pandas.Series
+    :returns: Scalar :math:`\\chi^2_i` value.
+    :rtype: float
     """
     mask = Mx_abs > 0
     diff = x_abs[mask] - Mx_abs[mask]
@@ -85,9 +168,24 @@ def _sigma_hits(
     sigma: pd.Series,      # multi-year std dev
 ) -> int:
     """
-    sigma-environment hit ratio  (Eq. A3 / A4)
+    Count classes inside the :math:`\\sigma`-environment (Eq. A3).
 
-    Number of classes j where  Mx_j - σ_j < x_j < Mx_j + σ_j  (Eq. A3).
+    A class *j* is a *hit* when the individual-year value lies strictly
+    within one standard deviation of the multi-year mean:
+
+    .. math::
+
+        (Mx_{i,j} - \\sigma_{i,j}) < x_{i,j} < (Mx_{i,j} + \\sigma_{i,j})
+
+    :param x: Per-class value for the individual year (absolute or
+        relative frequency).
+    :type x: pandas.Series
+    :param Mx: Multi-year mean per class.
+    :type Mx: pandas.Series
+    :param sigma: Multi-year standard deviation per class.
+    :type sigma: pandas.Series
+    :returns: Number of classes that satisfy Eq. A3.
+    :rtype: int
     """
     inside = (x > (Mx - sigma)) & (x < (Mx + sigma))
     return int(inside.sum())
@@ -111,35 +209,100 @@ def method_A(
     weak_wind_threshold: float = 2.0,             # m/s  (≤ threshold)
 ) -> tuple[int, pd.DataFrame, pd.DataFrame]:
     """
-    Select a representative year from a multi-year hourly meteorological
-    time series following VDI 3783 Part 20, Annex A3.1, Method A (AKJahr).
+    Select a representative year using Method A – AKJahr.
 
-    Parameters
-    ----------
-    df : pd.DataFrame
-        Hourly DatetimeIndex, columns: 'FF' (m/s), 'DD' (°), 'KM' (int 1-6).
-    n_dir_sectors : int
-        Wind-direction sectors (default 12 → 30° each).
-    speed_edges : array-like or None
-        Right bin edges for wind speed classes (m/s).  None → auto.
-    n_speed_classes : int
-        Number of auto speed classes (used only when speed_edges is None).
-    G1_dir, G2_noc, G3_spd, G4_ak : float
-        Parameter weightings for Eq. A2.
-    nocturnal_hours : (int, int)
-        Start and end hour (UTC) of the nocturnal period (default 18–06).
-    weak_wind_threshold : float
-        Wind speed threshold for nocturnal/weak-wind filter (default 2.0 m/s).
+    Implements VDI 3783 Part 20, Annex A3.1.  For each candidate year
+    the method evaluates four parameters against their multi-year means:
 
-    Returns
-    -------
-    dict with keys
-        'representative_year'  – int
-        'ranking_chi2'         – DataFrame sorted by χ² (ascending = best)
-        'ranking_sigma'        – DataFrame sorted by TQ (descending = best)
-        'chi2_by_year'         – Series of total χ² per year
-        'TQ_by_year'           – Series of total hit ratio TQ per year
-        'selection_log'        – list of strings explaining the selection logic
+    * :math:`i=1` – wind-direction distribution (30° sectors)
+    * :math:`i=2` – nocturnal and weak-wind direction distribution
+      (18:00–06:00 UTC, :math:`u \\le u_{\\text{weak}}`)
+    * :math:`i=3` – wind-speed distribution
+    * :math:`i=4` – dispersion-class (Klug/Manier) distribution
+
+    **Weighted** :math:`\\chi^2` **term** (Eq. A1)
+
+    .. math::
+
+        \\chi^2_i = \\sum_{j=1}^{m}
+            \\frac{(x_{i,j,\\mathrm{abs}} - Mx_{i,j,\\mathrm{abs}})^2}
+                  {Mx_{i,j,\\mathrm{abs}}}
+            \\cdot Mx_{i,j,\\mathrm{rel}}
+
+    **Total** :math:`\\chi^2` **(Eq. A2)**
+
+    .. math::
+
+        \\chi^2 = \\sum_{i=1}^{4} \\chi^2_i \\cdot G_i
+
+    with default weightings
+    :math:`G_1 = 0.36,\\; G_2 = 0.15,\\; G_3 = 0.24,\\; G_4 = 0.25`.
+
+    **Sigma-environment hit ratio (Eq. A3 / A4)**
+
+    A class *j* of parameter *i* is a *hit* if
+
+    .. math::
+
+        Mx_{i,j} - \\sigma_{i,j} < x_{i,j} < Mx_{i,j} + \\sigma_{i,j}
+
+    The total hit ratio is
+
+    .. math::
+
+        TQ = \\sum_{i=1}^{4} TQ_i \\cdot G_i
+
+    **Selection criteria (applied in order)**
+
+    a. Rank 1 in :math:`\\chi^2` **and** rank 1 in :math:`TQ`.
+    b. Rank 1 in :math:`\\chi^2` and rank 2 or 3 in :math:`TQ`.
+    c. Rank 2 or 3 in :math:`\\chi^2` and in the top-3 of :math:`TQ`.
+    d. Fallback: best :math:`\\chi^2` among the top-3 :math:`TQ` years.
+
+    :param df: Hourly time series with a :class:`pandas.DatetimeIndex`
+        and columns ``FF`` (wind speed, m/s), ``DD`` (wind direction, °),
+        ``KM`` (Klug/Manier stability class, integer 1–6).
+    :type df: pandas.DataFrame
+    :param n_dir_sectors: Number of equidistant wind-direction sectors.
+        Default 12 (→ 30° each).
+    :type n_dir_sectors: int
+    :param speed_edges: Right bin edges for wind-speed classes (m/s).
+        ``None`` → *n_speed_classes* equidistant classes up to the
+        overall maximum.
+    :type speed_edges: numpy.ndarray or None
+    :param n_speed_classes: Number of auto-generated speed classes;
+        used only when *speed_edges* is ``None``.
+    :type n_speed_classes: int
+    :param G1_dir: Weighting for the wind-direction parameter
+        (:math:`G_1`, default 0.36).
+    :type G1_dir: float
+    :param G2_noc: Weighting for the nocturnal/weak-wind parameter
+        (:math:`G_2`, default 0.15).
+    :type G2_noc: float
+    :param G3_spd: Weighting for the wind-speed parameter
+        (:math:`G_3`, default 0.24).
+    :type G3_spd: float
+    :param G4_ak: Weighting for the dispersion-class parameter
+        (:math:`G_4`, default 0.25).
+    :type G4_ak: float
+    :param nocturnal_hours: ``(start_hour, end_hour)`` UTC defining the
+        nocturnal period (default ``(18, 6)`` → 18:00–06:00 UTC).
+    :type nocturnal_hours: tuple[int, int]
+    :param weak_wind_threshold: Upper wind-speed limit (m/s, inclusive)
+        for the nocturnal/weak-wind filter (default 2.0 m/s).
+    :type weak_wind_threshold: float
+    :returns: A 3-tuple ``(representative_year, ranking_chi2,
+        ranking_sigma)`` where
+
+        * *representative_year* – selected calendar year (int)
+        * *ranking_chi2* – :class:`pandas.DataFrame` indexed by year,
+          sorted ascending by ``chi2_total`` (lower is better), with
+          per-parameter and total :math:`\\chi^2` columns
+        * *ranking_sigma* – :class:`pandas.DataFrame` indexed by year,
+          sorted descending by ``TQ_total`` (higher is better), with
+          per-parameter and total :math:`TQ` columns
+
+    :rtype: tuple[int, pandas.DataFrame, pandas.DataFrame]
     """
     df = df.copy()
     df.index = pd.to_datetime(df.index)
@@ -183,10 +346,16 @@ def method_A(
 
     def _multiyear_stats(series: pd.Series, classes) -> tuple[pd.Series, pd.Series, pd.Series]:
         """
-        Returns (Mx_abs, Mx_rel, sigma_abs) over all years.
-        Mx_abs  = mean absolute frequency (h/yr) per class
-        Mx_rel  = relative share of Mx_abs in total annual hours
-        sigma   = std dev of absolute freq across years
+        Compute multi-year mean, relative frequency, and standard deviation.
+
+        Values equal to ``-1`` (NaN sentinel) are excluded because they
+        are absent from *classes*.
+
+        :returns: ``(Mx_abs, Mx_rel, sigma)`` where
+
+            * *Mx_abs* – mean absolute frequency (h/yr) per class
+            * *Mx_rel* – :math:`Mx_{\\mathrm{abs}} / \\sum Mx_{\\mathrm{abs}}`
+            * *sigma*  – sample standard deviation across years (ddof=1)
         """
         yearly = pd.DataFrame(
             {yr: _freq_abs(series[df.index.year == yr] if series is not dir_sec_noc
@@ -359,38 +528,70 @@ def method_B(
     weight_speed: float = 1.0,
 ) -> tuple[int, pd.DataFrame]:
     """
-    Select a representative year from a multi-year hourly meteorological time
-    series following VDI 3783 Part 20, Annex A3.2, Method B (Eq. A5 + A6).
+    Select a representative year using Method B – time-series comparison.
 
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DatetimeIndex (hourly), columns: 'FF' (wind speed m/s), 'DD' (wind
-        direction °), 'KM' (Klug/Manier stability class – not used in Method B
-        but kept for completeness).
-    n_dir_sectors : int
-        Number of equidistant wind-direction sectors (default 12 → 30° each).
-    speed_classes : list of float or None
-        Upper class boundaries for wind speed (m/s).  If None, n_speed_classes
-        equidistant classes between 0 and the overall maximum are created.
-    n_speed_classes : int
-        Number of auto-generated speed classes (used only when speed_classes is
-        None).
-    weight_dir : float
-        Weight for the wind-direction deviation (default 3, giving ratio 3:1).
-    weight_speed : float
-        Weight for the wind-speed deviation (default 1).
+    Implements VDI 3783 Part 20, Annex A3.2.  The method compares the
+    wind-direction and wind-speed frequency distributions of each
+    individual year against the multi-year total, then ranks years by a
+    weighted deviation score.
 
-    Returns
-    -------
-    dict with keys
-        'ranking'          – DataFrame sorted by BG_n (best year first)
-        'representative_year' – int, the best year
-        'A_dir'            – Series of raw deviation measures for direction
-        'A_speed'          – Series of raw deviation measures for speed
-        'BG'               – Series of weighted assessment variable BG_n
-        'mean_speed_total' – long-term mean wind speed (plausibility check)
-        'mean_speed_by_year' – Series of annual mean wind speeds
+    **Deviation measure (Eq. A5)**
+
+    For parameter :math:`i` (1 = wind direction, 2 = wind speed) and
+    individual year :math:`n`:
+
+    .. math::
+
+        A_{i,n} = \\sum_{j=1}^{m}
+            \\left( x_{i,j,\\mathrm{rel}} - x_{i,j,n,\\mathrm{rel}} \\right)^2
+
+    where :math:`x_{i,j,\\mathrm{rel}}` is the relative frequency of
+    class *j* over the entire multi-year period and
+    :math:`x_{i,j,n,\\mathrm{rel}}` is the corresponding value for
+    year *n*.  Only valid (non-NaN) hours enter both denominators.
+
+    Each :math:`A_{i,n}` is then normalised so that the minimum across
+    all years equals 100.
+
+    **Assessment variable (Eq. A6)**
+
+    .. math::
+
+        BG_n = \\frac{w_{\\mathrm{dir}}}{w_{\\mathrm{dir}}+w_{\\mathrm{spd}}}
+               \\cdot A_{1,n}^{\\mathrm{norm}}
+             + \\frac{w_{\\mathrm{spd}}}{w_{\\mathrm{dir}}+w_{\\mathrm{spd}}}
+               \\cdot A_{2,n}^{\\mathrm{norm}}
+
+    The year with the smallest :math:`BG_n` is the representative year.
+
+    :param df: Hourly time series with a :class:`pandas.DatetimeIndex`
+        and columns ``FF`` (wind speed, m/s), ``DD`` (wind direction, °).
+        Column ``KM`` is accepted but not used by this method.
+    :type df: pandas.DataFrame
+    :param n_dir_sectors: Number of equidistant wind-direction sectors.
+        Default 12 (→ 30° each).
+    :type n_dir_sectors: int
+    :param speed_classes: Right bin edges for wind-speed classes (m/s).
+        ``None`` → *n_speed_classes* equidistant classes up to the
+        overall maximum.
+    :type speed_classes: list[float] or None
+    :param n_speed_classes: Number of auto-generated speed classes;
+        used only when *speed_classes* is ``None``.
+    :type n_speed_classes: int
+    :param weight_dir: Weight :math:`w_{\\mathrm{dir}}` for the
+        wind-direction deviation (default 3.0).
+    :type weight_dir: float
+    :param weight_speed: Weight :math:`w_{\\mathrm{spd}}` for the
+        wind-speed deviation (default 1.0).
+    :type weight_speed: float
+    :returns: A 2-tuple ``(representative_year, ranking)`` where
+
+        * *representative_year* – selected calendar year (int)
+        * *ranking* – :class:`pandas.DataFrame` indexed by year, sorted
+          ascending by ``BG_n`` (lower is better), with columns
+          ``A_dir_norm (→100)``, ``A_speed_norm (→100)``, ``BG_n``,
+          and ``mean_FF_ms`` (annual mean wind speed, plausibility check)
+    :rtype: tuple[int, pandas.DataFrame]
     """
     df = df.copy()
     df.index = pd.to_datetime(df.index)
@@ -500,44 +701,91 @@ def method_T(
         temp_col: str = "T",
 ) -> tuple[int, pd.DataFrame]:
     """
-    Select a representative year from a multi-year hourly (or sub-daily)
-    meteorological time series based on temperature alone.
+    Select a representative year using Method T – temperature annual cycle.
 
-    Algorithm
-    ---------
-    1. Compute daily mean temperature for every day in the record.
-    2. Build a mean annual cycle: for each day-of-year (1–366) average the
-       daily means across all years.
-    3. For each individual year n compute three scores against the mean
-       annual cycle (MAC):
+    The method compares the temperature annual cycle of each individual
+    year against the multi-year mean annual cycle (MAC) using three
+    complementary scores.
 
-       bias_n  = mean  (T_day - MAC_doy)              … systematic offset
-       rms_n   = rms   ((T_day-bias_n) - MAC_doy)     … day-by-day scatter
-       rms_m_n = rms   ((T_month-bias_n) - MAC_month) … monthly-mean scatter
-                 where T_month     = mean of daily means per calendar month
-                       MAC_month   = mean of MAC values for that month
+    **Step 1 – Daily means**
 
-    4. Rank years by
-       score_n = |bias_n| + |rms_n - min(rms_n)| + |rms_m_n - min(rms_m_n)|
-       (ascending).
+    Sub-daily values are aggregated to daily means
+    :math:`T_{d,n}` for day *d* of year *n*.  Days where all values are
+    missing are excluded.
 
-       The year with the smallest score is the representative year.
+    **Step 2 – Mean annual cycle (MAC)**
 
-    Parameters
-    ----------
-    df : pd.DataFrame
-        DatetimeIndex (hourly or finer), column *temp_col* with air
-        temperature in °C (or K – unit does not matter).
-    temp_col : str
-        Name of the temperature column (default ``'T'``).
+    .. math::
 
-    Returns
-    -------
-    (representative_year, ranking)
-        representative_year – int
-        ranking             – DataFrame indexed by year, columns
-                              ``bias``, ``rms_daily``, ``rms_monthly``,
-                              ``score``, sorted ascending by ``score``.
+        \\overline{T}_{\\mathrm{doy}}
+        = \\frac{1}{N_{\\mathrm{doy}}}
+          \\sum_{n} T_{d(\\mathrm{doy}),n}
+
+    where the average runs over all years that contain day-of-year
+    *doy*.  Leap-day (DOY 366) is averaged only over leap years.
+
+    **Step 3 – Per-year bias**
+
+    .. math::
+
+        b_n = \\frac{1}{D_n} \\sum_{d \\in n}
+              \\left( T_{d,n} - \\overline{T}_{\\mathrm{doy}(d)} \\right)
+
+    **Step 4 – RMS of bias-corrected daily anomalies**
+
+    .. math::
+
+        \\sigma_{\\mathrm{daily},n} = \\sqrt{
+            \\frac{1}{D_n} \\sum_{d \\in n}
+            \\left[
+                \\left( T_{d,n} - \\overline{T}_{\\mathrm{doy}(d)} \\right)
+                - b_n
+            \\right]^2
+        }
+
+    **Step 5 – RMS of bias-corrected monthly-mean anomalies**
+
+    Let :math:`\\bar{T}_{m,n}` be the mean of daily means in calendar
+    month *m* of year *n*, and :math:`\\bar{T}_{m,n}^{\\mathrm{MAC}}`
+    the corresponding mean of MAC values for the same days.  Then:
+
+    .. math::
+
+        \\sigma_{\\mathrm{monthly},n} = \\sqrt{
+            \\frac{1}{12} \\sum_{m=1}^{12}
+            \\left( \\bar{T}_{m,n} - \\bar{T}_{m,n}^{\\mathrm{MAC}} - b_n
+            \\right)^2
+        }
+
+    **Step 6 – Ranking score**
+
+    .. math::
+
+        S_n = |b_n|
+            + \\left| \\sigma_{\\mathrm{daily},n}
+                      - \\min_n \\sigma_{\\mathrm{daily},n} \\right|
+            + \\left| \\sigma_{\\mathrm{monthly},n}
+                      - \\min_n \\sigma_{\\mathrm{monthly},n} \\right|
+
+    The year with the smallest :math:`S_n` is the representative year.
+
+    :param df: Time series with a :class:`pandas.DatetimeIndex` (hourly
+        or finer) and a temperature column.
+    :type df: pandas.DataFrame
+    :param temp_col: Name of the temperature column (default ``'T'``).
+        The unit (°C or K) does not affect the result.
+    :type temp_col: str
+    :returns: A 2-tuple ``(representative_year, ranking)`` where
+
+        * *representative_year* – selected calendar year (int)
+        * *ranking* – :class:`pandas.DataFrame` indexed by year, sorted
+          ascending by ``score`` (:math:`S_n`), with columns ``bias``
+          (:math:`b_n`), ``rms_daily`` (:math:`\\sigma_{\\mathrm{daily}}`),
+          ``rms_monthly`` (:math:`\\sigma_{\\mathrm{monthly}}`), and
+          ``score`` (:math:`S_n`)
+
+    :rtype: tuple[int, pandas.DataFrame]
+    :raises KeyError: If *temp_col* is not present in *df*.
     """
     df = df.copy()
     df.index = pd.to_datetime(df.index)
@@ -618,12 +866,30 @@ def method_T(
 
 # -------------------------------------------------------------------------
 
-def main(args):
+def main(args, return_only: bool = False):
     """
-    This is the main working function
+    Main entry point for the ``select-year`` sub-command.
 
-    :param args: the command line arguments as dictionary
+    Loads or builds a multi-year meteorological DataFrame, dispatches to
+    the requested method, and prints the selected year together with the
+    ranking table(s).
+
+    :param args: Command-line arguments as a dictionary.  Recognised keys:
+
+        * ``working_dir`` *(str, default* ``'.'`` *)* – directory used
+          for the intermediate pickle cache ``select_year.pkl``.
+        * ``year`` *(str or None)* – year range such as ``'2010-2020'``;
+          ``None`` uses the last 10 calendar years.
+        * ``source`` *(str, required)* – weather-data source identifier.
+        * ``method`` *(str, required)* – one of ``'a'``/``'akjahr'``,
+          ``'b'``/``'timeseries'``, or ``'t'``/``'temperature'``.
+        * ``prec`` *(bool, default* ``False`` *)* – precipitation flag
+          passed to :func:`input_weather.austal_weather`.
+
     :type args: dict
+    :raises ValueError: If ``source`` or ``method`` is missing or
+        ``method`` is not a recognised value.
+    :raises EnvironmentError: If no weather data can be located.
     """
     logger.debug(format(args))
 
@@ -667,10 +933,24 @@ def main(args):
         if len(available_weather) == 0:
             raise EnvironmentError("No available weather data found.")
 
-    SELECT_YEAR_PICKLE = os.path.join(working_dir, 'select_year.pkl')
+    # load cache file if it exists and test if it matches
     if os.path.exists(SELECT_YEAR_PICKLE):
+        logger.debug(f"cache file found: {SELECT_YEAR_PICKLE}")
         df = pd.read_pickle(SELECT_YEAR_PICKLE)
+        test_attrs = []
+        for x in ["dwd", "wmo", "gk", "ut", "ll", "years", "source",
+                  "class-scheme", "wind-variant"]:
+            test_attrs.append(df.attrs.get(x, None) == args.get(x, None))
+        if all(test_attrs):
+            logger.info(f"using data in cache file: {SELECT_YEAR_PICKLE}")
+        else:
+            logger.debug("chache file does not match")
+            df = None
     else:
+        df = None
+
+    # if cache did not exist rd does not match: extract data
+    if df is None:
         df_list = []
         n=0
         for year in years:
@@ -685,29 +965,39 @@ def main(args):
         df = pd.concat(df_list)
         del df_list
 
+        # save cache to file
+        for x in ["dwd", "wmo", "gk", "ut", "ll", "years", "source",
+                  "class-scheme", "wind-variant"]:
+            df.attrs[x] = args.get(x,None)
         df.to_pickle(SELECT_YEAR_PICKLE)
+        logger.info(f"saved data to cache file: {SELECT_YEAR_PICKLE}")
 
     if method == 'a':
         selected_year, ranking_chi2, ranking_sigma = method_A(df)
-        rankings=[ranking_chi2, ranking_sigma]
+        rankings = {'chi2 ranking': ranking_chi2,
+                    'sigma ranking': ranking_sigma}
     elif method == 'b':
         selected_year, ranking = method_B(df)
-        rankings = [ranking]
+        rankings = {'ranking': ranking}
     elif method == 't':
         selected_year, ranking = method_T(df)
-        rankings=[ranking]
+        rankings = {'ranking': ranking}
     else:
         raise RuntimeError(f"unknown method: {str(method)}")
 
-    print("---------------------")
-    print(f"selected year: {selected_year}")
-    print("---------------------")
-
-    for r in rankings:
-        print(format(r))
+    if not return_only:
         print("---------------------")
 
+        for k, v in rankings.items():
+            print(k)
+            print()
+            print(format(v))
+            print("---------------------")
 
+        print(f"selected year: {selected_year}")
+        print("---------------------")
+
+    return selected_year
 
 # ----------------------------------------------------
 
@@ -718,7 +1008,7 @@ def add_options(subparsers):
     pars_syr = subparsers.add_parser(
         name='select-year',
         help='Select representative year according to '
-             'VDI 3783 Part 20, Appendix A3 [VDI3783p20]_',
+             'VDI 3783 Part 20, Appendix A3',
         formatter_class=_tools.SmartFormatter,
     )
     pars_syr = _tools.add_location_opts(pars_syr, stations=True)
@@ -729,13 +1019,15 @@ def add_options(subparsers):
                           default='b',
                           help="Method for selecting a representative"
                                "year:\n"
-                               "`a`/`akjahr`: method ``A``"
-                               " ($\Chi^2$ and $\sigma$ environment)\n"
-                               "`b`/`timeseries`: method ``B``"
+                               "``a``/``akjahr``: method A"
+                               " (chi^2 and sigma environment)\n"
+                               "``b``/``timeseries``: method B"
                                " (from meteorological timesries)\n"
-                               "`t`/`temperature`: method ``T`` "
-                               "(representative year by temperature cycle)\n"
-                               "Defaults to [%(default)]")
+                               "``t``/``temperature``: method T"
+                               " (representative by temperature)\n"
+                               "For Details see the API description of "
+                               "the module" + __name__ + ". "
+                               "Defaults to %(default)s")
     pars_syr.add_argument('-s', '--source',
                         metavar="CODE",
                         nargs=None,
@@ -753,6 +1045,14 @@ def add_options(subparsers):
                               " `1990-2000`."
                               " If not given, the last 10 years will be"
                               " used.")
+    pars_syr.add_argument('-c', '--cache',
+                          default=SELECT_YEAR_PICKLE,
+                          help="Name for cache file. "
+                               "This file stores the extraxted data "
+                               "for all years, which allows to re-run "
+                               "this program quicker if only -m/--method "
+                               "or the output is changed. "
+                               "The default is %(default)s.")
     input_weather.DEFAULT_CLASS_SCHEME = 'kms'
     pars_syr = input_weather.add_advanced_option_group(pars_syr)
     return subparsers

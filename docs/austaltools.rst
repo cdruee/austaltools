@@ -1,4 +1,5 @@
 :orphan:
+:tocdepth: 3
 
 -----------
 austaltools

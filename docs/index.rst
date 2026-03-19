@@ -1,5 +1,7 @@
 .. -*- coding: utf-8 -*-
 
+:tocdepth: 2
+
 *************************************
 Welcome to austaltools documentation!
 *************************************
