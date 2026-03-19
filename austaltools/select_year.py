@@ -358,7 +358,8 @@ def method_A(
             * *sigma*  – sample standard deviation across years (ddof=1)
         """
         yearly = pd.DataFrame(
-            {yr: _freq_abs(series[df.index.year == yr] if series is not dir_sec_noc
+            {yr: _freq_abs(series[df.index.year == yr]
+                           if series is not dir_sec_noc
                            else series[series.index.year == yr], classes)
              for yr in years}
         ).T  # shape (n_years, n_classes)
@@ -370,7 +371,8 @@ def method_A(
         return Mx_abs, Mx_rel, sigma
 
     # helper for nocturnal series (its own year-mask)
-    def _multiyear_stats_noc(classes) -> tuple[pd.Series, pd.Series, pd.Series]:
+    def _multiyear_stats_noc(classes) -> tuple[
+        pd.Series, pd.Series, pd.Series]:
         yearly = pd.DataFrame(
             {yr: _freq_abs(dir_sec_noc[dir_sec_noc.index.year == yr], classes)
              for yr in years}
@@ -383,10 +385,12 @@ def method_A(
 
     # values in the classification timeseries that are -1
     # are disregarded since -1 is not included in *_classes
-    Mx_dir_abs,   Mx_dir_rel,   sigma_dir   = _multiyear_stats(dir_sec,     dir_classes)
-    Mx_noc_abs,   Mx_noc_rel,   sigma_noc   = _multiyear_stats_noc(dir_classes)
-    Mx_spd_abs,   Mx_spd_rel,   sigma_spd   = _multiyear_stats(spd_sec,     speed_classes)
-    Mx_km_abs,    Mx_km_rel,    sigma_km    = _multiyear_stats(km_sec,      km_classes)
+    Mx_dir_abs, Mx_dir_rel, sigma_dir = _multiyear_stats(dir_sec,
+                                                         dir_classes)
+    Mx_noc_abs, Mx_noc_rel, sigma_noc = _multiyear_stats_noc(dir_classes)
+    Mx_spd_abs, Mx_spd_rel, sigma_spd = _multiyear_stats(spd_sec,
+                                                         speed_classes)
+    Mx_km_abs, Mx_km_rel, sigma_km = _multiyear_stats(km_sec, km_classes)
 
     # ------------------------------------------------------------------
     # 3. Per-year χ² terms and sigma hits  (Eq. A1 – A4)
@@ -408,10 +412,11 @@ def method_A(
 
         # values in the classification timeseries that are -1
         # are disregarded since -1 is not included in *_classes
-        x_dir = _freq_abs(dir_sec[mask_yr],                            dir_classes)
-        x_noc = _freq_abs(dir_sec_noc[dir_sec_noc.index.year == yr],   dir_classes)
-        x_spd = _freq_abs(spd_sec[mask_yr],                            speed_classes)
-        x_km  = _freq_abs(km_sec[mask_yr],                             km_classes)
+        x_dir = _freq_abs(dir_sec[mask_yr], dir_classes)
+        x_noc = _freq_abs(dir_sec_noc[dir_sec_noc.index.year == yr],
+                          dir_classes)
+        x_spd = _freq_abs(spd_sec[mask_yr], speed_classes)
+        x_km = _freq_abs(km_sec[mask_yr], km_classes)
 
         # --- χ² (Eq. A1) ---
         c1 = _chi2_term(x_dir, Mx_dir_abs, Mx_dir_rel)
@@ -425,7 +430,8 @@ def method_A(
         chi2_km_yr[yr]  = c4
 
         # Eq. A2: total χ²
-        chi2_total[yr] = G1_dir * c1 + G2_noc * c2 + G3_spd * c3 + G4_ak * c4
+        chi2_total[
+            yr] = G1_dir * c1 + G2_noc * c2 + G3_spd * c3 + G4_ak * c4
 
         # --- sigma hits (Eq. A3) ---
         h1 = _sigma_hits(x_dir, Mx_dir_abs, sigma_dir)
@@ -477,7 +483,8 @@ def method_A(
     yr_chi2_1 = ranking_chi2.index[0]
     if sigma_rank[yr_chi2_1] == 1:
         rep_year = yr_chi2_1
-        logger.info(f"Criterion (a): year {rep_year} is rank 1 in χ² AND rank 1 in sigma → selected.")
+        logger.info(f"Criterion (a): year {rep_year} is rank 1 in χ² "
+                    f"AND rank 1 in sigma → selected.")
 
     # criterion b: rank 1 in χ², rank 2 or 3 in sigma
     if rep_year is None:
@@ -494,12 +501,14 @@ def method_A(
             if yr in top3_sigma:
                 rep_year = yr
                 logger.info(
-                    f"Criterion (c): year {rep_year} is rank {chi2_rank[yr]} in χ², "
+                    f"Criterion (c): year {rep_year} is "
+                    f"rank {chi2_rank[yr]} in χ², "
                     f"rank {sigma_rank[yr]} in sigma → selected."
                 )
                 break
 
-    # fallback: best χ² among top-3 sigma (best wind-direction + AK agreement)
+    # fallback: best χ² among top-3 sigma
+    # (best wind-direction + AK agreement)
     if rep_year is None:
         candidates = [yr for yr in ranking_chi2.index if yr in top3_sigma]
         if candidates:
@@ -511,7 +520,8 @@ def method_A(
         else:
             rep_year = int(ranking_chi2.index[0])
             logger.info(
-                f"Fallback (last resort): year {rep_year} chosen as rank-1 χ² "
+                f"Fallback (last resort): "
+                f"year {rep_year} chosen as rank-1 χ² "
                 f"(no overlap between top-3 χ² and top-3 sigma)."
             )
 
@@ -601,7 +611,8 @@ def method_B(
     # 1.  Build classification bins
     # ------------------------------------------------------------------
     # Wind direction: 12 sectors of 30° each, centred so that sector 1
-    # covers 345°–15° (i.e. "North"), consistent with meteorological practice.
+    # covers 345°–15° (i.e. "North"),
+    # consistent with meteorological practice.
     # We shift DD by half a sector width before flooring.
 
     # Wind speed: equidistant or user-supplied classes
@@ -611,7 +622,7 @@ def method_B(
     else:
         edges = np.array([0.0] + list(speed_classes))
 
-    # keep full index, -1 values are simply absent from the valid classes range
+    # keep full index, -1 values are simply absent from valid classes range
     dir_sector = _classify_direction(df["DD"], n_dir_sectors)
     speed_sector = _classify_speed(df["FF"], edges)
 
@@ -656,8 +667,10 @@ def method_B(
         )
 
         # Eq. A5:  A_{i,n} = Σ_j ( x_{i,j,rel} − x_{i,j,n,rel} )²
-        A_dir[yr]   = float(np.sum((freq_dir_total.values - freq_dir_yr.values) ** 2))
-        A_speed[yr] = float(np.sum((freq_spd_total.values - freq_spd_yr.values) ** 2))
+        A_dir[yr] = float(
+            np.sum((freq_dir_total.values - freq_dir_yr.values) ** 2))
+        A_speed[yr] = float(
+            np.sum((freq_spd_total.values - freq_spd_yr.values) ** 2))
 
         mean_speed_by_year[yr] = float(df.loc[mask, "FF"].mean())
 
@@ -674,7 +687,8 @@ def method_B(
     # 5.  Weighted assessment variable BG_n  (Eq. A6)
     # ------------------------------------------------------------------
     w_total = weight_dir + weight_speed
-    BG = (weight_dir / w_total) * A_dir_norm + (weight_speed / w_total) * A_speed_norm
+    BG = (weight_dir / w_total) * A_dir_norm + (
+                weight_speed / w_total) * A_speed_norm
 
     # ------------------------------------------------------------------
     # 6.  Rank and output
@@ -900,7 +914,8 @@ def main(args, return_only: bool = False):
     if yearstring is not None:
         years = _tools.expand_sequence(yearstring)
     else:
-        years = [pd.Timestamp.now().year - x for x in reversed(range(1,11))]
+        years = [pd.Timestamp.now().year - x for x in
+                 reversed(range(1, 11))]
     logger.info(f"using years: {format(years)}")
 
     source = args.get('source', None)
