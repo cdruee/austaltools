@@ -1666,7 +1666,7 @@ def austal_weather(args, return_data_frame: bool = False):
                            method + '.akterm')
                 logger.info('writing output file: %s' % outname)
                 ak.write(outname)
-    if response is None:
+    if return_data_frame and response is None:
         raise ValueError(f"Selected scheme {selected_scheme} is not in "
                          f"available schemes {str(methods_available)}.")
     return response
@@ -1780,7 +1780,7 @@ def add_advanced_option_group(parser):
                               f"data source. Ignored if value is None. "
                               f"[%(default)s]"
                          )
-    return parser
+    return adv_grp
 
 # -------------------------------------------------------------------------
 
@@ -1823,12 +1823,11 @@ def add_options(subparsers):
                         help='surface elevation. '
                              'An approximate value is sufficient' +
                              'only allowed with -L, -G, -U.')
-
     pars_wea.add_argument('-p', '--precip', dest='prec',
                           action='store_true',
                           help='add precipitation columns to output file')
 
-    pars_wea = add_advanced_option_group(pars_wea)
+    pars_wea_adv = add_advanced_option_group(pars_wea)
     return pars_wea
 
 # =========================================================================

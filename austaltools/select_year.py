@@ -877,6 +877,196 @@ def method_T(
     representative_year = int(ranking.index[0])
     return representative_year, ranking
 
+# -------------------------------------------------------------------------
+
+def selected_year_plot(args, rankings, selected_year):
+    """
+    Plot the ranking scores as stacked bar charts and save to a file.
+
+    Each ranking in *rankings* produces one group of bars per year.
+    The total bar height equals the ranking score; each bar is subdivided
+    into the weighted contributions of the individual measures.  With two
+    rankings (as returned by :func:`method_A`) the left y-axis shows the
+    first ranking and the right y-axis shows the second.  The selected
+    year is marked with a vertical dotted line.
+
+    The function returns immediately without drawing anything if
+    ``args['plot']`` is ``None``.
+
+    :param args: Argument dictionary.  The key ``'plot'`` must contain
+        the output file path (str).  The file format is inferred fromHere is m
+        the extension (e.g. ``'.png'``, ``'.pdf'``, ``'.svg'``).
+    :type args: dict
+    :param rankings: Ordered mapping of ranking label → ranking
+        :class:`pandas.DataFrame`.  Each DataFrame must be indexed by
+        year (int) with one column per measure followed by a score
+        column as the last column.  Accepts 1 or 2 entries.
+    :type rankings: dict[str, pandas.DataFrame]
+    :param selected_year: The representative year to highlight.
+    :type selected_year: int
+    :raises ValueError: If ``args['plot']`` is an empty string.
+    """
+    plot_name = args.get('plot', None)
+    if plot_name is None:
+        return
+    if plot_name == "":
+        raise ValueError("no plot name given")
+
+    import matplotlib
+    import matplotlib.pyplot as plt
+    import matplotlib.ticker as mticker
+
+    ranking_list = list(rankings.items())   # [(label, df), ...]
+    n_rankings   = len(ranking_list)        # 1 or 2
+
+    # ------------------------------------------------------------------
+    # Determine a common set of years (x-axis), sorted ascending
+    # ------------------------------------------------------------------
+    all_years = sorted(
+        set().union(*[set(df.index) for _, df in ranking_list])
+    )
+    n_years = len(all_years)
+    x = np.arange(n_years)
+
+    # ------------------------------------------------------------------
+    # Bar geometry
+    # ------------------------------------------------------------------
+    group_width = 0.7          # fraction of one x-unit occupied by bars
+    bar_width   = group_width / n_rankings
+    offsets     = [(i - (n_rankings - 1) / 2) * bar_width
+                   for i in range(n_rankings)]
+
+    # ------------------------------------------------------------------
+    # Colour palettes – one per ranking
+    # ------------------------------------------------------------------
+    _PALETTES = [
+        # ranking 0 (left axis)  – blues / greens
+        ["#4e79a7", "#76b7b2", "#59a14f", "#edc948"],
+        # ranking 1 (right axis) – reds / purples
+        ["#f28e2b", "#e15759", "#b07aa1", "#ff9da7"],
+    ]
+
+    # ------------------------------------------------------------------
+    # Figure
+    # ------------------------------------------------------------------
+    #fig, ax1 = plt.subplots(figsize=(max(8, n_years * 1.1), 5))
+    fig, ax1 = plt.subplots(figsize=(8, 5))
+    ax2 = ax1.twinx() if n_rankings == 2 else None
+    axes = [ax1] if n_rankings == 1 else [ax1, ax2]
+
+    legend_handles = []
+
+    for rank_idx, (label, df) in enumerate(ranking_list):
+        ax = axes[rank_idx]
+
+        # Score column is always the last column
+        score_col    = df.columns[-1]
+        measure_cols = list(df.columns[:-1])
+
+        palette = _PALETTES[rank_idx % len(_PALETTES)]
+        colors  = [palette[k % len(palette)]
+                   for k in range(len(measure_cols))]
+
+        # Re-index df to the common year axis (fill 0 if a year is absent)
+        df_plot = df.reindex(all_years, fill_value=0.0)
+
+        # Compute weighted contributions.
+        # For method_A chi2:  each chi2_X column already holds G_i * c_i,
+        # so the contributions sum to chi2_total exactly.
+        # For method_A sigma and all other methods the "score" is built
+        # differently; we split it proportionally to each measure's value.
+        totals = df_plot[measure_cols].abs().sum(axis=1)
+        scores = df_plot[score_col].abs()
+
+        bottom = np.zeros(n_years)
+        for k, col in enumerate(measure_cols):
+            # proportional share of each measure in the total score
+            share = np.where(
+                totals > 0,
+                df_plot[col].abs().values / totals.values * scores.values,
+                0.0,
+            )
+            bar = ax.bar(
+                x + offsets[rank_idx],
+                share,
+                bar_width,
+                bottom=bottom,
+                color=colors[k],
+                label=f"{label} – {col}",
+                zorder=3,
+            )
+            legend_handles.append(bar)
+            bottom += share
+
+        # # Mark the selected year with a star on this axis
+        # if selected_year in all_years:
+        #     sel_x = all_years.index(selected_year)
+        #     ax.plot(
+        #         sel_x + offsets[rank_idx],
+        #         bottom[sel_x] * 1.04,
+        #         marker="*",
+        #         markersize=10,
+        #         color=colors[0],
+        #         zorder=5,
+        #         linestyle="none",
+        #         label=f"{label} – selected" if rank_idx == 0 else None,
+        #     )
+
+        # Axis labels
+        ax.set_ylabel(f"{label}  [{score_col}]",
+                      color="black" if rank_idx == 0 else "dimgrey")
+        if rank_idx == 1:
+            ax.yaxis.set_label_position("right")
+            ax.yaxis.tick_right()
+
+    # ------------------------------------------------------------------
+    # Common x-axis formatting
+    # ------------------------------------------------------------------
+    ax1.set_xticks(x)
+    ax1.set_xticklabels([str(y) for y in all_years], rotation=45, ha="right")
+    ax1.set_xlabel("Year")
+    ax1.set_xlim(-0.5, n_years - 0.5)
+    ax1.grid(axis="y", linestyle="--", alpha=0.4, zorder=0)
+    ax1.set_axisbelow(True)
+
+    # Vertical line for selected year
+    if selected_year in all_years:
+        ax1.axvline(
+            all_years.index(selected_year),
+            color="black", linestyle=":", linewidth=2, zorder=2,
+            label=f"selected year: {selected_year}",
+        )
+
+    # ------------------------------------------------------------------
+    # Legend (collect all handles from both axes)
+    # ------------------------------------------------------------------
+    handles1, labels1 = ax1.get_legend_handles_labels()
+    handles2, labels2 = (ax2.get_legend_handles_labels()
+                         if ax2 is not None else ([], []))
+
+    # extend y axes range to make spage for legend:
+    for ax in axes:
+        y1,y2 = ax.get_ylim()
+        ax.set_ylim(y1, y2 * 1.5)
+
+    ax1.legend(
+        handles1 + handles2,
+        labels1  + labels2,
+        loc="upper left",
+        ncol=2,
+        fontsize="small",
+        framealpha=0.8,
+    )
+
+    plt.title(f"Representative year selection  –  selected: {selected_year}")
+    plt.tight_layout()
+
+    if plot_name == '-':
+        plt.show()
+    else:
+        plt.savefig(plot_name, dpi=300)
+        logger.info(f"plot saved to: {plot_name}")
+        plt.close(fig)
 
 # -------------------------------------------------------------------------
 
@@ -1012,6 +1202,9 @@ def main(args, return_only: bool = False):
         print(f"selected year: {selected_year}")
         print("---------------------")
 
+    if args.get('plot', None) is not None:
+        selected_year_plot(args, rankings, selected_year)
+
     return selected_year
 
 # ----------------------------------------------------
@@ -1060,7 +1253,23 @@ def add_options(subparsers):
                               " `1990-2000`."
                               " If not given, the last 10 years will be"
                               " used.")
-    pars_syr.add_argument('-c', '--cache',
+    pars_syr.add_argument('-p', '--plot',
+                          metavar="FILE",
+                          nargs='?',
+                          const=f'{__name__}.png',
+                          help="save reasults as a plot to a file. "
+                               "If the paramater is not given "
+                               "(or `File` id `None`), no plot is "
+                               "produced. If `FILE` is `-` "
+                               "the plot is shown on screen. "
+                               "If `FILE` is missing, the file name "
+                               "defaults %(default)s."
+                               "The default is to produce no plot."
+                          )
+
+    input_weather.DEFAULT_CLASS_SCHEME = 'kms'
+    pars_syr_adv = input_weather.add_advanced_option_group(pars_syr)
+    pars_syr_adv.add_argument('--cache',
                           default=SELECT_YEAR_PICKLE,
                           help="Name for cache file. "
                                "This file stores the extraxted data "
@@ -1068,6 +1277,5 @@ def add_options(subparsers):
                                "this program quicker if only -m/--method "
                                "or the output is changed. "
                                "The default is %(default)s.")
-    input_weather.DEFAULT_CLASS_SCHEME = 'kms'
-    pars_syr = input_weather.add_advanced_option_group(pars_syr)
+
     return subparsers
