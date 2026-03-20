@@ -23,7 +23,7 @@ else:
     from ._mock import netCDF4
 
 from ._metadata import __version__, __title__
-from . import _corine
+from . import _corine, _windutil
 from . import _fetch_dwd
 from . import _datasets
 from . import _dispersion as dis
@@ -43,8 +43,8 @@ DEFAULT_WIND_VARIANT = os.environ.get('WIND_VARIANT', 'model_uv10')
  
   Overridden by environment variable "WIND_VARIANT"
  
-  Possible values are: 'fixed_057' 'fixed_010' 'model_mean' 
-  'model_uv10' 'model_fsr'
+  Possible values are: 'model_uv10' 'ustar_wmo' 'ustar_z0' 
+  'ustar_fsr'
 """
 DEFAULT_INTER_VARIANT = os.environ.get('INTER_VARIANT', 'weighted')
 """
@@ -357,11 +357,10 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
       Default is :py:const:`DEFAULT_WIND_VARIANT`.
       Supported options:
 
-        - `'fixed_057'` : Assumes fixed surface roughness z₀ = 0.57 m.
-        - `'fixed_010'` : Assumes fixed surface roughness z₀ = 0.10 m.
-        - `'model_mean'` : Uses mean surface roughness from model data.
         - `'model_uv10'` : Uses u10 and v10 without adjustment.
-        - `'model_fsr'` : Uses model-provided roughness field (fsr).
+        - `'ustar_wmo'` : Assumes fixed surface roughness z₀ = 0.03 m (WMO).
+        - `'ustar_z0'` : Uses mean surface roughness from model data.
+        - `'ustar_fsr'` : Uses model-provided roughness field (fsr).
 
     :type wind_variant: str
 
@@ -524,25 +523,27 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
     #   https://confluence.ecmwf.int/display/FUG/Section+9.3+Surface+Wind
     #
     #   Therefore: u10 = u*/k * ln(z/z0)
-    if wind_variant == 'fixed_057':
-        z0 = 0.57  # m
+    if wind_variant == 'model_uv10':
+        ha = 10.  # m
+        z0 = 0.03  # m
         values['fsr'] = z0  # m
-        values['ff'] = (values['zust'] / kappa *
-                        np.log((10. + 7. * z0) / z0))  # m/s
-    elif wind_variant == 'fixed_010':
-        z0 = 0.10  # m
-        values['fsr'] = z0  # m
-        values['ff'] = (values['zust'] / kappa *
-                        np.log((10. + 7. * z0) / z0))  # m/s
-    elif wind_variant == 'model_mean':
-        z0 = np.nanmean(values['fsr'])  # m
-        values['fsr'] = z0  # m
-        values['ff'] = (values['zust'] / kappa *
-                        np.log((10. + 7. * z0) / z0))  # m/s
-    elif wind_variant == 'model_uv10':
         values['ff'] = np.sqrt(values['u10'] ** 2 +
                                values['v10'] ** 2)  # m/s
-    elif wind_variant == 'model_fsr':
+    elif wind_variant == 'ustar_wmo':
+        ha = 10.  # m
+        z0 = 0.03  # m
+        values['fsr'] = z0  # m
+        values['ff'] = (values['zust'] / kappa *
+                        np.log(ha / z0))  # m/s
+    elif wind_variant == 'ustar_z0':
+        z0 = np.nanmean(values['fsr'])  # m
+        ha = 10. + 7. * z0  # m
+        values['fsr'] = z0  # m
+        values['ff'] = (values['zust'] / kappa *
+                        np.log(ha / z0))  # m/s
+    elif wind_variant == 'ustar_fsr':
+        ha = np.nanmean(10. + 7. * values['fsr'])  # m
+        z0 = np.nanmean(values['fsr'])  # m
         values['ff'] = (values['zust'] / kappa *
                         np.log((10. + 7. * values['fsr']) /
                                values['fsr']))  # m/s
@@ -552,7 +553,7 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
     values['dd'] = np.rad2deg(np.arctan2((-values['u10']),
                                          (-values['v10'])))  # deg
 
-    return values
+    return values, z0, ha
 
 # ----------------------------------------------------
 
@@ -607,7 +608,7 @@ def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
         datafile = os.path.join(ds.path, ds.file_data)
     logging.info('reading data from; %s' % datafile)
 
-    v = read_era5_nc(datafile, lat, lon, wind_variant)
+    v, z0, ha = read_era5_nc(datafile, lat, lon, wind_variant)
     v.index = v['time']
     v.sort_index(inplace=True)
 
@@ -617,7 +618,7 @@ def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
     else:
         v['lmcc'] = v['lcc']  # 1
 
-    z0 = v['fsr'].mean()
+    #z0 = v['fsr'].mean()
     logger.info("roughness length: %6f m" % z0)
 
     res = v.filter(['time',  # UTC
@@ -633,11 +634,11 @@ def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
                     ])
     logger.debug("got: %s" % res.keys())
     logger.debug("z0 : %s" % z0)
-    return res, z0
+    return res, z0, ha
 
 
 # ----------------------------------------------------
-def read_cerra_nc(ncfile, lat, lon):
+def read_cerra_nc(ncfile, lat, lon, wind_variant=None):
     """
     Read a CERRA NetCDF file and interpolate variables to a given
     position (lat, lon), converting units where necessary and
@@ -720,7 +721,10 @@ def read_cerra_nc(ncfile, lat, lon):
         Missing optional variables are skipped with a warning.
 
 
-   """
+    """
+    if wind_variant is None:
+        wind_variant = DEFAULT_WIND_VARIANT
+
     _VAR_NEEDED = [['wdir10','10wdir'], ['si10', '10si'],
                    ['r2', '2r'], ['t2m', '2t'], 'lcc',
                    'mcc', 'tisemf', 'tisnmf', 'slhf', 'sp',
@@ -888,7 +892,42 @@ def read_cerra_nc(ncfile, lat, lon):
         np.sqrt(values['tisemf'] ** 2 + values['tisnmf'] ** 2) / rho
     )
     values.drop(['tisemf', 'tisnmf'], axis=1)
+
+    # ECMWF's standard "10m wind components" - surface parameters - differ
+    # fundamentally from wind components on the lowest model levels,
+    # even if those are nominally at 10m.  These "10m wind components" are
+    # diagnostic quantities generally computed not by using the roughness
+    # length of the tile itself, but instead assuming a roughness length
+    # for short grass (=0.03m), the surface over which (by WMO convention)
+    # winds should be measured.
     #
+    if wind_variant == 'model_uv10':
+        ha = 10.  # m
+        z0 = 0.03  # m
+        # keep ff as is
+        pass
+    elif wind_variant == 'ustar_wmo':
+        ha = 10.  # m
+        z0 = 0.03  # m
+        values['fsr'] = z0  # m
+        values['ff'] = (values['zust'] / kappa *
+                        np.log(ha / z0))  # m/s
+    elif wind_variant == 'ustar_z0':
+        z0 = np.nanmean(values['fsr'])  # m
+        ha = 10. + 7. * z0  # m
+        values['fsr'] = z0  # m
+        values['ff'] = (values['zust'] / kappa *
+                        np.log(ha / z0))  # m/s
+    elif wind_variant == 'ustar_fsr':
+        ha = np.nanmean(10. + 7. * values['fsr'])  # m
+        z0 = np.nanmean(values['fsr'])  # m
+        values['ff'] = (values['zust'] / kappa *
+                        np.log((10. + 7. * values['fsr']) /
+                               values['fsr']))  # m/s
+    else:
+        raise ValueError('unknown wind variant: %s' % wind_variant)
+    logging.info('wind variant: %s' % wind_variant)
+
     # convert wind back into speed and direction
     values['ff'], values['dd'] = m.wind.uv2dir(
         values['u10'], values['v10'])
@@ -910,7 +949,7 @@ def read_cerra_nc(ncfile, lat, lon):
                                for c in values.columns})
         values = pd.concat([pd.DataFrame(first_rows), values],
                            ignore_index=True)
-    return values
+    return values, z0, ha
 
 # ----------------------------------------------------
 
@@ -961,7 +1000,7 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
         datafile = os.path.join(ds.path, ds.file_data)
     logging.info('reading data from; %s' % datafile)
 
-    v = read_cerra_nc(datafile, lat, lon)
+    v, z0, ha = read_cerra_nc(datafile, lat, lon)
     v.index = v['time']
     v.sort_index(inplace=True)
 
@@ -971,7 +1010,6 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
     else:
         v['lmcc'] = v['lcc']  # 1
 
-    z0 = v['fsr'].mean()
     logger.info("roughness length: %6f m" % z0)
 
     res = v.filter(['time',  # UTC
@@ -987,7 +1025,7 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
                     ])
     logger.debug("got: %s" % res.keys())
     logger.debug("z0 : %s" % z0)
-    return res, z0
+    return res, z0, ha
 
 # ----------------------------------------------------
 
@@ -1194,6 +1232,7 @@ def get_hostrada_weather(lat, lon, year, datafile=None) \
     if z0 is None:
         logger.error(f'cannot get any roughness length')
 
+    ha = 10.  # m  #FIXME
 
     res = v.filter(['time',  # UTC
                     'ff',  # m/s
@@ -1206,7 +1245,7 @@ def get_hostrada_weather(lat, lon, year, datafile=None) \
     logger.debug("got: %s" % res.keys())
     logger.debug("z0 : %s" % z0)
 
-    return res, z0
+    return res, z0, ha
 
 # ----------------------------------------------------
 
@@ -1265,7 +1304,7 @@ def get_dwd_weather(lat: float, lon: float, year:int,
             station = si.nearest(lat, lon)
             logger.debug(f"nearest station is #{station}")
         nam = si.name(station)
-        z0 = si.roughness(station)
+        z0 = float(si.roughness(station))
     logger.info(f"selected station: {nam}")
     logger.info(f"roughness length: {z0}")
 
@@ -1287,12 +1326,32 @@ def get_dwd_weather(lat: float, lon: float, year:int,
     elif len(df.index) < 0.90 * 24 * 366:
         logger.warning((f"Year {year} not fully covered by data "
                         f"from #{station} ({nam})"))
+    df.index.name = 'time'
     #
     # rename / convert units
     data = pd.DataFrame(index=df.index)
+    data['time'] = data.index
     # wind direction 990 means "undetermined"/"umlaufender Wind"
     data['dd'] = df['D'].mask(df['D'] == 990., np.nan)  # deg
-    data['ff'] = df['F']  # m/s
+    # ensure constant aneomener height
+    ha_column = 'windgeschwindigkeit_geberhoehe ueber grund [m]'
+    ha_values = set(list(df[ha_column]))
+    if len(ha_values) == 1:
+        # if anemometer height was constant:
+        # return measured wind, and true ha and z0
+        data['ff'] = df['F']
+        ha = list(ha_values)[0]
+    else:
+        # if anemometer height changed during the time period:
+        # wind is corrected to WMO standard height an roughness
+        data['ff'] = _windutil.roughness_correction(
+            df['F'],  # m/s
+            df['windgeschwindigkeit_geberhoehe ueber grund [m]'],  # m
+            z0,  # m
+            method='wmo'
+        )  # m/s  (now as measured at z=10m and z0=0.03m)
+        z0 = 0.03
+        ha = 10
     data['sp'] = df['P0'] * 100.  # hPa -> Pa
     data['t2m'] = df['TT_TU']  # °C
     data['r2m'] = df['RF_TU'] / 100.  # % -> 1
@@ -1318,10 +1377,10 @@ def get_dwd_weather(lat: float, lon: float, year:int,
 
     logger.debug("got: %s" % data.keys())
     logger.debug("z0 : %s" % z0)
-    return data, z0
+    return data, z0, ha
 
 # -------------------------------------------------------------------------
-def austal_weather(args):
+def austal_weather(args, return_data_frame: bool = False):
 
     """
     This is the main function implementing the command 'weather'.
@@ -1341,12 +1400,25 @@ def austal_weather(args):
         - output (str): Output name for the results.
         - source (str): Source of the weather data (e.g., "ERA5", "CERRA", "DWD").
         - prec (bool): Flag indicating whether precipitation data should be included.
+        - class-scheme (str): how stability classes are derived
+            from the weather data ['all', 'kms', 'kmo', 'k2s', 'pts', 'kmc', 'pgc'].
 
     :type args: dict
+
+    :param return_data_frame: If the function should return a
+        pandas DataFrame istead of writing files. If True,
+        `class-scheme` must not be `all`.
+
+    :type return_data_frame: bool
 
     :raises ValueError: If an unknown source is provided.
     """
     logger.debug("args: %s" % format(args))
+
+    selected_scheme = args.get('class-scheme', DEFAULT_CLASS_SCHEME)
+    if return_data_frame and selected_scheme in ['all', None]:
+        raise ValueError("If return_data_frame==True, "
+                         "class-scheme must not be `all` or None.")
 
     if args.get('read-extracted', None) is not None:
         csv_name = args['read-extracted']
@@ -1368,11 +1440,11 @@ def austal_weather(args):
         source = args['source']
         if source == "ERA5":
             wind_variant = args.get('wind-variant', None)
-            obs, z0 = get_era5_weather(lat, lon, year, wind_variant)
+            obs, z0, ha = get_era5_weather(lat, lon, year, wind_variant)
         elif source == "CERRA":
-            obs, z0 = get_cerra_weather(lat, lon, year)
+            obs, z0, ha = get_cerra_weather(lat, lon, year)
         elif source == "HOSTRADA":
-            obs, z0 = get_hostrada_weather(lat, lon, year)
+            obs, z0, ha = get_hostrada_weather(lat, lon, year)
             if z0 is None and args.get('z0, None') is None:
                 raise RuntimeError(f'cannot determine roughness lenght '
                                    f'automatically.\n'
@@ -1383,7 +1455,7 @@ def austal_weather(args):
                 raise ValueError(f"source {source} not available")
             path = _datasets.dataset_get(source).path
             datafile = os.path.join(path, _datasets.OBS_FMT % source)
-            obs, z0 = get_dwd_weather(lat, lon, year, stat_no,
+            obs, z0, ha = get_dwd_weather(lat, lon, year, stat_no,
                                       datafile=datafile)
         else:
             raise ValueError("source not implemented: %s" % source)
@@ -1403,27 +1475,27 @@ def austal_weather(args):
                            'You should consider providing -e')
             ele = 0.
 
-    nam = args['output']
+    nam = args.get('output', 'unnamed')
     logger.debug("rechts: %s, hoch: %s" % (rechts, hoch))
     logger.debug("lat: %s, lon: %s" % (lat, lon))
     logger.debug("elevation: %s" % (ele))
 
-    if args.get('write-extracted', False):
-        csv_name = 'extracted_weather.csv'
+    if args.get('write-extracted', None):
+        csv_name = args.get('write-extracted', 'extracted_weather.csv')
         logger.info('writing raw weather data to: %s' % csv_name)
         with open(csv_name, 'w') as f:
             f.write('# %.4f %.4f %.1f %.3f %s, %s\n' %
                     (lat, lon, ele, z0, source, format(stat_nam)))
             obs.to_csv(f, float_format='%.2f', index=False, na_rep='-999')
 
-    logger.debug(str(obs.iloc[0:2]))
+    logger.debug("\n%s" %str(obs.iloc[0:2]))
 
     methods_available = []
 
     # 10-m wind speed for the correct roughness length
     logger.debug('v10')
     obs['v10'] = dis.vdi_3872_6_standard_wind(obs['ff'],
-                                              hap=10.0 + 7. * z0,
+                                              hap=ha,
                                               z0p=z0)
 
     # air density
@@ -1472,10 +1544,6 @@ def austal_weather(args):
         obs['Lo'] = dis.obukhov_length(
             ust=obs['ust'], rho=obs['rho'], Tv=obs['Tv'],
             H=obs['sshf'], E=obs['slhf'])
-        #  if ...:
-        #     obs[['time', 'v10', 'rho', 'Tv', 'Lo', 'ust']].to_csv(
-        #         'calculated_L_%05i_%04i.csv' % (stat_no, year),
-        #         float_format='%.2f', index=False, na_rep='-999')
 
     #
     # kms -----------------------------
@@ -1488,56 +1556,56 @@ def austal_weather(args):
             cty = cloud_type_from_cover(tcc=obs['tcc'], lmcc=obs['lmcc'])
         else:
             cty = None
-        obs['kms'] = dis.klug_manier_scheme_2017(
+        classes = dis.klug_manier_scheme_2017(
             obs.index, obs['v10'], obs['tcc'],
             lat, lon, ele, cty=cty
         )
+        obs['kms'] = dis.KM2021.name2austal(classes)
+        del cty, classes
     #
     # kmo -----------------------------
     if all([x in obs.columns for x in ['v10', 'tcc']]):
         logger.info('Method: kmo')
         methods_available.append('kmo')
         cty = obs['cty'] if 'cty' in obs else None
-        obs['kmo'] = dis.klug_manier_scheme_1992(
+        classes = dis.klug_manier_scheme_1992(
             obs.index, obs['v10'], obs['tcc'],
             lat, lon, cty=cty)
-        del cty
+        obs['kmo'] = dis.KM2002.name2austal(classes)
+        del cty, classes
     #
-    # k2o -----------------------------
+    # k2s -----------------------------
     if (all([x in obs.columns for x in ['v10', 'tcc']]) and
         any([x in obs.columns for x in ['cbh', 'cty']])):
-        logger.info('Method: k2o')
-        methods_available.append('k2o')
+        logger.info('Method: k2s')
+        methods_available.append('k2s')
         cbh = obs['cbh'] if 'cbh' in obs else None
         cty = obs['cty'] if 'cty' in obs else None
-        obs['k2o'] = dis.klug_manier_scheme_2017(
+        classes = dis.klug_manier_scheme_2017(
             obs.index, obs['v10'], obs['tcc'],
             lat, lon, ele, cbh=cbh, cty=cty)
-        del cbh, cty
+        obs['k2s'] = dis.KM2021.name2austal(classes)
+        del cbh, cty, classes
     #
     # pts -----------------------------
     if all([x in obs.columns for x in ['ff', 'tcc', 'cbh']]):
         logger.info('Method: pts')
         methods_available.append('pts')
-        obs['pts'] = dis.pasquill_taylor_scheme(
+        classes = dis.pasquill_taylor_scheme(
             obs.index, obs['ff'], obs['tcc'], lat, lon, obs['cbh'])
+        obs['pts'] = dis.PT1972.name2austal(classes)
     #
     # kmc -----------------------------
     if all([x in obs.columns for x in ['fsr', 'Lo']]):
         logger.info('Method: kmc')
         methods_available.append('kmc')
-        obs['kmc'] = dis.stabilty_class(
-            'KM', obs.index, obs['fsr'], obs['Lo'].copy())
+        obs['kmc'] = dis.KM2021.lookup_austal(obs['fsr'], obs['Lo'])
     #
     # pgc -----------------------------
     if all([x in obs.columns for x in ['fsr', 'Lo']]):
         logger.info('Method: pgc')
         methods_available.append('pgc')
-        pg = dis.stabilty_class(
-            'PG', obs.index, obs['fsr'], obs['Lo'])
-        # convert to corresponding AK number (class F&G->1)
-        obs['pgc'] = [max((1, 7 - x)) for x in pg]
-
+        obs['pgc'] = dis.PT1972.lookup_austal(obs['fsr'], obs['Lo'])
     #
     # create hour-complete data frame for output
     logger.debug('create w')
@@ -1567,9 +1635,9 @@ def austal_weather(args):
     #
     #    print(skm.classification_report(data['kmc'], data['pgc']))
     logger.debug("methods_available: %s" % methods_available)
+    response = None
     for method in methods_available:
-        if args.get('class-scheme',
-                    DEFAULT_CLASS_SCHEME) in [method, 'all']:
+        if selected_scheme in [method, 'all']:
             logger.debug('generating output for: ' + method)
             if args['prec']:
                 df = pd.DataFrame({'FF': data['ff'],
@@ -1585,14 +1653,134 @@ def austal_weather(args):
                                    'KM': data[method]},
                                   index=data.index)
                 ak = readmet.akterm.DataFile(data=df, z0=z0)
-            outname = ('{:s}_{:s}_{:04d}_'.format(
-                _tools.slugify(source),
-                _tools.slugify(nam), year) +
-                       method + '.akterm')
-            logger.info('writing output file: %s' % outname)
-            ak.write(outname)
-    #
-    return
+            if return_data_frame:
+                response = df
+                if 't2m' in data.columns:
+                    response['T'] = data['t2m']
+                else:
+                    response['T'] = np.nan
+            else:
+                outname = ('{:s}_{:s}_{:04d}_'.format(
+                    _tools.slugify(source),
+                    _tools.slugify(nam), year) +
+                           method + '.akterm')
+                logger.info('writing output file: %s' % outname)
+                ak.write(outname)
+    if return_data_frame and response is None:
+        raise ValueError(f"Selected scheme {selected_scheme} is not in "
+                         f"available schemes {str(methods_available)}.")
+    return response
+
+# -------------------------------------------------------------------------
+
+def add_advanced_option_group(parser):
+    adv_grp = parser.add_argument_group('advanced options')
+    adv_grp.add_argument('--class-scheme',
+                         dest='class-scheme',
+                         choices=['all', 'kms', 'kmo', 'k2s', 'pts',
+                                  'kmc', 'pgc'],
+                         default=DEFAULT_CLASS_SCHEME,
+                         help='Choose the method how stability classes'
+                              'are derived from the weather data.'
+                              'Possible values: %(choices)s. '
+                              '[%(default)s]\n'
+                              '  - kms: Klug/Manier scheme (after VDI 3782'
+                              ' Part 6, issued Apr 2017) calculated from '
+                              'date, time, wind speed, total cloud cover, '
+                              'and cloud type of the lowest cloud layer\n'
+                              '  - k2s: Klug/Manier scheme (after VDI 3782'
+                              ' Part 6, issued Apr 2017) calculated from '
+                              'date, time, wind speed, total cloud cover,'
+                              'and cloud base height (alternatively'
+                              'cloud type of the lowest cloud layer)\n'
+                              '  - kmo: Klug/Manier scheme (after VDI 3782'
+                              ' Part 1, issued 1992) calculated from '
+                              'date, time, wind speed, total cloud cover,'
+                              'and cloud type of the lowest cloud layer\n'
+                              '  - pts: Pasquill/Turner scheme (after '
+                              'EPA-454/R-99-005, issued 2000) calculated '
+                              'from date, time, wind speed, '
+                              'total cloud cover, '
+                              'and cloud type of lowest cloud layer\n'
+                              '  - kmc: classify the model-derived Obukhov'
+                              'length into stability classes using the '
+                              'class boundaries of the Klug/Manier scheme '
+                              '(after TA-Luft, 2021 issued 1992)\n'
+                              '  - pgc: classify the model-derived Obukhov'
+                              'length into stability classes using the '
+                              'class boundaries of the Pasquill/Gifford '
+                              'stability classes '
+                              '(scraped from Golder, 1972)\n'
+                              )
+    adv_grp.add_argument('--inter-variant',
+                         dest='inter-variant',
+                         choices=['weighted', 'nearest', 'mean'],
+                         default=DEFAULT_INTER_VARIANT,
+                         help='Controls the interpolation of gridded data '
+                              'to the position specified. '
+                              'Possible values: %(choices)s. '
+                              '[%(default)s]\n'
+                              '  - nearest: take model values from nearest'
+                              'grid point\n'
+                              '  - mean: arithmetic mean of the model '
+                              'values at the three nearest grid poinst\n'
+                              '  - weighted: barycentric mean (weighted '
+                              'by distance) of the model '
+                              'values at the three nearest grid poinst\n')
+    adv_grp.add_argument('--read-extracted',
+                         dest='read-extracted',
+                         metavar="FILE",
+                         help='Save time by re-reading extracted weather '
+                              'data form a saved file. '
+                              )
+    adv_grp.add_argument('-x', '--write-extracted',
+                         dest='write-extracted',
+                         nargs='?',
+                         # -x with no filename:
+                         const='extracted_weather.csv',
+                         # -x not given at all:
+                         default=None,
+                         metavar='FILE',
+                         help='write full extracted weather data '
+                              'to an extra file. '
+                              'Optional FILE name [%(const)s]')
+    adv_grp.add_argument('--wind-variant',
+                          dest=DEFAULT_WIND_VARIANT,
+                          choices=['model_uv10', 'ustar_wmo',
+                                   'ustar_z0', 'ustar_fsr'],
+                          default='model_uv10',
+                          help=('Controls how the 10-m wind is calculated'
+                                'from ERA5 reanaysis data.'
+                                'possible values: %(choices)s. '
+                                '[%(default)s]\n'
+                                ' - model_uv10: '
+                                'use the ``10-m wind`` provided by the '
+                                'model\n'
+                                '  - ustar_wmo: '
+                                'from friction velocity using a fixed '
+                                'roughness length :math:`z_0` = 0.03 m\n'
+                                ' - ustar_z0: '
+                                'from friction velocity using the mean '
+                                '``forecast surface roughness`` '
+                                'from the model, averaged '
+                                'over the whole data period\n'
+                                ' - ustar_fsr: '
+                                'from friction velocity using the instant '
+                                '``forecast surface roughness`` '
+                                'from the model for each hour\n'
+                                )
+                         )
+    adv_grp.add_argument('--z0',
+                         dest='z0',
+                         default=None,
+                         help=f"roughness length at the position of the "
+                              f"measurement used for calculation of "
+                              f"the effective anemometer height. "
+                              f"Overrides the value provided by the "
+                              f"data source. Ignored if value is None. "
+                              f"[%(default)s]"
+                         )
+    return adv_grp
 
 # -------------------------------------------------------------------------
 
@@ -1635,113 +1823,11 @@ def add_options(subparsers):
                         help='surface elevation. '
                              'An approximate value is sufficient' +
                              'only allowed with -L, -G, -U.')
-
     pars_wea.add_argument('-p', '--precip', dest='prec',
                           action='store_true',
                           help='add precipitation columns to output file')
 
-    adv_wea = pars_wea.add_argument_group('advanced options')
-    adv_wea.add_argument('--class-scheme',
-                         dest='class-scheme',
-                         choices=['all', 'kms', 'kmo', 'k2o', 'pts',
-                                  'kmc', 'pgc'],
-                         default=DEFAULT_CLASS_SCHEME,
-                         help='Choose the method how stability classes'
-                              'are derived from the weather data.'
-                              'Possible values: %(choices)s. '
-                              '[%(default)s]\n'
-                              '  - kms: Klug/Manier scheme (after VDI 3782'
-                              ' Part 6, issued Apr 2017) calculated from '
-                              'date, time, wind speed, total cloud cover, '
-                              'and cloud type of the lowest cloud layer\n'
-                              '  - kmo: Klug/Manier scheme (after VDI 3782'
-                              ' Part 1, issued 1992) calculated from '
-                              'date, time, wind speed, total cloud cover,'
-                              'and cloud type of the lowest cloud layer\n'
-                              '  - k2o: Klug/Manier scheme (after VDI 3782'
-                              ' Part 6, issued Apr 2017) calculated from '
-                              'date, time, wind speed, total cloud cover,'
-                              'and cloud base height (alternatively'
-                              'cloud type of the lowest cloud layer)\n'
-                              '  - pts: Pasquill/Turner scheme (after '
-                              'EPA-454/R-99-005, issued 2000) calculated '
-                              'from date, time, wind speed, '
-                              'total cloud cover, '
-                              'and cloud type of lowest cloud layer\n'
-                              '  - kmc: classify the model-derived Obukhov'
-                              'length into stability classes using the '
-                              'class boundaries of the Klug/Manier scheme '
-                              '(after TA-Luft, 2021 issued 1992)\n'
-                              '  - pgc: classify the model-derived Obukhov'
-                              'length into stability classes using the '
-                              'class boundaries of the Pasquill/Gifford '
-                              'stability classes '
-                              '(scraped from Golder, 1972)\n'
-                              )
-    adv_wea.add_argument('--inter-variant',
-                         dest='inter-variant',
-                         choices=['weighted', 'nearest', 'mean'],
-                         default=DEFAULT_INTER_VARIANT,
-                         help='Controls the interpolation of gridded data '
-                              'to the position specified. '
-                              'Possible values: %(choices)s. '
-                              '[%(default)s]\n'
-                              '  - nearest: take model values from nearest'
-                              'grid point\n'
-                              '  - mean: arithmetic mean of the model '
-                              'values at the three nearest grid poinst\n'
-                              '  - weighted: barycentric mean (weighted '
-                              'by distance) of the model '
-                              'values at the three nearest grid poinst\n')
-    adv_wea.add_argument('--read-extracted',
-                         dest='read-extracted',
-                         metavar="FILE",
-                         help='Save time by re-reading extracted weather '
-                              'data form a saved file. '
-                              )
-    adv_wea.add_argument('-x', '--write-extracted',
-                          dest='write-extracted',
-                          action='store_true',
-                          help='write full extracted weather data '
-                               'to an extra file')
-    adv_wea.add_argument('--wind-variant',
-                          dest=DEFAULT_WIND_VARIANT,
-                          choices=['fixed_057', 'fixed_010', 'model_mean',
-                                   'model_uv10', 'model_fsr'],
-                          default='model_uv10',
-                          help=('Controls how the 10-m wind is calculated'
-                                'from ERA5 reanaysis data.'
-                                'possible values: %(choices)s. '
-                                '[%(default)s]\n'
-                                '  - fixed_057: '
-                                'from friction velocity using a fixed '
-                                'roughness length :math:`z_0` = 0.57 m\n'
-                                '  - fixed_010: '
-                                'from friction velocity using a fixed '
-                                'roughness length :math:`z_0` = 0.10 m\n'
-                                ' - model_fsr: '
-                                'from friction velocity using the instant '
-                                '``forecast surface roughness`` '
-                                'from the model for each hour\n'
-                                ' - model_mean: '
-                                'from friction velocity using the mean '
-                                '``forecast surface roughness`` '
-                                'from the model, averaged '
-                                'over the whole data period\n'
-                                ' - model_uv10: '
-                                'use the ``10-m wind`` provided by the '
-                                'model\n')
-                         )
-    adv_wea.add_argument('--z0',
-                         dest='z0',
-                         default=None,
-                         help=f"roughness length at the position of the "
-                              f"measurement used for calculation of "
-                              f"the effective anemometer height. "
-                              f"Overrides the value provided by the "
-                              f"data source. Ignored if value is None. "
-                              f"[%(default)s]"
-                         )
+    pars_wea_adv = add_advanced_option_group(pars_wea)
     return pars_wea
 
 # =========================================================================

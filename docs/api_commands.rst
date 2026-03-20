@@ -54,6 +54,13 @@ plot
    :undoc-members:
    :member-order: groupwise
 
+select-year
+-----------
+.. automodule:: austaltools.select_year
+   :members:
+   :undoc-members:
+   :member-order: groupwise
+
 steepness
 ---------
 .. automodule:: austaltools.steepness

@@ -61,7 +61,7 @@ def gk2ll(rechts: float, hoch: float) -> (float, float):
     :rtype: float, float, float
     """
     transform = osr.CoordinateTransformation(GK, LL)
-    lat, lon, zz = transform.TransformPoint(rechts, hoch)
+    lat, lon, zz = transform.TransformPoint(float(rechts), float(hoch))
     return lat, lon
 
 # -------------------------------------------------------------------------
@@ -81,7 +81,7 @@ def ll2gk(lat: float, lon: float) -> (float, float):
     :rtype: float, float
     """
     transform = osr.CoordinateTransformation(LL, GK)
-    x, y, z = transform.TransformPoint(lat, lon)
+    x, y, z = transform.TransformPoint(float(lat), float(lon))
     return x, y
 
 # -------------------------------------------------------------------------
@@ -100,7 +100,7 @@ def ut2ll(east: float, north:float) -> (float, float):
     :rtype: float, float, float
     """
     transform = osr.CoordinateTransformation(UT, LL)
-    lat, lon, zz = transform.TransformPoint(east, north)
+    lat, lon, zz = transform.TransformPoint(float(east), float(north))
     return lat, lon
 
 # -------------------------------------------------------------------------
@@ -120,7 +120,7 @@ def ll2ut(lat: float, lon: float) -> (float, float):
     :rtype: float, float
     """
     transform = osr.CoordinateTransformation(LL, UT)
-    easting, nothing, zz = transform.TransformPoint(lat, lon)
+    easting, nothing, zz = transform.TransformPoint(float(lat), float(lon))
     return easting, nothing
 
 # -------------------------------------------------------------------------
@@ -142,7 +142,7 @@ def ut2gk(east: float, north:float) -> (float, float):
     :rtype: float, float, float
     """
     transform = osr.CoordinateTransformation(UT, GK)
-    rechts, hoch, zz = transform.TransformPoint(east, north)
+    rechts, hoch, zz = transform.TransformPoint(float(east), float(north))
     return rechts, hoch
 
 # -------------------------------------------------------------------------
@@ -163,7 +163,7 @@ def gk2ut(rechts: float, hoch: float) -> (float, float):
     :rtype: float, float
     """
     transform = osr.CoordinateTransformation(GK, UT)
-    easting, nothing, zz = transform.TransformPoint(rechts, hoch)
+    easting, nothing, zz = transform.TransformPoint(float(rechts), float(hoch))
     return easting, nothing
 
 # -------------------------------------------------------------------------

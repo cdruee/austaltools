@@ -5,10 +5,19 @@ References
 .. [AST31] Ingenieurbüro Janicke, 2021:
     AUSTAL – Programmbeschreibung zu Version 3.1.
     Umweltbundesamt, Dessau-Roßlau, Germany
+.. [DIN1991] DIN (1995)
+    Nationaler Anhang - National festgelegte Parameter -
+    Eurocode 1: Einwirkungen auf Tragwerke - Teil 1-4:
+    Allgemeine Einwirkungen - Windlasten
+    DIN EN 1991-1-4/NA:2010-12,
+    Deutsches Institut für Normung (DIN), Berlin, Germany
 .. [EPA2000] EPA, 2000: Meteorological Monitoring Guidance for
     Regulatory Modeling Applications,  EPA-454/R-99-005,
     United States Environmental Protection Agency,
     Triangle Park, NC, USA, 171pp.
+.. [EN1991] CEN (1995)
+    Eurocode 1: Actions on structures - Part 1-4: General actions - Wind action.
+    EN 1991-1-4:1995, Comite Europeen de Normalisation, Brussels, Belgium
 .. [JCR07] Julieta, S., R. Carla, and G. Ricardo, 2007:
     Roughness Length Classification of CORINE Land Cover Classes.
     *Proceedings of the European Wind Energy Conference*,
@@ -55,3 +64,13 @@ References
     Methods for licensing procedures according to TA Luft.
     VDI/DIN-Kommission Reinhaltung der Luft (KRdL) - Normenausschuss (Ed.),
     Verein Deutscher Ingenieure, Düsseldorf, Germany
+.. [VDI3783p20] VDI (2017)
+    VDI 3783 part 20:
+    Environmental meteorology – Testing the transferability of meteorological
+    data for application within the context of TA Luft.
+    VDI/DIN-Kommission Reinhaltung der Luft (KRdL) - Normenausschuss (Ed.),
+    Verein Deutscher Ingenieure, Düsseldorf, Germany
+.. [WMO8] WMO (2017)
+    Guide to Meteorological Instruments and Methods of Observation.
+    WMO-No. 8, World Meteorological Organization, Geneva, Switzerland,
+    1177pp.

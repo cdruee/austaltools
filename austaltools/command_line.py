@@ -14,6 +14,7 @@ from . import fill_timeseries
 from . import heating
 from . import input_terrain
 from . import input_weather
+from . import select_year
 from . import steepness
 from . import simple
 from . import transform
@@ -71,6 +72,7 @@ def cli_parser():
         heating,
         plot,
         simple,
+        select_year,
         steepness,
         input_terrain,
         transform,
@@ -160,6 +162,8 @@ def main(args=None):
             plot.main(args)
         elif args['command'] == 'simple':
             simple.main(args)
+        elif args['command'] == 'select-year':
+            select_year.main(args)
         elif args['command'] == 'steepness':
             steepness.main(args)
         elif args['command'] == 'terrain':

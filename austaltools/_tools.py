@@ -1315,6 +1315,12 @@ def read_extracted_weather(csv_name: str) -> (
         ).strip('# \n').split(maxsplit=6)
     stat_no = 0
 
+    # convert numbers
+    lat = float(lat)
+    lon = float(lon)
+    ele = float(ele)
+    z0 = float(z0)
+
     # read observation data from subsequent lines
     obs = pd.read_csv(csv_name, comment='#', index_col=0,
                       parse_dates=True, na_values='-999')

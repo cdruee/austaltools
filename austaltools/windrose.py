@@ -97,7 +97,7 @@ def main(args):
         hist,xx,yy = np.histogram2d(dd,ff, bins=[d_bnds, r_bnds])
     elif scale == STAB:
         r_bnds = [0. + i for i in range(7)]
-        labels = [_dispersion.KM2021.name(j+1) for j in range(6)]
+        labels = [_dispersion.KM2021.num2name(j+1) for j in range(6)]
         hist,xx,yy = np.histogram2d(dd,ff, bins=[d_bnds, r_bnds])
     elif scale in [SEAS, QUAD]:
         if scale == SEAS:

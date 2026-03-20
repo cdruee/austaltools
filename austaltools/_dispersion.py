@@ -9,6 +9,7 @@ import os
 
 import numpy as np
 import pandas as pd
+from pandas import Series
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import meteolib as m
@@ -46,12 +47,12 @@ class StabiltyClass:
         values of the Obukhov lenght for 1st, 2nd, 3rd, ... class
         Mutually exclusive with `bounds`.
     :type centers: list[tuple[list]]
-    :param tabbed_values_inverted:
+    :param tabbed_is_inverse:
         False if the bounds or center values should
         be taken as they are. True if values shoud be inverted
         i.e. :math:`1/x`. Defaults to False.
-    :type tabbed_values_inverted: bool
-    :param reverse_index: False if the numric class index is acsending.
+    :type tabbed_is_inverse: bool
+    :param reverse_index: False if the numeric class index is acsending.
         True if it is decending. Defaults to False.
     :type reverse_index:
     :param names: Names of the stability classes. Must be same lenght
@@ -63,13 +64,14 @@ class StabiltyClass:
     _index = None
     count = 0
     names = None
-    reverse_index = False
+    austal = None
 
     def __init__(self, bounds: list | tuple | None = None,
                  centers: list | tuple | None = None,
-                 tabbed_values_inverted: bool = False,
+                 tabbed_is_inverse: bool = False,
                  reverse_index: bool = True,
-                 names: list[str] | tuple[str] | None = None) -> None:
+                 names: list[str] | tuple[str] | None = None,
+                 austal: list[int] | tuple[int] | None = None) -> None:
         if bounds is not None and centers is not None:
             raise ValueError('bounds and centers are mutually exclusive')
         elif bounds is not None:
@@ -89,15 +91,19 @@ class StabiltyClass:
             if any([sorted(x[0]) != x[0] for x in bounds]):
                 raise ValueError('lists in bounds elements must ' +
                                  'be sorted by ascending z0')
-            if tabbed_values_inverted:
+            # StabilityClass object always contains 1/L (not L) values
+            if tabbed_is_inverse:
                 self._bounds = bounds
             else:
                 self._bounds = []
                 for b in bounds:
                     self._bounds.append([b[0], [1 / x for x in b[1]]])
+
+            if reverse_index:
+                self._bounds = list(reversed(self._bounds))
             self.count = len(bounds) + 1
-            # self._bounds = self._sort(self._bounds)
             self._bounds2centers()
+
         elif centers is not None:
             if type(centers) not in [list, tuple]:
                 raise ValueError('centers must be list or tuple')
@@ -115,16 +121,22 @@ class StabiltyClass:
             if any([sorted(x[0]) != x[0] for x in centers]):
                 raise ValueError('lists in centers elements must ' +
                                  'be sorted by ascending z0')
-            if tabbed_values_inverted:
+            # StabilityClass object always contains 1/L (not L) values
+            if tabbed_is_inverse:
                 self._centers = centers
             else:
                 self._centers = []
                 for b in centers:
                     self._centers.append([b[0], [1 / x for x in b[1]]])
+
+            if reverse_index:
+                self._centers = list(reversed(self._centers))
             self.count = len(centers)
-            # self._centers = self._sort(self._centers)
             self._centers2bounds()
-        if names is not None:
+
+        if names is None:
+            raise ValueError('names key missing in stability class data')
+        else:
             if not type(names) in [list, tuple]:
                 raise ValueError('names must be list or tuple')
             if any([not isinstance(x, str) for x in names]):
@@ -132,11 +144,24 @@ class StabiltyClass:
             if len(names) != self.count:
                 raise ValueError('number of names must equal ' +
                                  'number of classes')
-            self.names = names
-        if reverse_index:
-            self.reverse_index = True
+            if not reverse_index:
+                self.names = names
+            else:
+                self.names = list(reversed(names))
+        if austal is None:
+            raise ValueError('austal key missing in stability class data')
         else:
-            self.reverse_index = False
+            if not type(austal) in [list, tuple]:
+                raise ValueError('austal must be list or tuple')
+            if any([not isinstance(x, int) for x in austal]):
+                raise ValueError('austal must be integers')
+            if len(austal) != self.count:
+                raise ValueError('number of austal must equal ' +
+                                 'number of classes')
+            if not reverse_index:
+                self.austal = austal
+            else:
+                self.austal = list(reversed(austal))
 
     def _sort(self, lines: list) -> list:
         # get median z0
@@ -164,9 +189,9 @@ class StabiltyClass:
     def _bounds2centers(self) -> None:
         # calculate center values if bounds values are defined
         bz0, bil = self._bounds[0]
-        lbounds = [[bz0, [1. / 9999. for x in bil]], ] + self._bounds[:-1]
+        lbounds = [[bz0, [1. / 9999. for x in bil]], ] + self._bounds
         bz0, bil = self._bounds[-1]
-        rbounds = self._bounds[1:] + [[bz0, [1. / 9999. for x in bil]], ]
+        rbounds = self._bounds + [[bz0, [1. / 9999. for x in bil]], ]
 
         self._centers = []
         for lb, rb in zip(lbounds, rbounds):
@@ -191,125 +216,234 @@ class StabiltyClass:
                    for x in bz0]
             self._bounds.append([bz0, bil])
 
-    def get_bound(self, num: int, z0: float, inverted: bool = False) -> float:
+    def class_bound(self, cls: int|str, z0: float,
+                    inverse: bool = False) -> float:
         """
         get the upper boundary value of Obukhov lentgh :math:`L` for the
-        class with index `num` for roughness length `z0`.
+        class with number `num` for roughness length `z0`.
 
-        :param num: numeric class index
-        :type num: int
+        Note: there is no such value for the class with the highest number.
+
+        :param cls: class name or number (1-based)
+        :type num: int|str
         :param z0: roughness length in m
         :type z0: float
-        :param inverted: True if :math:`1/L` should be returned instead
+        :param inverse: True if :math:`1/L` should be returned instead
           of :math:`L`
-        :type inverted: bool (optional)
+        :type inverse: bool (optional)
         :return: Obukhov length :math:`L` in m
         :rtype: float
         """
 
-        if num not in range(self.count - 1):
-            # print(self.count)
-            raise ValueError('no boundary number #%i' % int(num))
-        il = self._getval(z0, self._bounds[num])
-        if inverted:
-            return il
+        if isinstance(cls, str):
+            num = self.name2num(cls)
+            if num == self.count:
+                raise ValueError('no upper boundary for highest class #%i' % num)
         else:
-            return 1 / il
+            num = int(cls)
+            if num not in range(1, self.count):
+                raise ValueError('no class number #%i' % int(num))
+        zeta = self._getval(z0, self._bounds[num - 1])
+        if inverse:
+            return zeta
+        else:
+            return 1 / zeta
 
-    def get_center(self, num: int, z0: float, inverted: bool = False) -> float:
+    def class_center(self, cls: int | str, z0: float,
+                     inverse: bool = False) -> float:
         """
         get the center value of Obukhov lentgh :math:`L` for the
-        class with index `num` for roughness length `z0`.
+        class with number `num` for roughness length `z0`.
 
-        :param num: numeric class index
-        :type num: int
+        :param cls: class name or number (1-based)
+        :type num: int|str
         :param z0: roughness length in m
         :type z0: float
-        :param inverted: True if :math:`1/L` should be returned instead
+        :param inverse: True if :math:`1/L` should be returned instead
           of :math:`L`
-        :type inverted:  bool (optional)
+        :type inverse:  bool (optional)
         :return: Obukhov length :math:`L` in m
         :rtype: float
         """
-        if num not in range(self.count):
-            raise ValueError('no class number #%i' % int(num))
-        il = self._getval(z0, self._centers[num])
-        if inverted:
-            return il
+        if isinstance(cls, str):
+            num = self.name2num(cls)
         else:
-            return 1 / il
+            num = int(cls)
+            if num not in range(1, self.count + 1):
+                raise ValueError('no class number #%i' % int(num))
+        zeta = self._getval(z0, self._centers[num - 1])
+        if inverse:
+            return zeta
+        else:
+            return 1 / zeta
 
-    def get_index(self, z0: float, lob: float, inverted: bool = False) -> int:
+    def lookup_num(self,
+                   z0: float | pd.Series,
+                   lob: float | pd.Series,
+                   inverse: bool = False) -> int:
         """
-        get the numeric class index for roughness length `z0` and
+        get the numeric class for roughness length `z0` and
         Obukhov lentgh :math:`L`.
 
         :param z0: roughness length in m
-        :type z0: float
+        :type z0: float | ps.Series
         :param lob: Obukhov lentgh
-        :param inverted: True if `lob` is :math:`1/L` instead
+        :type lob: float | pd.Series
+        :param inverse: True if `lob` is :math:`1/L` instead
           of :math:`L`
-        :type inverted:  bool (optional)
+        :type inverse:  bool (optional)
         :return: Numeric class index
         :rtype: int
         """
-        if inverted:
-            il = lob
-        else:
-            il = 1. / lob
-        bs = [self.get_bound(i, z0, inverted=True)
-              for i in range(self.count - 1)]
-        for i, x in enumerate(bs):
-            if il < x:
-                cl = i
-                break
-        else:
-            cl = self.count - 1
-        if self.reverse_index:
-            return self.count - cl
-        else:
-            return cl + 1
+        #
+        # we do the lookup on inverted (1/L)
+        # because (1/L) i monotonous while (L) is not
+        if not isinstance(z0, pd.Series):
+            z0 = pd.Series(z0, dtype=float)
+        if not isinstance(lob, pd.Series):
+            lob = pd.Series(lob, dtype=float)
+        if not z0.index.equals(lob.index):
+            raise ValueError('z0 and lob indexes do not match')
+        cl = pd.Series(index=z0.index)
+        for i in cl.index:
+            if np.isnan(z0[i]) or not 1.E-9 < z0[i] < 1000.:
+                # z0 not present of has an impossible value
+                cl[i] = -1
+            else:
+                if inverse:
+                    zeta = lob[i]
+                else:
+                    zeta = 1. / lob[i]
+                zeta_bounds = [self.class_bound(x, z0[i], inverse=True)
+                    for x in range(1, self.count)]
+                cl[i] = 1
+                for zi, zb in enumerate(zeta_bounds):
+                    if zb < zeta:
+                        break
+                    else:
+                        cl[i] += 1
+        return cl
 
-    def get_name(self, z0: float, index: int, inverted: bool = False) -> str:
+    def lookup_name(self,
+                    z0: float | pd.Series,
+                    lob: float | pd.Series,
+                    inverse: bool = False) -> str:
         """
         get the class name for roughness length `z0` and
         Obukhov lentgh :math:`L`.
 
         :param z0: roughness length in m
-        :type z0: float
-        :param index: class index
-        :param inverted: True if `lob` is :math:`1/L` instead
-            of :math:`L`
-        :type inverted:  bool (optional)
-        :return: class name
-        :rtype: str
-        """
-        return self.names[self.get_index(z0, index, inverted) - 1]
-
-    def name(self, num: int) -> str:
-        """
-        get the class name for numeric class index
-
-        :param num: numeric class index
-        :return: class name
-        :rtype: str
-        """
-        if not num - 1 in range(self.count):
-            raise ValueError('no class number #%i' % int(num))
-        return self.names[int(num) - 1]
-
-    def index(self, name: str) -> int:
-        """
-        get the numeric class index for class name
-
-        :param name: class name
-        :type name: str
-        :return: numeric class index
+        :type z0: float | pd.Series
+        :param lob: Obukhov lentgh
+        :type lob: float | pd.Series
+        :param inverse: True if `lob` is :math:`1/L` instead
+          of :math:`L`
+        :type inverse:  bool (optional)
+        :return: Numeric class index
         :rtype: int
         """
-        if name not in self.names:
-            raise ValueError('no class name "%s"' % name)
-        return self.names.index(name) + 1
+        return self.num2name(
+            self.lookup_num(z0, lob, inverse=inverse))
+
+    def lookup_austal(self,
+                      z0: float | pd.Series,
+                      lob: float | pd.Series,
+                      inverse: bool = False) -> int:
+        """
+        get the class name for roughness length `z0` and
+        Obukhov lentgh :math:`L`.
+
+        :param z0: roughness length in m
+        :type z0: float | pd.Series
+        :param lob: Obukhov lentgh
+        :type lob: float | pd.Series
+        :param inverse: True if `lob` is :math:`1/L` instead
+          of :math:`L`
+        :type inverse:  bool (optional)
+        :return: Numeric class index
+        :rtype: int
+        """
+        return self.num2austal(
+            self.lookup_num(z0, lob, inverse=inverse))
+
+
+    def num2name(self, num: int) -> str:
+        """
+        get the class name for numeric class
+
+        :param num: numeric class index
+        :type num: int | list | pd.Series[int]
+        :return: class name
+        :rtype: str | pd.Series
+        """
+        scalar = (np.ndim(num) == 0)
+        idx_series = pd.Series(num) - 1
+        if not all(idx_series.isin(range(self.count))):
+            invalid = idx_series[~idx_series.isin(range(self.count))] + 1
+            raise ValueError(f'invalid class number(s): {invalid.tolist()}')
+        res = pd.Series([self.names[int(i)] for i in idx_series],
+                        index=idx_series.index)
+        if scalar:
+            return str(res.iloc[0])
+        else:
+            return res
+
+    def num2austal(self, num: int) -> int | Series:
+        """
+        get the AUSTAL numeric class for numeric class
+
+        :param num: numeric class index
+        :type num: int | list | pd.Series[int]
+        :return: class name
+        :rtype: int | pd.Series
+        """
+        scalar = (np.ndim(num) == 0)
+        idx_series = pd.Series(num) - 1
+        # if not all(idx_series.isin(range(self.count))):
+        #     invalid = idx_series[~idx_series.isin(range(self.count))] + 1
+        #     raise ValueError(f'invalid class number(s): {invalid.tolist()}')
+        res = pd.Series([self.austal[int(i)]
+                         if np.isin(int(i),range(self.count))
+                         else 9
+                         for i in idx_series
+                         ], index=idx_series.index)
+        if scalar:
+            return int(res.iloc[0])
+        else:
+            return res
+
+    def name2num(self, name: str | list | pd.Series) -> int | pd.Series:
+        """
+        Get the numeric class for a class name.
+
+        :param name: class name(s)
+        :type name: str | list | pd.Series
+        :return: numeric class index (1-based); scalar input returns a scalar
+        :rtype: int | pd.Series
+        """
+        scalar = isinstance(name, (str, bytes))
+        name_series = pd.Series(name)
+        if not all(name_series.isin(self.names)):
+            invalid = name_series[~name_series.isin(self.names)]
+            raise ValueError(f'invalid class name(s): {invalid.tolist()}')
+        res = pd.Series([self.names.index(n) + 1 for n in name_series],
+                        index=name_series.index)
+        if scalar:
+            return int(res.iloc[0])
+        else:
+            return res
+
+    def name2austal(self, name: str) -> int:
+        """
+        get the AUSTAL numeric class index for class name
+
+        :param name: class name
+        :type name: str | list | pd.Series
+        :return: numeric class index
+        :rtype: int | pd.Series
+        """
+        idx = self.name2num(name)
+        return self.num2austal(idx)
 
 
 # ----------------------------------------------------
@@ -327,10 +461,12 @@ KM2021 = StabiltyClass(centers=[
      [-15, -19, -27, -36, -49, -80, -125, -170, -217]),
     ([0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 1.00, 1.50, 2.00],
      [-6, -8, -11, -15, -20, -33, -52, -70, -89]),
-],
-    tabbed_values_inverted=False,
-    reverse_index=True,
-    names=['I', 'II', 'III1', 'III2', 'IV', 'V'])
+    ],
+    tabbed_is_inverse=False,
+    reverse_index=False,
+    names=['I', 'II', 'III1', 'III2', 'IV', 'V'],
+    austal=[1, 2, 3, 4, 5, 6]
+)
 """
 Klug/Manier stabilty classes. Class center values taken from 
 TA Luft 2021 [TAL2021]_.
@@ -355,10 +491,12 @@ KM2002 = StabiltyClass(centers=[
      [-10, -13, -19, -25, -34, -55, -83, -110, -137]),
     ([0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 1.00, 1.50, 2.00],
      [-4, -5, -7, -10, -14, -22, -34, -45, -56]),
-],
-    tabbed_values_inverted=False,
-    reverse_index=True,
-    names=['I', 'II', 'III1', 'III2', 'IV', 'V'])
+    ],
+    tabbed_is_inverse=False,
+    reverse_index=False,
+    names=['I', 'II', 'III1', 'III2', 'IV', 'V'],
+    austal=[1, 2, 3, 4, 5, 6]
+)
 """
 Klug/Manier stabilty classes. Class center values taken from TA Luft 2002
 [TAL2002]_.
@@ -371,30 +509,52 @@ Tabelle 17: Bestimmung der Monin–Obukhov–Länge L_M
 # ----------------------------------------------------
 #
 PG1972 = StabiltyClass(bounds=[
-    #        ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
-    #           0.056587,   0.10508,   0.19514,   0.49384],
-    #         [-0.130121,  -0.12399, -0.114696, -0.108358, -0.098456,
-    #           -0.087685, -0.079713, -0.071017, -0.056878]),
-    #        ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
-    #           0.056587,   0.10508,   0.19514,   0.49384],
-    #         [-0.086466, -0.081043, -0.072786, -0.067090, -0.057879,
-    #           -0.047121, -0.039191, -0.031135, -0.015915]),
-    #        ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
-    #           0.056587,   0.10508,   0.19514,   0.49384],
-    #         [-0.036088, -0.032579, -0.027597, -0.024512, -0.019885,
-    #           -0.015090, -0.011871, -0.008705, -0.004281]),
-    #        ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
-    #           0.056587,   0.10508,   0.19514,   0.49384],
-    #         [ 0.012206,  0.009979,  0.007739,  0.006889,  0.006501,
-    #           0.004992,  0.004183,  0.003579,  0.002873]),
-    #        ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
-    #           0.056587,   0.10508,   0.19514,   0.49384],
-    #         [ 0.040156,  0.033523,  0.025014,  0.021329,  0.016380,
-    #           0.012502,  0.010628,  0.009159,  0.007393]),
-    #        ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
-    #           0.056587,   0.10508,   0.19514,   0.49384],
-    #         [ 0.095955,  0.085088,  0.069084,  0.059677,  0.047705,
-    #         0.038408,  0.032892,  0.028047,  0.022981]),
+       ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
+          0.056587,   0.10508,   0.19514,   0.49384],
+        [-0.130121,  -0.12399, -0.114696, -0.108358, -0.098456,
+          -0.087685, -0.079713, -0.071017, -0.056878]),
+       ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
+          0.056587,   0.10508,   0.19514,   0.49384],
+        [-0.086466, -0.081043, -0.072786, -0.067090, -0.057879,
+          -0.047121, -0.039191, -0.031135, -0.015915]),
+       ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
+          0.056587,   0.10508,   0.19514,   0.49384],
+        [-0.036088, -0.032579, -0.027597, -0.024512, -0.019885,
+          -0.015090, -0.011871, -0.008705, -0.004281]),
+       ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
+          0.056587,   0.10508,   0.19514,   0.49384],
+        [ 0.012206,  0.009979,  0.007739,  0.006889,  0.006501,
+          0.004992,  0.004183,  0.003579,  0.002873]),
+       ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
+          0.056587,   0.10508,   0.19514,   0.49384],
+        [ 0.040156,  0.033523,  0.025014,  0.021329,  0.016380,
+          0.012502,  0.010628,  0.009159,  0.007393]),
+       ([0.0010125, 0.0018802, 0.0047581,  0.008836,  0.022361,
+          0.056587,   0.10508,   0.19514,   0.49384],
+        [ 0.095955,  0.085088,  0.069084,  0.059677,  0.047705,
+        0.038408,  0.032892,  0.028047,  0.022981]),
+    ],
+    # values here are:
+    # least stable   ...  most stable
+    tabbed_is_inverse=True,
+    reverse_index=True,
+    names=['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+    # For EPA regulatory modeling applications, stability categories
+    # 6 and 7 (F and G) are combined and considered category 6 (G).
+    austal = [6, 5, 4, 3, 2, 1, 1]
+)
+"""
+Pasquill-*Gifford* stability classes.
+Class Boundaries scraped from [GOL1972]_ Fig *4*
+
+According to EPA [EPA2000]_ class G is neglected for regulatory modeling
+
+:meta hide-value:
+"""
+
+# ----------------------------------------------------
+#
+PT1972 = StabiltyClass(bounds=[
     ([0.005, 0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 2.00],
      [-0.114, -0.107, -0.099, -0.089, -0.081, -0.071, -0.057, -0.042]),
     ([0.005, 0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 2.00],
@@ -407,85 +567,24 @@ PG1972 = StabiltyClass(bounds=[
      [0.025, 0.020, 0.017, 0.013, 0.011, 0.009, 0.007, 0.0002]),
     ([0.005, 0.01, 0.02, 0.05, 0.10, 0.20, 0.50, 2.00],
      [0.068, 0.058, 0.049, 0.039, 0.033, 0.028, 0.023, 0.006]),
-],
-    tabbed_values_inverted=True,
-    reverse_index=False,
-    names=['A', 'B', 'C', 'D', 'E', 'F', 'G'])
+    ],
+    # values here are:
+    # least stable   ...  most stable
+    tabbed_is_inverse=True,
+    reverse_index=True,
+    names=['A', 'B', 'C', 'D', 'E', 'F', 'G'],
+    # For EPA regulatory modeling applications, stability categories
+    # 6 and 7 (F and G) are combined and considered category 6 (G).
+    austal = [6, 5, 4, 3, 2, 1, 1]
+)
 """
-Pasquill-Gifford stability classes.
-Class Boundaries scraped from [GOL1972]_ Fig 5
+Pasquill-*Turner* stability classes.
+Class Boundaries scraped from [GOL1972]_ Fig *5*
 
-According to EPA (link?) class G is neglected for regulatory modeling
+According to EPA [EPA2000]_ class G is neglected for regulatory modeling
 
 :meta hide-value:
 """
-
-
-# ----------------------------------------------------
-#
-def stabilty_class(classifyer: str,
-                   time: pd.DatetimeIndex | pd.Timestamp| np.datetime64 | list[str],
-                   z0: pd.Series | float,
-                   L: pd.Series | float) -> list[int]:
-    """
-    Returns the atmospheric stability class according to
-     the selected classification scheme.
-
-    :param str classifyer: The classification method
-        ('Klug/Manier', 'KM2021', 'KM', 'TA Luft 2021',
-        'KM2002', or 'TA Luft 2002').
-    :param time: Date and time
-    :type time: pandas.DatetimeIndex or datetime64
-    :param z0: Roughness length(s)
-    :type z0: pandas.Series or float
-    :param L: Monin-Obukhov length(s) in m
-     :type L: pd.Series or float
-
-    :return: Stability class indices (1-6; 9 for missing values)
-    :rtype: list
-
-    :raises ValueError: If shapes of time, z0, and L are not equal.
-    :raises ValueError: If an unknown classification method is provided.
-
-    :example:
-        >>> import pandas as pd
-        >>> time = pd.DatetimeIndex(['2024-08-02 12:00:00'])
-        >>> z0 = pd.Series(0.1, index=time)
-        >>> L = pd.Series(-100, index=time)  # Example Monin-Obukhov length
-        >>> result = stabilty_class('KM2021', time, z0, L)
-        >>> print("Stability class indices:", result)
-        Stability class indices: [2]
-
-    """
-    # check / adjust types
-    if _isscalar(time):
-        time = pd.DatetimeIndex([time])
-    else:
-        time = pd.DatetimeIndex(time)
-    if _isscalar(z0):
-        z0 = pd.Series(z0, index=time)
-    else:
-        z0 = pd.Series(z0)
-    L = pd.Series(L)
-    if not (np.shape(time) == np.shape(z0) == np.shape(L)):
-        raise ValueError('shapes of time, z0, L are not equal')
-
-    if classifyer in ['Klug/Manier', 'KM2021', 'KM', 'TA Luft 2021']:
-        scale = KM2021
-    elif classifyer in ['KM2002', 'TA Luft 2002']:
-        scale = KM2002
-    elif classifyer in ['Pasquill/Gifford', 'PG1972', 'PG']:
-        scale = PG1972
-    else:
-        return ValueError('unknown classication :%s' % classifyer)
-
-    # 9 = missing value
-    sclass = np.array([9] * len(time))
-    for i, t in enumerate(time):
-        sclass[i] = scale.get_index(z0.iloc[i], L.iloc[i], inverted=False)
-
-    return sclass[()].tolist()
-
 
 # =============================================================================
 
@@ -635,20 +734,20 @@ def klug_manier_scheme_1992(
         lat: float,
         lon: float,
         cty: str | list[
-            float] | pd.Series | None = None) -> int | pd.Series:
+            float] | pd.Series | None = None) -> str | pd.Series:
     """
     Calulate stability class after Klug/Manier
     accroding to according to VDI 3782 Part 1 (issued 1992)
 
 
      ========== ================= =======
-      Category  Atmospheric        Index
+      Category  Atmospheric       numeric
                 stability
      ========== ================= =======
       I         very stable         1
       II        stable              2
-      III/1     neutral/stable      3
-      III/2     neutral/unstable    4
+      III1      neutral/stable      3
+      III2      neutral/unstable    4
       IV        unstable            5
       V         very unstable       6
      ========== ================= =======
@@ -710,10 +809,17 @@ def klug_manier_scheme_1992(
         logger.warning('Klug-Manier scheme is made for Central Europe, only.')
 
     logger.debug('klug_manier_scheme_1992 ---> %19s ...' % (time[0]))
-    # Einlesen
-    monat = pd.Series([x.month for x in time], index=time)
+
+    # The correction rules (a, b, and the day/night boundary)
+    # compare against hardcoded CET clock hours
+    # therefore wee need to determine monat and stund from time in CET:
+    if time.tz is None:
+        time_cet = time.tz_localize('Etc/GMT-1')
+    else:
+        time_cet = time.tz_convert('Etc/GMT-1')   # Etc/GMT-1 = fixed UTC+1, no DST
+    monat = pd.Series([x.month for x in time_cet], index=time)
     stund = pd.Series([(float(x.hour) + float(x.minute) / 60.)
-                       for x in time], index=time)
+                       for x in time_cet], index=time)
 
     # auf/unter UTC
     s_auf, _, s_unter = m.radiation.fast_rise_transit_set(time, lat, lon)
@@ -724,7 +830,16 @@ def klug_manier_scheme_1992(
     #
     # Ausbreitungsklassen
     #
-    k = {KM2002.name(i + 1): i + 1 for i in range(KM2002.count)}
+    k = {
+        'I': 1,
+        'II': 2,
+        'III1': 3,
+        'III2': 4,
+        'IV': 5,
+        'V': 6
+    }
+    # reverse name table
+    ik = {y:x for x,y in k.items()}
     #
     # Tabelle A.1
     #
@@ -787,7 +902,7 @@ def klug_manier_scheme_1992(
                 kt.iloc[i] = k['III1']
 
         logger.debug('table A.1: k_n: %4s, k_d: %4s' %
-                     (KM2002.name(kn.iloc[i]), KM2002.name(kt.iloc[i])))
+                     (ik[kn.iloc[i]], ik[kt.iloc[i]]))
     #
     # **)  Für die Abgrenzung sind Sonnenaufgang und -untergang
     #      (MEZ) maßgebend. Die Ausbreitungsklasse für Nachtstunden
@@ -798,13 +913,13 @@ def klug_manier_scheme_1992(
     for i, _ in enumerate(time):
         if stund.iloc[i] <= np.ceil(s_auf.iloc[i]):
             km.iloc[i] = kn.iloc[i]
-            logger.debug('morning        -> %4s' % (KM2002.name(km.iloc[i])))
+            logger.debug('morning        -> %4s' % ik[km.iloc[i]])
         elif stund.iloc[i] <= s_unter.iloc[i]:
             km.iloc[i] = kt.iloc[i]
-            logger.debug('day            -> %4s' % (KM2002.name(km.iloc[i])))
+            logger.debug('day            -> %4s' % ik[km.iloc[i]])
         else:
             km.iloc[i] = kn.iloc[i]
-            logger.debug('evening        -> %4s' % (KM2002.name(km.iloc[i])))
+            logger.debug('evening        -> %4s' % ik[km.iloc[i]])
 
     #
     # besondere Ausbreitungsverhaeltnisse
@@ -828,14 +943,14 @@ def klug_manier_scheme_1992(
             if stund.iloc[i] >= 10 and stund.iloc[i] <= 16 and km.iloc[i] < k['V']:
                 if ecc.iloc[i] <= 0.75:
                     km.iloc[i] = km.iloc[i] + 1
-                    logger.debug('rule a.1a     -> %4s' % (KM2002.name(km.iloc[i])))
+                    logger.debug('rule a.1a     -> %4s' % ik[km.iloc[i]])
                 elif ecc.iloc[i] <= 0.875 and ff.iloc[i] < 2.5:
                     km.iloc[i] = km.iloc[i] + 1
-                    logger.debug('rule a.1b     -> %4s' % (KM2002.name(km.iloc[i])))
+                    logger.debug('rule a.1b     -> %4s' % ik[km.iloc[i]])
             if stund.iloc[i] >= 12 and stund.iloc[i] <= 15 and km.iloc[i] < k['V']:
                 if ecc.iloc[i] <= 0.625:
                     km.iloc[i] = km.iloc[i] + 1
-                    logger.debug('rule a.2      -> %4s' % (KM2002.name(km.iloc[i])))
+                    logger.debug('rule a.2      -> %4s' % ik[km.iloc[i]])
         #
         # Teil b)
         # Für die Monate Mai und September ist für die
@@ -848,7 +963,7 @@ def klug_manier_scheme_1992(
             if stund.iloc[i] >= 11 and stund.iloc[i] <= 15:
                 if ecc.iloc[i] <= 0.75:
                     km.iloc[i] = km.iloc[i] + 1
-                    logger.debug('rule b        -> %4s' % (KM2002.name(km.iloc[i])))
+                    logger.debug('rule b        -> %4s' % ik[km.iloc[i]])
         #
         # Teil c)
         # Für jede volle Stunde der Zeiträume von 1 Stunde
@@ -1001,7 +1116,7 @@ def klug_manier_scheme_1992(
             logger.debug('rule c tab A.2:')
             if a2_star is not None:
                 logger.debug('footnote (%2a) :' % a2_star)
-            logger.debug('col: %9a-> %4s' % (a2_col, KM2002.name(km.iloc[i])))
+            logger.debug('col: %9a-> %4s' % (a2_col, ik[km.iloc[i]]))
         #
         # Teil d)
         #  Für die Monate Dezember, Januar und Februar
@@ -1011,7 +1126,7 @@ def klug_manier_scheme_1992(
         if monat.iloc[i] in [1, 2, 12]:
             if km.iloc[i] == k['IV']:
                 km.iloc[i] = k['III2']
-                logger.debug('rule d        -> %4s' % (KM2002.name(km.iloc[i])))
+                logger.debug('rule d        -> %4s' % ik[km.iloc[i]])
 
     #
     # Fälle, bei denen keine Ausbreitungsklasse bestimmt
@@ -1029,12 +1144,15 @@ def klug_manier_scheme_1992(
                 km.iloc[i] = k['II']
             else:
                 km.iloc[i] = k['III1']
-            logger.debug('savlatory rule-> %4s' % (KM2002.name(km.iloc[i])))
+            logger.debug('savlatory rule-> %4s' % ik[km.iloc[i]])
 
-    logger.debug('return value  -> %s' % str([KM2002.name(x) for x in km]))
+    #ret = [ik[x] for x in km]
+    ret = km.map(ik)  # pd.Series[int] → pd.Series[str]
+    logger.debug('return value  -> %s' % str(ret))
     if scalar:
-        km = km[0]
-    return km
+        return ret[0]
+    else:
+        return ret
 
 
 # ----------------------------------------------------
@@ -1049,19 +1167,19 @@ def klug_manier_scheme_2017(
         ele: float,
         cty: float | list[float] | pd.Series | None = None,
         cbh: float | list[float] | pd.Series | None = None,
-        _cloudout=False):
+        _cloudout=False) -> str | pd.Series:
     """
     Calulate stability class after Klug/Manier
     according to according to VDI 3782 Part 6 (issued Apr 2017)
 
      ========== ================= =======
-      Category  Atmospheric        Index
+      Category  Atmospheric       numeric
                 stability
      ========== ================= =======
       I         very stable         1
       II        stable              2
-      III/1     neutral/stable      3
-      III/2     neutral/unstable    4
+      III1      neutral/stable      3
+      III2      neutral/unstable    4
       IV        unstable            5
       V         very unstable       6
      ========== ================= =======
@@ -1164,10 +1282,16 @@ def klug_manier_scheme_2017(
 
     logger.debug('klug_manier_scheme_2017 ---> %19s ...' % (time[0]))
 
-    # Einlesen
-    monat = pd.Series([x.month for x in time], index=time)
+    # The correction rules (a, b, and the day/night boundary)
+    # compare against hardcoded CET clock hours
+    # therefore wee need to determine monat and stund from time in CET:
+    if time.tz is None:
+        time_cet = time.tz_localize('Etc/GMT-1')
+    else:
+        time_cet = time.tz_convert('Etc/GMT-1')   # Etc/GMT-1 = fixed UTC+1, no DST
+    monat = pd.Series([x.month for x in time_cet], index=time)
     stund = pd.Series([(float(x.hour) + float(x.minute) / 60.)
-                       for x in time], index=time)
+                       for x in time_cet], index=time)
 
     # Sunrise and sunset times are to be quoted in the
     # relevant zonetime. For Germany, CET should be
@@ -1178,7 +1302,15 @@ def klug_manier_scheme_2017(
     # termined in accordance with VDI 3789; further
     # information on calculating sunrise and sunset times
     # can be found in Annex A.
-    sr, ss = vdi_3872_6_sun_rise_set(time, lat, lon)
+    # Pass time_cet so that sr/ss are returned in CET hours, consistent
+    # with stund.  vdi_3872_6_sun_rise_set converts its output back to the
+    # caller's timezone, so it must receive the same CET index that stund
+    # was built from.
+    sr, ss = vdi_3872_6_sun_rise_set(time_cet, lat, lon)
+    # vdi_3872_6_sun_rise_set returns Series indexed on its input (time_cet);
+    # reset to the original time index so all Series remain aligned.
+    sr = pd.Series(sr.values, index=time)
+    ss = pd.Series(ss.values, index=time)
     if np.min(ss - sr) < 5:
         raise ValueError('scheme only defined where day length > 5h')
     for i, x, y in zip(stund, sr, ss):
@@ -1202,7 +1334,16 @@ def klug_manier_scheme_2017(
     #
     # Ausbreitungsklassen
     #
-    k = {KM2021.name(i + 1): i + 1 for i in range(KM2021.count)}
+    k = {
+        'I':    1,
+        'II':   2,
+        'III1': 3,
+        'III2': 4,
+        'IV':   5,
+        'V':    6
+    }
+    # reverse name table
+    ik = {y: x for x, y in k.items()}
     #
     # The dispersion categories I to IV are determined
     # according to the scheme shown in Table 2. Cate-
@@ -1355,7 +1496,7 @@ def klug_manier_scheme_2017(
         # else show them
         if not np.isnan(kt.iloc[i]) and not np.isnan(kn.iloc[i]):
             logger.debug('ff: %4.1f, k_n: %4s, k_d: %4s' % (
-                ff.iloc[i], KM2002.name(kn.iloc[i]), KM2002.name(kt.iloc[i])))
+                ff.iloc[i], ik[kn.iloc[i]], ik[kt.iloc[i]]))
 
     # select value depending om day/night
     km = kt.where(daytime, kn)
@@ -1387,16 +1528,16 @@ def klug_manier_scheme_2017(
                 if ecc.iloc[i] <= 0.75:
                     km.iloc[i] = km.iloc[i] + 1
                     logger.debug('rule a.1a     -> %4s' %
-                                 (KM2002.name(km.iloc[i])))
+                                 ik[km.iloc[i]])
                 elif ecc.iloc[i] <= 0.875 and ff.iloc[i] < 2.4:
                     km.iloc[i] = km.iloc[i] + 1
                     logger.debug('rule a.1b     -> %4s' %
-                                 (KM2002.name(km.iloc[i])))
+                                 ik[km.iloc[i]])
             if stund.iloc[i] >= 12 and stund.iloc[i] <= 15 and km.iloc[i] < k['V']:
                 if ecc.iloc[i] <= 0.625:
                     km.iloc[i] = km.iloc[i] + 1
                     logger.debug('rule a.2      -> %4s' %
-                                 (KM2002.name(km.iloc[i])))
+                                 ik[km.iloc[i]])
         #
         # rule b)
         # For May (last climatological spring month) and
@@ -1410,7 +1551,7 @@ def klug_manier_scheme_2017(
                 if ecc.iloc[i] <= 0.75:
                     km.iloc[i] = km.iloc[i] + 1
                     logger.debug('rule b        -> %4s' %
-                                 (KM2002.name(km.iloc[i])))
+                                 ik[km.iloc[i]])
         #
         # rule c)
         # For the period from one hour until three hours
@@ -1564,7 +1705,7 @@ def klug_manier_scheme_2017(
             logger.debug('rule c tab 3:')
             if t3_fn is not None:
                 logger.debug('footnote (%2a) :' % t3_fn)
-            logger.debug('col: %9a-> %4s' % (t3_col, KM2002.name(km.iloc[i])))
+            logger.debug('col: %9a-> %4s' % (t3_col, ik[km.iloc[i]]))
         #
         # part d)
         # For December, January and February (climato-
@@ -1574,7 +1715,7 @@ def klug_manier_scheme_2017(
         if monat.iloc[i] in [1, 2, 12]:
             if km.iloc[i] == k['IV']:
                 km.iloc[i] = k['III2']
-                logger.debug('rule d        -> %4s' % (KM2002.name(km.iloc[i])))
+                logger.debug('rule d        -> %4s' % ik[km.iloc[i]])
 
     # Missing total cloud cover
     #
@@ -1630,17 +1771,18 @@ def klug_manier_scheme_2017(
                 else:  # km.iloc[i] >= 3.3
                     km.iloc[i] = k['III1']
 
-    logger.debug('return value  -> %s' % str([KM2002.name(x) for x in km]))
+    #ret = [ik[x] for x in km]
+    ret = km.map(ik)  # pd.Series[int] → pd.Series[str]
+    logger.debug('return value  -> %s' % str(ret))
     if scalar:
-        km = km[0]
+        return ret[0]
     else:
-        km = np.array(km)
-    return km
+        return ret
 
 
 # ----------------------------------------------------
 
-def klug_manier_scheme(*args, **kwargs):
+def klug_manier_scheme(*args, **kwargs) -> str | pd.Series:
     """
     shorthand for the currently valid version of the
     Klug/Manier scheme
@@ -1658,20 +1800,21 @@ def pasquill_taylor_scheme(
         tcc: float | list[float] | pd.Series,
         lat: float,
         lon: float,
-        ceil: float | list[float] | pd.Series):
+        ceil: float | list[float] | pd.Series) -> str | pd.Series:
     """
     Calulate stability class after Pasquill and Turner [EPA2000]_
 
     ========== ================= =======
-      Category  Atmospheric        Index
+      Category  Atmospheric      numeric
                 stability
     ========== ================= =======
-      I         very stable         1
-      II        stable              2
-      III/1     neutral/stable      3
-      III/2     neutral/unstable    4
-      IV        unstable            5
-      V         very unstable       6
+      A         very unstable       1
+      B         unstable            2
+      C         neutral/unstable    3
+      D         neutral/stable      4
+      E         stable              5
+      F         very stable         6
+      G         very very stable    7
     ========== ================= =======
 
     The norm states:
@@ -1715,37 +1858,67 @@ def pasquill_taylor_scheme(
     if pd.api.types.is_scalar(time):
         scalar = True
         time = pd.DatetimeIndex([time])
-        ff = pd.Series(ff)
-        tcc = pd.Series(tcc)
-        ceil = pd.Series(ceil)
+        ff = pd.Series(ff, index=time)
+        tcc = pd.Series(tcc, index=time)
+        ceil = pd.Series(ceil, index=time)
     else:
         scalar = False
         time = pd.DatetimeIndex(time)
+        if isinstance(ff, pd.Series):
+            if not ff.index.equals(time):
+                raise ValueError('index of ff does not match time')
+        else:
+            ff = pd.Series(ff, index=time)
+        if isinstance(tcc, pd.Series):
+            if not tcc.index.equals(time):
+                raise ValueError('index of tcc does not match time')
+        else:
+            tcc = pd.Series(tcc, index=time)
+        if isinstance(ceil, pd.Series):
+            if not ceil.index.equals(time):
+                raise ValueError('index of ceil does not match time')
+        else:
+            ceil = pd.Series(ceil, index=time)
+
+
+    names = {
+        1: 'A',
+        2: 'B',
+        3: 'C',
+        4: 'D',
+        5: 'E',
+        6: 'F',
+        7: 'G',
+    }
 
     logger.debug('pasquill_taylor_scheme ---> %19s ...' % (time[0]))
 
     # auf/unter UTC
     s_rise, _, s_set = m.radiation.fast_rise_transit_set(time, lat, lon)
     s_ele, _ = m.radiation.fast_sun_position(time, lat, lon)
-    pt = pd.Series(np.nan, index=range(len(time)))
-    for i in range(len(time)):
+    sun = pd.DataFrame({'rise': s_rise.values,
+                        'set': s_set.values,
+                        'ele': s_ele.values},
+                       index=time)
+    pt = pd.Series(np.nan, index=time)
+    for i in pt.index:
         logger.debug('surise,sunset,elevation : (%f, %f) %f)' %
-                     (s_rise.iloc[i], s_set.iloc[i], s_ele.iloc[i]))
+                     (sun['rise'][i], sun['set'][i], sun['ele'][i]))
         rad_index = -999
         insolation_class = -999
         #
         # 1. If the total cloud1 cover is 10/10 and the ceiling is
         #   less than 7000 feet, use net radiation index equal to 0
         #   (whether day or night).
-        if tcc.iloc[i] > 0.9 and ceil.iloc[i] <= (7000 * 0.3048):
+        if tcc[i] > 0.9 and ceil[i] <= (7000 * 0.3048):
             rad_index = 0
 
         # 2. For nighttime:
         #   (from one hour before sunset to one hour after sunrise):
         #  (a) If total cloud cover < 4/10, use net radiation index -2.
         #  (b) If total cloud cover > 4/10, use net radiation index -1.
-        elif s_ele.iloc[i] < 0.:
-            if tcc.iloc[i] <= 0.4:
+        elif sun['ele'][i] < 0.:
+            if tcc[i] <= 0.4:
                 rad_index = -2
             else:
                 rad_index = -1
@@ -1754,29 +1927,29 @@ def pasquill_taylor_scheme(
         else:
             # (a) Determine the insolation class number as a function of
             #   solar altitude from Table 6-5.
-            insolation_class = taylor_insolation_class(s_ele.iloc[i])
+            insolation_class = taylor_insolation_class(sun['ele'][i])
 
             # (b) If total cloud cover <5/10, use the net radiation index
             #   in Table 6-4 corresponding to the isolation class number.
-            if tcc.iloc[i] < 0.5:
+            if tcc[i] < 0.5:
                 rad_index = insolation_class
 
             # (c) If cloud cover >5/10, modify the insolation class number
             #   using the following six steps.
             else:
                 # (1) Ceiling <7000 ft, subtract 2.
-                if ceil.iloc[i] <= (7000 * 0.3048):
+                if ceil[i] <= (7000 * 0.3048):
                     mod_ins_class = insolation_class - 2
 
                 # (2) Ceiling >7000 ft but <16000 ft, subtract 1.
-                elif (7000 * 0.3048) < ceil.iloc[i] < (16000 * 0.3048):
+                elif (7000 * 0.3048) < ceil[i] < (16000 * 0.3048):
                     mod_ins_class = insolation_class - 1
 
                 # (3) total cloud cover equal 10/10, subtract 1.
                 #    (This will only apply to ceilings >7000 ft
                 #     since cases with 10/10 coverage below 7000 ft
                 #     are considered in item 1 above.)
-                elif tcc.iloc[i] > 0.9:
+                elif tcc[i] > 0.9:
                     mod_ins_class = insolation_class - 1
 
                 # (4) If insolation class number has not been modified by
@@ -1795,21 +1968,20 @@ def pasquill_taylor_scheme(
                 rad_index = mod_ins_class
 
         logger.debug('tcc, insolation_class, rad_index: %f, %i, %i' % (
-            tcc.iloc[i], insolation_class, rad_index))
+            tcc[i], insolation_class, rad_index))
         # use index in Table 6-4
-        pt.iloc[i] = turners_key(ff.iloc[i], rad_index)
+        pt[i] = turners_key(ff[i], rad_index)
 
-        # For EPA regulatory modeling applications, stability categories
-        # 6 and 7 (F and G) are combined and considered category 6.
-        if pt.iloc[i] > 6:
-            pt.iloc[i] = 6
+    # convert numbers to class names
+    #ret = [names[x] for x in pt]
+    ret = pt.map(names)  # pd.Series[int] → pd.Series[str]
 
-    pt = 7 - pt  # turn class values around to match K/M
+    logger.debug('return value  -> %s' % str(ret))
+
     if scalar:
-        pt = pt.iloc[0]
+        return ret[0]
     else:
-        pt = np.array(pt)
-    return pt
+        return ret
 
 
 def turners_key(ff: float, NRI:int) -> int:

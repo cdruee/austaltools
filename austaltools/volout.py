@@ -232,7 +232,12 @@ def main(args):
     plotfile = _plotting.consolidate_plotname(args['plot'],'volout.png')
 
     grid_no = int(args['grid'])
-    volfile = os.path.join(working_dir, f'volout{grid_no:02d}.dmna')
+    if args.get('file', None):
+        volfile = args['file']
+    else:
+        grid_no = int(args.get('grid', 1))
+        volfile = os.path.join(working_dir, f'volout{grid_no:02d}.dmna')
+    logger.info(f"reading file {volfile}")
     volume = readmet.dmna.DataFile(volfile)
     xmin = float(volume.header['xmin'])
     ymin = float(volume.header['ymin'])
