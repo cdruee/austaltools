@@ -1078,6 +1078,8 @@ def main(args, return_only: bool = False):
     the requested method, and prints the selected year together with the
     ranking table(s).
 
+    Optionally the ranking table(s) may be plottet as a stacked-bar plot.
+
     :param args: Command-line arguments as a dictionary.  Recognised keys:
 
         * ``working_dir`` *(str, default* ``'.'`` *)* – directory used
