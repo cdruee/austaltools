@@ -1624,16 +1624,15 @@ def austal_weather(args, return_data_frame: bool = False):
     #       mask  = "replace, where cond is True"
     #       where = "replace, where cond is False"
     # and bring dd to range 0..360
-    data['dd'] = np.remainder(
-        data['dd'].mask(data['ff'] < 1., other=0.), 360.)
-    data['ff'] = data['ff'].mask(
-        (np.isnan(data['dd']) | data['dd'] < 1.), other=0.)
-
-    #    print(pd.crosstab(data['kmc'],
-    #                      data['pgc'],
-    #                      margins = True))
+    data['bad'] = (
+            data['ff'] < 0.1 | np.isnan(data['ff']) | np.isnan(data['dd'])
+    )
+    data['dd'] = np.remainder(data['dd'].mask(
+        data['bad'], other=0.), 360.)
+    data['dd'] = data['dd'].mask(
+        not data['bad'] & data['dd'] == 0, other=360.)
+    data['ff'] = data['ff'].mask(data['bad'], other=0.)
     #
-    #    print(skm.classification_report(data['kmc'], data['pgc']))
     logger.debug("methods_available: %s" % methods_available)
     response = None
     for method in methods_available:
