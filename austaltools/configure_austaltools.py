@@ -7,6 +7,7 @@ import logging
 import os
 
 from . import _datasets as DS
+from . import _fetch_cds
 from . import _storage
 from . import _tools
 from ._metadata import __version__
@@ -485,7 +486,7 @@ def main():
         _storage.TEMP = args['temp']
 
     if args['noparallel'] is True:
-        DS.RUNPARALLEL = False
+        _fetch_cds.RUNPARALLEL = False
 
     if args['action'] == 'list':
         list_datasets(args['only'], args['state'], args['long'])

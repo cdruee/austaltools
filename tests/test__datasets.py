@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from austaltools import _datasets
+from austaltools import _datasets, _fetch_cds, _storage
 
 
 class TestModuleConstants(unittest.TestCase):
@@ -25,13 +25,13 @@ class TestModuleConstants(unittest.TestCase):
 
     def test_cdsapi_limit_parallel_is_positive(self):
         """Test CDSAPI_LIMIT_PARALLEL is a positive integer."""
-        self.assertIsInstance(_datasets.CDSAPI_LIMIT_PARALLEL, int)
-        self.assertGreaterEqual(_datasets.CDSAPI_LIMIT_PARALLEL, 0)
+        self.assertIsInstance(_fetch_cds.API_LIMIT_PARALLEL, int)
+        self.assertGreaterEqual(_fetch_cds.API_LIMIT_PARALLEL, 0)
 
     def test_wea_window_format(self):
         """Test WEA_WINDOW has correct format (latmin, latmax, lonmin, lonmax)."""
-        self.assertEqual(len(_datasets.WEA_WINDOW), 4)
-        latmin, latmax, lonmin, lonmax = _datasets.WEA_WINDOW
+        self.assertEqual(len(_fetch_cds.WEA_WINDOW), 4)
+        latmin, latmax, lonmin, lonmax = _fetch_cds.WEA_WINDOW
         self.assertLess(latmin, latmax)
         self.assertLess(lonmin, lonmax)
 
@@ -64,8 +64,8 @@ class TestModuleConstants(unittest.TestCase):
 
     def test_compress_netcdf_is_string(self):
         """Test COMPRESS_NETCDF is a valid compression string."""
-        self.assertIsInstance(_datasets.COMPRESS_NETCDF, str)
-        self.assertIn(_datasets.COMPRESS_NETCDF, ['zlib', 'gzip', 'lzma', ''])
+        self.assertIsInstance(_storage.COMPRESS_NETCDF, str)
+        self.assertIn(_storage.COMPRESS_NETCDF, ['zlib', 'gzip', 'lzma', ''])
 
     def test_nodata_value(self):
         """Test NODATA is a large float value."""
@@ -443,7 +443,7 @@ class TestCdsMergeZipped(unittest.TestCase):
                 zf.writestr('data1.nc', 'nc_content_1')
                 zf.writestr('data2.nc', 'nc_content_2')
 
-            _datasets.cds_merge_zipped(zip_path, dest_path)
+            _fetch_cds.cds_merge_zipped(zip_path, dest_path)
             mock_merge.assert_called_once()
 
     def test_cds_merge_zipped_no_nc_files(self):
@@ -456,7 +456,7 @@ class TestCdsMergeZipped(unittest.TestCase):
                 zf.writestr('readme.txt', 'no nc files here')
 
             with self.assertRaises(IOError):
-                _datasets.cds_merge_zipped(zip_path, dest_path)
+                _fetch_cds.cds_merge_zipped(zip_path, dest_path)
 
 
 class TestCdsReplaceValidTime(unittest.TestCase):
@@ -464,18 +464,18 @@ class TestCdsReplaceValidTime(unittest.TestCase):
 
     def test_cds_replace_valid_time_returns_dicts(self):
         """Test cds_replace_valid_time returns two dicts."""
-        replace, convert = _datasets.cds_replace_valid_time()
+        replace, convert = _fetch_cds.cds_replace_valid_time()
         self.assertIsInstance(replace, dict)
         self.assertIsInstance(convert, dict)
 
     def test_cds_replace_valid_time_replace_key(self):
         """Test cds_replace_valid_time has valid_time in replace."""
-        replace, convert = _datasets.cds_replace_valid_time()
+        replace, convert = _fetch_cds.cds_replace_valid_time()
         self.assertIn('valid_time', replace)
 
     def test_cds_replace_valid_time_convert_key(self):
         """Test cds_replace_valid_time has valid_time in convert."""
-        replace, convert = _datasets.cds_replace_valid_time()
+        replace, convert = _fetch_cds.cds_replace_valid_time()
         self.assertIn('valid_time', convert)
 
 
@@ -667,8 +667,8 @@ class TestCdsGetOrderList(unittest.TestCase):
     @patch('austaltools._datasets.cds_getorder')
     def test_cds_get_order_list_sequential(self, mock_getorder, mock_process):
         """Test cds_get_order_list runs sequentially when RUNPARALLEL=False."""
-        original_runparallel = _datasets.RUNPARALLEL
-        _datasets.RUNPARALLEL = False
+        original_runparallel = _fetch_cds.RUNPARALLEL
+        _fetch_cds.RUNPARALLEL = False
         try:
             mock_getorder.return_value = 'downloaded.nc'
             mock_process.return_value = 'processed.nc'
@@ -678,11 +678,11 @@ class TestCdsGetOrderList(unittest.TestCase):
                 {'dataset': 'test', 'request': {}, 'target': 'file2.nc'}
             ]
 
-            result = _datasets.cds_get_order_list(args_list)
+            result = _fetch_cds.cds_get_order_list(args_list)
             self.assertEqual(len(result), 2)
             self.assertEqual(mock_getorder.call_count, 2)
         finally:
-            _datasets.RUNPARALLEL = original_runparallel
+            _fetch_cds.RUNPARALLEL = original_runparallel
 
 
 class TestProvideStationlist(unittest.TestCase):
