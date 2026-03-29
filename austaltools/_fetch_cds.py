@@ -233,6 +233,7 @@ def cds_getorder(order_args: dict[str, Any],
 
     logger.info(f"downloading {target}")
     remote.download(downloaded)
+    _cds_orderlist_del(target)
 
     logger.info(f"preprocessing {target}")
     produced = cds_processorder(downloaded, order_args)
@@ -344,7 +345,8 @@ def cds_processorder(downloaded: str,
                             replace=replace, convert=convert,
                             compression=compression,
                             remove_source=True)
-    os.remove(oldtime)
+    if os.path.exists(oldtime):
+        os.remove(oldtime)
 
     return target
 
