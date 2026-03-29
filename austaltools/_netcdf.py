@@ -158,6 +158,17 @@ def _get_variable_attributes(dataset, var):
 
 # -------------------------------------------------------------------------
 
+def file_check_ok(fname):
+    try:
+        with netCDF4.Dataset(fname) as dataset:
+            global_attributes = _get_global_attributes(dataset)
+    except Exception as e:
+        logger.debug(f"file integrity check failde on {fname}: {str(e)}")
+        return False
+    return True
+
+# -------------------------------------------------------------------------
+
 def check_homhogenity(file_list, timevar=None, fail=False):
     """
     Check if all NetCDF datasets in the provided list have

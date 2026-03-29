@@ -31,7 +31,7 @@ setup()
 #     license=v['__license__'],
 #     url=v['__url__'],
 #     install_requires=[
-#         "cdsapi",
+#         "ecmwf-datastores-client",
 #         "gdal",
 #         "meteolib",
 #         "netcdf4",

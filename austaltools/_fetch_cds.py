@@ -5,15 +5,17 @@ import datetime
 import glob
 import logging
 import os
+import json
 import shutil
 import tempfile
+import time
 import zipfile
 from copy import deepcopy
 from typing import Any
 
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import multiprocessing as mp
-    import cdsapi as _cdsapi_legacy
+    import ecmwf.datastores as _edsapi
 
 from . import _storage
 from . import _netcdf
@@ -26,14 +28,13 @@ WEA_WINDOW = (33, 71, -12, 36)
     latmin, latmax, lonmin, lonmax """
 API_LIMIT_PARALLEL = 2
 """ Copernicus per-user limit for parallel queries """
-CDSAPI_CHUNKS = True
+ECMWF_CHUNKS = True
 """ Copernicus per-request limit does not permit download of 
     yearly files and requires splitting up donwloads. 
     For possible values see 
     :py:func:`austaltools._dataset.cds_get_cerra_year` """
-CACHE_FILE: str = "cds_job_cache.json"
+ORDERFILE: str = "cds_orders.json"
 """ written next to the nc files """
-
 
 # -------------------------------------------------------------------------
 
@@ -115,6 +116,53 @@ def cds_replace_valid_time(compression:str|None = _storage.COMPRESS_NETCDF):
 
 # -------------------------------------------------------------------------
 
+def _cds_orderlist_clear(orderfile:str = ORDERFILE):
+    if os.path.exists(orderfile):
+        logger.debug(f"cleared orderlist")
+        os.unlink(orderfile)
+
+def _cds_orderlist_get(target:str, orderfile:str = ORDERFILE):
+    if not os.path.exists(orderfile):
+        logger.debug(f"could not orderlist: {target}")
+        return None
+    with open(orderfile, 'r') as f:
+        orders = json.load(f)
+    if target not in orders:
+        logger.debug(f"could not find in orderlist: {target}")
+        return None
+    return orders[target]
+
+def _cds_orderlist_add(target:str, result: _edsapi.Remote,
+                       orderfile:str = ORDERFILE):
+    orders: dict
+    if os.path.exists(orderfile):
+        with open(orderfile, 'r') as f:
+            orders = json.load(f)
+    else:
+        orders = {}
+    logger.debug(f"add to orderlist: {target}")
+    orders[target] = result
+    with open(orderfile, 'w') as f:
+            json.dump(orders, f)
+
+def _cds_orderlist_del(target:str, orderfile:str = ORDERFILE):
+    orders: dict
+    if os.path.exists(orderfile):
+        with open(orderfile, 'r') as f:
+            orders = json.load(f)
+    else:
+        orders = {}
+    if target in orders:
+        del orders[target]
+        logger.debug(f"deleted from orderlist: {target}")
+    else:
+        logger.debug(f"could not delete noexistent order: {target}")
+    with open(orderfile, 'w') as f:
+            json.dump(orders, f)
+
+
+# -------------------------------------------------------------------------
+
 def cds_getorder(order_args: dict[str, Any],
                  ignore_cache: bool = False) -> str:
     """
@@ -137,45 +185,54 @@ def cds_getorder(order_args: dict[str, Any],
     target = order_args["target"]
     downloaded = "_" + target
 
+
     logger.info(f"processing file {target}")
 
-    # Target already on disk?
-    if os.path.exists(target):
-        if ignore_cache:
-            logger.info(f"Target {target!r} already exists, "
-                     f"but ignoring it on request.")
-        elif not _netcdf.file_check_ok(target):
-            logger.info(f"Target {target!r} already exists, "
-                     f"but contains errors.")
-        else:
-            logger.info(f"Target {target!r} already exists, "
-                        f"skipping order process.")
-            return target
+    order_done = False
+    if not  ignore_cache:
+        # Target already on disk?
+        if os.path.exists(target):
+            if not _netcdf.file_check_ok(target):
+                logger.info(f"Target {target!r} already exists, "
+                         f"but contains errors.")
+                os.unlink(target)
+            else:
+                logger.info(f"Target {target!r} already exists, "
+                            f"skipping order process.")
+                _cds_orderlist_del(target)
+                return target
 
-        logger.debug(f"Deleting existing target: {target}.")
-        os.unlink(target)
+        # Download file already on disk?
+        if os.path.exists(downloaded):
+            if not _netcdf.file_check_ok(downloaded):
+                logger.info(f"Download {downloaded!r} already exists, "
+                            f"but contains errors.")
+                os.unlink(downloaded)
+            else:
+                logger.info(f"Download {downloaded!r} already exists, ")
+                target = cds_processorder(downloaded, order_args)
+                _cds_orderlist_del(target)
+                return target
 
-    # Download file already on disk?
-    if os.path.exists(downloaded):
-        if ignore_cache:
-            logger.info(f"Download {downloaded!r} already exists, "
-                        f"but ignoring it on request.")
-        elif not _netcdf.file_check_ok(downloaded):
-            logger.info(f"Download {downloaded!r} already exists, "
-                        f"but contains errors.")
-        else:
-            logger.info(f"Download {downloaded!r} already exists, ")
-            target = cds_processorder(downloaded, order_args)
-            return target
+        request_id = _cds_orderlist_get(target)
 
-        os.unlink(downloaded)
-        logger.debug(f"Deleting existing download: {downloaded}.")
+    if ignore_cache or not request_id:
+        logger.info(f"Placing an order for target: {target} ")
+        client = _edsapi.Client()
+        remote = client.submit(dataset, request)
+        request_id = remote.request_id
+        _cds_orderlist_add(target, remote.request_id)
+        del client
 
-    logger.info(f"Placing an order for target: {target} ")
-    quiet = logger.getEffectiveLevel() > logging.INFO
-    debug = logger.getEffectiveLevel() <= logging.DEBUG
-    cdsapi = _cdsapi_legacy.Client(quiet=quiet, debug=debug)
-    cdsapi.retrieve(dataset, request, downloaded)
+    client = _edsapi.Client()
+    remote = client.get_remote(request_id)
+
+    while remote.status != "successful":
+        logger.debug(f"order {target} has remote status: {remote.status}")
+        time.sleep(30)
+
+    logger.info(f"downloading {target}")
+    remote.download(downloaded)
 
     logger.info(f"preprocessing {target}")
     produced = cds_processorder(downloaded, order_args)
@@ -296,7 +353,6 @@ def cds_processorder(downloaded: str,
 def cds_get_order_list(
         args_list: list[dict[str, Any]],
         maxparallel: int | None = None,
-        cache_path: str = CACHE_FILE,
         ignore_cache: bool = False,
 ) -> list[str]:
     """
@@ -340,7 +396,6 @@ def cds_get_era5_year(year: int,
                       maxparallel: int | None = None,
                       area: list | None = None,
                       subset: list | None = None,
-                      cache_path: str = CACHE_FILE,
                       ignore_cache: bool = False):
     """
     Downloads ERA5 reanalysis data for a specific year and
@@ -402,7 +457,7 @@ def cds_get_era5_year(year: int,
       - The function crafts a filename based on the year, prefixing it
         with `era5_ak_eu_` to denote the region and type of data retrieved.
         Ensure that the specified directory exists and is writable.
-      - Either ``ecmwf-datastores-client`` or ``cdsapi`` must be installed
+      - ``ecmwf-datastores-client`` must be installed
         and a **valid CDS API key** must be configured.
     """
     if subset is not None:
@@ -416,7 +471,7 @@ def cds_get_era5_year(year: int,
     # get in chunks ?
     # (do not use module attribute directly, may have changed after import)
     if chunks is None:
-        chunks = CDSAPI_CHUNKS
+        chunks = ECMWF_CHUNKS
 
     ncname = 'era5_ak_eu_{:04d}.nc'.format(int(year))
 
@@ -573,7 +628,7 @@ def cds_get_cerra_year(
     # get in chunks ?
     # (do not use module attribute directly, may have changed after import)
     if chunks is None:
-        chunks = CDSAPI_CHUNKS
+        chunks = ECMWF_CHUNKS
 
     ncname = f"cerra_ak_eu_{int(year):04d}.nc"
 

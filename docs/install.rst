@@ -115,11 +115,14 @@ Requirements:
 
 Austaltools uses the following python packages:
 
- -**cdsapi**:
-  The `Climate Data Store Application Program Interface
-  (CDS API) <https://cds.climate.copernicus.eu/how-to-api>`_
-  is a Python library which allows you to access data from the CDS
-  programmatically
+ -**ecmwf-datastores-client**:
+  The `ECMWF Data Stores Service (DSS) API Python client.
+  <https://ecmwf.github.io/ecmwf-datastores-client/>`_
+  is new API package with advanced features:
+  metadata retrieval, synchronous or asynchronous job submission,
+  REST API. It is Incubating and subject to ECMWF's guidelines
+  on `Software Maturity
+  <https://github.com/ecmwf/codex/raw/refs/heads/main/Project%20Maturity>`_.
  -**GDAL**:
   The
   `Geospatial Data Abstraction Library <https://gdal.org/en/stable/>`_

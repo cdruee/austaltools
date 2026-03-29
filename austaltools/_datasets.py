@@ -1424,7 +1424,7 @@ def assemble_rea(path: str, name: str,
     else:
         raise ValueError(f"unknown reanalysis name: {name}")
 
-    chunks = args.get('chunks', _fetch_cds.CDSAPI_CHUNKS)
+    chunks = args.get('chunks', _fetch_cds.ECMWF_CHUNKS)
     if not CAN_RUN_PARALLEL or NOPARALLEL:
         maxparallel = 1
     else:
@@ -1449,8 +1449,6 @@ def assemble_rea(path: str, name: str,
             continue
 
         # download the year and put into place
-        print(f"processing year: {year}")
-        print("")
         ncname = fun_getyear(year, chunks,
                              maxparallel=maxparallel,
                              area=area, subset=subset)
@@ -1604,8 +1602,6 @@ def assemble_hostrada(path: str, name="HOSTRADA", years: list = None,
     logger.debug("creating file names")
     to_download = {}
     for year in years:
-        print(f"processing year: {year}")
-        print("")
 
         # construct time/date part of filenames
         for i in range(12):
