@@ -83,8 +83,8 @@ class VariableSkeleton():
 
 # -------------------------------------------------------------------------
 
-def get_dimensions(dataset: netCDF4.Dataset,
-                   timevar: str | None = None) -> dict:
+def _get_dimensions(dataset: netCDF4.Dataset,
+                    timevar: str | None = None) -> dict:
     """
     Helper function to get dimensions of a dataset
 
@@ -101,7 +101,7 @@ def get_dimensions(dataset: netCDF4.Dataset,
 
 # -------------------------------------------------------------------------
 
-def get_global_attributes(dataset):
+def _get_global_attributes(dataset):
     """
     Helper function to get file attributes of a dataset
 
@@ -115,7 +115,7 @@ def get_global_attributes(dataset):
 
 # -------------------------------------------------------------------------
 
-def get_variables(dataset):
+def _get_variables(dataset):
     """
     Helper function to get variables information of a dataset
 
@@ -139,7 +139,7 @@ def get_variables(dataset):
 
 # -------------------------------------------------------------------------
 
-def get_variable_attributes(dataset, var):
+def _get_variable_attributes(dataset, var):
     """
     Helper function to get the attributes of variable of a dataset
 
@@ -189,9 +189,9 @@ def check_homhogenity(file_list, timevar=None, fail=False):
     for fname in file_list:
         try:
             with netCDF4.Dataset(fname, 'r') as dataset:
-                dimensions = get_dimensions(dataset, timevar)
-                global_attrs = get_global_attributes(dataset)
-                variables = get_variables(dataset)
+                dimensions = _get_dimensions(dataset, timevar)
+                global_attrs = _get_global_attributes(dataset)
+                variables = _get_variables(dataset)
 
                 if ref_dataset is None:
                     # Initialize reference data
@@ -215,8 +215,8 @@ def check_homhogenity(file_list, timevar=None, fail=False):
                     else:
                         # compare variables
                         for k, v in ref_variables.keys():
-                            if (get_variable_attributes(ref_dataset, v) !=
-                                    get_variable_attributes(dataset, v)):
+                            if (_get_variable_attributes(ref_dataset, v) !=
+                                    _get_variable_attributes(dataset, v)):
                                 report.append(f"Variables attribute "
                                               f"mismatch in {fname}, "
                                               f"attribute {v}")
@@ -794,7 +794,7 @@ def subset_xy(infile, target,
                      f"{os.path.basename(dst.filepath())}")
 
         # determine the index variables
-        dimensions = list(get_dimensions(src).keys())
+        dimensions = list(_get_dimensions(src).keys())
 
         if xvar is None:
             candidates = [x for x in dimensions

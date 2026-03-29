@@ -67,10 +67,14 @@ logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------------
 
-RUNPARALLEL = True
+CAN_RUN_PARALLEL = True
 """ Use parallel processing (defaults to False on Windows Systems) """
-if _fetch_cds.API_LIMIT_PARALLEL <= 1 and os.name in ['nt']:
-    RUNPARALLEL = False
+if os.name in ['nt']:
+    CAN_RUN_PARALLEL = False
+
+NOPARALLEL = False
+""" Disable parallel processing (on request = change value to `True`) """
+
 
 with (_storage.DIST_AUX_FILES / 'dataset_definitions.json').open() as f:
     DATASET_DEFINITIONS = json.load(f)
@@ -642,7 +646,7 @@ def assemble_DGMxx(path: str, name: str, replace: bool,
         else:
             pp = PROCS
         i = 0
-        if RUNPARALLEL:
+        if CAN_RUN_PARALLEL:
             with mp.Pool(pp) as pool:
                 for tfs in _tools.progress(pool.imap_unordered(
                         process_input, thread_args), "processing input",
@@ -699,7 +703,7 @@ def assemble_DGM_SH(path, name, replace, args: dict):
     random.shuffle(fids)
     args = [(i, len(fids), x, args) for i, x in enumerate(fids)]
     tile_files = []
-    if RUNPARALLEL:
+    if CAN_RUN_PARALLEL:
         with mp.Pool(PROCS) as pool:
             for tf in _tools.progress(
                     pool.imap_unordered(dgm1_sh_getfid, args),
@@ -1341,10 +1345,9 @@ def assemble_rea(path: str, name: str,
     :param args: The arguments neede to preform the asembly.
         for more details see :doc:`configure-austaltools`.
 
-        - "parallel_queries": (int, optional)
-          number of parallel queries that are accepted
-          by CDS for this dataset.
-          Defaults to :const:`CDS_PARALLEL_QUERIES`.
+        - "noparallel": (bool, optional)
+          switch off parallel execution of dataset queries.
+          Defaults to `False`.
         - "chunks": (str | bool, optional)
           Whether to query the data in one piece (`1` or `False`),
           in montly chunks (`12 or `True`) or in 2, 3, or 4
@@ -1422,7 +1425,10 @@ def assemble_rea(path: str, name: str,
         raise ValueError(f"unknown reanalysis name: {name}")
 
     chunks = args.get('chunks', _fetch_cds.CDSAPI_CHUNKS)
-    maxparallel = args.get('parallel_queries', _fetch_cds.API_LIMIT_PARALLEL)
+    if not CAN_RUN_PARALLEL or NOPARALLEL:
+        maxparallel = 1
+    else:
+        maxparallel = 0 # used API default
 
     # get years to retrieve
     for year in years:

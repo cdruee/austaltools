@@ -103,7 +103,7 @@ class TestGetDimensions(unittest.TestCase):
             'time': MagicMock(size=24)
         }
         
-        result = _netcdf.get_dimensions(mock_dataset)
+        result = _netcdf._get_dimensions(mock_dataset)
         
         self.assertEqual(result['x'], 100)
         self.assertEqual(result['y'], 200)
@@ -118,7 +118,7 @@ class TestGetDimensions(unittest.TestCase):
             'time': MagicMock(size=24)
         }
         
-        result = _netcdf.get_dimensions(mock_dataset, timevar='time')
+        result = _netcdf._get_dimensions(mock_dataset, timevar='time')
         
         self.assertEqual(result['x'], 100)
         self.assertEqual(result['y'], 200)
@@ -138,7 +138,7 @@ class TestGetGlobalAttributes(unittest.TestCase):
             'source': 'Test Model'
         }[x]
         
-        result = _netcdf.get_global_attributes(mock_dataset)
+        result = _netcdf._get_global_attributes(mock_dataset)
         
         self.assertEqual(result['title'], 'Test Dataset')
         self.assertEqual(result['institution'], 'Test Institute')
@@ -149,7 +149,7 @@ class TestGetGlobalAttributes(unittest.TestCase):
         mock_dataset = MagicMock()
         mock_dataset.ncattrs.return_value = []
         
-        result = _netcdf.get_global_attributes(mock_dataset)
+        result = _netcdf._get_global_attributes(mock_dataset)
         
         self.assertEqual(result, {})
 
@@ -167,7 +167,7 @@ class TestGetVariables(unittest.TestCase):
         mock_dataset = MagicMock()
         mock_dataset.variables = {'temperature': mock_var}
         
-        result = _netcdf.get_variables(mock_dataset)
+        result = _netcdf._get_variables(mock_dataset)
         
         self.assertIn('temperature', result)
         self.assertEqual(result['temperature']['dimensions'], ('x', 'y', 'time'))
@@ -191,7 +191,7 @@ class TestGetVariableAttributes(unittest.TestCase):
         mock_dataset = MagicMock()
         mock_dataset.variables = {'temperature': mock_var}
         
-        result = _netcdf.get_variable_attributes(mock_dataset, 'temperature')
+        result = _netcdf._get_variable_attributes(mock_dataset, 'temperature')
         
         self.assertEqual(result['units'], 'K')
         self.assertEqual(result['long_name'], 'Temperature')
@@ -770,7 +770,7 @@ class TestEdgeCases(unittest.TestCase):
         mock_dataset = MagicMock()
         mock_dataset.dimensions = {}
         
-        result = _netcdf.get_dimensions(mock_dataset)
+        result = _netcdf._get_dimensions(mock_dataset)
         
         self.assertEqual(result, {})
 
@@ -779,7 +779,7 @@ class TestEdgeCases(unittest.TestCase):
         mock_dataset = MagicMock()
         mock_dataset.variables = {}
         
-        result = _netcdf.get_variables(mock_dataset)
+        result = _netcdf._get_variables(mock_dataset)
         
         self.assertEqual(result, {})
 

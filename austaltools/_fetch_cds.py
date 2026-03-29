@@ -1,33 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 import calendar
+import datetime
 import glob
-import json
 import logging
 import os
 import shutil
 import tempfile
-import time
 import zipfile
 from copy import deepcopy
 from typing import Any
 
-# Sentinel defaults so names are always bound (Sphinx builds, missing libs)
-_USE_DATASTORES: bool = False
-def DSClient():
-    return None           # type: ignore[assignment]
-_cdsapi_legacy = None     # type: ignore[assignment]
-
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import multiprocessing as mp
-    try:
-        from ecmwf.datastores import Client as DSClient  # type: ignore[assignment]
-        _USE_DATASTORES = True
-    except ImportError:
-        try:
-            import cdsapi as _cdsapi_legacy  # type: ignore[assignment]
-        except ImportError:
-            pass  # both remain None / False
+    import cdsapi as _cdsapi_legacy
 
 from . import _storage
 from . import _netcdf
@@ -112,7 +98,7 @@ def cds_replace_valid_time(compression:str|None = _storage.COMPRESS_NETCDF):
 
     dtime_var = _netcdf.VariableSkeleton(
         dtime_name, 'd',
-        dimensions=(dtime_name),
+        dimensions=(dtime_name,),
         compression=compression,
     )
     dtime_var.setncattr('long_name', dtime_name)
@@ -129,107 +115,19 @@ def cds_replace_valid_time(compression:str|None = _storage.COMPRESS_NETCDF):
 
 # -------------------------------------------------------------------------
 
-def _load_cache(cache_path: str) -> dict[str, dict]:
-    """Return the job cache as ``{target_filename: job_info_dict}``."""
-    if os.path.exists(cache_path):
-        try:
-            with open(cache_path, "r", encoding="utf-8") as fh:
-                return json.load(fh)
-        except (json.JSONDecodeError, OSError) as exc:
-            logger.warning(
-                f"Could not read job cache {cache_path!r}: {exc}")
-    return {}
-
-# -------------------------------------------------------------------------
-
-def _save_cache(cache_path: str, cache: dict[str, dict]) -> None:
-    """Atomically write the job cache."""
-    tmp = cache_path + ".tmp"
-    try:
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(cache, fh, indent=2)
-        os.replace(tmp, cache_path)
-    except OSError as exc:
-        logger.error(f"Could not write job cache {cache_path!r}: {exc}")
-
-# -------------------------------------------------------------------------
-
-def _cache_set(cache_path: str, target: str, info: dict) -> None:
-    """Upsert one entry and persist the cache immediately."""
-    cache = _load_cache(cache_path)
-    cache[target] = info
-    _save_cache(cache_path, cache)
-
-# -------------------------------------------------------------------------
-
-def _cache_get(cache_path: str, target: str) -> dict | None:
-    return _load_cache(cache_path).get(target)
-
-# -------------------------------------------------------------------------
-
-def _cache_del(cache_path: str, target: str) -> None:
-    cache = _load_cache(cache_path)
-    cache.pop(target, None)
-    _save_cache(cache_path, cache)
-
-# -------------------------------------------------------------------------
-
-def cleanup_cds_cache(cache_path: str = CACHE_FILE,
-                      remove_partial_files: bool = False) -> None:
-    """
-    Delete the job-cache file and optionally remove every partial/incomplete
-    target file listed in it.
-
-    Call this when you want to start a year download completely from scratch
-    regardless of any previous state.
-
-    :param cache_path: path to the JSON cache file.
-    :param remove_partial_files: if True, also unlink every target file that
-        was registered as *not yet completed* in the cache.
-    """
-    if not os.path.exists(cache_path):
-        logger.info(
-            f"No cache file found at {cache_path!r} – nothing to do.")
-        return
-
-    if remove_partial_files:
-        cache = _load_cache(cache_path)
-        for target, info in cache.items():
-            if not info.get("completed", False) and os.path.exists(target):
-                logger.info(f"Removing partial file {target!r}")
-                try:
-                    os.unlink(target)
-                except OSError as exc:
-                    logger.warning(f"Could not remove {target!r}: {exc}")
-
-    os.unlink(cache_path)
-    logger.info(f"Cache file {cache_path!r} removed.")
-
-# -------------------------------------------------------------------------
-
 def cds_getorder(order_args: dict[str, Any],
-                 cache_path: str = CACHE_FILE,
                  ignore_cache: bool = False) -> str:
     """
     Submit *one* CDS order and return the target filename.
 
-    Unlike the original version this function:
+    * Checks whether *target* already exists on disk
+      → skips.
+    * Checks whether download file already exists on disk
+      → preprocess to *target*
 
-    * Checks whether *target* already exists on disk → skips.
-    * Checks the job cache for a previously obtained ``request_id`` so it
-      can re-attach to an in-progress server job after a reboot rather than
-      re-submitting.
-    * Persists the ``request_id`` to the cache immediately after submission
-      so a crash between submission and completion doesn't lose the job.
-
-    Requires ``ecmwf-datastores-client`` (``pip install ecmwf-datastores-client``).
-    Falls back to the legacy ``cdsapi`` if the new client is not installed,
-    but **without** resumability (the legacy client's retrieve() is
-    monolithic and does not expose a request_id).
 
     :param order_args: same dict accepted by the original ``cds_getorder``
         (keys: ``dataset``, ``request``, ``target``; optionally ``subset``).
-    :param cache_path: path to the JSON cache file.
     :param ignore_cache: if True, ignore any cached job info and re-submit.
     :returns: target filename (the file is guaranteed to exist on return).
     :raises RuntimeError: if the client libraries are unavailable.
@@ -237,157 +135,52 @@ def cds_getorder(order_args: dict[str, Any],
     dataset = order_args["dataset"]
     request = order_args["request"]
     target = order_args["target"]
+    downloaded = "_" + target
 
-    # 1. Target already on disk?
-    if os.path.exists(target) and not ignore_cache:
-        logger.info(
-            f"Target {target!r} already exists – skipping download.")
-        return target
+    logger.info(f"processing file {target}")
 
-    # 2a. New datastores client path (preferred)
-    if _USE_DATASTORES:
-        return _cds_getorder_datastores(
-            dataset, request, target, cache_path, ignore_cache
-        )
+    # Target already on disk?
+    if os.path.exists(target):
+        if ignore_cache:
+            logger.info(f"Target {target!r} already exists, "
+                     f"but ignoring it on request.")
+        elif not _netcdf.file_check_ok(target):
+            logger.info(f"Target {target!r} already exists, "
+                     f"but contains errors.")
+        else:
+            logger.info(f"Target {target!r} already exists, "
+                        f"skipping order process.")
+            return target
 
-    # 2b. Legacy cdsapi fallback – no resumability                          #
-    if _cdsapi_legacy is None:
-        raise RuntimeError(
-            "Neither 'ecmwf-datastores-client' nor 'cdsapi' is installed."
-        )
-    logger.warning(
-        "ecmwf-datastores-client not found; falling back to legacy cdsapi "
-        "(no resume support – install ecmwf-datastores-client for resilience)."
-    )
+        logger.debug(f"Deleting existing target: {target}.")
+        os.unlink(target)
+
+    # Download file already on disk?
+    if os.path.exists(downloaded):
+        if ignore_cache:
+            logger.info(f"Download {downloaded!r} already exists, "
+                        f"but ignoring it on request.")
+        elif not _netcdf.file_check_ok(downloaded):
+            logger.info(f"Download {downloaded!r} already exists, "
+                        f"but contains errors.")
+        else:
+            logger.info(f"Download {downloaded!r} already exists, ")
+            target = cds_processorder(downloaded, order_args)
+            return target
+
+        os.unlink(downloaded)
+        logger.debug(f"Deleting existing download: {downloaded}.")
+
+    logger.info(f"Placing an order for target: {target} ")
     quiet = logger.getEffectiveLevel() > logging.INFO
     debug = logger.getEffectiveLevel() <= logging.DEBUG
     cdsapi = _cdsapi_legacy.Client(quiet=quiet, debug=debug)
-    cdsapi.retrieve(dataset, request, target)
+    cdsapi.retrieve(dataset, request, downloaded)
 
-    return target
+    logger.info(f"preprocessing {target}")
+    produced = cds_processorder(downloaded, order_args)
 
-# -------------------------------------------------------------------------
-
-def _cds_getorder_datastores(
-        dataset: str,
-        request: dict[str, Any],
-        target: str,
-        cache_path: str,
-        ignore_cache: bool,
-) -> str:
-    """
-    Inner implementation using ``ecmwf.datastores.Client``.
-
-    Three stages, each independently resumable:
-      1 submit (or re-attach to existing job)
-      2 wait for server-side completion
-      3 download
-    """
-
-    client = DSClient()
-
-    # stage 1: submit or re-attach ----------------------------------
-    cached = None if ignore_cache else _cache_get(cache_path, target)
-    job = None
-
-    if cached and cached.get("request_id"):
-        request_id = cached["request_id"]
-        logger.info(
-            f"Re-attaching to existing CDS job {request_id!r} "
-            f"for target {target!r}"
-        )
-        try:
-            job = client.get_remote(request_id)
-        except Exception as exc:
-            logger.info(
-                f"Could not re-attach to job {request_id!r}: {exc}. "
-                "Re-submitting."
-            )
-            job = None
-
-    if job is None:
-        logger.info(f"Submitting new CDS order for {target!r}")
-        job = client.submit(dataset, request)
-        _cache_set(cache_path, target, {
-            "request_id": job.request_id,
-            "dataset": dataset,
-            "target": target,
-            "status": "submitted",
-            "completed": False,
-        })
-        logger.info(
-            f"Job submitted: request_id={job.request_id!r}  "
-            f"target={target!r}"
-        )
-
-    # stage 2: wait for results --------------------------------------
-    poll_interval = 60  # seconds; the library itself also backs off
-    while not job.results_ready:
-        status = job.status
-        logger.info(
-            f"[{target}] Job {job.request_id!r} status={status!r} – "
-            "waiting …"
-        )
-        _cache_set(cache_path, target, {
-            "request_id": job.request_id,
-            "dataset": dataset,
-            "target": target,
-            "status": status,
-            "completed": False,
-        })
-        time.sleep(poll_interval)
-        # refresh the remote object so status is re-queried
-        job = client.get_remote(job.request_id)
-
-    # stage 3: download -----------------------------------------------
-    logger.info(
-        f"[{target}] Job {job.request_id!r} complete – downloading …"
-    )
-    _cache_set(cache_path, target, {
-        "request_id": job.request_id,
-        "dataset": dataset,
-        "target": target,
-        "status": "downloading",
-        "completed": False,
-    })
-    job.download(target)
-
-    # post-processing: unzip if needed, subset, fix time variable
-    # Reconstruct order_args from the individual parameters this function
-    # received, adding subset from the cache if it was stored there.
-    order_args = {
-        "dataset": dataset,
-        "request": request,
-        "target":  target,
-        "subset":  (_cache_get(cache_path, target) or {}).get("subset"),
-    }
-    cds_processorder(order_args)
-
-    _cache_set(cache_path, target, {
-        "request_id": job.request_id,
-        "dataset": dataset,
-        "target": target,
-        "status": "completed",
-        "completed": True,
-    })
-    logger.info(f"[{target}] Download complete.")
-    return target
-
-# -------------------------------------------------------------------------
-
-def order_args_subset_from_cache(cache_path: str,
-                                 target: str) -> dict | None:
-    """Return subset info stored alongside the job, or None.
-
-    .. note::
-        Not used in the main download path (subsetting is handled by
-        :func:`cds_processorder`).  Kept for external callers that inspect
-        the cache directly.
-    """
-    cached = _cache_get(cache_path, target)
-    if cached:
-        return cached.get("subset")
-    return None
+    return produced
 
 # -------------------------------------------------------------------------
 
@@ -440,7 +233,8 @@ def _apply_subset(target: str, subset: dict) -> None:
 
 # -------------------------------------------------------------------------
 
-def cds_processorder(order_args: dict[str, str | dict],
+def cds_processorder(downloaded: str,
+                     order_args: dict[str, str | dict],
                      compression: str | None = _storage.COMPRESS_NETCDF) -> str:
     """
     Preprocess a file downloaded by
@@ -449,6 +243,8 @@ def cds_processorder(order_args: dict[str, str | dict],
     netCDF files (new since 2024) into one plain netCDF file and / or by
     optionally subestting the data.
 
+    :param downloaded: The full name of the downloaded file to process
+    :type downloaded: str
     :param order_args: order data dictionary
     :type order_args: dict
         must contain the keys:
@@ -468,26 +264,30 @@ def cds_processorder(order_args: dict[str, str | dict],
     target = order_args.get('target',None)
     if target is None:
         raise ValueError("target key must be specified in oder_args")
-    if zipfile.is_zipfile(target):
-        zipname = target + '.zip'
-        shutil.move(target, zipname)
-        cds_merge_zipped(zipname, target)
+
+    # unzip if necessary
+    if zipfile.is_zipfile(downloaded):
+        zipname = downloaded + '.zip'
+        shutil.move(downloaded, zipname)
+        cds_merge_zipped(zipname, downloaded)
         os.remove(zipname)
 
+    # subset
+    oldtime = 'oldtime_' + target
     if order_args.get('subset', None) is not None:
-        fullname = 'full_' + target
-        shutil.move(target, fullname)
-        _netcdf.subset_xy(fullname, target, **order_args['subset'],
+        _netcdf.subset_xy(downloaded, oldtime, **order_args['subset'],
                           compression=compression)
-        os.remove(fullname)
+        os.remove(downloaded)
+    else:
+        shutil.move(downloaded, oldtime)
 
-    fullname = 'oldtime_' + target
-    shutil.move(target, fullname)
+    # convert time
     replace, convert = cds_replace_valid_time(compression)
-    _netcdf.merge_variables([fullname], target,
+    _netcdf.merge_variables([oldtime], target,
                             replace=replace, convert=convert,
                             compression=compression,
                             remove_source=True)
+    os.remove(oldtime)
 
     return target
 
@@ -517,135 +317,21 @@ def cds_get_order_list(
     :returns: list of completed target filenames.
     """
 
-    # cdsapi fallback ----------------------------------------------------
-    #
-    if not _USE_DATASTORES:
-        # Legacy path – sequential, no resume
-        downloaded: list[str] = []
+    if maxparallel is None or maxparallel == 0:
+        maxparallel = API_LIMIT_PARALLEL
+
+    downloaded: list[str] = []
+    if maxparallel > 1:
+        logger.debug(f"running parallel {maxparallel} parallel jobs")
         with mp.Pool(maxparallel) as pool:
             for f,args in zip(pool.map(cds_getorder, args_list),
                               args_list):
-                print(f"downloading file {args['target']}", flush=True)
                 downloaded.append(f)
-        return downloaded
-
-    # New datastores implementation ---------------------------------------
-    # submit all first, then poll + download
-    #
-    client = DSClient()
-    jobs: list[tuple[dict, Any]] = []  # (args, remote_or_None)
-
-    # 1: submit all (or re-attach from cache) -----------------------------
-    for args in args_list:
-        target = args["target"]
-
-        # Already on disk?
-        if os.path.exists(target) and not ignore_cache:
-            logger.info(f"Skipping {target!r} – already on disk.")
-            jobs.append((args, "done"))
-            continue
-
-        cached = None if ignore_cache else _cache_get(cache_path, target)
-        remote = None
-        if cached and cached.get("request_id"):
-            try:
-                remote = client.get_remote(cached["request_id"])
-                logger.info(
-                    f"Re-attached to job {cached['request_id']!r} "
-                    f"for {target!r} (status={remote.status})"
-                )
-            except Exception as exc:
-                logger.warning(
-                    f"Re-attach failed for {target!r}: {exc}. Re-submitting."
-                )
-                remote = None
-
-        if remote is None:
-            logger.info(f"Submitting {target!r}")
-            remote = client.submit(args["dataset"], args["request"])
-            _cache_set(cache_path, target, {
-                "request_id": remote.request_id,
-                "dataset": args["dataset"],
-                "target": target,
-                "status": "submitted",
-                "completed": False,
-                "subset": args.get("subset"),
-            })
-            logger.info(
-                f"  → request_id={remote.request_id!r}  target={target!r}"
-            )
-
-        jobs.append((args, remote))
-
-    # 2: poll in a loop until all complete -------------------------------
-    poll_interval = 120  # seconds between full sweeps
-    pending = [(a, r) for a, r in jobs if r != "done"]
-    completed: list[str] = [a["target"]
-                            for a, r in jobs if r == "done"]
-
-    while pending:
-        still_pending = []
-        for args, remote in pending:
-            target = args["target"]
-            # Refresh status
-            try:
-                remote = client.get_remote(remote.request_id)
-            except Exception as exc:
-                logger.warning(
-                    f"Status check failed for {target!r}: {exc}")
-                still_pending.append((args, remote))
-                continue
-
-            _cache_set(cache_path, target, {
-                "request_id": remote.request_id,
-                "dataset": args["dataset"],
-                "target": target,
-                "status": remote.status,
-                "completed": False,
-                "subset": args.get("subset"),
-            })
-
-            if not remote.results_ready:
-                logger.debug(
-                    f"  {target!r}: {remote.status}"
-                )
-                still_pending.append((args, remote))
-            else:
-                # 3: download -----------------------------------------
-                logger.info(f"Downloading {target!r} …")
-                _cache_set(cache_path, target, {
-                    "request_id": remote.request_id,
-                    "dataset": args["dataset"],
-                    "target": target,
-                    "status": "downloading",
-                    "completed": False,
-                    "subset": args.get("subset"),
-                })
-                remote.download(target)
-
-                # post-processing: unzip if needed, subset, fix time variable
-                cds_processorder(args)
-
-                _cache_set(cache_path, target, {
-                    "request_id": remote.request_id,
-                    "dataset": args["dataset"],
-                    "target": target,
-                    "status": "completed",
-                    "completed": True,
-                    "subset": args.get("subset"),
-                })
-                logger.info(f"  → {target!r} done.")
-                completed.append(target)
-
-        pending = still_pending
-        if pending:
-            logger.info(
-                f"{len(pending)} job(s) still pending – "
-                f"sleeping {poll_interval}s …"
-            )
-            time.sleep(poll_interval)
-
-    return completed
+    else:
+        logger.debug(f"running jobs sequentially")
+        for args in args_list:
+            downloaded.append(cds_getorder(args))
+    return downloaded
 
 # -------------------------------------------------------------------------
 
@@ -739,10 +425,6 @@ def cds_get_era5_year(year: int,
         logger.info(f"Final file {ncname!r} already exists – nothing to do.")
         return ncname
 
-    if not _USE_DATASTORES and _cdsapi_legacy is None:
-        raise RuntimeError(
-            "Neither 'ecmwf-datastores-client' nor 'cdsapi' is installed.")
-
     order_dataset = 'reanalysis-era5-single-levels'
     order_template = {
         'product_type': ['reanalysis'],
@@ -816,9 +498,8 @@ def cds_get_era5_year(year: int,
         args_list.append(deepcopy(args))
 
     # execute orders
-    logger.info("starting download process")
+    logger.info(f"starting getting year {year}")
     downloaded = cds_get_order_list(args_list, maxparallel=maxparallel,
-                                    cache_path=cache_path,
                                     ignore_cache=ignore_cache)
     logger.debug(f"downloaded files: {downloaded}")
     chunk_files = downloaded
@@ -845,7 +526,6 @@ def cds_get_cerra_year(
         maxparallel: int | None = None,
         area: list | None = None,
         subset: list | None = None,
-        cache_path: str = CACHE_FILE,
         ignore_cache: bool = False,
 ) -> str:
     """
@@ -855,11 +535,6 @@ def cds_get_cerra_year(
     See the original docstring for full parameter documentation.  New
     parameters:
 
-    :param cache_path: path to the JSON job-cache file.
-        Default: ``cds_job_cache.json`` in the current directory.
-    :param ignore_cache: if True, ignore all cached job information and
-        restart the year download from scratch.  Existing output files
-        are also re-downloaded if this flag is set.
 
     Resume behaviour
     ----------------
@@ -991,11 +666,10 @@ def cds_get_cerra_year(
             })
 
     # Execute (resumable)                                                  #
-    logger.info("Starting download process")
+    logger.info(f"Start getting year {year}.")
     downloaded = cds_get_order_list(
         args_list,
         maxparallel=maxparallel,
-        cache_path=cache_path,
         ignore_cache=ignore_cache,
     )
     logger.debug(f"Downloaded files: {downloaded}")
