@@ -101,7 +101,7 @@ OBS_FMT = '%s.obs.zip'
 PROCS = None
 """ Number of parallel processes to run downlading data or  
     `None` (then the number of processor cores in the system is used). """
-DATASETS: list = None
+DATASETS: list | None = None
 """
 All known datasets as :py:class:`DataSet` instances. 
 Filled on demand.
@@ -1737,6 +1737,7 @@ def provide_weather(source: str, path: str | None = None,
     else:
         yearly_names = [name_yearly(source, y) for y in years]
 
+    success = False
     for yn in yearly_names:
         dataset = dataset_get(yn)
         if method == 'download':

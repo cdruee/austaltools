@@ -665,9 +665,23 @@ def vdi_3872_6_sun_rise_set(
     s_dn = 12. + omega_0 + Z_v - Z
 
     # convert CET to tz given
-    tzoff = (pd.Series([x.tzinfo.utcoffset(x).seconds / 3600. for x in idx_loc],
-                       index=idx) -
-             pd.Timestamp.now(tz='CET').utcoffset().seconds / 3600.)
+    # s_up/s_dn are computed in CET (Etc/GMT-1 = fixed UTC+1).
+    # Convert to the caller's input timezone by computing:
+    #   tzoff = input_timezone_offset_hours - CET_offset_hours
+    # CET (Etc/GMT-1) is always UTC+1 = 1.0 h.
+    # The caller's offset is read from idx_loc, which holds the original
+    # tz-aware timestamps after tz_convert — its utcoffset equals the
+    # original input's utcoffset (tz_convert preserves the instant).
+    # Using .total_seconds() avoids the .seconds bug for negative offsets.
+    # Using 1.0 (a literal constant) for the CET reference avoids
+    # pd.Timestamp.now(tz='CET'), which reflects the *current* DST state
+    # rather than that of the data being processed.
+    cet_offset_h = 1.0   # Etc/GMT-1 is always UTC+1
+    tzoff = pd.Series(
+        [x.tzinfo.utcoffset(x).total_seconds() / 3600. - cet_offset_h
+         for x in idx_loc],
+        index=idx,
+    )
     s_up = s_up + tzoff
     s_dn = s_dn + tzoff
     # return scalar if scalar was spupplied

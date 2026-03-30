@@ -34,25 +34,36 @@ ECMWF_CHUNKS = True
     For possible values see 
     :py:func:`austaltools._dataset.cds_get_cerra_year` """
 ORDERFILE: str = "cds_orders.json"
-""" written next to the nc files """
+""" JSON file used to persist CDS request IDs across interrupted runs.
+    Written to the current working directory (i.e. next to the output
+    ``.nc`` files). """
 
 # -------------------------------------------------------------------------
 
 def cds_merge_zipped(source, destination,
                      compression= _storage.COMPRESS_NETCDF):
     """
-    Merge the files in a zipped archive downloaded from
-    cds.climate.eu into one nc file.
+    Merge the netCDF files contained in a zipped archive downloaded from
+    the Copernicus Climate Data Store (cds.climate.copernicus.eu) into a
+    single netCDF file.
 
-    :param source: path of the archive file to read
+    The archive is extracted to a temporary directory; all ``*.nc`` files
+    found there are merged via :py:func:`_netcdf.merge_variables` and
+    written to *destination*.  The temporary directory is deleted
+    afterwards unless the logger is set to ``DEBUG`` level.
+
+    :param source: path of the zip archive to read
     :type source: str
 
-    :param destination: path of the destination file to create
+    :param destination: path of the netCDF output file to create
     :type destination: str
 
-    :param compression: (optional) compression type,
-      defaults to :py:const:`_storage.COMPRESS_NETCDF`
+    :param compression: compression method passed to
+      :py:func:`_netcdf.merge_variables`.
+      Defaults to :py:const:`_storage.COMPRESS_NETCDF`.
     :type compression: str | None
+
+    :raises IOError: if the archive contains no ``*.nc`` files
     """
     source_file = os.path.abspath(source)
     logger.info("unpacking downloaded zip archive %s" % source_file)
@@ -78,17 +89,28 @@ def cds_merge_zipped(source, destination,
 
 def cds_replace_valid_time(compression:str|None = _storage.COMPRESS_NETCDF):
     """
-    Replaces the variable ``valid_time`` in ECMWF products
-    (measured in seconds since 1970-01-01) by the more widely
-    used variable ``time`` (measured in hours since 1900-01-01).
+    Build the *replace* and *convert* dicts needed to swap the
+    ``valid_time`` variable in ECMWF/CDS products (seconds since
+    1970-01-01) for the more widely used ``time`` variable (hours since
+    1900-01-01).
 
-    :param compression: compression method for netCDF files produced.
-      Ususally 'zlib'. Default to :py:const:`COMPRESS_NETCDF`.
+    The returned dicts are intended to be passed directly to
+    :py:func:`_netcdf.merge_variables` as its ``replace`` and ``convert``
+    keyword arguments.
+
+    :param compression: compression method used when constructing the
+      target :py:class:`_netcdf.VariableSkeleton`.
+      Usually ``'zlib'``.  Defaults to :py:const:`_storage.COMPRESS_NETCDF`.
     :type compression: str | None
 
-    :return: `replace` and `convert` for use with
-      function from the _netcdf module.
-    :rtype: dict, dict
+    :returns: A 2-tuple ``(replace, convert)`` where
+
+      * ``replace`` maps the source variable name ``'valid_time'`` to a
+        :py:class:`_netcdf.VariableSkeleton` describing the new ``'time'``
+        variable.
+      * ``convert`` maps ``'valid_time'`` to a callable that converts
+        values from *seconds since 1970-01-01* to *hours since 1900-01-01*.
+    :rtype: tuple[dict, dict]
     """
 
     # replace time variable
@@ -117,11 +139,36 @@ def cds_replace_valid_time(compression:str|None = _storage.COMPRESS_NETCDF):
 # -------------------------------------------------------------------------
 
 def _cds_orderlist_clear(orderfile:str = ORDERFILE):
+    """
+    Delete the order-list file from disk, discarding all cached request IDs.
+
+    Silently does nothing when the file does not exist.
+
+    :param orderfile: path of the JSON order-list file to remove.
+      Defaults to :py:const:`ORDERFILE`.
+    :type orderfile: str
+    """
     if os.path.exists(orderfile):
         logger.debug(f"cleared orderlist")
         os.unlink(orderfile)
 
+# -------------------------------------------------------------------------
+
 def _cds_orderlist_get(target:str, orderfile:str = ORDERFILE):
+    """
+    Retrieve the cached CDS request ID for *target* from the order-list file.
+
+    :param target: name of the target file whose request ID is sought
+    :type target: str
+
+    :param orderfile: path of the JSON order-list file.
+      Defaults to :py:const:`ORDERFILE`.
+    :type orderfile: str
+
+    :returns: the stored request ID string, or ``None`` if the file does
+      not exist or *target* has no entry.
+    :rtype: str | None
+    """
     if not os.path.exists(orderfile):
         logger.debug(f"could not orderlist: {target}")
         return None
@@ -132,8 +179,28 @@ def _cds_orderlist_get(target:str, orderfile:str = ORDERFILE):
         return None
     return orders[target]
 
+# -------------------------------------------------------------------------
+
 def _cds_orderlist_add(target:str, result: _edsapi.Remote,
                        orderfile:str = ORDERFILE):
+    """
+    Persist a CDS request ID in the order-list file.
+
+    If the file already exists its contents are read first so that
+    existing entries are preserved.  The file is always written as
+    pretty-printed JSON.
+
+    :param target: name of the target file associated with the request
+    :type target: str
+
+    :param result: the CDS request ID to store (typically a string
+      returned by ``_edsapi.Remote.request_id``)
+    :type result: str
+
+    :param orderfile: path of the JSON order-list file.
+      Defaults to :py:const:`ORDERFILE`.
+    :type orderfile: str
+    """
     orders: dict
     if os.path.exists(orderfile):
         with open(orderfile, 'r') as f:
@@ -145,7 +212,22 @@ def _cds_orderlist_add(target:str, result: _edsapi.Remote,
     with open(orderfile, 'w') as f:
             json.dump(orders, f)
 
+# -------------------------------------------------------------------------
+
 def _cds_orderlist_del(target:str, orderfile:str = ORDERFILE):
+    """
+    Remove a target's entry from the order-list file.
+
+    If the file does not exist, or *target* has no entry, the function
+    logs a debug message and returns without error.
+
+    :param target: name of the target file whose entry should be removed
+    :type target: str
+
+    :param orderfile: path of the JSON order-list file.
+      Defaults to :py:const:`ORDERFILE`.
+    :type orderfile: str
+    """
     orders: dict
     if os.path.exists(orderfile):
         with open(orderfile, 'r') as f:
@@ -160,25 +242,53 @@ def _cds_orderlist_del(target:str, orderfile:str = ORDERFILE):
     with open(orderfile, 'w') as f:
             json.dump(orders, f)
 
-
 # -------------------------------------------------------------------------
 
 def cds_getorder(order_args: dict[str, Any],
                  ignore_cache: bool = False) -> str:
     """
-    Submit *one* CDS order and return the target filename.
+    Submit one CDS order and return the path of the fully processed
+    target file.
 
-    * Checks whether *target* already exists on disk
-      → skips.
-    * Checks whether download file already exists on disk
-      → preprocess to *target*
+    The function implements a three-level resume strategy so that
+    interrupted runs can be restarted without re-submitting jobs or
+    re-downloading data:
 
+    - Target already on disk and valid → return immediately.
+    - Download file already on disk and valid →
+      go straight to post-processing via :py:func:`cds_processorder`.
+    - Cached request ID found (in :py:const:`ORDERFILE`) → re-attach
+       to the running server job, wait for completion, then download.
+    - No cache entry → submit a new order, store the request ID,
+       wait for completion, then download.
 
-    :param order_args: same dict accepted by the original ``cds_getorder``
-        (keys: ``dataset``, ``request``, ``target``; optionally ``subset``).
-    :param ignore_cache: if True, ignore any cached job info and re-submit.
-    :returns: target filename (the file is guaranteed to exist on return).
-    :raises RuntimeError: if the client libraries are unavailable.
+    After downloading, the raw file is post-processed by
+    :py:func:`cds_processorder` (unzipping, spatial subsetting, time
+    variable conversion) before the target path is returned.
+
+    :param order_args: order description dictionary with the keys:
+
+      * ``dataset`` *(str)* – CDS dataset name (e.g.
+        ``'reanalysis-era5-single-levels'``).
+      * ``request`` *(dict)* – request body as described in the
+        `CDS API how-to
+        <https://cds.climate.copernicus.eu/how-to-api>`_.
+      * ``target`` *(str)* – local filename of the final processed file
+        to produce.
+      * ``subset`` *(dict, optional)* – spatial subset passed through to
+        :py:func:`cds_processorder`.
+    :type order_args: dict[str, Any]
+
+    :param ignore_cache: if ``True``, skip all on-disk and order-list
+      checks and unconditionally re-submit the request.
+      Defaults to ``False``.
+    :type ignore_cache: bool
+
+    :returns: path of the processed target file (guaranteed to exist).
+    :rtype: str
+
+    :raises RuntimeError: if the ``ecmwf-datastores`` client library is
+      not available.
     """
     dataset = order_args["dataset"]
     request = order_args["request"]
@@ -188,7 +298,7 @@ def cds_getorder(order_args: dict[str, Any],
 
     logger.info(f"processing file {target}")
 
-    order_done = False
+    request_id = False
     if not  ignore_cache:
         # Target already on disk?
         if os.path.exists(target):
@@ -221,7 +331,7 @@ def cds_getorder(order_args: dict[str, Any],
         client = _edsapi.Client()
         remote = client.submit(dataset, request)
         request_id = remote.request_id
-        _cds_orderlist_add(target, remote.request_id)
+        _cds_orderlist_add(target, request_id)
         del client
 
     client = _edsapi.Client()
@@ -244,16 +354,44 @@ def cds_getorder(order_args: dict[str, Any],
 
 def _apply_subset(target: str, subset: dict) -> None:
     """
-    Apply spatial subsetting to a NetCDF file in-place using xarray.
-    ``subset`` is expected to have keys ``xmin``, ``xmax``, ``ymin``,
-    ``ymax``, ``by_index``.
+    Apply a spatial subset to a netCDF file **in place** using xarray.
+
+    The function writes the subsetted data to a temporary file alongside
+    *target* and then atomically replaces *target* with it via
+    :py:func:`os.replace`.
+
+    The x- and y-dimension names are not assumed: the function tries the
+    common variants ``('x', 'longitude', 'lon', 'rlon')`` and
+    ``('y', 'latitude', 'lat', 'rlat')`` and uses the first pair that is
+    actually present in the dataset.  If ``subset['by_index']`` is
+    ``True``, integer positional slicing (:py:meth:`xarray.Dataset.isel`)
+    is used; otherwise coordinate-value slicing
+    (:py:meth:`xarray.Dataset.sel`) is used.
 
     .. note::
-        In the normal download flow subsetting is handled by
-        :func:`cds_processorder` (via :func:`_netcdf.subset_xy`).
+        In the normal download flow, subsetting is handled by
+        :py:func:`cds_processorder` (via :py:func:`_netcdf.subset_xy`).
         This function is kept as a fallback for callers that cannot use
         ``cds_processorder`` (e.g. files not in the standard order-args
         format).
+
+    :param target: path of the netCDF file to subset in place
+    :type target: str
+
+    :param subset: subsetting specification with the keys:
+
+      * ``xmin`` *(int | float)* – lower bound of the x dimension
+        (index or coordinate value, depending on ``by_index``).
+      * ``xmax`` *(int | float)* – upper bound of the x dimension.
+      * ``ymin`` *(int | float)* – lower bound of the y dimension.
+      * ``ymax`` *(int | float)* – upper bound of the y dimension.
+      * ``by_index`` *(bool, optional)* – if ``True``, treat the bounds
+        as integer positional indices; if ``False`` (default), treat them
+        as coordinate values.
+    :type subset: dict
+
+    :raises ImportError: if ``xarray`` is not installed (logged as a
+      warning; the function returns without modifying *target*).
     """
     try:
         import xarray as xr
@@ -295,29 +433,45 @@ def cds_processorder(downloaded: str,
                      order_args: dict[str, str | dict],
                      compression: str | None = _storage.COMPRESS_NETCDF) -> str:
     """
-    Preprocess a file downloaded by
-    :py:func:`austaltools:_datasets.cds_getorder`
-    by converting a dowanload file that is a zip archive containing
-    netCDF files (new since 2024) into one plain netCDF file and / or by
-    optionally subestting the data.
+    Post-process a file downloaded by :py:func:`cds_getorder`.
 
-    :param downloaded: The full name of the downloaded file to process
+    Three transformations are applied in sequence:
+
+    1. Unzip – if ``downloaded`` is a zip archive (as returned by the
+       CDS API since 2024), its netCDF members are merged into a single
+       plain netCDF file via :py:func:`cds_merge_zipped`.
+    2. Spatial subset – if ``order_args['subset']`` is present, the
+       data are cropped via :py:func:`_netcdf.subset_xy`.
+    3. Time variable conversion – ``valid_time`` (seconds since
+       1970-01-01) is replaced by ``time`` (hours since 1900-01-01) via
+       :py:func:`cds_replace_valid_time` and :py:func:`_netcdf.merge_variables`.
+
+    :param downloaded: path of the raw downloaded file to process.
+      For the normal CDS flow this is ``'_' + target``.
     :type downloaded: str
-    :param order_args: order data dictionary
-    :type order_args: dict
-        must contain the keys:
-        - ``target``: Name of the file to produce
 
-       optionally may contain:
-        - ``subset``: a dictionary containing arguments to
-          :py: func:`austaltools._netcdf.subset_xy`,
-          except `rsc` and `dst`.
-          If the keyword is not contained in `order_args`,
-          no subestting is applied.
+    :param order_args: order description dictionary.  Must contain:
 
-    :returns: filename of the produced file
+      * ``target`` (str) – name of the final output file to produce.
+
+      May optionally contain:
+
+      * ``subset`` (dict) – keyword arguments for
+        :py:func:`_netcdf.subset_xy` (excluding ``src`` and ``dst``).
+        If absent, no spatial subsetting is applied.
+    :type order_args: dict[str, str | dict]
+
+    :param compression: compression method passed to
+      :py:func:`_netcdf.merge_variables` and :py:func:`_netcdf.subset_xy`.
+      Defaults to :py:const:`_storage.COMPRESS_NETCDF`.
+    :type compression: str | None
+
+    :returns: path of the final processed output file (equal to
+      ``order_args['target']``).
     :rtype: str
 
+    :raises ValueError: if ``order_args`` does not contain the key
+      ``'target'``.
     """
     target = order_args.get('target',None)
     if target is None:
@@ -358,21 +512,36 @@ def cds_get_order_list(
         ignore_cache: bool = False,
 ) -> list[str]:
     """
-    Execute a list of CDS orders sequentially, skipping any that are already
-    present on disk or can be resumed from the job cache.
+    Execute a list of CDS orders and return the paths of all processed
+    output files.
 
-    The original parallel multiprocessing approach is replaced here with a
-    sequential loop because the bottleneck is always the server (hours of
-    queue + retrieval), not local CPU.  Submitting all jobs first and then
-    polling in round-robin is the correct strategy – see the implementation
-    below.
+    When *maxparallel* resolves to 1 (or 0), orders are processed
+    sequentially via a plain ``for`` loop.  When it resolves to more than
+    1, a :py:class:`multiprocessing.Pool` of that size is used so that
+    multiple server jobs are in flight simultaneously — useful because
+    the bottleneck is server-side queue time, not local CPU.
 
-    :param args_list: list of order dicts (keys: ``dataset``, ``request``,
-        ``target``; optionally ``subset``).
-    :param maxparallel: kept for API compatibility; not used.
-    :param cache_path: path to the JSON cache file.
-    :param ignore_cache: if True, ignore cached job info (re-submit all).
-    :returns: list of completed target filenames.
+    Each individual order is handled by :py:func:`cds_getorder`, which
+    implements on-disk and order-list caching so that interrupted runs
+    can be resumed without re-submitting already-queued jobs.
+
+    :param args_list: list of order description dicts, each accepted by
+      :py:func:`cds_getorder` (required keys: ``dataset``, ``request``,
+      ``target``; optional key: ``subset``).
+    :type args_list: list[dict[str, Any]]
+
+    :param maxparallel: maximum number of concurrent server requests.
+      ``None`` or ``0`` falls back to :py:const:`API_LIMIT_PARALLEL`.
+      ``1`` forces sequential execution.
+    :type maxparallel: int | None
+
+    :param ignore_cache: passed through to :py:func:`cds_getorder`; if
+      ``True``, all on-disk and order-list caches are ignored and every
+      order is re-submitted from scratch.
+    :type ignore_cache: bool
+
+    :returns: list of processed output file paths, in submission order.
+    :rtype: list[str]
     """
 
     if maxparallel is None or maxparallel == 0:
@@ -400,67 +569,68 @@ def cds_get_era5_year(year: int,
                       subset: list | None = None,
                       ignore_cache: bool = False):
     """
-    Downloads ERA5 reanalysis data for a specific year and
-    saves it as a NetCDF file.
+    Download ERA5 reanalysis data for one calendar year and save the
+    result as a single netCDF file.
 
-    The function calls the Climate Data Store (CDS) API to retrieve
-    a specific set of meteorological variables for
-    the entire year specified by the user. It requests data in
-    NetCDF format, covering a predefined geographic
-    extent focusing on Alaska and Europe. This function is specifically
-    designed to automate the retrieval process
-    for ERA5 weather variables, saving the data in a structured format
-    that's easier to work with for further analysis.
+    The function submits requests to the Copernicus Climate Data Store
+    (CDS) API for a fixed set of meteorological variables (see source for
+    the full list) at hourly resolution.  Requests are split into
+    *chunks* (typically one per month) and processed by
+    :py:func:`cds_get_order_list`, which supports parallelism and
+    transparent resumption of interrupted downloads.
 
-    :param year: The year for which to download the data (integer).
+    The final output filename follows the pattern
+    ``era5_ak_eu_<YYYY>.nc`` and is written to the current working
+    directory.  If the file already exists and *ignore_cache* is
+    ``False``, the function returns immediately.
+
+    :param year: calendar year to download (e.g. ``2020``).
     :type year: int
 
-    :param chunks: Whether to retrieve monthly chunks or yearly files.
-      If True or 12, monthly chunks are downloaded.
-      If False or 1, the year is downloaded in one piece
-      (which exceeds current limits as of Apr 2025)
-      If 2, 3, 4, or 6, multi-monthly chunks are downloaded
-      (which can be faster, depending on the queue length)
-    :type chunks: int | bool
+    :param chunks: controls how the year is split into individual CDS
+      requests:
 
-    :param maxparallel: number of parallel queries that are
-      submitted to the CDS API. Or `None` for the default value.
+      * ``True`` or ``12`` – one request per month (12 total).
+      * ``False`` or ``1`` – the entire year in one request (may exceed
+        current CDS per-request size limits).
+      * ``2``, ``3``, ``4``, or ``6`` – the year split into that many
+        equal multi-month requests.
+      * ``None`` – use the module default :py:const:`ECMWF_CHUNKS`.
+    :type chunks: int | bool | None
+
+    :param maxparallel: maximum number of concurrent CDS requests.
+      ``None`` uses the default :py:const:`API_LIMIT_PARALLEL`.
     :type maxparallel: int | None
 
-    :param area: Area to extract from the CDS database
-      as a list of "North, West, South, East"
-      (Minimum latitude, maximum latitude,
-      minimum longitude, maximum longitude)
-      or `None` for the default value.
-    :type area: list[float, float, float, float] | None
+    :param area: geographic bounding box passed to the CDS API as
+      ``[North, West, South, East]`` (i.e. ``[latmax, lonmin, latmin,
+      lonmax]``).  ``None`` falls back to :py:const:`WEA_WINDOW`.
+    :type area: list[float] | None
 
-    :param subset: Accepted for consistency with other
-      ``cds_get_...`` functions.
-    :type subset: None
+    :param subset: not used for ERA5; accepted only for a consistent
+      call signature with :py:func:`cds_get_cerra_year`.  Passing a
+      non-``None`` value logs an error and is otherwise ignored.
+    :type subset: list | None
 
-    :param cache_path: path to the JSON job-cache file.
-      Default: ``cds_job_cache.json`` in the current directory.
-    :type cache_path: str
-
-    :param ignore_cache: if True, ignore all cached job information and
-      restart the year download from scratch. Existing output files
-      are also re-downloaded if this flag is set.
+    :param ignore_cache: if ``True``, re-download even if the output
+      file or intermediate chunk files already exist on disk.
     :type ignore_cache: bool
 
-    :returns: filename of the assembled NetCDF file.
+    :returns: path of the assembled yearly netCDF file.
     :rtype: str
 
+    :raises ValueError: if *chunks* is not ``True``, ``False``, or a
+      divisor of 12.
+    :raises RuntimeError: if no files were downloaded.
+
     :example:
-        >>> # To download ERA5 data for the year 2020 and
-        >>> # save it to the specified directory
+
         >>> cds_get_era5_year(2020)
 
-    :note:
-      - The function crafts a filename based on the year, prefixing it
-        with `era5_ak_eu_` to denote the region and type of data retrieved.
-        Ensure that the specified directory exists and is writable.
-      - ``ecmwf-datastores-client`` must be installed
-        and a **valid CDS API key** must be configured.
+    .. note::
+      The ``ecmwf-datastores`` package must be installed and a valid CDS
+      API key must be configured (see the
+      `CDS API how-to <https://cds.climate.copernicus.eu/how-to-api>`_).
     """
     if subset is not None:
         logger.error("option 'subset' given with a value that is "
@@ -586,31 +756,78 @@ def cds_get_cerra_year(
         ignore_cache: bool = False,
 ) -> str:
     """
-    Download and process a year's worth of CERRA data, resuming
-    automatically if a previous run was interrupted.
+    Download CERRA (Copernicus European Regional ReAnalysis) data for one
+    calendar year and save the result as a single netCDF file.
 
-    See the original docstring for full parameter documentation.  New
-    parameters:
+    CERRA is a forecast product with three lead times (1 h, 2 h, 3 h)
+    for each analysis time step.  For every chunk × lead-time combination
+    a separate CDS request is submitted, giving
+    ``chunk_count × 3`` requests in total.  After all requests have
+    completed, the lead-time files within each chunk are merged along the
+    time axis, and the chunk files are then merged into the final yearly
+    file.
 
+    The function supports transparent resumption of interrupted runs:
 
-    Resume behaviour
-    ----------------
-    On startup the function reads ``cache_path`` (if it exists) and for
-    every chunk+leadtime combination determines the minimum work still
-    needed:
+    * If the final output file ``cerra_ak_eu_<YYYY>.nc`` already exists
+      and *ignore_cache* is ``False``, the function returns immediately.
+    * Intermediate chunk files that already exist are reused without
+      re-downloading or re-merging.
+    * Already-submitted server jobs are tracked via the order-list file
+      (see :py:const:`ORDERFILE`) and are re-attached rather than
+      re-submitted.
 
-    * Target ``.nc`` already on disk → skip.
-    * A ``request_id`` is in the cache → re-attach to the server job;
-      if the server already finished → download only; if still running →
-      wait and then download.
-    * No cache entry → submit fresh.
+    :param year: calendar year to download (e.g. ``2020``).
+    :type year: int
 
-    The year-level output file ``cerra_ak_eu_<year>.nc`` is only
-    assembled once *all* chunk files are present.
+    :param chunks: controls how the year is split into individual CDS
+      requests:
 
-    Use :func:`cleanup_cds_cache` to wipe the cache and start over::
+      * ``True`` or ``12`` – one request per month (12 × 3 = 36 requests
+        total).
+      * ``False`` or ``1`` – the entire year in one request per lead time
+        (3 requests total; may exceed CDS per-request size limits).
+      * ``2``, ``3``, ``4``, or ``6`` – the year split into that many
+        equal multi-month groups.
+      * ``None`` – use the module default :py:const:`ECMWF_CHUNKS`.
+    :type chunks: int | bool | None
 
-        cleanup_cds_cache("cds_job_cache.json", remove_partial_files=True)
+    :param maxparallel: maximum number of concurrent CDS requests.
+      ``None`` uses the default :py:const:`API_LIMIT_PARALLEL`.
+    :type maxparallel: int | None
+
+    :param area: not used for CERRA (the dataset uses a fixed rotated
+      grid); accepted only for a consistent call signature with
+      :py:func:`cds_get_era5_year`.  Passing a non-``None`` value logs
+      an error and is otherwise ignored.
+    :type area: list | None
+
+    :param subset: spatial subset expressed as grid-cell indices
+      ``[xmin, xmax, ymin, ymax]``.  ``None`` defaults to the index
+      range covering Germany (xmin=489, xmax=649, ymin=479, ymax=659).
+    :type subset: list[int] | None
+
+    :param ignore_cache: if ``True``, re-download even if the output
+      file or intermediate chunk files already exist on disk.
+    :type ignore_cache: bool
+
+    :returns: path of the assembled yearly netCDF file
+      (``cerra_ak_eu_<YYYY>.nc`` in the current working directory).
+    :rtype: str
+
+    :raises ValueError: if *chunks* is not ``True``, ``False``, or a
+      divisor of 12.
+    :raises RuntimeError: if no files were downloaded, or if no source
+      files are found for a given chunk during the merge step.
+
+    :example:
+
+        >>> cds_get_cerra_year(2023)
+
+    .. note::
+      The ``ecmwf-datastores`` package must be installed and a valid CDS
+      API key must be configured (see the
+      `CDS API how-to <https://cds.climate.copernicus.eu/how-to-api>`_).
     """
     import calendar
 
