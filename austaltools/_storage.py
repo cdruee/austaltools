@@ -52,6 +52,8 @@ SIMPLE_DEFAULT_TERRAIN = 'DGM25-DE'
 SIMPLE_DEFAULT_EXTENT = 10.
 """ default terrain extent in austaltools simple """
 
+COMPRESS_NETCDF = 'zlib'
+""" Standard compression method of netCDF files  """
 
 # =========================================================================
 

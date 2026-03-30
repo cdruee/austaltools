@@ -1,9 +1,42 @@
 import unittest
+import tempfile
+import os
 from unittest.mock import patch, MagicMock
+
+import pandas as pd
 
 import austaltools._geo
 import austaltools._tools
 from austaltools import _tools
+
+
+# ---------------------------------------------------------------------------
+# Helpers shared by multiple test classes
+# ---------------------------------------------------------------------------
+
+def _write_format1_csv(path: str) -> None:
+    """Write a minimal format-1 extracted-weather CSV (no ha field)."""
+    times = pd.date_range('2000-01-01', periods=4, freq='1h')
+    df = pd.DataFrame({'ff': [1.0, 2.0, 3.0, 4.0],
+                       'dd': [90., 180., 270., 0.]},
+                      index=times)
+    with open(path, 'w') as f:
+        f.write('# 49.75 6.75 200.0 0.10 ERA5 test_station\n')
+        df.to_csv(f, float_format='%.2f', na_rep='-999')
+
+
+def _write_format2_csv(path: str) -> None:
+    """Write a minimal format-2 extracted-weather CSV (includes ha field)."""
+    times = pd.date_range('2000-01-01', periods=4, freq='1h')
+    df = pd.DataFrame({'ff': [1.0, 2.0, 3.0, 4.0],
+                       'dd': [90., 180., 270., 0.]},
+                      index=times)
+    with open(path, 'w') as f:
+        f.write('# 49.75 6.75 200.0 12.5 0.10 ERA5 test_station\n')
+        df.to_csv(f, float_format='%.2f', na_rep='-999')
+
+
+# ---------------------------------------------------------------------------
 
 class TestEstimateElevation(unittest.TestCase):
     def test_estimate_elevation(self):
@@ -229,3 +262,125 @@ class TestStr2Bool(unittest.TestCase):
         # Test that boolean inputs pass through
         self.assertTrue(_tools.str2bool(True))
         self.assertFalse(_tools.str2bool(False))
+
+
+# ---------------------------------------------------------------------------
+# Tests for read_extracted_weather
+# ---------------------------------------------------------------------------
+
+class TestReadExtractedWeather(unittest.TestCase):
+    """Tests for _tools.read_extracted_weather."""
+
+    def setUp(self):
+        self._tmpdir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self._tmpdir, ignore_errors=True)
+
+    # --- format-1 (legacy, no ha) -------------------------------------------
+
+    def test_format1_returns_eight_values(self):
+        """Format-1 file unpacks to 8 values."""
+        path = os.path.join(self._tmpdir, 'f1.csv')
+        _write_format1_csv(path)
+        result = _tools.read_extracted_weather(path)
+        self.assertEqual(len(result), 8)
+
+    def test_format1_coordinates(self):
+        """Format-1 lat/lon/ele are parsed correctly."""
+        path = os.path.join(self._tmpdir, 'f1.csv')
+        _write_format1_csv(path)
+        lat, lon, ele, ha, z0, source, nam, obs = \
+            _tools.read_extracted_weather(path)
+        self.assertAlmostEqual(lat, 49.75)
+        self.assertAlmostEqual(lon, 6.75)
+        self.assertAlmostEqual(ele, 200.0)
+
+    def test_format1_ha_is_float_10(self):
+        """Format-1 falls back to ha=10.0 (float, not string)."""
+        path = os.path.join(self._tmpdir, 'f1.csv')
+        _write_format1_csv(path)
+        lat, lon, ele, ha, z0, source, nam, obs = \
+            _tools.read_extracted_weather(path)
+        self.assertIsInstance(ha, float)
+        self.assertAlmostEqual(ha, 10.0)
+
+    def test_format1_z0_and_source(self):
+        """Format-1 z0 and source are parsed correctly."""
+        path = os.path.join(self._tmpdir, 'f1.csv')
+        _write_format1_csv(path)
+        lat, lon, ele, ha, z0, source, nam, obs = \
+            _tools.read_extracted_weather(path)
+        self.assertAlmostEqual(z0, 0.10)
+        self.assertEqual(source, 'ERA5')
+
+    def test_format1_obs_is_dataframe(self):
+        """Format-1 obs is a DataFrame with a DatetimeIndex."""
+        path = os.path.join(self._tmpdir, 'f1.csv')
+        _write_format1_csv(path)
+        lat, lon, ele, ha, z0, source, nam, obs = \
+            _tools.read_extracted_weather(path)
+        self.assertIsInstance(obs, pd.DataFrame)
+        self.assertIsInstance(obs.index, pd.DatetimeIndex)
+        self.assertEqual(len(obs), 4)
+
+    # --- format-2 (current, includes ha) ------------------------------------
+
+    def test_format2_returns_eight_values(self):
+        """Format-2 file unpacks to 8 values."""
+        path = os.path.join(self._tmpdir, 'f2.csv')
+        _write_format2_csv(path)
+        result = _tools.read_extracted_weather(path)
+        self.assertEqual(len(result), 8)
+
+    def test_format2_ha_from_header(self):
+        """Format-2 ha is read from the header, not hard-coded."""
+        path = os.path.join(self._tmpdir, 'f2.csv')
+        _write_format2_csv(path)
+        lat, lon, ele, ha, z0, source, nam, obs = \
+            _tools.read_extracted_weather(path)
+        self.assertIsInstance(ha, float)
+        self.assertAlmostEqual(ha, 12.5)
+
+    def test_format2_z0_and_source(self):
+        """Format-2 z0 and source are parsed correctly."""
+        path = os.path.join(self._tmpdir, 'f2.csv')
+        _write_format2_csv(path)
+        lat, lon, ele, ha, z0, source, nam, obs = \
+            _tools.read_extracted_weather(path)
+        self.assertAlmostEqual(z0, 0.10)
+        self.assertEqual(source, 'ERA5')
+
+    def test_format2_obs_is_dataframe(self):
+        """Format-2 obs is a DataFrame with a DatetimeIndex."""
+        path = os.path.join(self._tmpdir, 'f2.csv')
+        _write_format2_csv(path)
+        lat, lon, ele, ha, z0, source, nam, obs = \
+            _tools.read_extracted_weather(path)
+        self.assertIsInstance(obs, pd.DataFrame)
+        self.assertIsInstance(obs.index, pd.DatetimeIndex)
+        self.assertEqual(len(obs), 4)
+
+    # --- error handling -----------------------------------------------------
+
+    def test_missing_file_raises_ioerror(self):
+        """Raises IOError when the file does not exist."""
+        with self.assertRaises(IOError):
+            _tools.read_extracted_weather('/nonexistent/path/file.csv')
+
+    def test_format1_ha_type_and_value(self):
+        """Format-1: ha is a float equal to 10.0."""
+        path = os.path.join(self._tmpdir, 'f1_param.csv')
+        _write_format1_csv(path)
+        _, _, _, ha, _, _, _, _ = _tools.read_extracted_weather(path)
+        self.assertIsInstance(ha, float)
+        self.assertAlmostEqual(ha, 10.0)
+
+    def test_format2_ha_type_and_value(self):
+        """Format-2: ha is a float equal to 12.5."""
+        path = os.path.join(self._tmpdir, 'f2_param.csv')
+        _write_format2_csv(path)
+        _, _, _, ha, _, _, _, _ = _tools.read_extracted_weather(path)
+        self.assertIsInstance(ha, float)
+        self.assertAlmostEqual(ha, 12.5)

@@ -1,140 +1,136 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Comprehensive test suite for austaltools._datasets module.
+Test suite for austaltools._datasets module.
 
-This module tests dataset management, downloading, assembling,
-and various utility functions for terrain and weather data handling.
+Covers dataset management, availability scanning, terrain/weather helpers,
+and various utility functions.  CDS-download tests live in test__fetch_cds.py.
 """
 import json
 import os
 import tempfile
 import unittest
 import zipfile
-from unittest.mock import patch, MagicMock, mock_open, PropertyMock
+from unittest.mock import patch, MagicMock
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from austaltools import _datasets
+from austaltools import _datasets, _storage
 
+
+# ---------------------------------------------------------------------------
+# Module-level constants
+# ---------------------------------------------------------------------------
 
 class TestModuleConstants(unittest.TestCase):
-    """Tests for module-level constants."""
-
-    def test_cdsapi_limit_parallel_is_positive(self):
-        """Test CDSAPI_LIMIT_PARALLEL is a positive integer."""
-        self.assertIsInstance(_datasets.CDSAPI_LIMIT_PARALLEL, int)
-        self.assertGreaterEqual(_datasets.CDSAPI_LIMIT_PARALLEL, 0)
-
-    def test_wea_window_format(self):
-        """Test WEA_WINDOW has correct format (latmin, latmax, lonmin, lonmax)."""
-        self.assertEqual(len(_datasets.WEA_WINDOW), 4)
-        latmin, latmax, lonmin, lonmax = _datasets.WEA_WINDOW
-        self.assertLess(latmin, latmax)
-        self.assertLess(lonmin, lonmax)
+    """Tests for module-level constants defined in _datasets."""
 
     def test_dem_window_format(self):
-        """Test DEM_WINDOW has correct format."""
+        """DEM_WINDOW must be a 4-tuple with latmin < latmax and lonmin < lonmax."""
         self.assertEqual(len(_datasets.DEM_WINDOW), 4)
         latmin, latmax, lonmin, lonmax = _datasets.DEM_WINDOW
         self.assertLess(latmin, latmax)
         self.assertLess(lonmin, lonmax)
 
     def test_dem_fmt_is_string(self):
-        """Test DEM_FMT is a format string."""
+        """DEM_FMT must be a format string containing '%s'."""
         self.assertIsInstance(_datasets.DEM_FMT, str)
         self.assertIn('%s', _datasets.DEM_FMT)
 
     def test_wea_fmt_is_string(self):
-        """Test WEA_FMT is a format string."""
+        """WEA_FMT must be a format string containing '%s'."""
         self.assertIsInstance(_datasets.WEA_FMT, str)
         self.assertIn('%s', _datasets.WEA_FMT)
 
     def test_obs_fmt_is_string(self):
-        """Test OBS_FMT is a format string."""
+        """OBS_FMT must be a format string containing '%s'."""
         self.assertIsInstance(_datasets.OBS_FMT, str)
         self.assertIn('%s', _datasets.OBS_FMT)
 
     def test_dem_crs_is_epsg(self):
-        """Test DEM_CRS is a valid EPSG code format."""
+        """DEM_CRS must be a string starting with 'EPSG:'."""
         self.assertIsInstance(_datasets.DEM_CRS, str)
         self.assertTrue(_datasets.DEM_CRS.startswith('EPSG:'))
 
     def test_compress_netcdf_is_string(self):
-        """Test COMPRESS_NETCDF is a valid compression string."""
-        self.assertIsInstance(_datasets.COMPRESS_NETCDF, str)
-        self.assertIn(_datasets.COMPRESS_NETCDF, ['zlib', 'gzip', 'lzma', ''])
+        """_storage.COMPRESS_NETCDF must be a recognised compression name."""
+        self.assertIsInstance(_storage.COMPRESS_NETCDF, str)
+        self.assertIn(_storage.COMPRESS_NETCDF, ['zlib', 'gzip', 'lzma', ''])
 
     def test_nodata_value(self):
-        """Test NODATA is a large float value."""
+        """NODATA must be a large float (standard netCDF fill value)."""
         self.assertIsInstance(_datasets.NODATA, float)
         self.assertGreater(_datasets.NODATA, 1e30)
 
     def test_sources_terrain_is_list(self):
-        """Test SOURCES_TERRAIN is a non-empty list."""
+        """SOURCES_TERRAIN must be a list."""
         self.assertIsInstance(_datasets.SOURCES_TERRAIN, list)
 
     def test_sources_weather_is_list(self):
-        """Test SOURCES_WEATHER is a non-empty list."""
+        """SOURCES_WEATHER must be a list."""
         self.assertIsInstance(_datasets.SOURCES_WEATHER, list)
 
     def test_dataset_definitions_loaded(self):
-        """Test DATASET_DEFINITIONS is loaded from JSON."""
+        """DATASET_DEFINITIONS must be a non-empty dict loaded from JSON."""
         self.assertIsInstance(_datasets.DATASET_DEFINITIONS, dict)
         self.assertGreater(len(_datasets.DATASET_DEFINITIONS), 0)
 
+
+# ---------------------------------------------------------------------------
+# DataSet class
+# ---------------------------------------------------------------------------
 
 class TestDataSetClass(unittest.TestCase):
     """Tests for the DataSet class."""
 
     def test_dataset_init_requires_name(self):
-        """Test DataSet requires name parameter."""
-        with self.assertRaises(ValueError) as context:
+        """DataSet must raise ValueError when 'name' is missing."""
+        with self.assertRaises(ValueError) as ctx:
             _datasets.DataSet(storage='terrain')
-        self.assertIn('name', str(context.exception))
+        self.assertIn('name', str(ctx.exception))
 
     def test_dataset_init_requires_storage(self):
-        """Test DataSet requires storage parameter."""
-        with self.assertRaises(ValueError) as context:
+        """DataSet must raise ValueError when 'storage' is missing."""
+        with self.assertRaises(ValueError) as ctx:
             _datasets.DataSet(name='TEST')
-        self.assertIn('storage', str(context.exception))
+        self.assertIn('storage', str(ctx.exception))
 
     def test_dataset_init_minimal(self):
-        """Test DataSet initialization with minimal parameters."""
+        """DataSet initialises correctly with minimal parameters."""
         ds = _datasets.DataSet(name='TEST', storage='terrain')
         self.assertEqual(ds.name, 'TEST')
         self.assertEqual(ds.storage, 'terrain')
         self.assertFalse(ds.available)
 
     def test_dataset_init_sets_file_license(self):
-        """Test DataSet sets default file_license."""
+        """DataSet sets a default file_license based on name."""
         ds = _datasets.DataSet(name='TEST', storage='terrain')
         self.assertEqual(ds.file_license, 'TEST.LICENSE.txt')
 
     def test_dataset_init_sets_file_notice(self):
-        """Test DataSet sets default file_notice."""
+        """DataSet sets a default file_notice based on name."""
         ds = _datasets.DataSet(name='TEST', storage='terrain')
         self.assertEqual(ds.file_notice, 'TEST.NOTICE.txt')
 
     def test_dataset_init_sets_file_data_terrain(self):
-        """Test DataSet sets file_data for terrain storage."""
+        """DataSet sets file_data for terrain storage from DEM_FMT."""
         ds = _datasets.DataSet(name='TEST', storage='terrain')
         self.assertEqual(ds.file_data, _datasets.DEM_FMT % 'TEST')
 
     def test_dataset_init_sets_file_data_weather_grid(self):
-        """Test DataSet sets file_data for weather grid storage."""
+        """DataSet sets file_data for weather grid storage from WEA_FMT."""
         ds = _datasets.DataSet(name='TEST', storage='weather', position='grid')
         self.assertEqual(ds.file_data, _datasets.WEA_FMT % 'TEST')
 
     def test_dataset_init_sets_file_data_weather_station(self):
-        """Test DataSet sets file_data for weather station storage."""
+        """DataSet sets file_data for weather station storage from OBS_FMT."""
         ds = _datasets.DataSet(name='TEST', storage='weather', position='station')
         self.assertEqual(ds.file_data, _datasets.OBS_FMT % 'TEST')
 
     def test_dataset_init_custom_attributes(self):
-        """Test DataSet accepts custom attributes."""
+        """DataSet stores custom keyword arguments as attributes."""
         ds = _datasets.DataSet(
             name='TEST',
             storage='terrain',
@@ -145,90 +141,96 @@ class TestDataSetClass(unittest.TestCase):
         self.assertEqual(ds.uri, 'https://example.com/data.nc')
 
     def test_dataset_assemble_default(self):
-        """Test default assemble method returns True."""
+        """Default assemble() placeholder returns True."""
         ds = _datasets.DataSet(name='TEST', storage='terrain')
-        result = ds.assemble('/path', 'TEST', False, {})
-        self.assertTrue(result)
+        self.assertTrue(ds.assemble('/path', 'TEST', False, {}))
 
     def test_dataset_download_no_uri_raises(self):
-        """Test download raises when no uri provided."""
+        """download() raises ValueError when no URI is set or provided."""
         ds = _datasets.DataSet(name='TEST', storage='terrain')
         with self.assertRaises(ValueError):
             ds.download(path='/tmp')
 
+    def test_dataset_init_with_assemble_function(self):
+        """DataSet resolves the 'assemble' string to an actual callable."""
+        ds = _datasets.DataSet(
+            name='TEST',
+            storage='terrain',
+            assemble='assemble_DGMxx'
+        )
+        self.assertTrue(callable(ds.assemble))
+
+
+# ---------------------------------------------------------------------------
+# name_yearly
+# ---------------------------------------------------------------------------
 
 class TestNameYearly(unittest.TestCase):
-    """Tests for the name_yearly function."""
+    """Tests for the name_yearly helper."""
 
     def test_name_yearly_format(self):
-        """Test name_yearly produces correct format."""
-        result = _datasets.name_yearly('ERA5', 2020)
-        self.assertEqual(result, 'ERA5-2020')
+        """name_yearly produces '<NAME>-<YYYY>' format."""
+        self.assertEqual(_datasets.name_yearly('ERA5', 2020), 'ERA5-2020')
 
     def test_name_yearly_pads_year(self):
-        """Test name_yearly pads year to 4 digits."""
-        result = _datasets.name_yearly('TEST', 99)
-        self.assertEqual(result, 'TEST-0099')
+        """name_yearly zero-pads the year to 4 digits."""
+        self.assertEqual(_datasets.name_yearly('TEST', 99), 'TEST-0099')
 
     def test_name_yearly_with_zero(self):
-        """Test name_yearly with year 0."""
-        result = _datasets.name_yearly('DATA', 0)
-        self.assertEqual(result, 'DATA-0000')
+        """name_yearly handles year 0."""
+        self.assertEqual(_datasets.name_yearly('DATA', 0), 'DATA-0000')
 
+
+# ---------------------------------------------------------------------------
+# dataset_get / dataset_available / dataset_list
+# ---------------------------------------------------------------------------
 
 class TestDatasetGet(unittest.TestCase):
-    """Tests for the dataset_get function."""
+    """Tests for dataset_get."""
 
     @patch('austaltools._datasets._init_datasets')
-    def test_dataset_get_found(self, mock_init):
-        """Test dataset_get returns dataset when found."""
+    def test_dataset_get_found(self, _mock_init):
+        """dataset_get returns the matching DataSet object."""
         mock_ds = MagicMock()
         mock_ds.name = 'TEST-DS'
         _datasets.DATASETS = [mock_ds]
-
-        result = _datasets.dataset_get('TEST-DS')
-        self.assertEqual(result, mock_ds)
+        self.assertEqual(_datasets.dataset_get('TEST-DS'), mock_ds)
 
     @patch('austaltools._datasets._init_datasets')
-    def test_dataset_get_not_found(self, mock_init):
-        """Test dataset_get raises ValueError when not found."""
+    def test_dataset_get_not_found(self, _mock_init):
+        """dataset_get raises ValueError when the dataset is unknown."""
         _datasets.DATASETS = []
-
-        with self.assertRaises(ValueError) as context:
+        with self.assertRaises(ValueError) as ctx:
             _datasets.dataset_get('NONEXISTENT')
-        self.assertIn('not found', str(context.exception))
+        self.assertIn('not found', str(ctx.exception))
 
 
 class TestDatasetAvailable(unittest.TestCase):
-    """Tests for the dataset_available function."""
+    """Tests for dataset_available."""
 
     @patch('austaltools._datasets.dataset_get')
     def test_dataset_available_true(self, mock_get):
-        """Test dataset_available returns True when available."""
+        """dataset_available returns True when the dataset is available."""
         mock_ds = MagicMock()
         mock_ds.available = True
         mock_get.return_value = mock_ds
-
-        result = _datasets.dataset_available('TEST')
-        self.assertTrue(result)
+        self.assertTrue(_datasets.dataset_available('TEST'))
 
     @patch('austaltools._datasets.dataset_get')
     def test_dataset_available_false(self, mock_get):
-        """Test dataset_available returns False when not available."""
+        """dataset_available returns False when the dataset is not available."""
         mock_ds = MagicMock()
         mock_ds.available = False
         mock_get.return_value = mock_ds
-
-        result = _datasets.dataset_available('TEST')
-        self.assertFalse(result)
+        self.assertFalse(_datasets.dataset_available('TEST'))
 
 
 class TestDatasetList(unittest.TestCase):
-    """Tests for the dataset_list function."""
+    """Tests for dataset_list."""
 
     @patch('austaltools._datasets._init_datasets')
-    def test_dataset_list_returns_dict(self, mock_init):
-        """Test dataset_list returns a dictionary."""
+    def test_dataset_list_returns_dict(self, _mock_init):
+        """dataset_list returns a dict keyed by dataset name."""
         mock_ds = MagicMock()
         mock_ds.name = 'TEST'
         mock_ds.storage = 'terrain'
@@ -242,8 +244,8 @@ class TestDatasetList(unittest.TestCase):
         self.assertIn('TEST', result)
 
     @patch('austaltools._datasets._init_datasets')
-    def test_dataset_list_contains_required_keys(self, mock_init):
-        """Test dataset_list entries contain required keys."""
+    def test_dataset_list_contains_required_keys(self, _mock_init):
+        """Each entry in dataset_list has the four required keys."""
         mock_ds = MagicMock()
         mock_ds.name = 'TEST'
         mock_ds.storage = 'terrain'
@@ -252,81 +254,77 @@ class TestDatasetList(unittest.TestCase):
         mock_ds.path = None
         _datasets.DATASETS = [mock_ds]
 
-        result = _datasets.dataset_list()
-        entry = result['TEST']
-        self.assertIn('storage', entry)
-        self.assertIn('available', entry)
-        self.assertIn('uri', entry)
-        self.assertIn('path', entry)
+        entry = _datasets.dataset_list()['TEST']
+        for key in ('storage', 'available', 'uri', 'path'):
+            self.assertIn(key, entry)
 
+
+# ---------------------------------------------------------------------------
+# _ass_clear_target
+# ---------------------------------------------------------------------------
 
 class TestAssClearTarget(unittest.TestCase):
-    """Tests for the _ass_clear_target function."""
+    """Tests for _ass_clear_target."""
 
     def test_ass_clear_target_nonexistent(self):
-        """Test _ass_clear_target returns True for nonexistent file."""
+        """Returns True for a path that does not exist yet."""
         with tempfile.TemporaryDirectory() as tmpdir:
             target = os.path.join(tmpdir, 'nonexistent.nc')
-            result = _datasets._ass_clear_target(target, replace=False)
-            self.assertTrue(result)
+            self.assertTrue(_datasets._ass_clear_target(target, replace=False))
 
     def test_ass_clear_target_exists_no_replace(self):
-        """Test _ass_clear_target returns False when file exists and no replace."""
+        """Returns False and keeps file when it exists and replace=False."""
         with tempfile.TemporaryDirectory() as tmpdir:
             target = os.path.join(tmpdir, 'existing.nc')
             with open(target, 'w') as f:
                 f.write('data')
-
             result = _datasets._ass_clear_target(target, replace=False)
             self.assertFalse(result)
             self.assertTrue(os.path.exists(target))
 
     def test_ass_clear_target_exists_replace(self):
-        """Test _ass_clear_target removes file when replace=True."""
+        """Returns True and deletes file when it exists and replace=True."""
         with tempfile.TemporaryDirectory() as tmpdir:
             target = os.path.join(tmpdir, 'existing.nc')
             with open(target, 'w') as f:
                 f.write('data')
-
             result = _datasets._ass_clear_target(target, replace=True)
             self.assertTrue(result)
             self.assertFalse(os.path.exists(target))
 
 
+# ---------------------------------------------------------------------------
+# unpack_file
+# ---------------------------------------------------------------------------
+
 class TestUnpackFile(unittest.TestCase):
-    """Tests for the unpack_file function."""
+    """Tests for unpack_file."""
 
     def test_unpack_file_none(self):
-        """Test unpack_file with None returns original file."""
-        result = _datasets.unpack_file('test.tif', None)
-        self.assertEqual(result, ['test.tif'])
+        """None unpack string → returns the file unchanged."""
+        self.assertEqual(_datasets.unpack_file('test.tif', None), ['test.tif'])
 
     def test_unpack_file_empty_string(self):
-        """Test unpack_file with empty string returns original file."""
-        result = _datasets.unpack_file('test.tif', '')
-        self.assertEqual(result, ['test.tif'])
+        """Empty unpack string → returns the file unchanged."""
+        self.assertEqual(_datasets.unpack_file('test.tif', ''), ['test.tif'])
 
     def test_unpack_file_tif(self):
-        """Test unpack_file with 'tif' returns original file."""
-        result = _datasets.unpack_file('test.tif', 'tif')
-        self.assertEqual(result, ['test.tif'])
+        """'tif' unpack string → returns the file unchanged."""
+        self.assertEqual(_datasets.unpack_file('test.tif', 'tif'), ['test.tif'])
 
     def test_unpack_file_false(self):
-        """Test unpack_file with 'false' returns original file."""
-        result = _datasets.unpack_file('test.tif', 'false')
-        self.assertEqual(result, ['test.tif'])
+        """'false' unpack string → returns the file unchanged."""
+        self.assertEqual(_datasets.unpack_file('test.tif', 'false'), ['test.tif'])
 
     def test_unpack_file_zip_pattern(self):
-        """Test unpack_file with zip pattern extracts files."""
+        """zip:// pattern extracts matching files from the archive."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create a test zip file
             zip_path = os.path.join(tmpdir, 'test.zip')
             with zipfile.ZipFile(zip_path, 'w') as zf:
                 zf.writestr('data/file1.tif', 'content1')
                 zf.writestr('data/file2.tif', 'content2')
                 zf.writestr('other/file3.txt', 'content3')
 
-            # Change to temp dir to avoid polluting working directory
             old_cwd = os.getcwd()
             os.chdir(tmpdir)
             try:
@@ -338,23 +336,27 @@ class TestUnpackFile(unittest.TestCase):
                 os.chdir(old_cwd)
 
     def test_unpack_file_invalid_format(self):
-        """Test unpack_file with invalid format raises IOError."""
+        """Unknown unpack scheme raises IOError."""
         with self.assertRaises(IOError):
             _datasets.unpack_file('test.dat', 'unknown://pattern')
 
 
+# ---------------------------------------------------------------------------
+# expand_filelist_string
+# ---------------------------------------------------------------------------
+
 class TestExpandFilelistString(unittest.TestCase):
-    """Tests for the expand_filelist_string function."""
+    """Tests for expand_filelist_string."""
 
     def test_expand_filelist_string_no_expansion(self):
-        """Test expand_filelist_string with plain filename."""
+        """Plain filename is returned as a single-element list."""
         result = _datasets.expand_filelist_string(
             'simple.tif', 'https://example.com', True, None, None, None
         )
         self.assertEqual(result, ['simple.tif'])
 
     def test_expand_filelist_string_unknown_type(self):
-        """Test expand_filelist_string raises for unknown type."""
+        """An explicit but unknown type suffix raises ValueError."""
         with self.assertRaises(ValueError):
             _datasets.expand_filelist_string(
                 'file.dat::unknown', 'https://example.com',
@@ -362,140 +364,74 @@ class TestExpandFilelistString(unittest.TestCase):
             )
 
 
+# ---------------------------------------------------------------------------
+# xyz2csv
+# ---------------------------------------------------------------------------
+
 class TestXyz2csv(unittest.TestCase):
-    """Tests for the xyz2csv function."""
+    """Tests for xyz2csv."""
 
     def test_xyz2csv_basic(self):
-        """Test xyz2csv converts basic xyz file."""
+        """Converts a basic 4-point xyz file to csv."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            # Create test xyz file
-            input_file = os.path.join(tmpdir, 'test.xyz')
-            output_file = os.path.join(tmpdir, 'test.csv')
-
-            with open(input_file, 'w') as f:
-                f.write('100 200 10.5\n')
-                f.write('100 201 11.0\n')
-                f.write('101 200 10.8\n')
-                f.write('101 201 11.2\n')
-
-            result = _datasets.xyz2csv(input_file, output_file)
-            self.assertTrue(result)
-            self.assertTrue(os.path.exists(output_file))
+            inp = os.path.join(tmpdir, 'test.xyz')
+            out = os.path.join(tmpdir, 'test.csv')
+            with open(inp, 'w') as f:
+                f.write('100 200 10.5\n100 201 11.0\n'
+                        '101 200 10.8\n101 201 11.2\n')
+            self.assertTrue(_datasets.xyz2csv(inp, out))
+            self.assertTrue(os.path.exists(out))
 
     def test_xyz2csv_empty_file(self):
-        """Test xyz2csv returns False for nearly empty file."""
+        """Returns False when the file has fewer than 4 data points."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            input_file = os.path.join(tmpdir, 'empty.xyz')
-            output_file = os.path.join(tmpdir, 'empty.csv')
-
-            with open(input_file, 'w') as f:
-                f.write('100 200 10.5\n')  # Only one line
-
-            result = _datasets.xyz2csv(input_file, output_file)
-            self.assertFalse(result)
+            inp = os.path.join(tmpdir, 'empty.xyz')
+            out = os.path.join(tmpdir, 'empty.csv')
+            with open(inp, 'w') as f:
+                f.write('100 200 10.5\n')
+            self.assertFalse(_datasets.xyz2csv(inp, out))
 
     def test_xyz2csv_with_header(self):
-        """Test xyz2csv handles file with header."""
+        """Handles a file that starts with a text header line."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            input_file = os.path.join(tmpdir, 'header.xyz')
-            output_file = os.path.join(tmpdir, 'header.csv')
-
-            with open(input_file, 'w') as f:
-                f.write('x y z\n')  # Header line
-                f.write('100 200 10.5\n')
-                f.write('100 201 11.0\n')
-                f.write('101 200 10.8\n')
-                f.write('101 201 11.2\n')
-
-            result = _datasets.xyz2csv(input_file, output_file)
-            self.assertTrue(result)
+            inp = os.path.join(tmpdir, 'header.xyz')
+            out = os.path.join(tmpdir, 'header.csv')
+            with open(inp, 'w') as f:
+                f.write('x y z\n100 200 10.5\n100 201 11.0\n'
+                        '101 200 10.8\n101 201 11.2\n')
+            self.assertTrue(_datasets.xyz2csv(inp, out))
 
     def test_xyz2csv_utm_remove_zone(self):
-        """Test xyz2csv with UTM zone removal."""
+        """utm_remove_zone=True strips the leading zone digits from easting."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            input_file = os.path.join(tmpdir, 'utm.xyz')
-            output_file = os.path.join(tmpdir, 'utm.csv')
-
-            # Coordinates with UTM zone prefix (32500000 = zone 32, 500000 easting)
-            with open(input_file, 'w') as f:
-                f.write('32500000 5500000 100\n')
-                f.write('32500000 5500001 101\n')
-                f.write('32500001 5500000 102\n')
-                f.write('32500001 5500001 103\n')
-
-            result = _datasets.xyz2csv(input_file, output_file,
-                                        utm_remove_zone=True)
-            self.assertTrue(result)
+            inp = os.path.join(tmpdir, 'utm.xyz')
+            out = os.path.join(tmpdir, 'utm.csv')
+            with open(inp, 'w') as f:
+                f.write('32500000 5500000 100\n32500000 5500001 101\n'
+                        '32500001 5500000 102\n32500001 5500001 103\n')
+            self.assertTrue(_datasets.xyz2csv(inp, out, utm_remove_zone=True))
 
 
-class TestCdsMergeZipped(unittest.TestCase):
-    """Tests for the cds_merge_zipped function."""
-
-    @patch('austaltools._datasets._netcdf.merge_variables')
-    def test_cds_merge_zipped_creates_destination(self, mock_merge):
-        """Test cds_merge_zipped calls merge_variables."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            # Create test zip with nc files
-            zip_path = os.path.join(tmpdir, 'source.zip')
-            dest_path = os.path.join(tmpdir, 'dest.nc')
-
-            with zipfile.ZipFile(zip_path, 'w') as zf:
-                zf.writestr('data1.nc', 'nc_content_1')
-                zf.writestr('data2.nc', 'nc_content_2')
-
-            _datasets.cds_merge_zipped(zip_path, dest_path)
-            mock_merge.assert_called_once()
-
-    def test_cds_merge_zipped_no_nc_files(self):
-        """Test cds_merge_zipped raises IOError when no nc files."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            zip_path = os.path.join(tmpdir, 'empty.zip')
-            dest_path = os.path.join(tmpdir, 'dest.nc')
-
-            with zipfile.ZipFile(zip_path, 'w') as zf:
-                zf.writestr('readme.txt', 'no nc files here')
-
-            with self.assertRaises(IOError):
-                _datasets.cds_merge_zipped(zip_path, dest_path)
-
-
-class TestCdsReplaceValidTime(unittest.TestCase):
-    """Tests for the cds_replace_valid_time function."""
-
-    def test_cds_replace_valid_time_returns_dicts(self):
-        """Test cds_replace_valid_time returns two dicts."""
-        replace, convert = _datasets.cds_replace_valid_time()
-        self.assertIsInstance(replace, dict)
-        self.assertIsInstance(convert, dict)
-
-    def test_cds_replace_valid_time_replace_key(self):
-        """Test cds_replace_valid_time has valid_time in replace."""
-        replace, convert = _datasets.cds_replace_valid_time()
-        self.assertIn('valid_time', replace)
-
-    def test_cds_replace_valid_time_convert_key(self):
-        """Test cds_replace_valid_time has valid_time in convert."""
-        replace, convert = _datasets.cds_replace_valid_time()
-        self.assertIn('valid_time', convert)
-
+# ---------------------------------------------------------------------------
+# Availability helpers
+# ---------------------------------------------------------------------------
 
 class TestAvailableFunctions(unittest.TestCase):
-    """Tests for availability scanning functions."""
+    """Tests for _available_read, _available_write."""
 
     @patch('austaltools._datasets._storage.read_config')
     def test_available_read_empty_config(self, mock_read):
-        """Test _available_read with empty config."""
+        """_available_read returns an empty dict when config has no 'available' key."""
         mock_read.return_value = {}
-        result = _datasets._available_read()
-        self.assertEqual(result, {})
+        self.assertEqual(_datasets._available_read(), {})
 
     @patch('austaltools._datasets._storage.read_config')
     def test_available_read_with_data(self, mock_read):
-        """Test _available_read with available datasets."""
+        """_available_read returns datasets from both terrain and weather sections."""
         mock_read.return_value = {
             'available': {
                 'terrain': {'DEM1': '/path/to/dem1'},
-                'weather': {'ERA5-2020': '/path/to/era5'}
+                'weather': {'ERA5-2020': '/path/to/era5'},
             }
         }
         result = _datasets._available_read()
@@ -505,38 +441,37 @@ class TestAvailableFunctions(unittest.TestCase):
     @patch('austaltools._datasets._storage.write_config')
     @patch('austaltools._datasets._storage.read_config')
     def test_available_write_calls_write_config(self, mock_read, mock_write):
-        """Test _available_write calls write_config."""
+        """_available_write persists the availability tree via write_config."""
         mock_read.return_value = {}
         mock_ds = MagicMock()
         mock_ds.available = True
         mock_ds.name = 'TEST'
         mock_ds.path = '/path'
-
         _datasets._available_write([mock_ds])
         mock_write.assert_called_once()
 
 
+# ---------------------------------------------------------------------------
+# _datasets_expand / _datasets_set_available
+# ---------------------------------------------------------------------------
+
 class TestDatasetsExpand(unittest.TestCase):
-    """Tests for _datasets_expand function."""
+    """Tests for _datasets_expand."""
 
     def test_datasets_expand_simple(self):
-        """Test _datasets_expand with simple dataset."""
-        definitions = {
-            'TEST': {
-                'storage': 'terrain',
-            }
-        }
+        """A simple (non-split) definition produces one DataSet."""
+        definitions = {'TEST': {'storage': 'terrain'}}
         result = _datasets._datasets_expand(definitions)
         self.assertEqual(len(result), 1)
         self.assertEqual(result[0].name, 'TEST')
 
     def test_datasets_expand_yearly_split(self):
-        """Test _datasets_expand with yearly split."""
+        """A 'years' split produces one DataSet per year."""
         definitions = {
             'YEARLY': {
                 'storage': 'weather',
                 'split': 'years',
-                'years_available': '2020-2022'
+                'years_available': '2020-2022',
             }
         }
         result = _datasets._datasets_expand(definitions)
@@ -548,187 +483,200 @@ class TestDatasetsExpand(unittest.TestCase):
 
 
 class TestDatasetsSetAvailable(unittest.TestCase):
-    """Tests for _datasets_set_available function."""
+    """Tests for _datasets_set_available."""
 
     def test_datasets_set_available_marks_available(self):
-        """Test _datasets_set_available marks datasets as available."""
+        """Datasets present in the avail dict are marked available."""
         ds1 = _datasets.DataSet(name='DS1', storage='terrain')
         ds2 = _datasets.DataSet(name='DS2', storage='terrain')
-
-        avail = {'DS1': '/path/ds1'}
-        result = _datasets._datasets_set_available([ds1, ds2], avail)
-
+        _datasets._datasets_set_available([ds1, ds2], {'DS1': '/path/ds1'})
         self.assertTrue(ds1.available)
         self.assertEqual(ds1.path, '/path/ds1')
         self.assertFalse(ds2.available)
         self.assertIsNone(ds2.path)
 
 
+# ---------------------------------------------------------------------------
+# find_weather_data / find_terrain_data
+# ---------------------------------------------------------------------------
+
 class TestFindWeatherData(unittest.TestCase):
-    """Tests for find_weather_data function."""
+    """Tests for find_weather_data."""
 
     @patch('austaltools._datasets._init_datasets')
-    def test_find_weather_data_returns_dict(self, mock_init):
-        """Test find_weather_data returns a dictionary."""
+    def test_find_weather_data_returns_dict(self, _mock_init):
+        """Returns a dict containing available weather datasets."""
         mock_ds = MagicMock()
         mock_ds.name = 'ERA5-2020'
         mock_ds.storage = 'weather'
         mock_ds.available = True
         mock_ds.path = '/path/weather'
         _datasets.DATASETS = [mock_ds]
-
         result = _datasets.find_weather_data()
         self.assertIsInstance(result, dict)
         self.assertIn('ERA5-2020', result)
 
     @patch('austaltools._datasets._init_datasets')
-    def test_find_weather_data_excludes_terrain(self, mock_init):
-        """Test find_weather_data excludes terrain datasets."""
+    def test_find_weather_data_excludes_terrain(self, _mock_init):
+        """Terrain datasets are excluded from the result."""
         mock_ds = MagicMock()
         mock_ds.name = 'DEM1'
         mock_ds.storage = 'terrain'
         mock_ds.available = True
         _datasets.DATASETS = [mock_ds]
-
-        result = _datasets.find_weather_data()
-        self.assertNotIn('DEM1', result)
+        self.assertNotIn('DEM1', _datasets.find_weather_data())
 
 
 class TestFindTerrainData(unittest.TestCase):
-    """Tests for find_terrain_data function."""
+    """Tests for find_terrain_data."""
 
     @patch('austaltools._datasets._init_datasets')
-    def test_find_terrain_data_returns_dict(self, mock_init):
-        """Test find_terrain_data returns a dictionary."""
+    def test_find_terrain_data_returns_dict(self, _mock_init):
+        """Returns a dict containing available terrain datasets."""
         mock_ds = MagicMock()
         mock_ds.name = 'DEM1'
         mock_ds.storage = 'terrain'
         mock_ds.available = True
         mock_ds.path = '/path/terrain'
         _datasets.DATASETS = [mock_ds]
-
         result = _datasets.find_terrain_data()
         self.assertIsInstance(result, dict)
         self.assertIn('DEM1', result)
 
     @patch('austaltools._datasets._init_datasets')
-    def test_find_terrain_data_excludes_weather(self, mock_init):
-        """Test find_terrain_data excludes weather datasets."""
+    def test_find_terrain_data_excludes_weather(self, _mock_init):
+        """Weather datasets are excluded from the result."""
         mock_ds = MagicMock()
         mock_ds.name = 'ERA5-2020'
         mock_ds.storage = 'weather'
         mock_ds.available = True
         _datasets.DATASETS = [mock_ds]
+        self.assertNotIn('ERA5-2020', _datasets.find_terrain_data())
 
-        result = _datasets.find_terrain_data()
-        self.assertNotIn('ERA5-2020', result)
 
+# ---------------------------------------------------------------------------
+# show_notice
+# ---------------------------------------------------------------------------
 
 class TestShowNotice(unittest.TestCase):
-    """Tests for show_notice function."""
+    """Tests for show_notice."""
 
     @patch('builtins.print')
     def test_show_notice_with_file(self, mock_print):
-        """Test show_notice prints notice content."""
+        """Prints notice content when the notice file exists."""
         with tempfile.TemporaryDirectory() as tmpdir:
             notice_file = os.path.join(tmpdir, 'TEST.NOTICE.txt')
             with open(notice_file, 'w') as f:
                 f.write('Test notice content')
-
             _datasets.show_notice(tmpdir, 'TEST')
             self.assertTrue(mock_print.called)
 
     @patch('builtins.print')
     def test_show_notice_no_file(self, mock_print):
-        """Test show_notice does nothing when no notice file."""
+        """Does not print 'IMPORTANT' when no notice file is present."""
         with tempfile.TemporaryDirectory() as tmpdir:
             _datasets.show_notice(tmpdir, 'NONEXISTENT')
-            # Should not print anything (except maybe debug)
-            # The print for notice should not be called
             for call in mock_print.call_args_list:
                 self.assertNotIn('IMPORTANT', str(call))
 
 
+# ---------------------------------------------------------------------------
+# provide_terrain validation
+# ---------------------------------------------------------------------------
+
 class TestProvideTerrainValidation(unittest.TestCase):
-    """Tests for provide_terrain validation."""
+    """Input-validation tests for provide_terrain."""
 
     def test_provide_terrain_invalid_method(self):
-        """Test provide_terrain raises for invalid method."""
-        with self.assertRaises(ValueError) as context:
+        """Raises ValueError for unrecognised method."""
+        with self.assertRaises(ValueError) as ctx:
             _datasets.provide_terrain('DEM1', method='invalid')
-        self.assertIn('download', str(context.exception))
-        self.assertIn('assemble', str(context.exception))
+        self.assertIn('download', str(ctx.exception))
+        self.assertIn('assemble', str(ctx.exception))
 
 
-class TestCdsGetOrderList(unittest.TestCase):
-    """Tests for cds_get_order_list function."""
-
-    @patch('austaltools._datasets.cds_processorder')
-    @patch('austaltools._datasets.cds_getorder')
-    def test_cds_get_order_list_sequential(self, mock_getorder, mock_process):
-        """Test cds_get_order_list runs sequentially when RUNPARALLEL=False."""
-        original_runparallel = _datasets.RUNPARALLEL
-        _datasets.RUNPARALLEL = False
-        try:
-            mock_getorder.return_value = 'downloaded.nc'
-            mock_process.return_value = 'processed.nc'
-
-            args_list = [
-                {'dataset': 'test', 'request': {}, 'target': 'file1.nc'},
-                {'dataset': 'test', 'request': {}, 'target': 'file2.nc'}
-            ]
-
-            result = _datasets.cds_get_order_list(args_list)
-            self.assertEqual(len(result), 2)
-            self.assertEqual(mock_getorder.call_count, 2)
-        finally:
-            _datasets.RUNPARALLEL = original_runparallel
-
+# ---------------------------------------------------------------------------
+# provide_stationlist
+# ---------------------------------------------------------------------------
 
 class TestProvideStationlist(unittest.TestCase):
-    """Tests for provide_stationlist function."""
+    """Tests for provide_stationlist."""
 
     def test_provide_stationlist_no_source(self):
-        """Test provide_stationlist raises without source."""
+        """Raises ValueError when source is None."""
         with self.assertRaises(ValueError):
             _datasets.provide_stationlist(source=None)
 
     def test_provide_stationlist_unknown_source(self):
-        """Test provide_stationlist raises for unknown source."""
+        """Raises ValueError for an unknown source."""
         with self.assertRaises(ValueError):
             _datasets.provide_stationlist(source='UNKNOWN')
 
     @patch('austaltools._datasets.stationlist_DWD')
     def test_provide_stationlist_dwd(self, mock_stationlist):
-        """Test provide_stationlist calls stationlist_DWD for DWD source."""
-        _datasets.provide_stationlist(source='DWD', fmt='json', out='/tmp/out.json')
-        mock_stationlist.assert_called_once_with(path='/tmp/out.json', fmt='json')
+        """Delegates to stationlist_DWD for source='DWD'."""
+        _datasets.provide_stationlist(source='DWD', fmt='json',
+                                      out='/tmp/out.json')
+        mock_stationlist.assert_called_once_with(path='/tmp/out.json',
+                                                 fmt='json')
 
+
+# ---------------------------------------------------------------------------
+# merge_tiles validation
+# ---------------------------------------------------------------------------
 
 class TestMergeTilesValidation(unittest.TestCase):
-    """Tests for merge_tiles input validation."""
+    """Input-validation tests for merge_tiles."""
 
     def test_merge_tiles_invalid_ullr(self):
-        """Test merge_tiles raises for invalid ullr."""
+        """Raises ValueError when ullr does not have exactly 4 elements."""
         with self.assertRaises(ValueError):
             _datasets.merge_tiles('target.nc', ['file1.tif'], ullr=(1, 2, 3))
 
 
-# Pytest-style parametrized tests
+# ---------------------------------------------------------------------------
+# Edge cases
+# ---------------------------------------------------------------------------
+
+class TestEdgeCases(unittest.TestCase):
+    """Edge cases and boundary conditions."""
+
+    def test_nodata_is_standard_netcdf_fill(self):
+        """NODATA matches the standard netCDF float64 _FillValue."""
+        self.assertAlmostEqual(_datasets.NODATA,
+                               9.96920996838686905e+36, places=20)
+
+
+# ---------------------------------------------------------------------------
+# Integration
+# ---------------------------------------------------------------------------
+
+class TestIntegrationDatasetsExpand(unittest.TestCase):
+    """Integration tests using the real DATASET_DEFINITIONS."""
+
+    def test_expand_actual_definitions(self):
+        """_datasets_expand produces valid DataSet objects from the real JSON."""
+        result = _datasets._datasets_expand(_datasets.DATASET_DEFINITIONS)
+        self.assertIsInstance(result, list)
+        self.assertGreater(len(result), 0)
+        for ds in result:
+            self.assertIsInstance(ds, _datasets.DataSet)
+            self.assertIsNotNone(ds.name)
+            self.assertIsNotNone(ds.storage)
+
+
+# ---------------------------------------------------------------------------
+# Pytest-parametrised tests
+# ---------------------------------------------------------------------------
 
 class TestPytestStyle:
-    """Pytest-style tests for additional patterns."""
+    """Pytest-style parametrised tests."""
 
-    @pytest.mark.parametrize("unpack_str,expected_len", [
-        (None, 1),
-        ('', 1),
-        ('tif', 1),
-        ('false', 1),
-    ])
-    def test_unpack_file_simple_cases(self, unpack_str, expected_len):
-        """Test unpack_file with various simple inputs."""
+    @pytest.mark.parametrize("unpack_str", [None, '', 'tif', 'false'])
+    def test_unpack_file_simple_cases(self, unpack_str):
+        """unpack_file passthrough cases all return the original filename."""
         result = _datasets.unpack_file('test.tif', unpack_str)
-        assert len(result) == expected_len
+        assert len(result) == 1
         assert result[0] == 'test.tif'
 
     @pytest.mark.parametrize("name,year,expected", [
@@ -738,7 +686,7 @@ class TestPytestStyle:
         ('DATA', 99999, 'DATA-99999'),
     ])
     def test_name_yearly_parametrized(self, name, year, expected):
-        """Test name_yearly with various inputs."""
+        """name_yearly produces the expected string for various inputs."""
         assert _datasets.name_yearly(name, year) == expected
 
     @pytest.mark.parametrize("storage,position,expected_suffix", [
@@ -747,8 +695,9 @@ class TestPytestStyle:
         ('weather', 'station', '.obs.zip'),
         ('weather', None, '.ak-input.nc'),
     ])
-    def test_dataset_file_data_formats(self, storage, position, expected_suffix):
-        """Test DataSet file_data is set correctly for different configurations."""
+    def test_dataset_file_data_formats(self, storage, position,
+                                       expected_suffix):
+        """DataSet.file_data ends with the correct suffix for each configuration."""
         kwargs = {'name': 'TEST', 'storage': storage}
         if position:
             kwargs['position'] = position
@@ -756,39 +705,7 @@ class TestPytestStyle:
         assert ds.file_data.endswith(expected_suffix)
 
 
-class TestEdgeCases(unittest.TestCase):
-    """Tests for edge cases and boundary conditions."""
-
-    def test_dataset_init_with_assemble_function(self):
-        """Test DataSet can reference assemble function by name."""
-        # This should work if a function named 'assemble_DGMxx' exists
-        ds = _datasets.DataSet(
-            name='TEST',
-            storage='terrain',
-            assemble='assemble_DGMxx'
-        )
-        # The assemble attribute should be the actual function
-        self.assertTrue(callable(ds.assemble))
-
-    def test_nodata_is_standard_netcdf_fill(self):
-        """Test NODATA matches common netCDF fill value."""
-        # Standard netCDF _FillValue for float64
-        self.assertAlmostEqual(_datasets.NODATA, 9.96920996838686905e+36, places=20)
-
-
-class TestIntegrationDatasetsExpand(unittest.TestCase):
-    """Integration tests for dataset expansion."""
-
-    def test_expand_actual_definitions(self):
-        """Test _datasets_expand works with actual DATASET_DEFINITIONS."""
-        result = _datasets._datasets_expand(_datasets.DATASET_DEFINITIONS)
-        self.assertIsInstance(result, list)
-        self.assertGreater(len(result), 0)
-        for ds in result:
-            self.assertIsInstance(ds, _datasets.DataSet)
-            self.assertIsNotNone(ds.name)
-            self.assertIsNotNone(ds.storage)
-
+# ---------------------------------------------------------------------------
 
 if __name__ == '__main__':
     unittest.main()

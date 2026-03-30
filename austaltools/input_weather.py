@@ -1422,7 +1422,7 @@ def austal_weather(args, return_data_frame: bool = False):
 
     if args.get('read-extracted', None) is not None:
         csv_name = args['read-extracted']
-        lat, lon, ele, z0, source, stat_nam, obs = \
+        lat, lon, ele, ha, z0, source, stat_nam, obs = \
             _tools.read_extracted_weather(csv_name)
 
         year = obs.index.year[0]
@@ -1484,8 +1484,8 @@ def austal_weather(args, return_data_frame: bool = False):
         csv_name = args.get('write-extracted', 'extracted_weather.csv')
         logger.info('writing raw weather data to: %s' % csv_name)
         with open(csv_name, 'w') as f:
-            f.write('# %.4f %.4f %.1f %.3f %s, %s\n' %
-                    (lat, lon, ele, z0, source, format(stat_nam)))
+            f.write('# %.4f %.4f %.1f %.1f %.3f %s, %s\n' %
+                    (lat, lon, ele, ha, z0, source, format(stat_nam)))
             obs.to_csv(f, float_format='%.2f', index=False, na_rep='-999')
 
     logger.debug("\n%s" %str(obs.iloc[0:2]))
@@ -1624,16 +1624,15 @@ def austal_weather(args, return_data_frame: bool = False):
     #       mask  = "replace, where cond is True"
     #       where = "replace, where cond is False"
     # and bring dd to range 0..360
-    data['dd'] = np.remainder(
-        data['dd'].mask(data['ff'] < 1., other=0.), 360.)
-    data['ff'] = data['ff'].mask(
-        (np.isnan(data['dd']) | data['dd'] < 1.), other=0.)
-
-    #    print(pd.crosstab(data['kmc'],
-    #                      data['pgc'],
-    #                      margins = True))
+    data['bad'] = (
+            (data['ff'] < 0.1) | np.isnan(data['ff']) | np.isnan(data['dd'])
+    )
+    data['dd'] = np.remainder(data['dd'].mask(
+        data['bad'], other=0.), 360.)
+    data['dd'] = data['dd'].mask(
+        ~data['bad'] & (data['dd'] == 0), other=360.)
+    data['ff'] = data['ff'].mask(data['bad'], other=0.)
     #
-    #    print(skm.classification_report(data['kmc'], data['pgc']))
     logger.debug("methods_available: %s" % methods_available)
     response = None
     for method in methods_available:

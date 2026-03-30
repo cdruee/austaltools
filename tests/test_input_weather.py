@@ -468,18 +468,81 @@ class TestEdgeCases(unittest.TestCase):
 # Integration tests (marked slow - can be skipped)
 # =============================================================================
 
+# =============================================================================
+# Integration tests (marked slow - can be skipped)
+# =============================================================================
+
+def _write_minimal_extracted_csv(path: str, n_hours: int = 72) -> None:
+    """Write a minimal extracted-weather CSV that austal_weather accepts.
+
+    The file follows the format written by austal_weather when
+    ``--write-extracted`` is used (format 2):
+
+    * line 1: ``# lat lon ele ha z0 source station_name``
+    * remaining lines: CSV with a datetime index column followed by the
+      weather variables needed to exercise all stability-class schemes.
+
+    Using only *n_hours* rows (default 72 = 3 days) keeps the test fast
+    while still exercising the full processing pipeline.
+    """
+    times = pd.date_range('2000-01-01', periods=n_hours, freq='1h', tz='UTC')
+    rng = np.random.default_rng(42)
+    df = pd.DataFrame({
+        'ff':  rng.uniform(0.5, 10.0, n_hours),    # wind speed  [m/s]
+        'dd':  rng.uniform(0.0, 360.0, n_hours),    # wind dir    [°]
+        'tcc': rng.uniform(0.0, 1.0, n_hours),      # total cloud cover [0-1]
+        'cbh': rng.uniform(300., 2000., n_hours),   # cloud base height [m]
+        'sp':  rng.uniform(98000., 102000., n_hours),  # surface pressure [Pa]
+        't2m': rng.uniform(270., 300., n_hours),    # 2 m temperature  [K]
+        'r2m': rng.uniform(0.4, 1.0, n_hours),      # relative humidity [0-1]
+        'tp':  rng.uniform(0.0, 0.005, n_hours),    # precip [m]
+    }, index=times)
+    # index=True (default) writes the datetime index as the first column;
+    # read_extracted_weather reads with index_col=0, parse_dates=True.
+    with open(path, 'w') as fid:
+        # format-2 header: lat lon ele ha z0 source station_name
+        fid.write('# 49.75 6.75 200.0 10.0 0.10 ERA5 test_station\n')
+        df.to_csv(fid, float_format='%.4f', na_rep='-999')
+
+
 @pytest.mark.slow
 class TestIntegrationSlow(unittest.TestCase):
     """Slow integration tests that require network/data access.
-    
+
     These tests are marked as slow and can be skipped with:
-    pytest -m "not slow"
+        pytest -m "not slow"
+
+    The ``test_ll_coordinates`` test uses a pre-written minimal CSV
+    fixture (72 hours) passed via ``--read-extracted`` so that no real
+    dataset files or network access are needed, and the test completes
+    in seconds rather than minutes.
     """
 
+    def setUp(self):
+        """Create a temporary directory and write the fixture CSV."""
+        import tempfile
+        self._tmpdir = tempfile.mkdtemp()
+        self._csv = os.path.join(self._tmpdir, 'extracted.csv')
+        _write_minimal_extracted_csv(self._csv)
+
+    def tearDown(self):
+        """Remove the temporary directory and any output files."""
+        import shutil
+        shutil.rmtree(self._tmpdir, ignore_errors=True)
+        for f in expected_files(OUTPUT):
+            if os.path.exists(f):
+                os.remove(f)
+
     def test_ll_coordinates(self):
-        """Test with lat/lon coordinates (requires data access)."""
+        """Processing pipeline succeeds end-to-end with a minimal fixture.
+
+        Passes the pre-written 72-hour CSV via ``--read-extracted`` so
+        no real dataset is needed.  Verifies that at least one output
+        file is produced and the exit code is 0.
+        """
         command = CMD + [SUBCMD,
                          '-L', '49.75', '6.75',
+                         '--read-extracted', self._csv,
                          '-y', '2000',
                          OUTPUT]
         out, err, exitcode = capture(command)
@@ -487,8 +550,6 @@ class TestIntegrationSlow(unittest.TestCase):
         produced_files = [x for x in expected_files(OUTPUT)
                           if os.path.exists(x)]
         self.assertGreater(len(produced_files), 0)
-        for x in produced_files:
-            os.remove(x)
 
 
 if __name__ == '__main__':

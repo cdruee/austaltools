@@ -28,7 +28,7 @@ classifiers = [
 ]
 keywords = ["meteorology", "air quality", "modeling"]
 dependencies = [
-    "cdsapi",
+    "ecmwf-datastores-client",
     "gdal",
     "matplotlib",
     "meteolib",

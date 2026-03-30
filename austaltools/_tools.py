@@ -1292,17 +1292,35 @@ def add_location_opts(parser,
 
 
 def read_extracted_weather(csv_name: str) -> (
-        float, float, float, str, str, pd.DataFrame):
+        float, float, float, float, float, str, str, pd.DataFrame):
     """
-    read weather data that were previously extracted from a
-    dataset and stored into a csv file with specially crafted header line
+    Read weather data that were previously extracted from a dataset and
+    stored in a CSV file with a specially crafted comment header line.
 
-    :param csv_name: file name and path
+    Two header formats are supported:
+
+    1. (legacy, without anemometer height)::
+
+        # lat lon ele z0 source station_name
+
+    2. (current, with anemometer height)::
+
+        # lat lon ele ha z0 source station_name
+
+      Format 2 is detected when field index 4 parses as a float (i.e. is
+      the numeric ``z0`` value rather than the ``source`` string).
+
+    :param csv_name: path of the CSV file to read
     :type csv_name: str
-    :return: latitude, longitude, elevation, roughness length z0,
-      code of the original dataset, station name (if applicable),
-      and the weather data
-    :rtype: float, float, float, str, str, pd.DataFrame
+
+    :returns: latitude, longitude, elevation, anemometer height $h_a$,
+      roughness length $z_0$, source dataset code, station name, and the
+      weather observations as a time-indexed DataFrame.
+    :rtype: tuple[float, float, float, float, float, str, str,
+      pandas.DataFrame]
+
+    :raises IOError: if *csv_name* does not exist.
+    :raises RuntimeError: if the header format cannot be determined.
     """
     # halt if file is not found
     if not os.path.exists(csv_name):
@@ -1311,18 +1329,33 @@ def read_extracted_weather(csv_name: str) -> (
 
     # read position fom comment line
     with open(csv_name, 'r') as f:
-        lat, lon, ele, z0, source, nam = f.readline(
-        ).strip('# \n').split(maxsplit=6)
-    stat_no = 0
+        firstline = f.readline().strip('# \n')
+    fields = firstline.split(maxsplit=7)
 
-    # convert numbers
-    lat = float(lat)
-    lon = float(lon)
-    ele = float(ele)
-    z0 = float(z0)
+    # detect if format 1 (without ha) or format 2 (with ha)
+    try:
+        _ = float(fields[4])
+        format_version = 2
+    except ValueError:
+        format_version = 1
+
+    if format_version == 1:
+        lat, lon, ele, z0 = (float(x) for x in fields[0:4])
+        # anemometer height is not stored in format-1 files; fall back to
+        # the standard 10 m reference height used by all model sources
+        # (ERA5, CERRA, HOSTRADA).
+        ha = 10.
+        source = fields[4]
+        nam = fields[5]
+    elif format_version == 2:
+        lat, lon, ele, ha, z0 = (float(x) for x in fields[0:5])
+        source = fields[5]
+        nam = fields[6]
+    else:
+        raise RuntimeError(f"unkown format {format_version}")
 
     # read observation data from subsequent lines
     obs = pd.read_csv(csv_name, comment='#', index_col=0,
                       parse_dates=True, na_values='-999')
 
-    return lat, lon, ele, z0, source, nam, obs
+    return lat, lon, ele, ha, z0, source, nam, obs

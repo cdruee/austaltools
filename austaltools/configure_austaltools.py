@@ -485,7 +485,7 @@ def main():
         _storage.TEMP = args['temp']
 
     if args['noparallel'] is True:
-        DS.RUNPARALLEL = False
+        DS.NOPARALLEL = True
 
     if args['action'] == 'list':
         list_datasets(args['only'], args['state'], args['long'])

@@ -1,18 +1,18 @@
+Auto-merging austaltools/_datasets.py
 Auto-merging austaltools/_dispersion.py
-Auto-merging austaltools/_geo.py
+Auto-merging austaltools/_netcdf.py
+Auto-merging austaltools/_storage.py
 Auto-merging austaltools/_tools.py
-Auto-merging austaltools/_windutil.py
-Auto-merging austaltools/command_line.py
-Auto-merging austaltools/eap.py
+Auto-merging austaltools/configure_austaltools.py
+Auto-merging austaltools/data/dataset_definitions.json
 Auto-merging austaltools/input_weather.py
-Auto-merging austaltools/volout.py
-Auto-merging austaltools/windrose.py
-Auto-merging docs/api_commands.rst
-Auto-merging docs/api_internal.rst
-Auto-merging docs/austaltools.rst
-Auto-merging docs/index.rst
-Auto-merging docs/references.rst
-Auto-merging tests/test__dispersion.py
+CONFLICT (add/add): Merge conflict in austaltools/input_weather.py
+Auto-merging docs/install.rst
+Auto-merging pyproject.toml
+Auto-merging setup.py
+Auto-merging tests/test__datasets.py
+Auto-merging tests/test__netcdf.py
+Auto-merging tests/test__tools.py
 Auto-merging tests/test_input_weather.py
-Automatic merge went well; stopped before committing as requested
 Squash commit -- not updating HEAD
+Automatic merge failed; fix conflicts and then commit the result.
