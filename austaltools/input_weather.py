@@ -1506,12 +1506,13 @@ def austal_weather(args, return_data_frame: bool = False):
     # virtual temperature
     if all([x in obs.columns for x in ['sp', 't2m', 'r2m']]):
         logger.debug('d2m')
+        rh_clip = obs['r2m'].clip(lower=0., upper=1.0)
         obs['Tv'] = [m.humidity.Humidity(t=t, p=p, rh=rh).tvirt()
                      for t, p, rh in
-                     zip(obs['t2m'], obs['sp'], obs['r2m'])]
+                     zip(obs['t2m'], obs['sp'], rh_clip)]
         obs['d2m'] = [m.humidity.Humidity(t=t, p=p, rh=rh).td()
                      for t, p, rh in
-                     zip(obs['t2m'], obs['sp'], obs['r2m'])]
+                     zip(obs['t2m'], obs['sp'], rh_clip)]
     elif all([x in obs.columns for x in ['sp', 't2m', 'd2m']]):
         logger.debug('Tv')
         obs['Tv'] = [m.humidity.Humidity(t, p, td).tvirt()
