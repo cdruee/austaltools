@@ -463,12 +463,14 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
     # make lat lon 2-D fields
     nx = len(nc['longitude'])
     ny = len(nc['latitude'])
-    dims = {'lat': np.full((nx, ny), np.nan),
-            'lon': np.full((nx, ny), np.nan)}
-    for x in range(nx):
-        for y in range(ny):
-            dims['lon'][x, y] = nc['longitude'][x].data
-            dims['lat'][x, y] = nc['latitude'][y].data
+    # shape must be (ny, nx) = (lat, lon) to match nc[var][:, lat_idx, lon_idx]
+    dims = {'lat': np.full((ny, nx), np.nan),
+            'lon': np.full((ny, nx), np.nan)}
+
+    for x in range(nx):  # longitude axis (second dim in NetCDF)
+        for y in range(ny):  # latitude axis (first dim in NetCDF)
+            dims['lon'][y, x] = nc['longitude'][x].data
+            dims['lat'][y, x] = nc['latitude'][y].data
     #
     # convert time
     logger.info('calculating time')
@@ -1149,7 +1151,7 @@ def read_hostrada_nc(ncfile, lat, lon, wind_variant=None):
     )
     #
     # temperature to Celsius to Kelvin
-    values['t2m'] = [m.temperature.CtoF(x) for x in  values['tas']]
+    values['t2m'] = [m.temperature.CtoK(x) for x in  values['tas']]
     values.drop('tas', axis=1, inplace=True)
     #
     # cloud cover octa to 1
