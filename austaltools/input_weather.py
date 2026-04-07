@@ -37,14 +37,14 @@ logger = logging.getLogger(__name__)
 
 # ----------------------------------------------------
 
-DEFAULT_WIND_VARIANT = os.environ.get('WIND_VARIANT', 'model_uv10')
+DEFAULT_WIND_VARIANT = os.environ.get('WIND_VARIANT', 'as_is')
 """ 
   Default method to calculate the 10-m wind 
  
   Overridden by environment variable "WIND_VARIANT"
  
-  Possible values are: 'model_uv10' 'ustar_wmo' 'ustar_z0' 
-  'ustar_fsr'
+  Possible values are: 'as_is' (alias for deprecated 'model_uv10'), 
+  'ustar_wmo', 'ustar_z0', 'ustar_fsr'
 """
 DEFAULT_INTER_VARIANT = os.environ.get('INTER_VARIANT', 'weighted')
 """
@@ -357,7 +357,8 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
       Default is :py:const:`DEFAULT_WIND_VARIANT`.
       Supported options:
 
-        - `'model_uv10'` : Uses u10 and v10 without adjustment.
+        - `'as_is'` : Uses u10 and v10 without adjustment
+          (alias for deprecated 'model_uv10')
         - `'ustar_wmo'` : Assumes fixed surface roughness z₀ = 0.03 m (WMO).
         - `'ustar_z0'` : Uses mean surface roughness from model data.
         - `'ustar_fsr'` : Uses model-provided roughness field (fsr).
@@ -525,7 +526,7 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
     #   https://confluence.ecmwf.int/display/FUG/Section+9.3+Surface+Wind
     #
     #   Therefore: u10 = u*/k * ln(z/z0)
-    if wind_variant == 'model_uv10':
+    if wind_variant == 'as_is' or wind_variant == 'model_uv10':  # deprecate model_uv10.
         ha = 10.  # m
         z0 = 0.03  # m
         values['fsr'] = z0  # m
@@ -661,6 +662,18 @@ def read_cerra_nc(ncfile, lat, lon, wind_variant=None):
 
     :param lon: Longitude (decimal degrees) for interpolation.
     :type lon: float
+
+   :param wind_variant: Method used to compute 10 m wind speed (`ff`).
+      Default is :py:const:`DEFAULT_WIND_VARIANT`.
+      Supported options:
+
+        - `'as_is'` : Uses u10 and v10 without adjustment
+          (alias for deprecated 'model_uv10')
+        - `'ustar_wmo'` : Assumes fixed surface roughness z₀ = 0.03 m (WMO).
+        - `'ustar_z0'` : Uses mean surface roughness from model data.
+        - `'ustar_fsr'` : Uses model-provided roughness field (fsr).
+
+    :type wind_variant: str
 
     :returns:
         DataFrame containing time series of interpolated and
@@ -903,7 +916,7 @@ def read_cerra_nc(ncfile, lat, lon, wind_variant=None):
     # for short grass (=0.03m), the surface over which (by WMO convention)
     # winds should be measured.
     #
-    if wind_variant == 'model_uv10':
+    if wind_variant == 'as_is' or wind_variant == 'model_uv10':  # deprecate model_uv10.
         ha = 10.  # m
         z0 = 0.03  # m
         # keep ff as is
@@ -1252,7 +1265,8 @@ def get_hostrada_weather(lat, lon, year, datafile=None) \
 # ----------------------------------------------------
 
 def get_dwd_weather(lat: float, lon: float, year:int,
-                    station: int = None, datafile:str = None
+                    station: int = None, datafile:str = None,
+                    wind_variant: str| None = None
                     ) -> (pd.DataFrame, float):
     """
     Get weather timeseries for the provided position
@@ -1271,6 +1285,16 @@ def get_dwd_weather(lat: float, lon: float, year:int,
     :type station: int
     :param datafile: (optional) read from this data file
     :type datafile: str | None
+   :param wind_variant: Method used to compute 10 m wind speed (`ff`).
+      Default is :py:const:`DEFAULT_WIND_VARIANT`.
+      Supported options:
+
+        - `'as_is'` : Uses u10 and v10 without adjustment
+          (alias for deprecated 'model_uv10')
+        - `'ustar_wmo'` : Assumes fixed surface roughness z₀ = 0.03 m (WMO).
+
+    :type wind_variant: str
+
     :return: weather timeseries as dataframe and surface roughness in m.
         The index of the dataframe is the measurement time as `datetime64`,
         the columns are:
@@ -1301,14 +1325,17 @@ def get_dwd_weather(lat: float, lon: float, year:int,
         datafile = str(os.path.join(ds.path, ds.file_data))
     logging.info('weather data from; %s' % datafile)
 
+    if wind_variant is None:
+        wind_variant = DEFAULT_WIND_VARIANT
+
     with _fetch_dwd.DWDStationinfo() as si:
         if not station:
             station = si.nearest(lat, lon)
             logger.debug(f"nearest station is #{station}")
         nam = si.name(station)
-        z0 = float(si.roughness(station))
+        z0_station = float(si.roughness(station))
     logger.info(f"selected station: {nam}")
-    logger.info(f"roughness length: {z0}")
+    logger.info(f"roughness length: {z0_station}")
 
     with zipfile.ZipFile(datafile,
                          mode='r') as zf:
@@ -1335,25 +1362,51 @@ def get_dwd_weather(lat: float, lon: float, year:int,
     data['time'] = data.index
     # wind direction 990 means "undetermined"/"umlaufender Wind"
     data['dd'] = df['D'].mask(df['D'] == 990., np.nan)  # deg
-    # ensure constant aneomener height
-    ha_column = 'windgeschwindigkeit_geberhoehe ueber grund [m]'
-    ha_values = set(list(df[ha_column]))
-    if len(ha_values) == 1:
-        # if anemometer height was constant:
-        # return measured wind, and true ha and z0
+
+    # ensure constant aneometer height
+    #
+    if wind_variant == 'ustar_wmo':
+        #
+        # this option assumes that the reported wind is the wind
+        # measured at the actual height of the anemometer, which
+        # is retrieved from the metadata, and corresponds to the
+        # actual surface roughness z0 as read from the stationlist.
+        #
+        # If the reported height should have changed during the
+        # time period processed, the wind is corrected to
+        # WMO standard height and roughness so that the returned
+        # time series refers to only on height and rougness values
+        #
+        ha_column = 'windgeschwindigkeit_geberhoehe ueber grund [m]'
+        ha_values = set(list(df[ha_column]))
+        if len(ha_values) == 1:
+            # if anemometer height was constant:
+            # return measured wind, and true ha and z0
+            data['ff'] = df['F']
+            ha = list(ha_values)[0]
+            z0 = z0_station
+        else:
+            # if anemometer height changed during the time period:
+            # wind is corrected to WMO standard height an roughness
+            data['ff'] = _windutil.roughness_correction(
+                df['F'],  # m/s
+                df['windgeschwindigkeit_geberhoehe ueber grund [m]'],  # m
+                z0_station,  # m
+                method='wmo'
+            )  # m/s  (now as measured at z=10m and z0=0.03m)
+            ha = 10
+            z0 = 0.03
+
+    elif wind_variant == 'as_is' or wind_variant == 'model_uv10':  # deprecate model_uv10
+        #
+        # this option assumes that the reported wind has already been
+        # corrected to represent the WMO standard height an roughness
         data['ff'] = df['F']
-        ha = list(ha_values)[0]
-    else:
-        # if anemometer height changed during the time period:
-        # wind is corrected to WMO standard height an roughness
-        data['ff'] = _windutil.roughness_correction(
-            df['F'],  # m/s
-            df['windgeschwindigkeit_geberhoehe ueber grund [m]'],  # m
-            z0,  # m
-            method='wmo'
-        )  # m/s  (now as measured at z=10m and z0=0.03m)
-        z0 = 0.03
         ha = 10
+        z0 = 0.03
+    else:
+        raise ValueError(f"Invalid wind variant: {wind_variant}")
+
     data['sp'] = df['P0'] * 100.  # hPa -> Pa
     data['t2m'] = df['TT_TU']  # °C
     data['r2m'] = df['RF_TU'] / 100.  # % -> 1
@@ -1464,8 +1517,9 @@ def austal_weather(args, return_data_frame: bool = False):
 
         # override roughness length if given
         if (user_z0 := args.get('z0, None')) is not None:
-            logger.info('Roughness length provided by the source ({z0}m) '
-                        'by user-provided value ({user_z0}m).')
+            logger.warning('Roughness length provided '
+                           'by the source ({z0}m) is overridden '
+                           'by user-provided value ({user_z0}m).')
             z0 = user_z0
 
     rechts, hoch = _geo.ll2gk(lat, lon)
@@ -1748,14 +1802,14 @@ def add_advanced_option_group(parser):
                               'Optional FILE name [%(const)s]')
     adv_grp.add_argument('--wind-variant',
                           dest=DEFAULT_WIND_VARIANT,
-                          choices=['model_uv10', 'ustar_wmo',
+                          choices=['as_is', 'ustar_wmo',
                                    'ustar_z0', 'ustar_fsr'],
-                          default='model_uv10',
+                          default='as_is',
                           help=('Controls how the 10-m wind is calculated'
                                 'from ERA5 reanaysis data.'
                                 'possible values: %(choices)s. '
                                 '[%(default)s]\n'
-                                ' - model_uv10: '
+                                ' - as_is: '
                                 'use the ``10-m wind`` provided by the '
                                 'model\n'
                                 '  - ustar_wmo: '
