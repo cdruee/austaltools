@@ -16,6 +16,12 @@ from typing import Any
 if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import multiprocessing as mp
     import ecmwf.datastores as _edsapi
+else:
+    # prevent pshinx from freakin out
+    class _edsapi:
+        Remote = str()
+        def  __init__():
+            pass
 
 from . import _storage
 from . import _netcdf
@@ -194,7 +200,7 @@ def _cds_orderlist_add(target:str, result: _edsapi.Remote,
     :type target: str
 
     :param result: the CDS request ID to store (typically a string
-      returned by ``_edsapi.Remote.request_id``)
+      returned by ``ecmwf.datastores.Remote.request_id``)
     :type result: str
 
     :param orderfile: path of the JSON order-list file.

@@ -1285,7 +1285,7 @@ def get_dwd_weather(lat: float, lon: float, year:int,
     :type station: int
     :param datafile: (optional) read from this data file
     :type datafile: str | None
-   :param wind_variant: Method used to compute 10 m wind speed (`ff`).
+    :param wind_variant: Method used to compute 10 m wind speed (`ff`).
       Default is :py:const:`DEFAULT_WIND_VARIANT`.
       Supported options:
 
