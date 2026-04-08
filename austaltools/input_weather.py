@@ -1326,7 +1326,7 @@ def get_dwd_weather(lat: float, lon: float, year:int,
     logging.info('weather data from; %s' % datafile)
 
     if wind_variant is None:
-        wind_variant = DEFAULT_WIND_VARIANT
+        wind_variant = 'ustar_wmo' # not:  DEFAULT_WIND_VARIANT
 
     with _fetch_dwd.DWDStationinfo() as si:
         if not station:
@@ -1365,6 +1365,16 @@ def get_dwd_weather(lat: float, lon: float, year:int,
 
     # ensure constant aneometer height
     #
+    # DWD name confusion
+    # climate data wind (homogenized) is "*product_ff_*txt"
+    #                                 in "stundenzwerte_FF_*zip"
+    #                                 column "F"
+    # synop wind (only QCed)          is "*product_f_*txt"
+    #                                 in "stundenzwerte_F_*zip"
+    #                                 column "FF"
+    WIND_COL = 'FF'  # synop wind
+    #
+    #
     if wind_variant == 'ustar_wmo':
         #
         # this option assumes that the reported wind is the wind
@@ -1382,14 +1392,14 @@ def get_dwd_weather(lat: float, lon: float, year:int,
         if len(ha_values) == 1:
             # if anemometer height was constant:
             # return measured wind, and true ha and z0
-            data['ff'] = df['F']
+            data['ff'] = df[WIND_COL]
             ha = list(ha_values)[0]
             z0 = z0_station
         else:
             # if anemometer height changed during the time period:
             # wind is corrected to WMO standard height an roughness
             data['ff'] = _windutil.roughness_correction(
-                df['F'],  # m/s
+                df[WIND_COL],  # m/s
                 df['windgeschwindigkeit_geberhoehe ueber grund [m]'],  # m
                 z0_station,  # m
                 method='wmo'
@@ -1401,7 +1411,7 @@ def get_dwd_weather(lat: float, lon: float, year:int,
         #
         # this option assumes that the reported wind has already been
         # corrected to represent the WMO standard height an roughness
-        data['ff'] = df['F']
+        data['ff'] = df[WIND_COL]
         ha = 10
         z0 = 0.03
     else:

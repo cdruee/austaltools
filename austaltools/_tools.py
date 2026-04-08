@@ -687,6 +687,7 @@ def download(url, file, usr=None, pwd=None):
         if req.status_code == 200:
             with open(file, 'wb') as f:
                 f.write(req.content)
+            logger.debug(f"Download file {url} saved as {file}")
         else:
             raise Exception(
                 f"Download failed: status code {req.status_code}")

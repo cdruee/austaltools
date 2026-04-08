@@ -45,6 +45,7 @@ TO_COLLECT = [
     ['soil_temperature', 'EB', 'eb'],
     ['visibility', 'VV', 'vv'],
     ['wind', 'FF', 'ff'],
+    ['wind_synop', 'F', 'f']
 ]
 """parameter groups to collect from opendata file tree"""
 
@@ -383,7 +384,8 @@ def fetch_stationlist(years: list[int] | int | None = None, fullyear=True
 def fetch_station_data(
         station: int, store: bool = True,
         time_start: pd.Timestamp | str | None = None,
-        time_end: pd.Timestamp | str | None = None
+        time_end: pd.Timestamp | str | None = None,
+        force: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame] | tuple[str, str]:
     """
     Ensure that the DWD weather station data for station
@@ -401,6 +403,8 @@ def fetch_station_data(
     :param time_end: end of desired time window or None
       for getting latest available data
     :type time_end: pd.Timestamp | str
+    :param force: overwrite existing temp data
+    :type force: bool
     :returns: data file name or DataFrame and
       metadata file name or DataFrame
     :rtype: tuple[pd.DataFrame, pd.DataFrame] | tuple[str, str]
@@ -420,6 +424,9 @@ def fetch_station_data(
     # create temp dir and change into it
     cwd = os.getcwd()
     tempdir = "%05i" % station
+    if os.path.exists(tempdir):
+        logger.debug(f"deleting existing tempdir {tempdir}")
+        shutil.rmtree(tempdir)
     os.mkdir(tempdir)
     os.chdir(tempdir)
     #

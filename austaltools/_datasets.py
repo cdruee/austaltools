@@ -1504,26 +1504,26 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
         return False
     # get list of stations
     logger.info("fetching stationlists")
-    stations_dict = _fetch_dwd.DWDStationinfo().data
-    station_numbers = stations_dict.keys()
+    stations_df = _fetch_dwd.DWDStationinfo().data
+    station_numbers = list(stations_df.index)
 
     # download and process all stations
     #zip = zipfile.ZipFile(target)
     logger.info("writing stationlist")
-    sf = pd.DataFrame.from_dict(stations_dict, orient='index')
     with zipfile.ZipFile(target,
                          mode='a',
                          compression=zipfile.ZIP_DEFLATED) as zf:
-        sf.to_csv(path_or_buf=zf.open('stationlist.csv', mode='w'))
+        stations_df.to_csv(path_or_buf=zf.open('stationlist.csv', mode='w'))
 
     logger.info("writing station data")
     for sid in _tools.progress(station_numbers, "fetching files"):
         dat_in, meta_in =_fetch_dwd.fetch_station_data(sid,
-                                                       store=False)
+                                                       store=False,
+                                                       force=replace)
         # limit stationdata to period where all needed
         # values are available
-        sid_start = pd.to_datetime(stations_dict[sid]['start'])
-        sid_end = pd.to_datetime(stations_dict[sid]['end'])
+        sid_start = pd.to_datetime(stations_df['start'][sid])
+        sid_end = pd.to_datetime(stations_df['end'][sid])
         sid_years = list(range(sid_start.year, sid_end.year + 1))
 
         # if there are data, store them
