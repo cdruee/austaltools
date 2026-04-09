@@ -107,6 +107,7 @@ def corine_file_load():
     if not os.path.exists(corine_file):
         corine_file_help()
         raise RuntimeError(f"z0-gk.dmna not found in {austaldir}.")
+    logger.debug(f"loading CORINE file {corine_file}")
     z0gk = readmet.dmna.DataFile(corine_file)
     return z0gk
 
