@@ -181,6 +181,25 @@ class DWDStationinfo():
 
     # -------------------------------------
 
+    def data_period(self, station: int) -> tuple[float, float, float]:
+        """
+        Retrieves the time period covered by data
+        from a specific weather station
+        identified by the station number
+
+        Returns start and end date
+        :param station:
+        :type station:
+        :return: start, end
+        :rtype: (pd.Timestamp, pd.Timestamp)
+        """
+        self._ensure_valid(station)
+        start = self.data['start'][station]
+        end = self.data['end'][station]
+        return start, end
+
+    # -------------------------------------
+
     def name(self, station: int) -> str:
         """
         Retrieves the name of a specific weather station
@@ -260,16 +279,21 @@ class DWDStationinfo():
 
     # -------------------------------------
 
-    def write(self, path: str | None = None, fmt:str | None = None):
-        if path is None:
-            path = os.path.join(_storage.DIST_AUX_FILES,
+    def write(self, path_or_buf: str | None = None, fmt:str | None = None):
+        if path_or_buf is None:
+            path_or_buf = os.path.join(_storage.DIST_AUX_FILES,
                                 'dwd_stationlist.json')
-        if path == '-':
+        close_after = False
+        if path_or_buf == '-':
             logger.info(f"writing to stdout")
             fid = sys.stdout
+        elif isinstance(path_or_buf, io.IOBase):  # file handle, stdout etc
+            fid = path_or_buf
         else:
-            logger.info(f"writing file {path}")
-            fid = open(path, mode="w")
+            logger.info(f"writing file {path_or_buf}")
+            fid = open(path_or_buf, mode="w")
+            close_after = True
+
         if fmt == 'csv':
             logger.info(f"writing format: csv")
             self.data.to_csv(fid)
@@ -278,7 +302,8 @@ class DWDStationinfo():
             ugly = self.data.to_json(orient="index")
             pretty = json.dumps(json.loads(ugly), indent=4)
             fid.write(pretty)
-        if path is not None:
+
+        if close_after:
             fid.close()
 
 
@@ -956,4 +981,4 @@ def assemble_stationlist(path: str = None, fmt: str = None,
         stations.set_roughness(sid, z0)
 
     logger.info("writing stationlist")
-    stations.write(path=path, fmt=fmt)
+    stations.write(path_or_buf=path, fmt=fmt)

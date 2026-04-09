@@ -1526,14 +1526,15 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
         dat_in, meta_in =_fetch_dwd.fetch_station_data(sid,
                                                        store=False,
                                                        force=replace)
+        stn_start, stn_end = stations.data_period(sid)
         # limit stationdata to period where all needed
         # values are available
         sid_year_start = max(
-            pd.to_datetime(stations['start'][sid]).year,
+            stn_start.year,
             years_start
         )
         sid_end_year = min(
-            pd.to_datetime(stations['end'][sid]).year,
+            stn_end.year,
             years_end
         )
         sid_years = list(range(sid_year_start, sid_end_year + 1))

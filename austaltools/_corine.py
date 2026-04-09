@@ -22,12 +22,9 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
     import readmet
 
-try:
-    from ._metadata import __title__
-    from . import _storage
-except ImportError:
-    from _metadata import __title__
-    import _storage
+from ._metadata import __title__
+from . import _geo
+from . import _storage
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
