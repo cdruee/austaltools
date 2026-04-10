@@ -14,7 +14,7 @@ import re
 import shutil
 import sys
 import zipfile
-from typing import Any
+from typing import Any, IO
 
 import numpy as np
 import pandas as pd
@@ -181,7 +181,8 @@ class DWDStationinfo():
 
     # -------------------------------------
 
-    def data_period(self, station: int) -> tuple[float, float, float]:
+    def data_period(self,
+                    station: int) -> tuple[pd.Timestamp, pd.Timestamp]:
         """
         Retrieves the time period covered by data
         from a specific weather station
@@ -194,8 +195,8 @@ class DWDStationinfo():
         :rtype: (pd.Timestamp, pd.Timestamp)
         """
         self._ensure_valid(station)
-        start = self.data['start'][station]
-        end = self.data['end'][station]
+        start: pd.Timestamp = self.data['start'][station]
+        end: pd.Timestamp = self.data['end'][station]
         return start, end
 
     # -------------------------------------
@@ -279,7 +280,9 @@ class DWDStationinfo():
 
     # -------------------------------------
 
-    def write(self, path_or_buf: str | None = None, fmt:str | None = None):
+    def write(self,
+              path_or_buf: str | IO | None = None,
+              fmt:str | None = None):
         if path_or_buf is None:
             path_or_buf = os.path.join(_storage.DIST_AUX_FILES,
                                 'dwd_stationlist.json')
@@ -299,7 +302,7 @@ class DWDStationinfo():
             self.data.to_csv(fid)
         elif fmt == 'json':
             logger.info(f"writing format: json")
-            ugly = self.data.to_json(orient="index")
+            ugly = self.data.to_json(orient="index", date_format='iso')
             pretty = json.dumps(json.loads(ugly), indent=4)
             fid.write(pretty)
 
@@ -476,12 +479,13 @@ def fetch_stationinfo(
                 end_limit = pd.Timestamp(
                     years[-1], 12, 31, 23, 59, 59).tz_localize('UTC')
 
-        # if time overlaps window:
-        if s_start <= end_limit and s_end >= start_limit:
+        # if time period exists and overlaps given period:
+        if (s_start <= s_end and
+                s_start <= end_limit and s_end >= start_limit):
             complete_stations[sid] = {
                 # timestamps as ISO so the survive being storerd to json
-                "start": s_start.strftime('%Y-%m-%dT%H:%M:%S%z'),
-                "end": s_end.strftime('%Y-%m-%dT%H:%M:%S%z'),
+                "start": s_start,
+                "end": s_end,
                 "elevation": s_ele,
                 "latitude": s_lat,
                 "longitude": s_lon,
@@ -899,7 +903,7 @@ def meta_from_download(metadata_files: list[str], station: int,
                              lsuffix=' ',
                              rsuffix=' (doppel)'
                              )
-        logging.debug(meta.columns)
+        logging.debug(list(meta.columns))
 
     meta = meta.ffill()
     # remove duplicates

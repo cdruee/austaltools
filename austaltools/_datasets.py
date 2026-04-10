@@ -1518,18 +1518,21 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
     with zipfile.ZipFile(target,
                          mode='a',
                          compression=zipfile.ZIP_DEFLATED) as zf:
-        with zf.open('stationlist.csv', mode='w') as buf:
+        filename = 'stationlist.csv'
+        logger.debug(f"adding file: {filename}")
+        with zf.open(filename, mode='w') as buf:
             stations.write(path_or_buf=buf)
 
     logger.info("writing station data")
     for sid in _tools.progress(stations.numbers, "fetching files"):
+        logger.info(f"fetching station {sid}")
         dat_in, meta_in =_fetch_dwd.fetch_station_data(sid,
                                                        store=False,
                                                        force=replace)
         stn_start, stn_end = stations.data_period(sid)
         # limit stationdata to period where all needed
         # values are available
-        sid_year_start = max(
+        sid_start_year = max(
             stn_start.year,
             years_start
         )
@@ -1537,15 +1540,19 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
             stn_end.year,
             years_end
         )
-        sid_years = list(range(sid_year_start, sid_end_year + 1))
+        sid_years = list(range(sid_start_year, sid_end_year + 1))
 
+        logger.info(f"years available for {sid:05d}: "
+                    f"{sid_start_year}--{sid_end_year}")
+        logger.debug(sid_years)
         # if there are data, store them
         if sid_years:
             df = _fetch_dwd.build_table(dat_in, meta_in, sid_years)
             with zipfile.ZipFile(target, mode='a',
                                  compression=zipfile.ZIP_DEFLATED) as zf:
-                df.to_csv(path_or_buf=zf.open("%05i.csv" % sid,
-                                              mode='w'))
+                filename = f'{sid:05d}.csv'
+                logger.debug(f"adding file: {filename}")
+                df.to_csv(path_or_buf=zf.open(filename, mode='w'))
 
     return True
 

@@ -1361,7 +1361,7 @@ def get_dwd_weather(lat: float, lon: float, year:int,
     data = pd.DataFrame(index=df.index)
     data['time'] = data.index
     # wind direction 990 means "undetermined"/"umlaufender Wind"
-    data['dd'] = df['D'].mask(df['D'] == 990., np.nan)  # deg
+    data['dd'] = df['DD'].mask(df['DD'] == 990., np.nan)  # deg
 
     # ensure constant aneometer height
     #
