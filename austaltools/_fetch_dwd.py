@@ -402,7 +402,7 @@ def fetch_stationinfo(
     :return: list of stations
     :rtype: dict[dict]
     """
-    logger.debug(f"fetch_stationlist: years = {years}")
+    logger.debug(f"fetch_stationinfo: years = {years}")
     if years is not None and not isinstance(years, list):
         years = [years]
     stations = {}

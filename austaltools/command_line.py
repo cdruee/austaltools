@@ -94,8 +94,8 @@ def cli_parser():
     parser.add_argument('--temp-dir',
                         dest='temp_dir',
                         metavar='PATH',
-                        help='directory where temporary files'
-                             'are stored. None means use system'
+                        help='directory where temporary files '
+                             'are stored. None means use system '
                              'temporary files dir. [None]',
                         default=None)
     return parser

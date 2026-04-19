@@ -3,9 +3,9 @@
 import calendar
 import datetime
 import glob
+import json
 import logging
 import os
-import json
 import shutil
 import tempfile
 import time
@@ -17,11 +17,18 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import multiprocessing as mp
     import ecmwf.datastores as _edsapi
 else:
-    # prevent pshinx from freakin out
+    # prevent sphinx from freakin out
     class _edsapi:
         Remote = str()
-        def  __init__():
+        def  __init__(self):
             pass
+try:
+    import ecmwf.datastores as _edsapi
+except ImportError:
+     import importlib
+     _edsapi = importlib.import_module(
+         f"{__package__}._vendor.ecmwf.datastores")
+
 
 from . import _storage
 from . import _netcdf

@@ -28,7 +28,11 @@ classifiers = [
 ]
 keywords = ["meteorology", "air quality", "modeling"]
 dependencies = [
-    "ecmwf-datastores-client",
+    # ecmwf-datastores-client is vendored in austaltools/_vendor/ecmwf/datastores/
+    # because it is not yet available as a Debian/Ubuntu system package.
+    # Remove this comment and uncomment the line below once python3-ecmwf-datastores-client
+    # is available in Debian/Ubuntu:
+    # "ecmwf-datastores-client",
     "gdal",
     "matplotlib",
     "meteolib",
@@ -71,12 +75,22 @@ austal-input = "austaltools.austal_input:main"
 configure-austaltools = "austaltools.configure_austaltools:main"
 
 [tool.setuptools]
-packages = ["austaltools", "austaltools.data"]
+packages = [
+    "austaltools",
+    "austaltools.data",
+    # vendored ecmwf-datastores-client — all levels must be listed explicitly
+    # because ecmwf/ is a PEP 420 implicit namespace package (no __init__.py)
+    "austaltools._vendor",
+    "austaltools._vendor.ecmwf",
+    "austaltools._vendor.ecmwf.datastores",
+]
 include-package-data = true
 zip-safe = false
 
 [tool.setuptools.package-data]
 "austaltools.data" = ["*.txt", "*.json"]
+# include the vendored LICENSE file
+"austaltools._vendor.ecmwf.datastores" = ["LICENSE"]
 
 [tool.setuptools_scm]
 write_to = "austaltools/_version.py"
@@ -90,7 +104,7 @@ local_scheme = "no-local-version"
 [tool.setuptools.cmdclass]
 
 [tool.flake8]
-extend-exclude = ["pub", "docs", "build", "deb_dist", "venv"]
+extend-exclude = ["pub", "docs", "build", "deb_dist", "venv", "austaltools/_vendor"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

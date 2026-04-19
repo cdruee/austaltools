@@ -612,13 +612,13 @@ class TestProvideStationlist(unittest.TestCase):
         with self.assertRaises(ValueError):
             _datasets.provide_stationlist(source='UNKNOWN')
 
-    @patch('austaltools._datasets.stationlist_DWD')
-    def test_provide_stationlist_dwd(self, mock_stationlist):
-        """Delegates to stationlist_DWD for source='DWD'."""
+    @patch('austaltools._datasets.provide_stationlist')
+    def test_provide_stationlist(self, mock_stationlist):
+        """Delegates to assemble_stationlist for source='DWD'."""
         _datasets.provide_stationlist(source='DWD', fmt='json',
                                       out='/tmp/out.json')
-        mock_stationlist.assert_called_once_with(path='/tmp/out.json',
-                                                 fmt='json')
+        mock_stationlist.assert_called_once_with(source='DWD', fmt='json',
+                                                 out='/tmp/out.json')
 
 
 # ---------------------------------------------------------------------------

@@ -219,12 +219,12 @@ class TestFetchFile(unittest.TestCase):
                     self.fail(f"Group {gtl} should be recognized")
 
 
-class TestFetchStationlist(unittest.TestCase):
-    """Tests for the fetch_stationlist function."""
+class TestFetchStationInfo(unittest.TestCase):
+    """Tests for the fetch_stationinfo function."""
 
     @patch('austaltools._fetch_dwd.fetch_file')
-    def test_fetch_stationlist_returns_dict(self, mock_fetch_file):
-        """Test fetch_stationlist returns a dictionary."""
+    def test_fetch_stationinfo_returns_dwdstationinfo(self, mock_fetch_file):
+        """Test fetch_stationinfo returns a DWDStationinfo instance."""
         # Create mock station list file
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             f.write("Header line 1\n")
@@ -235,14 +235,14 @@ class TestFetchStationlist(unittest.TestCase):
         mock_fetch_file.return_value = temp_file
 
         try:
-            result = _fetch_dwd.fetch_stationlist(years=None)
-            self.assertIsInstance(result, dict)
+            result = _fetch_dwd.fetch_stationinfo(years=None)
+            self.assertIsInstance(result, _fetch_dwd.DWDStationinfo)
         finally:
             os.unlink(temp_file)
 
     @patch('austaltools._fetch_dwd.fetch_file')
-    def test_fetch_stationlist_with_years_list(self, mock_fetch_file):
-        """Test fetch_stationlist accepts years as list."""
+    def test_fetch_stationinfo_with_years_list(self, mock_fetch_file):
+        """Test fetch_stationinfo accepts years as list."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             f.write("Header line 1\n")
             f.write("Header line 2\n")
@@ -252,14 +252,14 @@ class TestFetchStationlist(unittest.TestCase):
         mock_fetch_file.return_value = temp_file
 
         try:
-            result = _fetch_dwd.fetch_stationlist(years=[2020, 2021, 2022])
-            self.assertIsInstance(result, dict)
+            result = _fetch_dwd.fetch_stationinfo(years=[2020, 2021, 2022])
+            self.assertIsInstance(result, _fetch_dwd.DWDStationinfo)
         finally:
             os.unlink(temp_file)
 
     @patch('austaltools._fetch_dwd.fetch_file')
-    def test_fetch_stationlist_with_single_year(self, mock_fetch_file):
-        """Test fetch_stationlist converts single year to list."""
+    def test_fetch_stationinfo_with_single_year(self, mock_fetch_file):
+        """Test fetch_stationinfo converts single year to list."""
         with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
             f.write("Header line 1\n")
             f.write("Header line 2\n")
@@ -269,8 +269,8 @@ class TestFetchStationlist(unittest.TestCase):
         mock_fetch_file.return_value = temp_file
 
         try:
-            result = _fetch_dwd.fetch_stationlist(years=2020)
-            self.assertIsInstance(result, dict)
+            result = _fetch_dwd.fetch_stationinfo(years=2020)
+            self.assertIsInstance(result, _fetch_dwd.DWDStationinfo)
         finally:
             os.unlink(temp_file)
 
@@ -570,7 +570,7 @@ class TestMetaFromDownload(unittest.TestCase):
             self.assertIn('unknown', str(context.exception).lower())
 
 
-class TestFetchStation(unittest.TestCase):
+class TestFetchStationData(unittest.TestCase):
     """Tests for the fetch_station function."""
 
     @patch('austaltools._fetch_dwd.meta_from_download')
