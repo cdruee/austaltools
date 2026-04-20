@@ -1,9 +1,13 @@
 #!/bin/env python3
 
 import argparse
+from importlib import metadata
 import logging
 import os
+import packaging.version as pv
 import sys
+
+import requests
 
 from . import _tools
 from ._metadata import __version__, __title__
@@ -35,6 +39,82 @@ class UsageError(Exception):
 
 # ----------------------------------------------------
 
+
+def check_for_update(package_name: str) -> dict:
+    """
+    Check if a newer version of a package is available on PyPI.
+
+    Returns a dict with:
+      - current: currently installed version (or None)
+      - latest: latest version on PyPI (or None)
+      - update_available: True if a newer version exists
+      - message: human-readable summary
+    """
+    # 1. Get installed version
+    try:
+        current = pv.Version(metadata.version(package_name))
+    except metadata.PackageNotFoundError:
+        current = None
+
+    # 2. Fetch latest version from PyPI
+    try:
+        response = requests.get(
+            f"https://pypi.org/pypi/{package_name}/json",
+            timeout=5
+        )
+        response.raise_for_status()
+        latest = pv.Version(response.json()["info"]["version"])
+    except Exception as e:
+        return {
+            "current": str(current),
+            "latest": None,
+            "update_available": False,
+            "message": f"Could not fetch PyPI info: {e}"
+        }
+
+    # 3. Compare using semantic versioning
+    update_available = current is not None and latest > current
+
+    return {
+        "current": str(current) if current else "not installed",
+        "latest": str(latest),
+        "update_available": update_available,
+        "message": (
+            f"Newer version available: {latest}"
+            if update_available
+            else f"Version is up to date."
+        )
+    }
+
+# ----------------------------------------------------
+
+class _VersionAction(argparse.Action):
+    def __init__(self, option_strings, dest=argparse.SUPPRESS,
+                 default=argparse.SUPPRESS, version=None, help=None):
+        super().__init__(
+            option_strings=option_strings,
+            dest=dest,
+            default=default,
+            nargs=0,
+            help=help,
+        )
+        self.version = version
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        try:
+            update_info = check_for_update(parser.prog)
+        except Exception as e:
+            update_info = {
+               "current": self.version or "unknown",
+               "update_available": None
+            }
+        print(f"Current version: {update_info['current']}")
+        if update_info["update_available"] is not None:
+            print(update_info["message"])
+        parser.exit()
+
+# ----------------------------------------------------
+
 def cli_parser():
     """
     funtion to parse command line arguments
@@ -44,7 +124,7 @@ def cli_parser():
     parser = argparse.ArgumentParser(description=__title__)
     parser.add_argument("--version",
                         version=f"{parser.prog} {__version__}",
-                        action="version")
+                        action=_VersionAction)
     verb = parser.add_mutually_exclusive_group()
     verb.add_argument('--insane',
                       dest='verb',
@@ -94,8 +174,8 @@ def cli_parser():
     parser.add_argument('--temp-dir',
                         dest='temp_dir',
                         metavar='PATH',
-                        help='directory where temporary files'
-                             'are stored. None means use system'
+                        help='directory where temporary files '
+                             'are stored. None means use system '
                              'temporary files dir. [None]',
                         default=None)
     return parser
@@ -148,6 +228,9 @@ def main(args=None):
 
     if args.get("temp_dir",None) is not None:
         _storage.TEMP = args["temp_dir"]
+
+    if args.get("version",None) is not None:
+        show_version(args['version'])
 
     try:
         if args['command'] in ['import-buildings', 'bg']:

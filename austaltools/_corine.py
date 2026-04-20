@@ -22,12 +22,9 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
 
     import readmet
 
-try:
-    from ._metadata import __title__
-    from . import _storage
-except ImportError:
-    from _metadata import __title__
-    import _storage
+from ._metadata import __title__
+from . import _geo
+from . import _storage
 
 logging.basicConfig()
 logger = logging.getLogger(__name__)
@@ -107,6 +104,7 @@ def corine_file_load():
     if not os.path.exists(corine_file):
         corine_file_help()
         raise RuntimeError(f"z0-gk.dmna not found in {austaldir}.")
+    logger.debug(f"loading CORINE file {corine_file}")
     z0gk = readmet.dmna.DataFile(corine_file)
     return z0gk
 

@@ -7,20 +7,23 @@ Created on Thu Feb  3 19:20:42 2022
 """
 import datetime
 import io
+import json
 import logging
 import os
 import re
 import shutil
+import sys
 import zipfile
-from typing import Any
+from typing import Any, IO
 
 import numpy as np
 import pandas as pd
 import requests
 
-from . import _tools
-from . import _storage
+from . import _corine
 from . import _geo
+from . import _storage
+from . import _tools
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +48,7 @@ TO_COLLECT = [
     ['soil_temperature', 'EB', 'eb'],
     ['visibility', 'VV', 'vv'],
     ['wind', 'FF', 'ff'],
+    ['wind_synop', 'F', 'f']
 ]
 """parameter groups to collect from opendata file tree"""
 
@@ -52,7 +56,7 @@ TO_COLLECT = [
 
 class DWDStationinfo():
     """
-    Class that holds information about a weather stations from a dataset.
+    Class that holds information about weather stations from a dataset.
 
      This function retrieves metadata about a specific weather station from
      a dataset that is either provided or located in a default location. The
@@ -72,7 +76,22 @@ class DWDStationinfo():
         with DWDStationinfo() as si:
             lat, lon, ele = si.position(1234)
     """
-    data = pd.DataFrame()
+    _attrs = ["start",
+              "end",
+              "elevation",
+              "latitude",
+              "longitude",
+              "name",
+              "roughness"
+              ]
+    data: pd.DataFrame
+
+    # -------------------------------------
+
+    def _ensure_columns(self):
+        for x in self._attrs:
+            if x not in self.data.columns:
+                self.data[x] = pd.NA
 
     # -------------------------------------
 
@@ -83,7 +102,27 @@ class DWDStationinfo():
 
         logging.info('dwd station data from; %s' % stationfile)
         with open(stationfile, mode='r') as f:
-            self.data = pd.read_json(f, orient='index', convert_dates=True)
+            self.data = pd.read_json(f, orient='index')
+        self._ensure_columns()
+        for x in ['start', 'end']:
+            self.data[x] = pd.to_datetime(self.data[x])
+
+    # -------------------------------------
+
+    @classmethod
+    def from_dict(cls, d: dict) -> 'DWDStationinfo':
+        obj = cls.__new__(cls)
+        obj.data = pd.DataFrame.from_dict(d, orient='index')
+        obj._ensure_columns()
+        for x in ['start', 'end']:
+            obj.data[x] = pd.to_datetime(obj.data[x])
+        return obj
+
+    # -------------------------------------
+
+    @classmethod
+    def read(cls, stationfile) -> 'DWDStationinfo':
+        return cls(stationfile)
 
     # -------------------------------------
 
@@ -142,6 +181,26 @@ class DWDStationinfo():
 
     # -------------------------------------
 
+    def data_period(self,
+                    station: int) -> tuple[pd.Timestamp, pd.Timestamp]:
+        """
+        Retrieves the time period covered by data
+        from a specific weather station
+        identified by the station number
+
+        Returns start and end date
+        :param station:
+        :type station:
+        :return: start, end
+        :rtype: (pd.Timestamp, pd.Timestamp)
+        """
+        self._ensure_valid(station)
+        start: pd.Timestamp = self.data['start'][station]
+        end: pd.Timestamp = self.data['end'][station]
+        return start, end
+
+    # -------------------------------------
+
     def name(self, station: int) -> str:
         """
         Retrieves the name of a specific weather station
@@ -167,6 +226,21 @@ class DWDStationinfo():
         """
         self._ensure_valid(station)
         return self.data['roughness'][station]
+
+    # -------------------------------------
+
+    def set_roughness(self, station: int, z0: float) -> str:
+        """
+        Sets the surface roughness $z_0$ at a specific weather station
+        identified by the station number
+        :param station:
+        :type station:
+        :param z0: new rougness length value in m
+        :type z0: float
+        """
+        self._ensure_valid(station)
+        self.data.loc[station, 'roughness'] = z0
+
 
     # -------------------------------------
 
@@ -199,6 +273,44 @@ class DWDStationinfo():
         return int(candidate)  # type: ignore[arg-type]
 
     # -------------------------------------
+
+    @property
+    def numbers(self):
+        return list(self.data.index)
+
+    # -------------------------------------
+
+    def write(self,
+              path_or_buf: str | IO | None = None,
+              fmt:str | None = None):
+        if path_or_buf is None:
+            path_or_buf = os.path.join(_storage.DIST_AUX_FILES,
+                                'dwd_stationlist.json')
+        close_after = False
+        if path_or_buf == '-':
+            logger.info(f"writing to stdout")
+            fid = sys.stdout
+        elif isinstance(path_or_buf, io.IOBase):  # file handle, stdout etc
+            fid = path_or_buf
+        else:
+            logger.info(f"writing file {path_or_buf}")
+            fid = open(path_or_buf, mode="w")
+            close_after = True
+
+        if fmt == 'csv':
+            logger.info(f"writing format: csv")
+            self.data.to_csv(fid)
+        elif fmt == 'json':
+            logger.info(f"writing format: json")
+            ugly = self.data.to_json(orient="index", date_format='iso')
+            pretty = json.dumps(json.loads(ugly), indent=4)
+            fid.write(pretty)
+
+        if close_after:
+            fid.close()
+
+
+
 
 # =========================================================================
 
@@ -274,8 +386,10 @@ def fetch_file(group: str, station: int | str,
 
 # -------------------------------------------------------------------------
 
-def fetch_stationlist(years: list[int] | int | None = None, fullyear=True
-                      ) -> dict[str, dict]:
+def fetch_stationinfo(
+        years: list[int] | int | None = None,
+        fullyear=True
+) -> DWDStationinfo:
     """
     compile the station list from (opendata) server
 
@@ -288,7 +402,7 @@ def fetch_stationlist(years: list[int] | int | None = None, fullyear=True
     :return: list of stations
     :rtype: dict[dict]
     """
-    logger.debug(f"fetch_stationlist: years = {years}")
+    logger.debug(f"fetch_stationinfo: years = {years}")
     if years is not None and not isinstance(years, list):
         years = [years]
     stations = {}
@@ -365,9 +479,11 @@ def fetch_stationlist(years: list[int] | int | None = None, fullyear=True
                 end_limit = pd.Timestamp(
                     years[-1], 12, 31, 23, 59, 59).tz_localize('UTC')
 
-        # if time overlaps window:
-        if s_start <= end_limit and s_end >= start_limit:
+        # if time period exists and overlaps given period:
+        if (s_start <= s_end and
+                s_start <= end_limit and s_end >= start_limit):
             complete_stations[sid] = {
+                # timestamps as ISO so the survive being storerd to json
                 "start": s_start,
                 "end": s_end,
                 "elevation": s_ele,
@@ -375,7 +491,7 @@ def fetch_stationlist(years: list[int] | int | None = None, fullyear=True
                 "longitude": s_lon,
                 "name": s_nam
             }
-    return complete_stations
+    return DWDStationinfo.from_dict(complete_stations)
 
 
 # -------------------------------------------------------------------------
@@ -383,7 +499,8 @@ def fetch_stationlist(years: list[int] | int | None = None, fullyear=True
 def fetch_station_data(
         station: int, store: bool = True,
         time_start: pd.Timestamp | str | None = None,
-        time_end: pd.Timestamp | str | None = None
+        time_end: pd.Timestamp | str | None = None,
+        force: bool = False,
 ) -> tuple[pd.DataFrame, pd.DataFrame] | tuple[str, str]:
     """
     Ensure that the DWD weather station data for station
@@ -401,6 +518,8 @@ def fetch_station_data(
     :param time_end: end of desired time window or None
       for getting latest available data
     :type time_end: pd.Timestamp | str
+    :param force: overwrite existing temp data
+    :type force: bool
     :returns: data file name or DataFrame and
       metadata file name or DataFrame
     :rtype: tuple[pd.DataFrame, pd.DataFrame] | tuple[str, str]
@@ -420,6 +539,9 @@ def fetch_station_data(
     # create temp dir and change into it
     cwd = os.getcwd()
     tempdir = "%05i" % station
+    if os.path.exists(tempdir):
+        logger.debug(f"deleting existing tempdir {tempdir}")
+        shutil.rmtree(tempdir)
     os.mkdir(tempdir)
     os.chdir(tempdir)
     #
@@ -781,7 +903,7 @@ def meta_from_download(metadata_files: list[str], station: int,
                              lsuffix=' ',
                              rsuffix=' (doppel)'
                              )
-        logging.debug(meta.columns)
+        logging.debug(list(meta.columns))
 
     meta = meta.ffill()
     # remove duplicates
@@ -790,3 +912,77 @@ def meta_from_download(metadata_files: list[str], station: int,
     #
     return meta
 
+# -------------------------------------------------------------------------
+
+def assemble_stationlist(path: str = None, fmt: str = None,
+                         h: float | None = None):
+    """
+    Downloads, extracts, and merges DWD station lists.
+
+    :param path: The path where the final merged file
+      will be stored.
+    :type path: str
+    :param fmt: file format or generate (csv or json)
+    :type fmt: str
+    :param h: (optional) height of wind measurements in m,
+      mut be gerater than 1. Defaults to standard heigth (10)
+    :type h: float
+
+    - This function assumes that a global `_tools.TEMP` variable is defined and
+      points to a valid temporary directory for intermediate files.
+
+    """
+    if fmt is None:
+        fmt = 'csv'
+    if h is None:
+        h = 10
+    if h < 1:
+        raise ValueError("standard wind measurement height must "
+                         "be greater than 1(m)")
+    # get list of stations
+    logger.info("fetching stationlists")
+    # get list without date checking
+    stations = fetch_stationinfo(years=None)
+
+    # get roughness length
+    have_corine = True
+    have_web = True
+    have_warned = False
+    for sid in _tools.progress(stations.numbers, "calulating z0"):
+        name = stations.name(sid)
+        lat, lon, _ = stations.position(sid)
+        xg, yg = _geo.ll2gk(lat, lon)
+        z0 = None
+        if have_corine:
+            logger.debug(f"z0 from corine  for #{sid} ({name})")
+            try:
+                z0 = _corine.mean_roughness('austal', xg, yg, h, fac=3)
+            except Exception as e:
+                have_corine = False
+                logger.warning("Please install the CORINE roughness"
+                               " dataset bundeled with AUSTAL is not"
+                               " found. Trying EU API lookup for "
+                               " roughness length.")
+                logger.info("Error text: " + str(e))
+        if not z0 and have_web:
+            logger.debug(f"z0 from EU API  for #{sid} ({name})")
+            try:
+                z0 = _corine.mean_roughness('web', xg, yg, h, fac=3)
+            except Exception as e:
+                have_web = False
+                logger.warning(
+                    f"Could use EU API to lookup roughness length."
+                    f" (Error:{str(e)}."
+                    f" Assuming WMO standard value (0.03m).")
+        if not z0:
+            if not have_warned:
+                logger.error("Cannot determine roughness station lengths,"
+                             "falling back to WMO standard value (0.03m).")
+                have_warned = True
+            z0 = 0.03  # m (standard WMO station, cut grass)
+
+        logger.debug(f"z0 = {z0:4.1f} for station #{sid}: ({name})")
+        stations.set_roughness(sid, z0)
+
+    logger.info("writing stationlist")
+    stations.write(path_or_buf=path, fmt=fmt)

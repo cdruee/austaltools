@@ -1,106 +1,97 @@
 {
     "3": {
-        "start": 809913600000,
-        "end": 1301529600000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2011-03-31T00:00:00.000Z",
         "elevation": 202.0,
         "latitude": 50.7827,
         "longitude": 6.0941,
         "name": "Aachen",
-        "roughness": 1.0
-    },
-    "44": {
-        "start": 1175385600000,
-        "end": 817689600000,
-        "elevation": 44.0,
-        "latitude": 52.9336,
-        "longitude": 8.237,
-        "name": "Gro\u00dfenkneten",
-        "roughness": 0.05
+        "roughness": 0.2
     },
     "96": {
-        "start": 1554854400000,
-        "end": 1772150400000,
+        "start": "2019-04-10T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 50.0,
         "latitude": 52.9437,
         "longitude": 12.8518,
         "name": "Neuruppin-Alt Ruppin",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "125": {
-        "start": 1695600000000,
-        "end": 1695686400000,
+        "start": "2023-09-25T00:00:00.000Z",
+        "end": "2023-09-26T00:00:00.000Z",
         "elevation": 739.0,
         "latitude": 47.8342,
         "longitude": 10.8667,
         "name": "Altenstadt",
-        "roughness": 0.7696551724
+        "roughness": 0.9672413793
     },
     "161": {
-        "start": 1314835200000,
-        "end": 1772150400000,
+        "start": "2011-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 75.0,
         "latitude": 50.4237,
         "longitude": 7.4202,
         "name": "Andernach",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "164": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 54.0,
         "latitude": 53.0316,
         "longitude": 13.9908,
         "name": "Angerm\u00fcnde",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "183": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 42.0,
         "latitude": 54.6791,
         "longitude": 13.4344,
         "name": "Arkona",
-        "roughness": 0.05
+        "roughness": 0.2427586207
     },
     "198": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-01T00:00:00.000Z",
         "elevation": 164.0,
         "latitude": 51.3744,
         "longitude": 11.292,
         "name": "Artern",
-        "roughness": 0.1155172414
+        "roughness": 1.0
     },
     "222": {
-        "start": 809913600000,
-        "end": 1214870400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2008-07-01T00:00:00.000Z",
         "elevation": 393.0,
         "latitude": 50.5908,
         "longitude": 12.7139,
         "name": "Aue",
-        "roughness": 1.0
+        "roughness": 0.8137931034
     },
     "232": {
-        "start": 847324800000,
-        "end": 1772150400000,
+        "start": "1996-11-07T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 462.0,
         "latitude": 48.4253,
         "longitude": 10.9417,
         "name": "Augsburg",
-        "roughness": 0.0862068966
+        "roughness": 0.0810344828
     },
     "282": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 240.0,
         "latitude": 49.8743,
         "longitude": 10.9206,
         "name": "Bamberg",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "298": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 3.0,
         "latitude": 54.3405,
         "longitude": 12.7108,
@@ -108,35 +99,35 @@
         "roughness": 0.1
     },
     "303": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 55.0,
         "latitude": 52.0613,
         "longitude": 13.4997,
         "name": "Baruth",
-        "roughness": 0.8986206897
+        "roughness": 0.4413793103
     },
     "342": {
-        "start": 1291161600000,
-        "end": 1772150400000,
+        "start": "2010-12-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 103.0,
         "latitude": 52.317,
         "longitude": 8.1694,
         "name": "Belm",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "348": {
-        "start": 809913600000,
-        "end": 1314835200000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2011-09-01T00:00:00.000Z",
         "elevation": 127.0,
         "latitude": 50.4135,
         "longitude": 7.5886,
         "name": "Bendorf",
-        "roughness": 1.0172413793
+        "roughness": 1.0
     },
     "427": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 46.0,
         "latitude": 52.3807,
         "longitude": 13.5306,
@@ -144,8 +135,8 @@
         "roughness": 0.1
     },
     "430": {
-        "start": 809913600000,
-        "end": 1620086400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2021-05-04T00:00:00.000Z",
         "elevation": 36.0,
         "latitude": 52.5644,
         "longitude": 13.3088,
@@ -153,8 +144,8 @@
         "roughness": 0.1
     },
     "433": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 48.0,
         "latitude": 52.4676,
         "longitude": 13.402,
@@ -162,80 +153,80 @@
         "roughness": 0.05
     },
     "460": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 362.0,
         "latitude": 49.2641,
         "longitude": 6.6868,
         "name": "Berus",
-        "roughness": 1.5
+        "roughness": 0.8965517241
     },
     "554": {
-        "start": 809913600000,
-        "end": 1141084800000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2006-02-28T00:00:00.000Z",
         "elevation": 23.0,
         "latitude": 51.8293,
         "longitude": 6.5365,
         "name": "Bocholt-Liedern (Wasserwerk)",
-        "roughness": 0.02
+        "roughness": 0.1310344828
     },
     "591": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 45.0,
         "latitude": 53.3911,
         "longitude": 10.6878,
         "name": "Boizenburg",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "596": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 15.0,
         "latitude": 54.0027,
         "longitude": 11.1908,
         "name": "Boltenhagen",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "599": {
-        "start": 809913600000,
-        "end": 880934400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "1997-12-01T00:00:00.000Z",
         "elevation": 62.0,
         "latitude": 50.7055,
         "longitude": 7.1467,
         "name": "Bonn-Friesdorf",
-        "roughness": 0.4206896552
+        "roughness": 0.2275862069
     },
     "603": {
-        "start": 986256000000,
-        "end": 1772150400000,
+        "start": "2001-04-03T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 147.0,
         "latitude": 50.7293,
         "longitude": 7.204,
         "name": "K\u00f6nigswinter-Heiderhof",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "656": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 607.0,
         "latitude": 51.7234,
         "longitude": 10.6021,
         "name": "Braunlage",
-        "roughness": 1.0
+        "roughness": 0.0982758621
     },
     "662": {
-        "start": 877478400000,
-        "end": 1772150400000,
+        "start": "1997-10-22T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 81.0,
         "latitude": 52.2915,
         "longitude": 10.4464,
         "name": "Braunschweig",
-        "roughness": 0.05
+        "roughness": 0.1310344828
     },
     "691": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 4.0,
         "latitude": 53.0451,
         "longitude": 8.7981,
@@ -243,62 +234,62 @@
         "roughness": 0.1
     },
     "701": {
-        "start": 897436800000,
-        "end": 1772150400000,
+        "start": "1998-06-10T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 7.0,
         "latitude": 53.5332,
         "longitude": 8.5761,
         "name": "Bremerhaven",
-        "roughness": 1.0
+        "roughness": 0.1
     },
     "704": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 11.0,
         "latitude": 53.4451,
         "longitude": 9.139,
         "name": "Bremerv\u00f6rde",
-        "roughness": 0.0282758621
+        "roughness": 0.1
     },
     "840": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 895.0,
         "latitude": 50.4313,
         "longitude": 12.6114,
         "name": "Carlsfeld",
-        "roughness": 1.0
+        "roughness": 0.1
     },
     "853": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 416.0,
         "latitude": 50.7913,
         "longitude": 12.872,
         "name": "Chemnitz",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "856": {
-        "start": 1041379200000,
-        "end": 1772150400000,
+        "start": "2003-01-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 551.0,
         "latitude": 47.8843,
         "longitude": 12.5404,
         "name": "Chieming",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "867": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 344.0,
         "latitude": 50.3066,
         "longitude": 10.9679,
         "name": "Lautertal-Oberlauter",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "880": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 69.0,
         "latitude": 51.7759,
         "longitude": 14.3168,
@@ -306,26 +297,26 @@
         "roughness": 1.0
     },
     "891": {
-        "start": 957916800000,
-        "end": 1772150400000,
+        "start": "2000-05-10T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 5.0,
         "latitude": 53.8712,
         "longitude": 8.7058,
         "name": "Cuxhaven",
-        "roughness": 2.0
+        "roughness": 0.1206896552
     },
     "953": {
-        "start": 881712000000,
-        "end": 1772150400000,
+        "start": "1997-12-10T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 481.0,
         "latitude": 49.7619,
         "longitude": 7.0542,
         "name": "Deuselbach",
-        "roughness": 0.0396551724
+        "roughness": 0.1
     },
     "963": {
-        "start": 833760000000,
-        "end": 1772150400000,
+        "start": "1996-06-03T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 38.0,
         "latitude": 52.5881,
         "longitude": 8.3424,
@@ -333,8 +324,8 @@
         "roughness": 0.1
     },
     "1001": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 97.0,
         "latitude": 51.6451,
         "longitude": 13.5747,
@@ -342,8 +333,8 @@
         "roughness": 1.0
     },
     "1048": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 228.0,
         "latitude": 51.1278,
         "longitude": 13.7543,
@@ -351,44 +342,35 @@
         "roughness": 0.1
     },
     "1078": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 37.0,
         "latitude": 51.296,
         "longitude": 6.7686,
         "name": "D\u00fcsseldorf",
         "roughness": 0.1
     },
-    "1130": {
-        "start": 1246406400000,
-        "end": 1078012800000,
-        "elevation": 18.0,
-        "latitude": 54.6282,
-        "longitude": 9.3649,
-        "name": "Eggebek",
-        "roughness": 0.0303448276
-    },
     "1200": {
-        "start": 1167609600000,
-        "end": 1772150400000,
+        "start": "2007-01-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 3.0,
         "latitude": 54.0691,
         "longitude": 9.0105,
         "name": "Elpersb\u00fcttel",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "1219": {
-        "start": 809913600000,
-        "end": 867628800000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "1997-06-30T00:00:00.000Z",
         "elevation": 5.0,
         "latitude": 53.3449,
         "longitude": 7.1909,
         "name": "Emden-Nesserland",
-        "roughness": 1.0
+        "roughness": 0.4413793103
     },
     "1262": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 446.0,
         "latitude": 48.3477,
         "longitude": 11.8134,
@@ -396,8 +378,8 @@
         "roughness": 0.1
     },
     "1270": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 317.0,
         "latitude": 50.9827,
         "longitude": 10.9613,
@@ -405,98 +387,89 @@
         "roughness": 0.1
     },
     "1303": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 150.0,
         "latitude": 51.4041,
         "longitude": 6.9677,
         "name": "Essen-Bredeney",
-        "roughness": 0.0489655172
+        "roughness": 0.1
     },
     "1346": {
-        "start": 1228262400000,
-        "end": 1772150400000,
+        "start": "2008-12-03T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 1486.0,
         "latitude": 47.8748,
         "longitude": 8.0038,
         "name": "Feldberg/Schwarzwald",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "1358": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 1213.0,
         "latitude": 50.4283,
         "longitude": 12.9536,
         "name": "Fichtelberg",
-        "roughness": 0.2351724138
+        "roughness": 0.9827586207
     },
     "1420": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 100.0,
         "latitude": 50.0259,
         "longitude": 8.5213,
         "name": "Frankfurt/Main",
-        "roughness": 0.1
+        "roughness": 1.0
     },
     "1443": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 237.0,
         "latitude": 48.0232,
         "longitude": 7.8343,
         "name": "Freiburg",
-        "roughness": 0.5655172414
+        "roughness": 0.9379310345
     },
     "1468": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 797.0,
         "latitude": 48.4538,
         "longitude": 8.409,
         "name": "Freudenstadt",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "1503": {
-        "start": 1349049600000,
-        "end": 1772150400000,
+        "start": "2012-10-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 6.0,
         "latitude": 53.0643,
         "longitude": 7.902,
         "name": "Friesoythe-Altenoythe",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "1544": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 47.0,
         "latitude": 52.5129,
         "longitude": 11.3942,
         "name": "Gardelegen",
-        "roughness": 0.5413793103
+        "roughness": 0.6586206897
     },
     "1550": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 719.0,
         "latitude": 47.483,
         "longitude": 11.0621,
         "name": "Garmisch-Partenkirchen",
         "roughness": 1.0
     },
-    "1572": {
-        "start": 1708905600000,
-        "end": 1104451200000,
-        "elevation": 80.0,
-        "latitude": 50.9593,
-        "longitude": 6.0392,
-        "name": "Geilenkirchen-Neutevern",
-        "roughness": 0.1
-    },
     "1580": {
-        "start": 1164931200000,
-        "end": 1772150400000,
+        "start": "2006-12-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 111.0,
         "latitude": 49.9859,
         "longitude": 7.9548,
@@ -504,62 +477,62 @@
         "roughness": 0.2
     },
     "1587": {
-        "start": 1071014400000,
-        "end": 1772150400000,
+        "start": "2003-12-10T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 536.0,
         "latitude": 48.9481,
         "longitude": 11.4289,
         "name": "Gelbelsee",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "1605": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 35.0,
         "latitude": 52.3875,
         "longitude": 12.1602,
         "name": "Genthin",
-        "roughness": 0.5086206897
+        "roughness": 0.4413793103
     },
     "1612": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 311.0,
         "latitude": 50.8812,
         "longitude": 12.1289,
         "name": "Gera-Leumnitz",
-        "roughness": 0.0931034483
+        "roughness": 0.1
     },
     "1639": {
-        "start": 858816000000,
-        "end": 1772150400000,
+        "start": "1997-03-20T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 203.0,
         "latitude": 50.6017,
         "longitude": 8.6439,
         "name": "Gie\u00dfen/Wettenberg",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "1684": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 239.0,
         "latitude": 51.1621,
         "longitude": 14.9506,
         "name": "G\u00f6rlitz",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "1691": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 167.0,
         "latitude": 51.5002,
         "longitude": 9.9507,
         "name": "G\u00f6ttingen",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "1694": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 59.0,
         "latitude": 53.6058,
         "longitude": 12.1034,
@@ -567,53 +540,53 @@
         "roughness": 1.0
     },
     "1757": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 2.0,
         "latitude": 54.0967,
         "longitude": 13.4056,
         "name": "Greifswald",
-        "roughness": 0.05
+        "roughness": 0.9672413793
     },
     "1759": {
-        "start": 979689600000,
-        "end": 1772150400000,
+        "start": "2001-01-17T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 11.0,
         "latitude": 54.2437,
         "longitude": 13.9104,
         "name": "Greifswalder Oie",
-        "roughness": 0.02
+        "roughness": 0.5
     },
     "1766": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 48.0,
         "latitude": 52.1344,
         "longitude": 7.6969,
         "name": "M\u00fcnster/Osnabr\u00fcck",
-        "roughness": 0.0365517241
+        "roughness": 0.1
     },
     "1869": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 56.0,
         "latitude": 53.3154,
         "longitude": 13.9339,
         "name": "Gr\u00fcnow",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "1957": {
-        "start": 809913600000,
-        "end": 1427068800000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2015-03-23T00:00:00.000Z",
         "elevation": 93.0,
         "latitude": 51.5138,
         "longitude": 11.9499,
         "name": "Halle-Kr\u00f6llwitz",
-        "roughness": 1.0
+        "roughness": 0.1
     },
     "1975": {
-        "start": 810259200000,
-        "end": 1772150400000,
+        "start": "1995-09-05T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 11.0,
         "latitude": 53.6332,
         "longitude": 9.9881,
@@ -621,8 +594,8 @@
         "roughness": 0.1
     },
     "2014": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-03-22T00:00:00.000Z",
         "elevation": 55.0,
         "latitude": 52.4644,
         "longitude": 9.6779,
@@ -630,53 +603,53 @@
         "roughness": 0.1
     },
     "2023": {
-        "start": 1037145600000,
-        "end": 1772150400000,
+        "start": "2002-11-13T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 501.0,
         "latitude": 48.7918,
         "longitude": 10.7062,
         "name": "Harburg",
-        "roughness": 0.05
+        "roughness": 0.2
     },
     "2044": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 404.0,
         "latitude": 51.652,
         "longitude": 11.1366,
         "name": "Harzgerode",
-        "roughness": 0.05
+        "roughness": 1.0
     },
     "2171": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 272.0,
         "latitude": 50.852,
         "longitude": 9.7377,
         "name": "Hersfeld, Bad",
-        "roughness": 0.8986206897
+        "roughness": 1.0
     },
     "2261": {
-        "start": 944092800000,
-        "end": 1772150400000,
+        "start": "1999-12-02T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 565.0,
         "latitude": 50.3123,
         "longitude": 11.876,
         "name": "Hof",
-        "roughness": 1.0
+        "roughness": 0.8896551724
     },
     "2290": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 977.0,
         "latitude": 47.8009,
         "longitude": 11.0108,
         "name": "Hohenpei\u00dfenberg",
-        "roughness": 0.1889655172
+        "roughness": 1.1896551724
     },
     "2410": {
-        "start": 1525996800000,
-        "end": 1525996800000,
+        "start": "2018-05-11T00:00:00.000Z",
+        "end": "2018-05-11T00:00:00.000Z",
         "elevation": 364.0,
         "latitude": 48.7111,
         "longitude": 11.5363,
@@ -684,8 +657,8 @@
         "roughness": 0.1
     },
     "2429": {
-        "start": 1056585600000,
-        "end": 1772150400000,
+        "start": "2003-06-26T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 20.0,
         "latitude": 53.9897,
         "longitude": 9.5697,
@@ -693,62 +666,62 @@
         "roughness": 0.1
     },
     "2483": {
-        "start": 813456000000,
-        "end": 1772150400000,
+        "start": "1995-10-12T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 839.0,
         "latitude": 51.1803,
         "longitude": 8.4891,
         "name": "Kahler Asten",
-        "roughness": 0.2
+        "roughness": 0.2103448276
     },
     "2485": {
-        "start": 1304294400000,
-        "end": 1772064000000,
+        "start": "2011-05-02T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 489.0,
         "latitude": 48.917,
         "longitude": 9.6871,
         "name": "Kaisersbach-Cronh\u00fctte",
-        "roughness": 0.02
+        "roughness": 0.8137931034
     },
     "2503": {
-        "start": 809913600000,
-        "end": 1051833600000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2003-05-02T00:00:00.000Z",
         "elevation": 487.0,
         "latitude": 50.6266,
         "longitude": 10.1455,
         "name": "Kaltennordheim",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "2522": {
-        "start": 822787200000,
-        "end": 1225411200000,
+        "start": "1996-01-28T00:00:00.000Z",
+        "end": "2008-10-31T00:00:00.000Z",
         "elevation": 112.0,
         "latitude": 49.0373,
         "longitude": 8.3637,
         "name": "Karlsruhe",
-        "roughness": 0.7051724138
+        "roughness": 1.0
     },
     "2532": {
-        "start": 956102400000,
-        "end": 1383091200000,
+        "start": "2000-04-19T00:00:00.000Z",
+        "end": "2013-10-30T00:00:00.000Z",
         "elevation": 231.0,
         "latitude": 51.2963,
         "longitude": 9.4424,
         "name": "Kassel",
-        "roughness": 1.0862068966
+        "roughness": 1.3793103448
     },
     "2559": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 705.0,
         "latitude": 47.7233,
         "longitude": 10.3348,
         "name": "Kempten",
-        "roughness": 0.0875862069
+        "roughness": 0.2862068966
     },
     "2564": {
-        "start": 1279065600000,
-        "end": 1772150400000,
+        "start": "2010-07-14T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 28.0,
         "latitude": 54.3776,
         "longitude": 10.1424,
@@ -756,17 +729,17 @@
         "roughness": 0.1
     },
     "2597": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 282.0,
         "latitude": 50.224,
         "longitude": 10.0792,
         "name": "Kissingen, Bad",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "2601": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 822.0,
         "latitude": 50.2218,
         "longitude": 8.4469,
@@ -774,17 +747,17 @@
         "roughness": 1.0
     },
     "2638": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 974.0,
         "latitude": 48.1054,
         "longitude": 8.7548,
         "name": "Klippeneck",
-        "roughness": 0.05
+        "roughness": 1.2068965517
     },
     "2667": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 91.0,
         "latitude": 50.8645,
         "longitude": 7.1575,
@@ -792,35 +765,35 @@
         "roughness": 0.1
     },
     "2712": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 428.0,
         "latitude": 47.6952,
         "longitude": 9.1307,
         "name": "Konstanz",
-        "roughness": 0.05
+        "roughness": 0.224137931
     },
     "2794": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 40.0,
         "latitude": 52.9362,
         "longitude": 12.4093,
         "name": "Kyritz",
-        "roughness": 0.4431034483
+        "roughness": 0.9689655172
     },
     "2812": {
-        "start": 827884800000,
-        "end": 1772150400000,
+        "start": "1996-03-27T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 156.0,
         "latitude": 48.3647,
         "longitude": 7.828,
         "name": "Lahr",
-        "roughness": 0.0913793103
+        "roughness": 0.1
     },
     "2907": {
-        "start": 917827200000,
-        "end": 1772150400000,
+        "start": "1999-02-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 7.0,
         "latitude": 54.7903,
         "longitude": 8.9514,
@@ -828,26 +801,26 @@
         "roughness": 0.1
     },
     "2925": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 356.0,
         "latitude": 51.3932,
         "longitude": 10.3123,
         "name": "Leinefelde",
-        "roughness": 0.05
+        "roughness": 0.0844827586
     },
     "2928": {
-        "start": 860371200000,
-        "end": 1772150400000,
+        "start": "1997-04-07T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 138.0,
         "latitude": 51.3151,
         "longitude": 12.4462,
         "name": "Leipzig-Holzhausen",
-        "roughness": 1.0
+        "roughness": 0.2465517241
     },
     "2932": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 131.0,
         "latitude": 51.4347,
         "longitude": 12.2396,
@@ -855,44 +828,44 @@
         "roughness": 0.1
     },
     "2985": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 321.0,
         "latitude": 50.9383,
         "longitude": 14.2094,
         "name": "Lichtenhain-Mittelndorf",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "3015": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 98.0,
         "latitude": 52.2085,
         "longitude": 14.118,
         "name": "Lindenberg",
-        "roughness": 1.0
+        "roughness": 0.8137931034
     },
     "3023": {
-        "start": 809913600000,
-        "end": 1412035200000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2014-09-30T00:00:00.000Z",
         "elevation": 22.0,
         "latitude": 52.5181,
         "longitude": 7.3081,
         "name": "Lingen",
-        "roughness": 1.0
+        "roughness": 0.05
     },
     "3028": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 157.0,
         "latitude": 51.7854,
         "longitude": 8.8388,
         "name": "Lippspringe, Bad",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "3032": {
-        "start": 1258588800000,
-        "end": 1772150400000,
+        "start": "2009-11-19T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 25.0,
         "latitude": 55.011,
         "longitude": 8.4125,
@@ -900,8 +873,8 @@
         "roughness": 0.2
     },
     "3086": {
-        "start": 835747200000,
-        "end": 1772150400000,
+        "start": "1996-06-26T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 15.0,
         "latitude": 53.8025,
         "longitude": 10.6989,
@@ -909,62 +882,62 @@
         "roughness": 0.1
     },
     "3093": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 16.0,
         "latitude": 52.9724,
         "longitude": 11.1374,
         "name": "L\u00fcchow",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "3098": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 387.0,
         "latitude": 51.2452,
         "longitude": 7.6425,
         "name": "L\u00fcdenscheid",
-        "roughness": 0.02
+        "roughness": 0.1620689655
     },
     "3126": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 79.0,
         "latitude": 52.1029,
         "longitude": 11.5827,
         "name": "Magdeburg",
-        "roughness": 1.0
+        "roughness": 0.6413793103
     },
     "3158": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 12.0,
         "latitude": 52.5468,
         "longitude": 14.5453,
         "name": "Manschnow",
-        "roughness": 0.5413793103
+        "roughness": 0.3793103448
     },
     "3166": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 639.0,
         "latitude": 50.6511,
         "longitude": 13.1469,
         "name": "Marienberg",
-        "roughness": 1.0
+        "roughness": 0.05
     },
     "3167": {
-        "start": 927763200000,
-        "end": 1772150400000,
+        "start": "1999-05-27T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 547.0,
         "latitude": 50.6621,
         "longitude": 7.9603,
         "name": "Marienberg, Bad",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "3196": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 81.0,
         "latitude": 53.3221,
         "longitude": 11.9324,
@@ -972,53 +945,53 @@
         "roughness": 1.0
     },
     "3231": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 450.0,
         "latitude": 50.5611,
         "longitude": 10.3771,
         "name": "Meiningen",
-        "roughness": 0.1213793103
+        "roughness": 0.1310344828
     },
     "3268": {
-        "start": 1381190400000,
-        "end": 1772150400000,
+        "start": "2013-10-08T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 900.0,
         "latitude": 48.1694,
         "longitude": 8.9433,
         "name": "Me\u00dfstetten-Appental",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "3287": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 453.0,
         "latitude": 49.7177,
         "longitude": 9.0997,
         "name": "Michelstadt-Vielbrunn",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "3362": {
-        "start": 1151712000000,
-        "end": 1772150400000,
+        "start": "2006-07-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 243.0,
         "latitude": 48.9721,
         "longitude": 8.8735,
         "name": "M\u00fchlacker",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "3366": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 406.0,
         "latitude": 48.279,
         "longitude": 12.5024,
         "name": "M\u00fchldorf",
-        "roughness": 0.0586206897
+        "roughness": 0.1
     },
     "3379": {
-        "start": 868320000000,
-        "end": 1772150400000,
+        "start": "1997-07-08T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 515.0,
         "latitude": 48.1632,
         "longitude": 11.5429,
@@ -1026,35 +999,35 @@
         "roughness": 1.0
     },
     "3478": {
-        "start": 809913600000,
-        "end": 1124150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2005-08-16T00:00:00.000Z",
         "elevation": 81.0,
         "latitude": 53.5468,
         "longitude": 13.1914,
         "name": "Neubrandenburg",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "3513": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 845.0,
         "latitude": 50.5003,
         "longitude": 11.1345,
         "name": "Neuhaus am Rennweg",
-        "roughness": 1.0
+        "roughness": 1.1896551724
     },
     "3552": {
-        "start": 809913600000,
-        "end": 1554681600000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2019-04-08T00:00:00.000Z",
         "elevation": 38.0,
         "latitude": 52.9037,
         "longitude": 12.8071,
         "name": "Neuruppin",
-        "roughness": 1.0
+        "roughness": 0.3986206897
     },
     "3631": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 12.0,
         "latitude": 53.7123,
         "longitude": 7.1519,
@@ -1062,17 +1035,17 @@
         "roughness": 0.2
     },
     "3660": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 485.0,
         "latitude": 50.3602,
         "longitude": 6.8697,
         "name": "N\u00fcrburg-Barweiler",
-        "roughness": 0.7296551724
+        "roughness": 0.6586206897
     },
     "3668": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 314.0,
         "latitude": 49.503,
         "longitude": 11.0549,
@@ -1080,17 +1053,17 @@
         "roughness": 0.1
     },
     "3730": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 806.0,
         "latitude": 47.3984,
         "longitude": 10.2759,
         "name": "Oberstdorf",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "3761": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 276.0,
         "latitude": 49.207,
         "longitude": 9.5176,
@@ -1098,89 +1071,89 @@
         "roughness": 1.0
     },
     "3791": {
-        "start": 907113600000,
-        "end": 1349049600000,
+        "start": "1998-09-30T00:00:00.000Z",
+        "end": "2012-10-01T00:00:00.000Z",
         "elevation": 11.0,
         "latitude": 53.1763,
         "longitude": 8.1824,
         "name": "Oldenburg",
-        "roughness": 1.0
+        "roughness": 0.5655172414
     },
     "3811": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 151.0,
         "latitude": 51.296,
         "longitude": 13.0928,
         "name": "Oschatz",
-        "roughness": 0.05
+        "roughness": 0.4413793103
     },
     "3815": {
-        "start": 809913600000,
-        "end": 1291075200000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2010-11-30T00:00:00.000Z",
         "elevation": 95.0,
         "latitude": 52.2553,
         "longitude": 8.0534,
         "name": "Osnabr\u00fcck",
-        "roughness": 1.0
+        "roughness": 0.1
     },
     "3821": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 244.0,
         "latitude": 51.0872,
         "longitude": 11.9293,
         "name": "Osterfeld",
-        "roughness": 0.0313793103
+        "roughness": 0.1
     },
     "3897": {
-        "start": 1155859200000,
-        "end": 1772150400000,
+        "start": "2006-08-18T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 2.0,
         "latitude": 54.0893,
         "longitude": 10.8773,
         "name": "Pelzerhaken",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "3946": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 387.0,
         "latitude": 50.4818,
         "longitude": 12.13,
         "name": "Plauen",
-        "roughness": 1.0
+        "roughness": 0.9689655172
     },
     "3987": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 81.0,
         "latitude": 52.3812,
         "longitude": 13.0622,
         "name": "Potsdam",
-        "roughness": 0.2
+        "roughness": 1.0344827586
     },
     "4024": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 40.0,
         "latitude": 54.3643,
         "longitude": 13.4771,
         "name": "Putbus",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "4039": {
-        "start": 828489600000,
-        "end": 1772150400000,
+        "start": "1996-04-03T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 11.0,
         "latitude": 53.7331,
         "longitude": 9.8776,
         "name": "Quickborn",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "4104": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 365.0,
         "latitude": 49.0425,
         "longitude": 12.1019,
@@ -1188,80 +1161,71 @@
         "roughness": 1.0
     },
     "4177": {
-        "start": 1225497600000,
-        "end": 1772150400000,
+        "start": "2008-11-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 116.0,
         "latitude": 48.9726,
         "longitude": 8.3301,
         "name": "Rheinstetten",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "4271": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 5.0,
         "latitude": 54.1803,
         "longitude": 12.0808,
         "name": "Rostock-Warnem\u00fcnde",
-        "roughness": 0.5589655172
+        "roughness": 0.01
     },
     "4280": {
-        "start": 1278547200000,
-        "end": 1772150400000,
+        "start": "2010-07-08T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 386.0,
         "latitude": 49.2162,
         "longitude": 11.1035,
         "name": "Roth",
-        "roughness": 0.2551724138
+        "roughness": 0.2862068966
     },
     "4336": {
-        "start": 835228800000,
-        "end": 1772150400000,
+        "start": "1996-06-20T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 319.0,
         "latitude": 49.2128,
         "longitude": 7.1077,
         "name": "Saarbr\u00fccken-Ensheim",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "4371": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 135.0,
         "latitude": 52.1042,
         "longitude": 8.7521,
         "name": "Salzuflen, Bad",
-        "roughness": 0.05
+        "roughness": 1.174137931
     },
     "4393": {
-        "start": 944006400000,
-        "end": 1772150400000,
+        "start": "1999-12-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 5.0,
         "latitude": 54.3279,
         "longitude": 8.6031,
         "name": "Sankt Peter-Ording",
         "roughness": 0.2
     },
-    "4445": {
-        "start": 1093996800000,
-        "end": 681004800000,
-        "elevation": 614.0,
-        "latitude": 51.7659,
-        "longitude": 10.6533,
-        "name": "Wernigerode-Schierke",
-        "roughness": 1.0
-    },
     "4464": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 501.0,
         "latitude": 50.5679,
         "longitude": 11.8041,
         "name": "Schleiz",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "4466": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 43.0,
         "latitude": 54.5275,
         "longitude": 9.5487,
@@ -1269,62 +1233,62 @@
         "roughness": 1.0
     },
     "4501": {
-        "start": 809913600000,
-        "end": 1749686400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2025-06-12T00:00:00.000Z",
         "elevation": 938.0,
         "latitude": 50.6545,
         "longitude": 10.7696,
         "name": "Schm\u00fccke",
-        "roughness": 1.0
+        "roughness": 1.5
     },
     "4625": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 59.0,
         "latitude": 53.6424,
         "longitude": 11.3871,
         "name": "Schwerin",
-        "roughness": 0.6724137931
+        "roughness": 1.0
     },
     "4642": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 22.0,
         "latitude": 52.8911,
         "longitude": 11.7297,
         "name": "Seehausen",
-        "roughness": 0.5413793103
+        "roughness": 0.0982758621
     },
     "4745": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 75.0,
         "latitude": 52.9604,
         "longitude": 9.793,
         "name": "Soltau",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "4752": {
-        "start": 809913600000,
-        "end": 1214784000000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2008-06-30T00:00:00.000Z",
         "elevation": 626.0,
         "latitude": 50.3746,
         "longitude": 11.1828,
         "name": "Sonneberg-Neufang",
-        "roughness": 1.4655172414
+        "roughness": 0.1
     },
     "4887": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 734.0,
         "latitude": 48.6656,
         "longitude": 9.8648,
         "name": "St\u00f6tten",
-        "roughness": 0.02
+        "roughness": 1.0
     },
     "4911": {
-        "start": 846115200000,
-        "end": 1772150400000,
+        "start": "1996-10-24T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 351.0,
         "latitude": 48.8275,
         "longitude": 12.5597,
@@ -1332,17 +1296,17 @@
         "roughness": 0.1310344828
     },
     "4928": {
-        "start": 896659200000,
-        "end": 1772150400000,
+        "start": "1998-06-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 314.0,
         "latitude": 48.8281,
         "longitude": 9.2,
         "name": "Stuttgart (Schnarrenberg)",
-        "roughness": 0.2
+        "roughness": 1.0
     },
     "4931": {
-        "start": 812764800000,
-        "end": 1772150400000,
+        "start": "1995-10-04T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 371.0,
         "latitude": 48.6883,
         "longitude": 9.2235,
@@ -1350,179 +1314,170 @@
         "roughness": 0.1
     },
     "5009": {
-        "start": 809913600000,
-        "end": 1088553600000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2004-06-30T00:00:00.000Z",
         "elevation": 37.0,
         "latitude": 53.761,
         "longitude": 12.5574,
         "name": "Teterow",
-        "roughness": 0.05
+        "roughness": 1.0
     },
     "5029": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 387.0,
         "latitude": 49.4737,
         "longitude": 7.0385,
         "name": "Tholey",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "5100": {
-        "start": 986083200000,
-        "end": 1772150400000,
+        "start": "2001-04-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 261.0,
         "latitude": 49.7479,
         "longitude": 6.6583,
         "name": "Trier-Petrisberg",
-        "roughness": 1.0
-    },
-    "5109": {
-        "start": 1380585600000,
-        "end": 1380499200000,
-        "elevation": 68.0,
-        "latitude": 53.5998,
-        "longitude": 13.3039,
-        "name": "Trollenhagen",
-        "roughness": 0.1
+        "roughness": 0.5034482759
     },
     "5142": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 1.0,
         "latitude": 53.7445,
         "longitude": 14.0698,
         "name": "Ueckerm\u00fcnde",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "5155": {
-        "start": 809913600000,
-        "end": 1409443200000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2014-08-31T00:00:00.000Z",
         "elevation": 567.0,
         "latitude": 48.3837,
         "longitude": 9.9524,
         "name": "Ulm",
-        "roughness": 1.0
+        "roughness": 0.5517241379
     },
     "5158": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 159.0,
         "latitude": 52.1601,
         "longitude": 11.1759,
         "name": "Ummendorf",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "5347": {
-        "start": 1038700800000,
-        "end": 1772150400000,
+        "start": "2002-12-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 236.0,
         "latitude": 51.5039,
         "longitude": 9.1118,
         "name": "Warburg",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "5349": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 73.0,
         "latitude": 53.5196,
         "longitude": 12.6654,
         "name": "Waren (M\u00fcritz)",
-        "roughness": 1.0
+        "roughness": 0.1
     },
     "5371": {
-        "start": 921888000000,
-        "end": 1772150400000,
+        "start": "1999-03-20T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 920.0,
         "latitude": 50.4973,
         "longitude": 9.9427,
         "name": "Wasserkuppe",
-        "roughness": 0.1
+        "roughness": 0.05
     },
     "5397": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 440.0,
         "latitude": 49.6662,
         "longitude": 12.1844,
         "name": "Weiden",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "5404": {
-        "start": 1227484800000,
-        "end": 1772150400000,
+        "start": "2008-11-24T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 477.0,
         "latitude": 48.4024,
         "longitude": 11.6946,
         "name": "Weihenstephan-D\u00fcrnast",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "5426": {
-        "start": 1241049600000,
-        "end": 1772150400000,
+        "start": "2009-04-30T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 553.0,
         "latitude": 49.3758,
         "longitude": 8.1212,
         "name": "Weinbiet",
-        "roughness": 1.0
+        "roughness": 1.5
     },
     "5440": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 439.0,
         "latitude": 49.0115,
         "longitude": 10.9308,
         "name": "Wei\u00dfenburg-Emetzheim",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "5480": {
-        "start": 1063152000000,
-        "end": 1772150400000,
+        "start": "2003-09-10T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 85.0,
         "latitude": 51.5763,
         "longitude": 7.8879,
         "name": "Werl",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "13674": {
-        "start": 1185926400000,
-        "end": 1772150400000,
+        "start": "2007-08-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 237.0,
         "latitude": 49.2943,
         "longitude": 8.9053,
         "name": "Waibstadt",
-        "roughness": 0.05
+        "roughness": 0.4034482759
     },
     "5490": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 233.0,
         "latitude": 51.8454,
         "longitude": 10.7686,
         "name": "Wernigerode",
-        "roughness": 1.0
+        "roughness": 0.8034482759
     },
     "5516": {
-        "start": 835660800000,
-        "end": 1772150400000,
+        "start": "1996-06-25T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 3.0,
         "latitude": 54.5283,
         "longitude": 11.0606,
         "name": "Fehmarn",
-        "roughness": 0.02
+        "roughness": 1.0
     },
     "5546": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 187.0,
         "latitude": 52.1206,
         "longitude": 12.4586,
         "name": "Wiesenburg",
-        "roughness": 0.05
+        "roughness": 0.9379310345
     },
     "5629": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 105.0,
         "latitude": 51.8891,
         "longitude": 12.6446,
@@ -1530,17 +1485,17 @@
         "roughness": 1.0
     },
     "5663": {
-        "start": 809913600000,
-        "end": 820368000000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "1995-12-31T00:00:00.000Z",
         "elevation": 118.0,
         "latitude": 53.4618,
         "longitude": 13.6099,
         "name": "Woldegk",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "5705": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 268.0,
         "latitude": 49.7704,
         "longitude": 9.9576,
@@ -1548,44 +1503,44 @@
         "roughness": 0.2
     },
     "5779": {
-        "start": 973728000000,
-        "end": 1772150400000,
+        "start": "2000-11-09T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 877.0,
         "latitude": 50.7313,
         "longitude": 13.7516,
         "name": "Zinnwald-Georgenfeld",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "5800": {
-        "start": 1152576000000,
-        "end": 1772150400000,
+        "start": "2006-07-11T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 615.0,
         "latitude": 49.028,
         "longitude": 13.2385,
         "name": "Zwiesel",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "5839": {
-        "start": 867715200000,
-        "end": 1731628800000,
+        "start": "1997-07-01T00:00:00.000Z",
+        "end": "2024-11-15T00:00:00.000Z",
         "elevation": 0.0,
         "latitude": 53.3881,
         "longitude": 7.2287,
         "name": "Emden",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "5856": {
-        "start": 852595200000,
-        "end": 1772150400000,
+        "start": "1997-01-07T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 476.0,
         "latitude": 48.5451,
         "longitude": 13.3532,
         "name": "F\u00fcrstenzell",
-        "roughness": 0.05
+        "roughness": 1.0
     },
     "5871": {
-        "start": 909878400000,
-        "end": 1475280000000,
+        "start": "1998-11-01T00:00:00.000Z",
+        "end": "2016-10-01T00:00:00.000Z",
         "elevation": 497.0,
         "latitude": 49.9463,
         "longitude": 7.2645,
@@ -1593,210 +1548,210 @@
         "roughness": 0.1
     },
     "5906": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 98.0,
         "latitude": 49.5063,
         "longitude": 8.5584,
         "name": "Mannheim",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "5930": {
-        "start": 809913600000,
-        "end": 1772150400000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 1.0,
         "latitude": 54.641,
         "longitude": 10.0238,
         "name": "Sch\u00f6nhagen (Ostseebad)",
-        "roughness": 0.02
+        "roughness": 1.0
     },
     "6163": {
-        "start": 1038700800000,
-        "end": 1772150400000,
+        "start": "2002-12-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 27.0,
         "latitude": 54.1654,
         "longitude": 10.3519,
         "name": "D\u00f6rnick",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "6197": {
-        "start": 1038700800000,
-        "end": 1772150400000,
+        "start": "2002-12-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 258.0,
         "latitude": 51.8664,
         "longitude": 9.271,
         "name": "L\u00fcgde-Paenbruch",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "15000": {
-        "start": 1301616000000,
-        "end": 1772150400000,
+        "start": "2011-04-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 231.0,
         "latitude": 50.7983,
         "longitude": 6.0244,
         "name": "Aachen-Orsbach",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "15207": {
-        "start": 1383264000000,
-        "end": 1772150400000,
+        "start": "2013-11-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 317.0,
         "latitude": 51.2835,
         "longitude": 9.359,
         "name": "Schauenburg-Elgershausen",
-        "roughness": 0.0210344828
+        "roughness": 0.1
     },
     "7244": {
-        "start": 809913600000,
-        "end": 1096329600000,
+        "start": "1995-09-01T00:00:00.000Z",
+        "end": "2004-09-28T00:00:00.000Z",
         "elevation": 62.0,
         "latitude": 53.1424,
         "longitude": 13.0319,
         "name": "Neuglobsow (HM)",
-        "roughness": 1.5
+        "roughness": 0.6417241379
     },
     "15444": {
-        "start": 1409529600000,
-        "end": 1772150400000,
+        "start": "2014-09-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 593.0,
         "latitude": 48.4418,
         "longitude": 9.9216,
         "name": "Ulm-M\u00e4hringen",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "7341": {
-        "start": 1122854400000,
-        "end": 1772150400000,
+        "start": "2005-08-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 119.0,
         "latitude": 50.09,
         "longitude": 8.7862,
         "name": "Offenbach-Wetterpark",
-        "roughness": 0.05
+        "roughness": 0.2
     },
     "7351": {
-        "start": 1126137600000,
-        "end": 1772150400000,
+        "start": "2005-09-08T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 115.0,
         "latitude": 53.3176,
         "longitude": 13.4175,
         "name": "Feldberg/Mecklenburg",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "7367": {
-        "start": 1196467200000,
-        "end": 1772150400000,
+        "start": "2007-12-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 144.0,
         "latitude": 51.9643,
         "longitude": 9.8072,
         "name": "Alfeld",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "7368": {
-        "start": 1193875200000,
-        "end": 1772150400000,
+        "start": "2007-11-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 312.0,
         "latitude": 51.0007,
         "longitude": 10.3621,
         "name": "Eisenach",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "7369": {
-        "start": 1193875200000,
-        "end": 1772150400000,
+        "start": "2007-11-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 475.0,
         "latitude": 49.1623,
         "longitude": 10.3661,
         "name": "Feuchtwangen-Heilbronn",
-        "roughness": 0.0210344828
+        "roughness": 0.1
     },
     "7370": {
-        "start": 1165795200000,
-        "end": 1772150400000,
+        "start": "2006-12-11T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 499.0,
         "latitude": 49.391,
         "longitude": 12.6838,
         "name": "Waldm\u00fcnchen",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "7374": {
-        "start": 1141171200000,
-        "end": 1772150400000,
+        "start": "2006-03-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 46.0,
         "latitude": 52.0813,
         "longitude": 6.9409,
         "name": "Ahaus",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "7393": {
-        "start": 1262304000000,
-        "end": 1772150400000,
+        "start": "2010-01-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 116.0,
         "latitude": 51.4492,
         "longitude": 14.2533,
         "name": "Hoyerswerda",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "7394": {
-        "start": 1149120000000,
-        "end": 1772150400000,
+        "start": "2006-06-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 622.0,
         "latitude": 50.0315,
         "longitude": 11.9745,
         "name": "Wunsiedel-Sch\u00f6nbrunn",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "7395": {
-        "start": 1196467200000,
-        "end": 1772150400000,
+        "start": "2007-12-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 351.0,
         "latitude": 48.6595,
         "longitude": 12.5388,
         "name": "Gottfrieding",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "7396": {
-        "start": 1209600000000,
-        "end": 1772150400000,
+        "start": "2008-05-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 740.0,
         "latitude": 50.5084,
         "longitude": 9.2246,
         "name": "Hoherodskopf/Vogelsberg",
-        "roughness": 0.6324137931
+        "roughness": 0.075862069
     },
     "7403": {
-        "start": 1175472000000,
-        "end": 1772150400000,
+        "start": "2007-04-02T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 672.0,
         "latitude": 47.7955,
         "longitude": 10.0325,
         "name": "Leutkirch-Herlazhofen",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "7410": {
-        "start": 1296518400000,
-        "end": 1772150400000,
+        "start": "2011-02-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 350.0,
         "latitude": 50.7513,
         "longitude": 9.0224,
         "name": "Neu-Ulrichstein",
-        "roughness": 0.05
+        "roughness": 0.1
     },
     "7412": {
-        "start": 1159660800000,
-        "end": 1772150400000,
+        "start": "2006-10-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 340.0,
         "latitude": 50.0083,
         "longitude": 9.4238,
         "name": "Neuh\u00fctten/Spessart",
-        "roughness": 0.02
+        "roughness": 0.1
     },
     "15813": {
-        "start": 1646092800000,
-        "end": 1772150400000,
+        "start": "2022-03-01T00:00:00.000Z",
+        "end": "2026-04-09T00:00:00.000Z",
         "elevation": 40.0,
         "latitude": 52.5126,
         "longitude": 7.4131,
         "name": "Lingen-Baccum",
-        "roughness": 0.05
+        "roughness": 0.1
     }
 }
