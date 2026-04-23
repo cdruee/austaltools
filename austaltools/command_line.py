@@ -229,9 +229,6 @@ def main(args=None):
     if args.get("temp_dir",None) is not None:
         _storage.TEMP = args["temp_dir"]
 
-    if args.get("version",None) is not None:
-        show_version(args['version'])
-
     try:
         if args['command'] in ['import-buildings', 'bg']:
             import_buildings.main(args)
