@@ -102,7 +102,16 @@ class _VersionAction(argparse.Action):
 
     def __call__(self, parser, namespace, values, option_string=None):
         try:
-            update_info = check_for_update(parser.prog)
+            # Use __title__ (the canonical distribution name, also used
+            # by austaltools._metadata for importlib.metadata lookups),
+            # not parser.prog. parser.prog defaults to the basename of
+            # sys.argv[0], which is only "austaltools" when invoked via
+            # the installed console-script. When run as
+            # `python -m austaltools.command_line` (e.g. in tests),
+            # sys.argv[0] points at this file, so parser.prog becomes
+            # "command_line.py" -- a name that matches neither the
+            # installed distribution nor any package on PyPI.
+            update_info = check_for_update(__title__)
         except Exception as e:
             update_info = {
                "current": self.version or "unknown",
