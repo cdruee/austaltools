@@ -1115,7 +1115,9 @@ def calc_vdi3783_8(levels: list, dirs: list, z0: float = None,
     v_ref = np.zeros((nz, N_CLASS, ndir))
 
     # Get Obukhov lengths for all stability classes (depends on z0)
-    l_obukhov = [_dispersion.KM2021.class_center(x, z0=z0) for x in
+    # argument to class_center() is 1-based
+    # arrays in this funtion are 0-based !
+    l_obukhov = [_dispersion.KM2021.class_center(x+1, z0=z0) for x in
                  range(N_CLASS)]
 
     for istab in range(N_CLASS):

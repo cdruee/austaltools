@@ -205,7 +205,7 @@ def main(args):
     # AK (ak) in file and command line is 1-based,
     # ak0 is zero-based so it can be used as field index
     ak0 = int(ak) - 1
-    akstr = _dispersion.KM2021.name(int(ak))
+    akstr = _dispersion.KM2021.num2name(int(ak))
     logger.info(f"wind: {u:.1f}, {v:.1f}, stability class: {akstr}")
     cmap = args['colormap']
     #
@@ -330,6 +330,14 @@ def main(args):
 
         # show wind field
         #
+        # austcale unless scale argument is set
+        scale = args.get('scale', None)
+        if scale:
+            scale = float(scale)
+        else:
+            scale = np.nanpercentile(
+                np.sqrt(u_slice ** 2 + v_slice ** 2), 90)
+        #
         spd_slice = np.sqrt(u_slice*u_slice + v_slice*v_slice)
         u_slice[spd_slice < 0.5] = np.nan
         v_slice[spd_slice < 0.5] = np.nan
@@ -340,11 +348,10 @@ def main(args):
                           color=color,
                           density=1.5)
         elif style == 'stream-color':
-            vmax = np.nanpercentile(np.sqrt(u_slice ** 2 + v_slice ** 2),90)
             sp = ax.streamplot(h_ccord, v_ccord, u_slice.T, v_slice.T,
                                color=spd_slice.T, cmap=cmap,
                                norm=matplotlib.colors.Normalize(
-                                   vmin=0.0, vmax=vmax),
+                                   vmin=0.0, vmax=scale),
                                density=1.5)
             fig.colorbar(sp.lines, ax=ax, label='m/s')
         elif style == 'arrows':
@@ -356,7 +363,10 @@ def main(args):
             st = int(u_slice.shape[0]/30)
             qp = plt.quiver(h_ccord[::st], v_ccord[::st],
                             u_slice[::st, ::st].T, v_slice[::st, ::st].T,
-                            spd_slice[::st, ::st].T, cmap=cmap)
+                            spd_slice[::st, ::st].T,
+                            norm=matplotlib.colors.Normalize(
+                                vmin=0.0, vmax=scale),
+                            cmap=cmap)
             fig.colorbar(qp, ax=ax, label='m/s')
         elif style == 'barbs':
             st = int(u_slice.shape[0]/20)
@@ -371,6 +381,8 @@ def main(args):
                            1.94 * u_slice[::st, ::st].T,
                            1.94 * v_slice[::st, ::st].T,
                            1.94 * spd_slice[::st, ::st].T,
+                           norm=matplotlib.colors.Normalize(
+                               vmin=0.0, vmax=scale),
                            cmap=cmap,
                            pivot='middle')
             fig.colorbar(bp, ax=ax, label='m/s')
@@ -516,3 +528,10 @@ def add_options(subparsers):
                               f"data source. Ignored if value is None. "
                               f"[%(default)s]"
                          )
+    pars_adv_wif.add_argument('--scale',
+                              metavar="VALUE",
+                              nargs='?',
+                              default=None,
+                              help='Max value of the colour scale in '
+                                   'm/s. '
+                                   'Default is autoscale.')
