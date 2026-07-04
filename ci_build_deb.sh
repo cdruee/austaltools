@@ -164,6 +164,7 @@ SIGNING_PRIVATE_KEY_ID=$(echo "$IMPORT_STATUS" | awk '/IMPORT_OK/ {print $4}')
 
 if [ -z "$SIGNING_PRIVATE_KEY_ID" ]; then
   echo "ERROR: failed to import signing key or extract its ID" >&2
+  gpg --batch --status-fd 1 --import "$SIGNING_PRIVATE_KEY"
   exit 1
 fi
 
