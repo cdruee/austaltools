@@ -69,6 +69,14 @@ dh_make --python -p ${NAME}_${VERSION}+1${CODENAME}1 \
 
 ls -l debian
 
+# Set the correct distribution *before* building, so the signed .changes
+# file already has the right value. dh_make writes the top changelog
+# entry with distribution "UNRELEASED"; patching debian/changelog here
+# (a plain, unsigned source file) is safe -- unlike patching the .changes
+# file *after* dpkg-buildpackage has signed it, which would invalidate
+# the signature.
+sed -i "0,/UNRELEASED/{s/UNRELEASED/${CODENAME}/}" debian/changelog
+
 # Edit the control file - add description
 echo " " >> debian/control
 mv debian/control debian/control.old
@@ -149,15 +157,20 @@ fi
 # Disable tests during package build (they may need special setup)
 export PYBUILD_DISABLE=test
 
-# Build the package
-dpkg-buildpackage -us -uc $ARCH_OPTS -b
+# Install the signing key and get its ID
+# $SIGNING_PRIVATE_KEY holds a PATH, not the key content
+IMPORT_STATUS=$(gpg --batch --status-fd 1 --import "$SIGNING_PRIVATE_KEY" 2>/dev/null)
+SIGNING_PRIVATE_KEY_ID=$(echo "$IMPORT_STATUS" | awk '/IMPORT_OK/ {print $4}')
 
+if [ -z "$SIGNING_PRIVATE_KEY_ID" ]; then
+  echo "ERROR: failed to import signing key or extract its ID" >&2
+  gpg --batch --status-fd 1 --import "$SIGNING_PRIVATE_KEY"
+  exit 1
+fi
+
+export DEB_SIGN_KEYID="$SIGNING_PRIVATE_KEY_ID"
+dpkg-buildpackage $ARCH_OPTS -b
 popd
-
-# Make reprepro happy - set correct distribution
-for X in *.changes; do
-  sed -i "s/Distribution: .*/Distribution: ${CODENAME}/" $X
-done
 
 # Optional: clean up source directory
 # rm -rv $FULLNAME

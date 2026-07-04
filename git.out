@@ -1,6 +1,4 @@
-Auto-merging austaltools/command_line.py
-CONFLICT (add/add): Merge conflict in austaltools/command_line.py
-Auto-merging austaltools/eap.py
-Auto-merging austaltools/windfield.py
+Auto-merging .gitlab-ci.yml
+Auto-merging ci_build_deb.sh
+Automatic merge went well; stopped before committing as requested
 Squash commit -- not updating HEAD
-Automatic merge failed; fix conflicts and then commit the result.
