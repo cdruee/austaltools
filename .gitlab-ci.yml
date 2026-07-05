@@ -306,9 +306,16 @@ release_deb:
     - chmod 600 ~/.ssh/id_rsa
     - eval $(ssh-agent -s)
     - ssh-add ~/.ssh/id_rsa
-    - apt install -y curl dupload
+    - apt install -y curl dupload gnupg
     - curl ifconfig.me
     - ssh-keyscan -H 'uwmhub.uni-trier.de' >> ~/.ssh/known_hosts
+    # Populate a local keyring so dupload's openpgp-check has something
+    # to verify the already-signed .changes files against. This only
+    # needs the CI signing key's public half -- we reuse the same File
+    # variable ci_build_deb.sh uses for signing, since importing it
+    # also brings in the public key.
+    - gpg --batch --import "$SIGNING_PRIVATE_KEY"
+    - gpg --export --output ~/pubring.gpg
   script:
     - ls -l
     - export RESDIR="deb_dist"
@@ -324,6 +331,7 @@ release_deb:
         incoming => "/home/reprepro/incoming/",
         # files pass on to dinstall which sends emails itself
         dinstall_runs => 1,
+        keyring => "$HOME/pubring.gpg",
       };
       EOF
     - cat ~/.dupload.conf
