@@ -103,6 +103,7 @@ build_deb:
     - bash -x ./ci_build_deb.sh $BUILD_VERSION
     - echo "DEB_${DISTRIB^^}_VERSION=$( cd deb_dist/$DISTRIB && ls *deb )" | tee -a  build.env
     - echo "DEB_${DISTRIB^^}_JOB=${CI_JOB_ID}" | tee -a build.env
+    - echo "DEB_${DISTRIB^^}_VENDOR=${PUBLISHER}" | tee -a build.env
     - cat build.env
   artifacts:
     paths:
@@ -115,6 +116,7 @@ build_deb:
         DISTRIB:
           - jammy
           - noble
+          - resolute
       - PUBLISHER: debian
         DISTRIB:
           - bookworm
@@ -154,7 +156,34 @@ release_pypi:
   script:
     - pip install twine
     - twine check dist/*tar.gz
-    - twine upload --repository-url https://upload.pypi.org/legacy/ --username __token__ --password $PYPI_ID_TOKEN dist/*tar.gz
+    - |
+      PKG_NAME=$(python3 -c "
+      import tomllib
+      with open('pyproject.toml', 'rb') as f:
+          data = tomllib.load(f)
+      print(data.get('project', {}).get('name', ''))
+      ")
+      if [ -z "$PKG_NAME" ]; then
+        echo "ERROR: could not determine package name from pyproject.toml" >&2
+        exit 1
+      fi
+      echo "Package name: $PKG_NAME"
+      # Version comes from the already-built sdist filename, not
+      # pyproject.toml, since setuptools_scm makes the version dynamic
+      # (no static "version" field to read there).
+      SDIST=$(ls dist/${PKG_NAME}-*.tar.gz | head -n1)
+      VERSION=$(basename "$SDIST" .tar.gz | sed "s/^${PKG_NAME}-//")
+      if [ -z "$VERSION" ]; then
+        echo "ERROR: could not determine version from sdist filename" >&2
+        exit 1
+      fi
+      echo "Version: $VERSION"
+      HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "https://pypi.org/pypi/${PKG_NAME}/${VERSION}/json")
+      if [ "$HTTP_CODE" = "200" ]; then
+        echo "Version ${VERSION} of ${PKG_NAME} is already on PyPI, skipping upload."
+      else
+        twine upload --repository-url https://upload.pypi.org/legacy/ --username __token__ --password $PYPI_ID_TOKEN dist/*tar.gz
+      fi
 
 test_pypi:
   image: python:latest
@@ -302,10 +331,24 @@ release_deb:
       for X in $( ls $RESDIR ); do 
         pushd $RESDIR/$X
         ls -l
-        for Y in *.changes; do 
-          sed -i s/Distribution:\ .\*/Distribution:\ "${X}"/ $Y   
+        VENDNAM="DEB_${X^^}_VENDOR"
+        VEND="${!VENDNAM}"
+        if [ -z "$VEND" ]; then
+          echo "ERROR: no vendor recorded for distribution '$X' (missing $VENDNAM)" >&2
+          exit 1
+        fi
+        for Y in *.changes; do
           cat $Y
-          dupload -f --nomail -t uwmhub $Y
+          NAMESRC=$(awk -F': ' '/^Source:/{print $2}' "$Y")
+          VERSION=$(awk -F': ' '/^Version:/{print $2}' "$Y")
+          echo "checking for ${NAMESRC} ${VERSION} in ${VEND}/${X}"
+          if ssh reprepro@uwmhub.uni-trier.de \
+              "reprepro -b /home/reprepro/repo/${VEND} list ${X} ${NAMESRC}" \
+              | awk '{print $NF}' | grep -qxF "${VERSION}"; then
+            echo "Package ${NAMESRC} ${VERSION} already in repo for ${X}, skipping upload."
+          else
+            dupload -f --nomail -t uwmhub "$Y"
+          fi
           sleep 60
         done
         popd
