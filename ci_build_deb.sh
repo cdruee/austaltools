@@ -160,7 +160,13 @@ export PYBUILD_DISABLE=test
 # Install the signing key and get its ID
 # $SIGNING_PRIVATE_KEY holds a PATH, not the key content
 IMPORT_STATUS=$(gpg --batch --status-fd 1 --import "$SIGNING_PRIVATE_KEY" 2>/dev/null)
-SIGNING_PRIVATE_KEY_ID=$(echo "$IMPORT_STATUS" | awk '/IMPORT_OK/ {print $4}')
+# NOTE: gpg emits a separate IMPORT_OK line for the public key half and
+# the secret key half of the same import, both carrying the same
+# fingerprint in field 4. Without "exit", awk matches both lines and
+# concatenates them (newline-joined) into one garbled two-line string,
+# which gpg/dpkg-buildpackage then fails to match to any real key
+# ("No secret key"). Take just the first match.
+SIGNING_PRIVATE_KEY_ID=$(echo "$IMPORT_STATUS" | awk '/IMPORT_OK/ {print $4; exit}')
 
 if [ -z "$SIGNING_PRIVATE_KEY_ID" ]; then
   echo "ERROR: failed to import signing key or extract its ID" >&2
