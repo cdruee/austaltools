@@ -117,7 +117,7 @@ build_deb:
           - jammy
           - noble
           - resolute
-      - PUBLISHER: debian
+      - PUBLISHER: raspbian
         DISTRIB:
           - bookworm
           - trixie
