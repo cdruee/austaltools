@@ -331,7 +331,7 @@ release_deb:
         incoming => "/home/reprepro/incoming/",
         # files pass on to dinstall which sends emails itself
         dinstall_runs => 1,
-        keyring => "$HOME/pubring.gpg",
+        keyrings => ["$HOME/pubring.gpg"],
       };
       EOF
     - cat ~/.dupload.conf
