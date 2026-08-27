@@ -23,6 +23,7 @@ test_latest:
   stage: test
   before_script:
     - apt-get update && apt-get install -y git python3-pip
+    - apt-get install -y python3-wxgtk4.0
     # Install system dependencies for GDAL
     - apt-get install -y gdal-bin libgdal-dev
     - apt-get install -y python3-build python3-setuptools-scm python3-gdal
@@ -32,10 +33,23 @@ test_latest:
     # Install package with test dependencies
     - pip install --break-system-packages -e .
   script:
+    - |
+      PKG_NAME=$(python3 -c "
+      import tomllib
+      with open('pyproject.toml', 'rb') as f:
+          data = tomllib.load(f)
+      print(data.get('project', {}).get('name', ''))
+      ")
+      if [ -z "$PKG_NAME" ]; then
+        echo "ERROR: could not determine package name from pyproject.toml" >&2
+        exit 1
+      fi
+      echo "Package name: $PKG_NAME"
+      export PKG_NAME
     - echo "Running compile test..."
-    - python3 -m py_compile austaltools/*.py
+    - python3 -m py_compile ${PKG_NAME}/*.py
     - echo "Running flake8 style check..."
-    - flake8 austaltools --max-line-length=88 --ignore=E501,W503 || true
+    - flake8 ${PKG_NAME} --max-line-length=88 --ignore=E501,W503 || true
     - echo "Running tests..."
     - python3 -m pytest tests/ -v || true
   rules:
