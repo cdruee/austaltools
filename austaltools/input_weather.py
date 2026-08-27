@@ -1811,7 +1811,7 @@ def add_advanced_option_group(parser):
                               'to an extra file. '
                               'Optional FILE name [%(const)s]')
     adv_grp.add_argument('--wind-variant',
-                          dest=DEFAULT_WIND_VARIANT,
+                          dest='wind-variant',
                           choices=['as_is', 'ustar_wmo',
                                    'ustar_z0', 'ustar_fsr'],
                           default='as_is',
