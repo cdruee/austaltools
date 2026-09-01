@@ -39,12 +39,14 @@ compared by :func:`compute_overlap`: both are thresholded at ``thx``
 and the ratio of the intersection to the union of the two
 above-threshold areas is returned.
 
-.. note::
-    Argument parsing, resolving the two input files, running AUSTAL
-    for each of them, extracting the relevant output file, and
-    computing the threshold-based overlap area is implemented and
-    working. Further ways to look at the result (e.g. a plot) are not
-    yet implemented -- see the ``TODO`` marker in :func:`add_options`.
+The extracted result files (see :data:`EXTRACT_FILENAMES`) are
+discarded once the overlap has been computed, unless ``--keep-files``
+is given, in which case they are copied to the working directory (or
+the directory given as its argument) before being discarded. A plot
+of the two fields and their overlap area can optionally be produced
+via ``-p/--plot`` (and the other plot options added by
+:func:`austaltools._tools.add_arguents_common_plot`) -- see
+:func:`austaltools._plotting.overlap_plot`.
 """
 import argparse
 import logging
@@ -67,6 +69,7 @@ if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
     import numpy as np
     import readmet
 
+from . import _plotting
 from . import _tools
 from . import _windutil
 from ._metadata import __version__
@@ -607,7 +610,7 @@ def _read_grid_file(path: str):
 # -------------------------------------------------------------------------
 
 def compute_overlap(reference_file: str, comparison_file: str,
-                    thx: float = None) -> float:
+                    thx: float = None) -> dict:
     """
     Compute the overlap (intersection over union) of the areas where
     the reference and comparison field exceed a threshold ``thx``.
@@ -620,7 +623,7 @@ def compute_overlap(reference_file: str, comparison_file: str,
     ``inside_cmp = cmp > thx``. The *union* area is the count of cells
     where ``inside_ref OR inside_cmp`` is true, the *intersect* area
     the count of cells where ``inside_ref AND inside_cmp`` is true.
-    The result is ``intersect / union``.
+    The overlap ratio is ``intersect / union``.
 
     :param reference_file: path to the reference grid dmna file.
     :type reference_file: str
@@ -629,9 +632,22 @@ def compute_overlap(reference_file: str, comparison_file: str,
     :param thx: threshold value. If ``None`` (default), the 75th
         percentile of all values in the reference field is used.
     :type thx: float, optional
-    :return: intersect area / union area, in ``[0, 1]``; ``nan`` if
-        the union area is empty (e.g. ``thx`` too high).
-    :rtype: float
+    :return: dict with keys:
+
+        - ``overlap``: intersect area / union area, in ``[0, 1]``;
+          ``nan`` if the union area is empty (e.g. ``thx`` too high).
+        - ``thx``: the threshold value actually used (``thx`` as
+          given, or the computed 75th percentile of the reference
+          field).
+        - ``x``, ``y``: the (shared) x/y coordinate axes of both
+          fields.
+        - ``reference``, ``comparison``: the two 2D data arrays, as
+          read from ``reference_file`` / ``comparison_file``.
+
+      This is enough to plot the two fields and their overlap without
+      re-reading the files -- see
+      :func:`austaltools._plotting.overlap_plot`.
+    :rtype: dict
     :raises ValueError: if the reference and comparison grids do not
         share the same shape / coordinates.
     """
@@ -670,9 +686,18 @@ def compute_overlap(reference_file: str, comparison_file: str,
             'union area is empty (threshold %.6g too high?), '
             'returning nan' % thx
         )
-        return float('nan')
+        overlap = float('nan')
+    else:
+        overlap = float(intersect_area / union_area)
 
-    return float(intersect_area / union_area)
+    return {
+        'overlap': overlap,
+        'thx': float(thx),
+        'x': x_ref,
+        'y': y_ref,
+        'reference': values_ref,
+        'comparison': values_cmp,
+    }
 
 
 # -------------------------------------------------------------------------
@@ -696,6 +721,14 @@ def main(args):
         - ``nodes``, ``delta``, ``throw``, ``height``: parameters
           passed through to :func:`run_austal`.
         - ``thx``: threshold passed through to :func:`compute_overlap`.
+        - ``keep_files``: if not ``None``, keep the extracted result
+          files instead of discarding them -- ``'__default__'`` means
+          the working directory, anything else is used as the
+          destination directory.
+        - ``plot`` and the other keys added by
+          :func:`austaltools._tools.add_arguents_common_plot`: control
+          whether/where a plot of the two fields is produced, see
+          :func:`austaltools._plotting.overlap_plot`.
 
     :type args: dict
 
@@ -744,10 +777,49 @@ def main(args):
     reference_grid_file = _find_extracted_file(extract_dir, 'ref')
     comparison_grid_file = _find_extracted_file(extract_dir, 'cmp')
 
-    overlap = compute_overlap(reference_grid_file, comparison_grid_file,
-                             thx=args.get('thx'))
+    #
+    # keep the extracted result files, if requested, before the
+    # extraction directory (and its contents) is discarded below
+    #
+    keep_files = args.get('keep_files')
+    if keep_files is not None:
+        if keep_files == '__default__':
+            keep_dir = working_dir
+        elif os.path.sep in keep_files:
+            # a path was given (absolute, or containing subdirs):
+            # use as-is, same convention as -p/--plot (see
+            # _plotting.finalize_plot)
+            keep_dir = keep_files
+        else:
+            # a bare name was given: relative to the working directory
+            keep_dir = os.path.join(working_dir, keep_files)
+        os.makedirs(keep_dir, exist_ok=True)
+        for src in (reference_grid_file, comparison_grid_file):
+            dst = os.path.join(keep_dir, os.path.basename(src))
+            shutil.copy(src, dst)
+            logger.info('kept output file: %s' % dst)
+
+    result = compute_overlap(reference_grid_file, comparison_grid_file,
+                            thx=args.get('thx'))
+    overlap = result['overlap']
     logger.info('overlap (intersection / union area): %.4f' % overlap)
     print('overlap (intersection / union area): %.4f' % overlap)
+
+    #
+    # optionally plot the two fields and their overlap area
+    #
+    if args.get('plot') is not None:
+        args['plot'] = _plotting.consolidate_plotname(
+            args['plot'], 'compare-weather.png')
+        _plotting.overlap_plot(
+            args,
+            reference={'x': result['x'], 'y': result['y'],
+                      'z': result['reference']},
+            comparison={'x': result['x'], 'y': result['y'],
+                       'z': result['comparison']},
+            thx=result['thx'],
+            unit='a.u.',  # arbitrary units: throw/emission is arbitrary
+        )
 
     shutil.rmtree(extract_dir)
     logger.debug('removed extraction directory: %s' % extract_dir)
@@ -827,11 +899,28 @@ def add_options(subparsers):
                                'overlap area between the reference and '
                                'comparison field. Defaults to the 75th '
                                'percentile of the reference field.')
+    pars_cmp.add_argument('--keep-files',
+                          dest='keep_files',
+                          metavar='DIR',
+                          nargs='?',
+                          const='__default__',
+                          default=None,
+                          help='keep the AUSTAL result files extracted\n'
+                               'for the reference and comparison run\n'
+                               '(e.g. "xx-j00z_ref.dmna",\n'
+                               '"xx-j00z_cmp.dmna"), instead of\n'
+                               'discarding them after use. If DIR is\n'
+                               'given, the files are copied there (a\n'
+                               'bare name is taken relative to the\n'
+                               'working directory); if missing, they\n'
+                               'are copied to the working directory\n'
+                               'itself.')
 
-    # TODO: add options controlling how the result is displayed
-    # (e.g. a plot of the two fields and their overlap area), once
-    # that is specified. Something along these lines, mirroring the
-    # plot options used e.g. by eap.py, is likely to be needed:
-    # pars_cmp = _tools.add_arguents_common_plot(pars_cmp)
+    pars_cmp = _tools.add_arguents_common_plot(pars_cmp)
+    # note: -c/--colormap (added above) has no effect on this
+    # sub-command's plot -- overlap_plot() uses a fixed pair of hues
+    # (see austaltools._plotting.OVERLAP_REFERENCE_COLOR /
+    # OVERLAP_COMPARISON_COLOR), since a single colormap cannot
+    # represent the bivariate reference/comparison overlap.
 
     return pars_cmp
