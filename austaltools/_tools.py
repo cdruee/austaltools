@@ -471,7 +471,18 @@ def find_z0_class(z0):
 
 # -------------------------------------------------------------------------
 
-def find_austxt(wdir='.'):
+def find_austxt(wdir='.', fail=True):
+    """
+    Find AUSTAL configuration file in a given directory
+
+    :param wdir: working directory, defaults to current working directory
+    :type wdir: str, optional
+    :param fail: whether to raise an exception when no file is found
+      (default = True, i.e. raise Exception)
+    :type fail: bool, optional
+    :return: AUSTAL configuration file name
+    :rtype: str
+    """
     if wdir == '':
         wdir = '.'
     xnames = [os.path.join(wdir, x) for x in ["austal.txt",
@@ -481,8 +492,9 @@ def find_austxt(wdir='.'):
             ausname = x
             break
     else:
-        
-        raise IOError('austal.txt or austal2000.txt not found')
+        if fail:
+            raise IOError('austal.txt or austal2000.txt not found')
+        ausname = None
     logger.debug('austal config: %s' % ausname)
     return ausname
 
