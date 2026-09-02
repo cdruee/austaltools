@@ -311,9 +311,6 @@ def plot_add_overlays(ax,
     if topo is not None:
         plot_add_topo(ax, topo, working_dir)
 
-    # ---------------------------
-    # show buildings
-    #
     if buildings is not None:
         for bb in buildings:
             ax.add_patch(
@@ -327,9 +324,6 @@ def plot_add_overlays(ax,
                 )
             )
 
-    # ---------------------------
-    # put marks on desired positions
-    #
     if mark is not None:
         plot_add_mark(ax, mark)
 
@@ -369,10 +363,19 @@ def finalize_plot(fig, ax, args: dict):
 
 def _overlap_blend_rgb(z, thx, zmax, hue_rgb):
     """
-    Linearly interpolate a scalar field ``z`` from white (at or below
-    ``thx``) to a fully-saturated ``hue_rgb`` (at ``zmax`` and above),
-    used by :func:`overlap_plot` to turn each of the two fields into an
-    RGB raster before blending them multiplicatively.
+    Interpolate a scalar field ``z`` from white (at or below ``thx``)
+    to a fully-saturated ``hue_rgb`` (at ``zmax`` and above), used by
+    :func:`overlap_plot` to turn each of the two fields into an RGB
+    raster before blending them multiplicatively.
+
+    The interpolation is logarithmic in ``z`` (equal color steps per
+    decade between ``thx`` and ``zmax``) whenever that is well defined
+    (``thx > 0`` and ``zmax > thx``) -- appropriate for concentration
+    fields, which typically span several orders of magnitude between
+    the threshold and the field's maximum, and would otherwise show
+    only a thin band of color near the isoline with a linear ramp. It
+    falls back to a linear ramp otherwise (``thx <= 0``, where a
+    logarithm is undefined, or a degenerate ``zmax <= thx``).
 
     White is the multiplicative identity color (``(1, 1, 1)``), so a
     cell that is at/below the threshold in one field does not tint the
@@ -393,11 +396,29 @@ def _overlap_blend_rgb(z, thx, zmax, hue_rgb):
     :rtype: numpy.ndarray
     """
     hue_rgb = np.asarray(hue_rgb, dtype=float)
-    denom = zmax - thx
-    if denom <= 0:
-        frac = np.where(z > thx, 1.0, 0.0)
+    z = np.asarray(z, dtype=float)
+
+    if thx > 0 and zmax > thx:
+        # logarithmic ramp: values <= 0 can't be logarithmed (and are
+        # always <= thx anyway, since thx > 0 here), so they -- and
+        # anything else at/below thx -- are masked to nan first and
+        # folded back to frac=0 (white) afterwards
+        log_thx = np.log(thx)
+        log_zmax = np.log(zmax)
+        with np.errstate(divide='ignore', invalid='ignore'):
+            frac = ((np.log(np.where(z > 0, z, np.nan)) - log_thx)
+                   / (log_zmax - log_thx))
+        frac = np.nan_to_num(frac, nan=0.0, neginf=0.0, posinf=1.0)
+        frac = np.clip(frac, 0.0, 1.0)
     else:
-        frac = np.clip((z - thx) / denom, 0.0, 1.0)
+        # thx <= 0 (log undefined) or zmax <= thx (degenerate range):
+        # fall back to a linear ramp
+        denom = zmax - thx
+        if denom <= 0:
+            frac = np.where(z > thx, 1.0, 0.0)
+        else:
+            frac = np.clip((z - thx) / denom, 0.0, 1.0)
+
     white = np.ones(3)
     return white + frac[..., np.newaxis] * (hue_rgb - white)
 
@@ -424,8 +445,12 @@ def overlap_plot(args: dict,
     :data:`OVERLAP_REFERENCE_COLOR` (orange), the comparison field in
     shades of :data:`OVERLAP_COMPARISON_COLOR` (purple); both ramp from
     white at/below the threshold ``thx`` to the fully-saturated color
-    at the field's maximum (or ``scale``, if given). The two rasters
-    are then combined with a multiplicative RGB blend (see
+    at the field's maximum (or ``scale``, if given), logarithmically
+    rather than linearly (see :func:`_overlap_blend_rgb`) so that the
+    typical decades-wide spread between threshold and peak of a
+    concentration field is actually visible as color, rather than only
+    a thin band near the isoline. The two rasters are then combined
+    with a multiplicative RGB blend (see
     :func:`_overlap_blend_rgb`): since white is the identity color for
     multiplication, a cell above threshold in only one field shows that
     field's pure hue, while a cell above threshold in *both* fields

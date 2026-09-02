@@ -45,13 +45,12 @@ as keyword arguments to :func:`compute_overlap`) --
 
 - an explicit, raw threshold value (``thx``, in the field's own
   units),
-- a percentile of the reference field (``thp``, ``0``-``100``;
-  defaults to :data:`DEFAULT_PERCENTILE` if none of the three is
-  given),
+- a percentile of the reference field (``thp``, ``0``-``100``),
 - or a position within the reference field's overall range (``thr``,
   ``0``-``100``): ``thr=0`` is the field's 0.1th percentile, ``thr=100``
   its 99.9th percentile (used instead of the true min/max to be robust
-  against outliers), and values in between interpolate linearly.
+  against outliers), and values in between interpolate linearly;
+  defaults to :data:`DEFAULT_RANGE` if none of the three is given.
 
 and the ratio of the intersection to the union of the two
 above-threshold areas is returned. :func:`compute_overlap` also
@@ -155,11 +154,10 @@ in g/s (equals 1 kg/h)  for :func:`run_austal`."""
 DEFAULT_HEIGHT = 20
 """float: Default source height in m (``hq``) for :func:`run_austal`."""
 
-DEFAULT_PERCENTILE = 95
-"""float: Default percentile of the reference field used as the
-overlap threshold ``thx`` in :func:`compute_overlap` (and the
-``--thp`` command line default), when none of ``thx``/``thp``/``thr``
-is given."""
+DEFAULT_RANGE = 33
+"""float: Default ``thr`` (range-position threshold, see
+:func:`compute_overlap`), used when none of ``thx``/``thp``/``thr`` is
+given."""
 
 DEFAULT_RANGE_LOW_PERCENTILE = 0.1
 """float: Percentile of the reference field used as the lower bound
@@ -774,8 +772,8 @@ def compute_overlap(reference_file: str, comparison_file: str,
       robust against outliers), and values in between interpolate
       linearly: ``thx = lo + thr / 100 * (hi - lo)``.
 
-    If none of the three is given, :data:`DEFAULT_PERCENTILE` is used
-    (as if it had been passed as ``thp``).
+    If none of the three is given, :data:`DEFAULT_RANGE` is used (as
+    if it had been passed as ``thr``).
 
     Binary fields are formed as ``inside_ref = ref > thx`` and
     ``inside_cmp = cmp > thx``. The *union* area is the count of cells
@@ -856,26 +854,26 @@ def compute_overlap(reference_file: str, comparison_file: str,
 
     #
     # resolve the threshold: an explicit value (thx), a percentile of
-    # the reference field (thp), a position within the reference
-    # field's (robust) range (thr), or -- if none of the three is
-    # given -- DEFAULT_PERCENTILE, as if it had been passed as thp
+    # the reference field (thp), or a position within the reference
+    # field's (robust) range (thr) -- if none of the three is given,
+    # DEFAULT_RANGE is used, as if it had been passed as thr
     #
     if thx is not None:
         logger.debug('using explicit threshold: thx=%.6g' % thx)
-    elif thr is not None:
+    elif thp is not None:
+        thx = float(np.nanpercentile(values_ref, thp))
+        logger.info('using the %gth percentile of the reference '
+                   'field: thx=%.6g' % (thp, thx))
+    else:
+        r = thr if thr is not None else DEFAULT_RANGE
         lo = float(np.nanpercentile(values_ref, DEFAULT_RANGE_LOW_PERCENTILE))
         hi = float(np.nanpercentile(values_ref, DEFAULT_RANGE_HIGH_PERCENTILE))
-        thx = lo + thr / 100.0 * (hi - lo)
+        thx = lo + r / 100.0 * (hi - lo)
         logger.info('using range position %.6g%% of the reference '
                    'field (between its %gth and %gth percentile, '
                    '%.6g and %.6g) -- thx=%.6g' %
-                   (thr, DEFAULT_RANGE_LOW_PERCENTILE,
+                   (r, DEFAULT_RANGE_LOW_PERCENTILE,
                     DEFAULT_RANGE_HIGH_PERCENTILE, lo, hi, thx))
-    else:
-        p = thp if thp is not None else DEFAULT_PERCENTILE
-        thx = float(np.nanpercentile(values_ref, p))
-        logger.info('using the %gth percentile of the reference '
-                   'field: thx=%.6g' % (p, thx))
 
     inside_ref = values_ref > thx
     inside_cmp = values_cmp > thx
@@ -1197,10 +1195,7 @@ def add_options(subparsers):
                           metavar='0..100',
                           help='threshold as a percentile of the '
                                'reference field. Mutually exclusive '
-                               'with --thx/--thr. If none of --thx, '
-                               '--thp, --thr is given, this is used '
-                               'with a default of %g.' %
-                               DEFAULT_PERCENTILE)
+                               'with --thx/--thr.')
     pars_thx.add_argument('--thr',
                           type=_percentage,
                           default=None,
@@ -1212,9 +1207,12 @@ def add_options(subparsers):
                                'min/max to be robust against '
                                'outliers), values in between '
                                'interpolate linearly. Mutually '
-                               'exclusive with --thx/--thp.' %
+                               'exclusive with --thx/--thp. If none of '
+                               '--thx, --thp, --thr is given, this is '
+                               'used with a default of %g.' %
                                (DEFAULT_RANGE_LOW_PERCENTILE,
-                                DEFAULT_RANGE_HIGH_PERCENTILE))
+                                DEFAULT_RANGE_HIGH_PERCENTILE,
+                                DEFAULT_RANGE))
     pars_cmp.add_argument('--no-parallel',
                           dest='parallel',
                           action='store_false',
