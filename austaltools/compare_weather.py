@@ -34,9 +34,21 @@ directory is discarded, since that is what the comparison actually
 works on -- the wind library / wind profile itself is not needed here.
 
 The two extracted fields are read with :mod:`readmet.dmna` and
-compared by :func:`compute_overlap`: both are thresholded at ``thx``
-(a value, or by default the :data:`DEFAULT_PERCENTILE`\ th
-percentile of the reference field),
+compared by :func:`compute_overlap`: both are thresholded at a value
+``thx``, which can be given three mutually exclusive ways (``--thx``,
+``--thp`` or ``--thr`` on the command line; ``thx``, ``thp`` or ``thr``
+as keyword arguments to :func:`compute_overlap`) --
+
+- an explicit, raw threshold value (``thx``, in the field's own
+  units),
+- a percentile of the reference field (``thp``, ``0``-``100``;
+  defaults to :data:`DEFAULT_PERCENTILE` if none of the three is
+  given),
+- or a position within the reference field's overall range (``thr``,
+  ``0``-``100``): ``thr=0`` is the field's 0.1th percentile, ``thr=100``
+  its 99.9th percentile (used instead of the true min/max to be robust
+  against outliers), and values in between interpolate linearly.
+
 and the ratio of the intersection to the union of the two
 above-threshold areas is returned. :func:`compute_overlap` also
 reports, for each field, whether its above-threshold area reaches the
@@ -138,10 +150,47 @@ in g/s (equals 1 kg/h)  for :func:`run_austal`."""
 DEFAULT_HEIGHT = 20
 """float: Default source height in m (``hq``) for :func:`run_austal`."""
 
-DEFAULT_PERCENTILE = 80
+DEFAULT_PERCENTILE = 95
 """float: Default percentile of the reference field used as the
-overlap threshold ``thx`` in :func:`compute_overlap`, when no explicit
-threshold is given."""
+overlap threshold ``thx`` in :func:`compute_overlap` (and the
+``--thp`` command line default), when none of ``thx``/``thp``/``thr``
+is given."""
+
+DEFAULT_RANGE_LOW_PERCENTILE = 0.1
+"""float: Percentile of the reference field used as the lower bound
+(``thr=0``) of the ``--thr``/``thr`` range-position threshold in
+:func:`compute_overlap`. The 0.1th percentile is used instead of the
+true minimum to be robust against outliers."""
+
+DEFAULT_RANGE_HIGH_PERCENTILE = 99.9
+"""float: Percentile of the reference field used as the upper bound
+(``thr=100``) of the ``--thr``/``thr`` range-position threshold in
+:func:`compute_overlap`. The 99.9th percentile is used instead of the
+true maximum to be robust against outliers."""
+
+
+# -------------------------------------------------------------------------
+
+def _percentage(value) -> float:
+    """
+    ``argparse`` ``type=`` helper for ``--thp``/``--thr``: parse
+    ``value`` as a float and check it lies within ``[0, 100]``.
+
+    :param value: command line argument value.
+    :return: ``value`` as a float.
+    :rtype: float
+    :raises argparse.ArgumentTypeError: if ``value`` is not a float, or
+        not within ``[0, 100]``.
+    """
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(
+            '%r is not a valid number' % (value,))
+    if not (0.0 <= v <= 100.0):
+        raise argparse.ArgumentTypeError(
+            '%r is not between 0 and 100' % (value,))
+    return v
 
 
 # -------------------------------------------------------------------------
@@ -680,14 +729,32 @@ def _touches_border(mask) -> bool:
 # -------------------------------------------------------------------------
 
 def compute_overlap(reference_file: str, comparison_file: str,
-                    thx: float = None) -> dict:
+                    thx: float = None, thp: float = None,
+                    thr: float = None) -> dict:
     """
     Compute the overlap (intersection over union) of the areas where
-    the reference and comparison field exceed a threshold ``thx``.
+    the reference and comparison field exceed a threshold.
 
     Both files are read with :func:`_read_grid_file`. For safety, the
     two grids' x/y coordinates are checked to be identical before
     comparing the fields cell by cell.
+
+    The threshold itself can be given three mutually exclusive ways
+    (at most one of ``thx``, ``thp``, ``thr`` may be given):
+
+    - ``thx``: an explicit, raw threshold value, in the field's own
+      units.
+    - ``thp``: a percentile (``0``-``100``) of the reference field.
+    - ``thr``: a position (``0``-``100``) within the reference field's
+      overall range: ``thr=0`` maps to the field's
+      :data:`DEFAULT_RANGE_LOW_PERCENTILE`\\ th percentile, ``thr=100``
+      to its :data:`DEFAULT_RANGE_HIGH_PERCENTILE`\\ th percentile
+      (those percentiles are used instead of the true min/max to be
+      robust against outliers), and values in between interpolate
+      linearly: ``thx = lo + thr / 100 * (hi - lo)``.
+
+    If none of the three is given, :data:`DEFAULT_PERCENTILE` is used
+    (as if it had been passed as ``thp``).
 
     Binary fields are formed as ``inside_ref = ref > thx`` and
     ``inside_cmp = cmp > thx``. The *union* area is the count of cells
@@ -703,17 +770,23 @@ def compute_overlap(reference_file: str, comparison_file: str,
     :type reference_file: str
     :param comparison_file: path to the comparison grid dmna file.
     :type comparison_file: str
-    :param thx: threshold value. If ``None`` (default),
-        :data:`DEFAULT_PERCENTILE` of all values in the reference
-        field is used.
+    :param thx: explicit, raw threshold value. Mutually exclusive with
+        ``thp``/``thr``.
     :type thx: float, optional
+    :param thp: percentile (``0``-``100``) of the reference field.
+        Mutually exclusive with ``thx``/``thr``.
+    :type thp: float, optional
+    :param thr: position (``0``-``100``) within the reference field's
+        overall range, see above. Mutually exclusive with
+        ``thx``/``thp``.
+    :type thr: float, optional
     :return: dict with keys:
 
         - ``overlap``: intersect area / union area, in ``[0, 1]``;
           ``nan`` if the union area is empty (e.g. ``thx`` too high).
-        - ``thx``: the threshold value actually used (``thx`` as
-          given, or the computed :data:`DEFAULT_PERCENTILE` of the
-          reference field).
+        - ``thx``: the actual raw threshold value used, resolved from
+          whichever of ``thx``/``thp``/``thr`` was given (or their
+          default).
         - ``x``, ``y``: the (shared) x/y coordinate axes of both
           fields.
         - ``reference``, ``comparison``: the two 2D data arrays, as
@@ -722,14 +795,27 @@ def compute_overlap(reference_file: str, comparison_file: str,
           ``True`` if the reference's / comparison's above-threshold
           area (``reference``/``comparison`` ``> thx``) reaches the
           edge of the modelled domain -- see :func:`_touches_border`.
+        - ``reference_area_fraction``, ``comparison_area_fraction``:
+          fraction (``[0, 1]``) of the *whole grid* that is above
+          ``thx`` in the reference / comparison field. Tied to the
+          grid the two fields were computed on -- a ``thx`` reused
+          from a run with different ``nodes``/``delta`` will generally
+          *not* reproduce the same area fraction.
 
       This is enough to plot the two fields and their overlap without
       re-reading the files -- see
       :func:`austaltools._plotting.overlap_plot`.
     :rtype: dict
     :raises ValueError: if the reference and comparison grids do not
-        share the same shape / coordinates.
+        share the same shape / coordinates, or if more than one of
+        ``thx``, ``thp``, ``thr`` is given.
     """
+    if sum(v is not None for v in (thx, thp, thr)) > 1:
+        raise ValueError(
+            'thx, thp and thr are mutually exclusive -- give at most '
+            'one of them'
+        )
+
     values_ref, x_ref, y_ref = _read_grid_file(reference_file)
     values_cmp, x_cmp, y_cmp = _read_grid_file(comparison_file)
 
@@ -747,10 +833,28 @@ def compute_overlap(reference_file: str, comparison_file: str,
             'coordinates'
         )
 
-    if thx is None:
-        thx = float(np.nanpercentile(values_ref, DEFAULT_PERCENTILE))
-        logger.info('no threshold given, using the %gth percentile of '
-                   'the reference field: %.6g' % (DEFAULT_PERCENTILE, thx))
+    #
+    # resolve the threshold: an explicit value (thx), a percentile of
+    # the reference field (thp), a position within the reference
+    # field's (robust) range (thr), or -- if none of the three is
+    # given -- DEFAULT_PERCENTILE, as if it had been passed as thp
+    #
+    if thx is not None:
+        logger.debug('using explicit threshold: thx=%.6g' % thx)
+    elif thr is not None:
+        lo = float(np.nanpercentile(values_ref, DEFAULT_RANGE_LOW_PERCENTILE))
+        hi = float(np.nanpercentile(values_ref, DEFAULT_RANGE_HIGH_PERCENTILE))
+        thx = lo + thr / 100.0 * (hi - lo)
+        logger.info('using range position %.6g%% of the reference '
+                   'field (between its %gth and %gth percentile, '
+                   '%.6g and %.6g) -- thx=%.6g' %
+                   (thr, DEFAULT_RANGE_LOW_PERCENTILE,
+                    DEFAULT_RANGE_HIGH_PERCENTILE, lo, hi, thx))
+    else:
+        p = thp if thp is not None else DEFAULT_PERCENTILE
+        thx = float(np.nanpercentile(values_ref, p))
+        logger.info('using the %gth percentile of the reference '
+                   'field: thx=%.6g' % (p, thx))
 
     inside_ref = values_ref > thx
     inside_cmp = values_cmp > thx
@@ -768,6 +872,22 @@ def compute_overlap(reference_file: str, comparison_file: str,
         overlap = float('nan')
     else:
         overlap = float(intersect_area / union_area)
+
+    # fraction of the *whole grid* each field is above threshold on --
+    # a hard number to check a threshold's effect against, rather than
+    # having to eyeball it off a plot. Note this is tied to the grid
+    # (nodes/delta) the two fields were computed on: reusing a thx
+    # value derived (e.g. via a percentile) from a run with different
+    # nodes/delta will generally *not* reproduce the same area
+    # fraction, since a coarser/finer or larger/smaller domain samples
+    # a different portion of the field and hence has a different
+    # value distribution.
+    total_cells = values_ref.size
+    reference_area_fraction = float(np.count_nonzero(inside_ref)) / total_cells
+    comparison_area_fraction = float(np.count_nonzero(inside_cmp)) / total_cells
+    logger.debug('area fraction above threshold: reference %.4f, '
+                'comparison %.4f' %
+                (reference_area_fraction, comparison_area_fraction))
 
     reference_touches_border = _touches_border(inside_ref)
     comparison_touches_border = _touches_border(inside_cmp)
@@ -791,6 +911,8 @@ def compute_overlap(reference_file: str, comparison_file: str,
         'comparison': values_cmp,
         'reference_touches_border': reference_touches_border,
         'comparison_touches_border': comparison_touches_border,
+        'reference_area_fraction': reference_area_fraction,
+        'comparison_area_fraction': comparison_area_fraction,
     }
 
 
@@ -814,7 +936,8 @@ def main(args):
         - ``files``: list of one or two timeseries filenames.
         - ``nodes``, ``delta``, ``throw``, ``height``: parameters
           passed through to :func:`run_austal`.
-        - ``thx``: threshold passed through to :func:`compute_overlap`.
+        - ``thx``, ``thp``, ``thr``: threshold, passed through to
+          :func:`compute_overlap` (mutually exclusive; see there).
         - ``keep_files``: if not ``None``, keep the extracted result
           files instead of discarding them -- ``'__default__'`` means
           the working directory, anything else is used as the
@@ -894,10 +1017,15 @@ def main(args):
             logger.info('kept output file: %s' % dst)
 
     result = compute_overlap(reference_grid_file, comparison_grid_file,
-                            thx=args.get('thx'))
+                            thx=args.get('thx'), thp=args.get('thp'),
+                            thr=args.get('thr'))
     overlap = result['overlap']
     logger.info('overlap (intersection / union area): %.4f' % overlap)
     print('overlap (intersection / union area): %.4f' % overlap)
+    print('area above threshold (fraction of grid): reference %.2f%%, '
+         'comparison %.2f%%' %
+         (result['reference_area_fraction'] * 100,
+          result['comparison_area_fraction'] * 100))
 
     # compute_overlap() already logs a warning if this is the case;
     # also surface it on stdout, next to the overlap ratio itself
@@ -995,14 +1123,39 @@ def add_options(subparsers):
                               default=DEFAULT_HEIGHT,
                               help='source height in m ("hq"). '
                                    'Defaults to %s' % DEFAULT_HEIGHT)
-    pars_cmp.add_argument('--thx',
+    pars_thx = pars_cmp.add_mutually_exclusive_group()
+    pars_thx.add_argument('--thx',
                           type=float,
                           default=None,
-                          help='threshold value used to determine the '
-                               'overlap area between the reference and '
-                               'comparison field. Defaults to the %gth '
-                               'percentile of the reference field.' %
+                          help='explicit threshold value (in the '
+                               'field\'s own units) used to determine '
+                               'the overlap area between the reference '
+                               'and comparison field. Mutually '
+                               'exclusive with --thp/--thr.')
+    pars_thx.add_argument('--thp',
+                          type=_percentage,
+                          default=None,
+                          metavar='0..100',
+                          help='threshold as a percentile of the '
+                               'reference field. Mutually exclusive '
+                               'with --thx/--thr. If none of --thx, '
+                               '--thp, --thr is given, this is used '
+                               'with a default of %g.' %
                                DEFAULT_PERCENTILE)
+    pars_thx.add_argument('--thr',
+                          type=_percentage,
+                          default=None,
+                          metavar='0..100',
+                          help='threshold as a position within the '
+                               'reference field\'s overall range: 0 is '
+                               'its %gth percentile, 100 its %gth '
+                               'percentile (used instead of the true '
+                               'min/max to be robust against '
+                               'outliers), values in between '
+                               'interpolate linearly. Mutually '
+                               'exclusive with --thx/--thp.' %
+                               (DEFAULT_RANGE_LOW_PERCENTILE,
+                                DEFAULT_RANGE_HIGH_PERCENTILE))
     pars_cmp.add_argument('--keep-files',
                           dest='keep_files',
                           metavar='DIR',
