@@ -32,6 +32,10 @@ run produces (matching :data:`EXTRACT_PATTERN`) is extracted into a
 third, shared temporary directory before the per-run temporary
 directory is discarded, since that is what the comparison actually
 works on -- the wind library / wind profile itself is not needed here.
+By default, the reference and comparison runs are started
+concurrently (each mostly just waits on its own ``austal`` subprocess,
+so two at once roughly halves the wall-clock time); give
+``--no-parallel`` to run them one after the other instead.
 
 The two extracted fields are read with :mod:`readmet.dmna` and
 compared by :func:`compute_overlap`: both are thresholded at a value
@@ -66,6 +70,7 @@ via ``-p/--plot`` (and the other plot options added by
 :func:`austaltools._plotting.overlap_plot`.
 """
 import argparse
+import concurrent.futures
 import logging
 import os
 import re
@@ -360,7 +365,9 @@ def run_austal(weather_file: str,
               height: float = DEFAULT_HEIGHT,
               tmproot: str = None,
               extract_to: str = None,
-              extract_suffix: str = None):
+              extract_suffix: str = None,
+              progress_desc: str = "",
+              progress_position: int = None):
     """
     Run AUSTAL on a synthetic, flat-terrain domain built just for
     ``weather_file``.
@@ -442,6 +449,19 @@ def run_austal(weather_file: str,
         run's (identically named) result files apart -- see
         :func:`_extract_results`. Required if ``extract_to`` is given.
     :type extract_suffix: str, optional
+    :param progress_desc: label shown in front of the progress bar
+        (see :func:`austaltools._tools.progress`). Useful to tell the
+        reference and comparison run's progress bars apart when both
+        are run concurrently (see :func:`main`).
+    :type progress_desc: str, optional
+    :param progress_position: line offset (0-based, from the top) at
+        which to draw the progress bar, passed through to
+        :class:`tqdm.tqdm` as ``position``. Needed when two of these
+        progress bars are alive at once (i.e. two concurrent calls to
+        this function) so they don't overwrite the same terminal line;
+        left as ``None`` (:class:`tqdm.tqdm`'s own default) when only
+        one run is active at a time.
+    :type progress_position: int, optional
     :return: destination paths of the extracted files (empty if
         ``extract_to`` was ``None``).
     :rtype: list[str]
@@ -516,7 +536,8 @@ def run_austal(weather_file: str,
     logger.info('started austal in: %s (progress via %s)' %
                (tmpdir, 'pty' if use_pty else 'pipe'))
 
-    pbar = _tools.progress(total=100.0)
+    pbar = _tools.progress(total=100.0, desc=progress_desc,
+                          position=progress_position)
     percent = 0.0
 
     # regex to find the float value after "Fertig berechnet:"
@@ -942,6 +963,16 @@ def main(args):
           files instead of discarding them -- ``'__default__'`` means
           the working directory, anything else is used as the
           destination directory.
+        - ``parallel``: if true (the default), the reference and
+          comparison AUSTAL runs are started concurrently (see
+          :func:`run_austal`), each in its own thread, instead of one
+          after the other. Since each run mostly waits on its own
+          ``austal`` subprocess, this roughly halves the wall-clock
+          time regardless of the GIL. Set to false (``--no-parallel``)
+          to run them sequentially instead -- e.g. to keep a single,
+          uncluttered progress bar, or to work around a resource
+          constraint (AUSTAL is memory/CPU-hungry and two runs share
+          the machine when parallel).
         - ``plot`` and the other keys added by
           :func:`austaltools._tools.add_arguents_common_plot`: control
           whether/where a plot of the two fields is produced, see
@@ -979,17 +1010,45 @@ def main(args):
 
     #
     # run austal for each of the two timeseries; we don't need the
-    # wind library/profile here, only the extracted result file
+    # wind library/profile here, only the extracted result file. By
+    # default both runs are started concurrently (each mostly just
+    # waits on its own austal subprocess, so this isn't hurt by the
+    # GIL); --no-parallel runs them one after the other instead.
     #
-    logger.info('running austal for reference timeseries: %s' %
-               reference_file)
-    run_austal(reference_file, extract_to=extract_dir,
-              extract_suffix='ref', **run_kwargs)
+    if args.get('parallel', True):
+        logger.info('running austal for reference and comparison '
+                   'timeseries in parallel: %s, %s' %
+                   (reference_file, comparison_file))
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            future_ref = executor.submit(
+                run_austal, reference_file, extract_to=extract_dir,
+                extract_suffix='ref', progress_desc='reference ',
+                progress_position=0, **run_kwargs)
+            future_cmp = executor.submit(
+                run_austal, comparison_file, extract_to=extract_dir,
+                extract_suffix='cmp', progress_desc='comparison',
+                progress_position=1, **run_kwargs)
+            # .result() re-raises whatever exception happened in the
+            # respective thread (or blocks until it completes, if it
+            # hasn't yet); checking the reference run first means its
+            # error, if any, is reported first/deterministically, but
+            # since both futures were already submitted, the "with"
+            # block's implicit executor.shutdown(wait=True) still
+            # waits for the comparison run to finish (or fail) too
+            # before that error propagates -- so neither subprocess is
+            # ever left dangling in the background.
+            future_ref.result()
+            future_cmp.result()
+    else:
+        logger.info('running austal for reference timeseries: %s' %
+                   reference_file)
+        run_austal(reference_file, extract_to=extract_dir,
+                  extract_suffix='ref', **run_kwargs)
 
-    logger.info('running austal for comparison timeseries: %s' %
-               comparison_file)
-    run_austal(comparison_file, extract_to=extract_dir,
-              extract_suffix='cmp', **run_kwargs)
+        logger.info('running austal for comparison timeseries: %s' %
+                   comparison_file)
+        run_austal(comparison_file, extract_to=extract_dir,
+                  extract_suffix='cmp', **run_kwargs)
 
     reference_grid_file = _find_extracted_file(extract_dir, 'ref')
     comparison_grid_file = _find_extracted_file(extract_dir, 'cmp')
@@ -1156,6 +1215,14 @@ def add_options(subparsers):
                                'exclusive with --thx/--thp.' %
                                (DEFAULT_RANGE_LOW_PERCENTILE,
                                 DEFAULT_RANGE_HIGH_PERCENTILE))
+    pars_cmp.add_argument('--no-parallel',
+                          dest='parallel',
+                          action='store_false',
+                          default=True,
+                          help='run the two synthetic austal model\n'
+                               'runs (for the reference and comparison\n'
+                               'timeseries) one after the other,\n'
+                               'instead of concurrently (the default).')
     pars_cmp.add_argument('--keep-files',
                           dest='keep_files',
                           metavar='DIR',
