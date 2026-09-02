@@ -35,9 +35,14 @@ works on -- the wind library / wind profile itself is not needed here.
 
 The two extracted fields are read with :mod:`readmet.dmna` and
 compared by :func:`compute_overlap`: both are thresholded at ``thx``
-(a value, or by default the 75th percentile of the reference field),
+(a value, or by default the :data:`DEFAULT_PERCENTILE`\ th
+percentile of the reference field),
 and the ratio of the intersection to the union of the two
-above-threshold areas is returned.
+above-threshold areas is returned. :func:`compute_overlap` also
+reports, for each field, whether its above-threshold area reaches the
+edge of the modelled domain -- i.e. whether its isoline is clipped by
+the domain boundary rather than closed -- since that can mean the
+domain is too small for the given ``thx``.
 
 The extracted result files (see :data:`EXTRACT_FILENAMES`) are
 discarded once the overlap has been computed, unless ``--keep-files``
@@ -123,7 +128,7 @@ DEFAULT_NODES = 141
 """int: Default number of grid nodes in x and y direction (``nx``/``ny``)
 for :func:`run_austal`."""
 
-DEFAULT_DELTA = 20
+DEFAULT_DELTA = 25
 """float: Default grid spacing in m (``dd``) for :func:`run_austal`."""
 
 DEFAULT_THROW = 0.278
@@ -132,6 +137,11 @@ in g/s (equals 1 kg/h)  for :func:`run_austal`."""
 
 DEFAULT_HEIGHT = 20
 """float: Default source height in m (``hq``) for :func:`run_austal`."""
+
+DEFAULT_PERCENTILE = 80
+"""float: Default percentile of the reference field used as the
+overlap threshold ``thx`` in :func:`compute_overlap`, when no explicit
+threshold is given."""
 
 
 # -------------------------------------------------------------------------
@@ -586,13 +596,22 @@ def _read_grid_file(path: str):
     """
     Read a single-variable 2D grid DMNA file with :mod:`readmet.dmna`.
 
+    AUSTAL's per-position result files (see :data:`EXTRACT_FILENAMES`)
+    are technically 3-dimensional (``dims == 3`` in the DMNA header,
+    since the format supports multiple vertical levels), but only
+    contain a single level -- :meth:`readmet.dmna.DataFile.axes`
+    reports a length-1 ``z`` axis and the data array has a trailing
+    dimension of size 1 accordingly. That trailing dimension is
+    squeezed away here, so callers can rely on ``values`` being
+    genuinely 2D and matching ``(len(x), len(y))``.
+
     :param path: path to the dmna file.
     :type path: str
     :return: tuple ``(values, x, y)``: the 2D data array, and the
         grid's x and y coordinate axes (1D each, in model coordinates).
     :rtype: tuple(numpy.ndarray, numpy.ndarray, numpy.ndarray)
     :raises ValueError: if the file does not contain exactly one
-        variable, or no x/y axes.
+        variable, no x/y axes, or more than one vertical level.
     """
     df = readmet.dmna.DataFile(file=path)
     if not df.variables or len(df.variables) != 1:
@@ -604,7 +623,58 @@ def _read_grid_file(path: str):
     axes = df.axes()
     if 'x' not in axes or 'y' not in axes:
         raise ValueError('%s does not contain x/y grid axes' % path)
-    return values, np.asarray(axes['x']), np.asarray(axes['y'])
+    x = np.asarray(axes['x'])
+    y = np.asarray(axes['y'])
+
+    if values.ndim == 3:
+        # single-level 3D field (dims == 3, one z level) -- squeeze
+        # the trailing level dimension away
+        if values.shape[2] != 1:
+            raise ValueError(
+                '%s contains %d vertical levels, expected exactly 1' %
+                (path, values.shape[2])
+            )
+        values = values[:, :, 0]
+    elif values.ndim != 2:
+        raise ValueError(
+            '%s: expected a 2D (or single-level 3D) grid, got shape %s' %
+            (path, values.shape)
+        )
+
+    if values.shape != (len(x), len(y)):
+        raise ValueError(
+            '%s: data shape %s does not match x/y axes lengths (%d, %d)' %
+            (path, values.shape, len(x), len(y))
+        )
+    return values, x, y
+
+
+# -------------------------------------------------------------------------
+
+def _touches_border(mask) -> bool:
+    """
+    Check whether any ``True`` cell of a 2D boolean ``mask`` lies on
+    its outer border (first/last row or column).
+
+    Used by :func:`compute_overlap` to detect that an above-threshold
+    area extends all the way to the edge of the modelled domain: in
+    that case its isoline (the boundary of the above-threshold area)
+    is clipped by the domain boundary rather than being a closed
+    contour, and the corresponding area (and hence the overlap ratio)
+    may be an underestimate of the true above-threshold area outside
+    the modelled domain.
+
+    :param mask: 2D boolean array (e.g. ``values > thx``).
+    :type mask: numpy.ndarray
+    :return: ``True`` if the domain border is touched.
+    :rtype: bool
+    """
+    if mask.ndim != 2 or mask.size == 0:
+        return False
+    return bool(
+        mask[0, :].any() or mask[-1, :].any() or
+        mask[:, 0].any() or mask[:, -1].any()
+    )
 
 
 # -------------------------------------------------------------------------
@@ -623,26 +693,35 @@ def compute_overlap(reference_file: str, comparison_file: str,
     ``inside_cmp = cmp > thx``. The *union* area is the count of cells
     where ``inside_ref OR inside_cmp`` is true, the *intersect* area
     the count of cells where ``inside_ref AND inside_cmp`` is true.
-    The overlap ratio is ``intersect / union``.
+    The overlap ratio is ``intersect / union``. Each of the two binary
+    fields is also checked, via :func:`_touches_border`, for whether it
+    reaches the edge of the modelled domain -- if it does, its isoline
+    is clipped there rather than closed, which is worth flagging since
+    it means the domain may be too small for that threshold.
 
     :param reference_file: path to the reference grid dmna file.
     :type reference_file: str
     :param comparison_file: path to the comparison grid dmna file.
     :type comparison_file: str
-    :param thx: threshold value. If ``None`` (default), the 75th
-        percentile of all values in the reference field is used.
+    :param thx: threshold value. If ``None`` (default),
+        :data:`DEFAULT_PERCENTILE` of all values in the reference
+        field is used.
     :type thx: float, optional
     :return: dict with keys:
 
         - ``overlap``: intersect area / union area, in ``[0, 1]``;
           ``nan`` if the union area is empty (e.g. ``thx`` too high).
         - ``thx``: the threshold value actually used (``thx`` as
-          given, or the computed 75th percentile of the reference
-          field).
+          given, or the computed :data:`DEFAULT_PERCENTILE` of the
+          reference field).
         - ``x``, ``y``: the (shared) x/y coordinate axes of both
           fields.
         - ``reference``, ``comparison``: the two 2D data arrays, as
           read from ``reference_file`` / ``comparison_file``.
+        - ``reference_touches_border``, ``comparison_touches_border``:
+          ``True`` if the reference's / comparison's above-threshold
+          area (``reference``/``comparison`` ``> thx``) reaches the
+          edge of the modelled domain -- see :func:`_touches_border`.
 
       This is enough to plot the two fields and their overlap without
       re-reading the files -- see
@@ -669,9 +748,9 @@ def compute_overlap(reference_file: str, comparison_file: str,
         )
 
     if thx is None:
-        thx = float(np.nanpercentile(values_ref, 75))
-        logger.info('no threshold given, using the 75th percentile of '
-                   'the reference field: %.6g' % thx)
+        thx = float(np.nanpercentile(values_ref, DEFAULT_PERCENTILE))
+        logger.info('no threshold given, using the %gth percentile of '
+                   'the reference field: %.6g' % (DEFAULT_PERCENTILE, thx))
 
     inside_ref = values_ref > thx
     inside_cmp = values_cmp > thx
@@ -690,6 +769,19 @@ def compute_overlap(reference_file: str, comparison_file: str,
     else:
         overlap = float(intersect_area / union_area)
 
+    reference_touches_border = _touches_border(inside_ref)
+    comparison_touches_border = _touches_border(inside_cmp)
+    touched = [name for name, flag in (
+        ('reference', reference_touches_border),
+        ('comparison', comparison_touches_border)) if flag]
+    if touched:
+        logger.warning(
+            '%s above-threshold area reaches the domain border '
+            '(isoline clipped there, not closed) at thx=%.6g -- '
+            'results may depend on domain size; consider a larger '
+            '--nodes/--delta' % (' and '.join(touched), thx)
+        )
+
     return {
         'overlap': overlap,
         'thx': float(thx),
@@ -697,6 +789,8 @@ def compute_overlap(reference_file: str, comparison_file: str,
         'y': y_ref,
         'reference': values_ref,
         'comparison': values_cmp,
+        'reference_touches_border': reference_touches_border,
+        'comparison_touches_border': comparison_touches_border,
     }
 
 
@@ -805,6 +899,15 @@ def main(args):
     logger.info('overlap (intersection / union area): %.4f' % overlap)
     print('overlap (intersection / union area): %.4f' % overlap)
 
+    # compute_overlap() already logs a warning if this is the case;
+    # also surface it on stdout, next to the overlap ratio itself
+    touched = [name for name, flag in (
+        ('reference', result['reference_touches_border']),
+        ('comparison', result['comparison_touches_border'])) if flag]
+    if touched:
+        print('note: %s isoline reaches the domain border (clipped, '
+             'not closed)' % ' and '.join(touched))
+
     #
     # optionally plot the two fields and their overlap area
     #
@@ -897,8 +1000,9 @@ def add_options(subparsers):
                           default=None,
                           help='threshold value used to determine the '
                                'overlap area between the reference and '
-                               'comparison field. Defaults to the 75th '
-                               'percentile of the reference field.')
+                               'comparison field. Defaults to the %gth '
+                               'percentile of the reference field.' %
+                               DEFAULT_PERCENTILE)
     pars_cmp.add_argument('--keep-files',
                           dest='keep_files',
                           metavar='DIR',

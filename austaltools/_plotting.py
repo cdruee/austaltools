@@ -311,6 +311,9 @@ def plot_add_overlays(ax,
     if topo is not None:
         plot_add_topo(ax, topo, working_dir)
 
+    # ---------------------------
+    # show buildings
+    #
     if buildings is not None:
         for bb in buildings:
             ax.add_patch(
@@ -324,6 +327,9 @@ def plot_add_overlays(ax,
                 )
             )
 
+    # ---------------------------
+    # put marks on desired positions
+    #
     if mark is not None:
         plot_add_mark(ax, mark)
 
