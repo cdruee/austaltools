@@ -4,6 +4,12 @@
 commands
 ========
 
+compare-weather
+---------------
+.. automodule:: austaltools.compare_weather
+   :members:
+   :undoc-members:
+   :member-order: groupwise
 
 eap
 ---
