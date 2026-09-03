@@ -13,6 +13,7 @@ from . import _tools
 from ._metadata import __version__, __title__
 from . import _storage
 from . import import_buildings
+from . import compare_weather
 from . import eap
 from . import fill_timeseries
 from . import heating
@@ -156,6 +157,7 @@ def cli_parser():
 
     for subcmd in [
         import_buildings,
+        compare_weather,
         eap,
         fill_timeseries,
         heating,
@@ -241,6 +243,8 @@ def main(args=None):
     try:
         if args['command'] in ['import-buildings', 'bg']:
             import_buildings.main(args)
+        elif args['command'] == 'compare-weather':
+            compare_weather.main(args)
         elif args['command'] == 'eap':
             eap.main(args)
         elif args['command'] in ['fill-timeseries', 'ft']:

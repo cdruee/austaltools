@@ -27,6 +27,13 @@ austaltools
    :func: cli_parser
    :prog: austaltools
 
+   compare-weather
+        Compare two weather timeseries by running a synthetic,
+        flat-terrain AUSTAL dispersion model for each and measuring
+        the overlap of their above-threshold areas.
+        See :doc:`api_commands` for the full details (threshold
+        selection, ``--no-parallel``, ``--keep-files``, plotting).
+
    fill-timeseries (ft)
         Detailed userguide see: :doc:`fill-timeseries`
 

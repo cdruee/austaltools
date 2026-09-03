@@ -1,4 +1,7 @@
-Auto-merging .gitlab-ci.yml
-Auto-merging austaltools/input_weather.py
+Auto-merging austaltools/_plotting.py
+Auto-merging austaltools/_tools.py
+Auto-merging austaltools/command_line.py
+Auto-merging docs/api_commands.rst
+Auto-merging docs/austaltools.rst
 Automatic merge went well; stopped before committing as requested
 Squash commit -- not updating HEAD
