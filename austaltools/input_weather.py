@@ -392,7 +392,11 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
         Computed:
             - `ff`   : float, 10 m wind speed [m/s]
             - `dd`   : float, wind direction in degrees from North [°]
-    :rtype: pandas.DataFrame
+
+        Returned together with the roughness length `z0` (in m) used
+        for the wind calculation, and the corresponding effective
+        anemometer height `ha` (in m).
+    :rtype: (pandas.DataFrame, float, float)
 
     :raises ValueError:
       If a required variable is missing from the NetCDF file or
@@ -437,7 +441,7 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
 
     :example:
 
-        >>> df = read_era5_nc("era5_data.nc", lat=52.52, lon=13.405)
+        >>> df, z0, ha = read_era5_nc("era5_data.nc", lat=52.52, lon=13.405)
         >>> print(df[['time', 'ff', 'dd']].head())
 
     """
@@ -561,7 +565,7 @@ def read_era5_nc(ncfile, lat, lon, wind_variant=None):
 # ----------------------------------------------------
 
 def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
-        -> (pd.DataFrame, float):
+        -> (pd.DataFrame, float, float):
     """
     Get weather timeseries for the provided position
     from source ERA5 for the year provided and calulate
@@ -579,7 +583,8 @@ def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
     :type wind_variant: str | None
     :param datafile: (optional) read from this ERA5 data file
     :type datafile: str | None
-    :return: weather timeseries as dataframe and surface roughness in m.
+    :return: weather timeseries as dataframe, surface roughness `z0`
+        in m, and the effective anemometer height `ha` in m.
         The index of the dataframe is the measurement time as `datetime64`,
         the columns are:
 
@@ -599,7 +604,8 @@ def get_era5_weather(lat, lon, year, wind_variant=None, datafile=None) \
         'tp'     mm       total precipitation per hour
         ======  ========= =============================
 
-    :rtype: (pd.DataFrame, float)
+    :rtype: (pd.DataFrame, float, float)
+    :raises ValueError: If the ERA5 dataset for `year` is not available.
     """
     ds = _datasets.dataset_get(
         _datasets.name_yearly("ERA5", year)
@@ -699,13 +705,17 @@ def read_cerra_nc(ncfile, lat, lon, wind_variant=None):
             - 'zust' : Friction velocity [m s**-1]
             - 'ff' : 10-metre wind speed [m s**-1]
             - 'dd' : 10-metre wind direction [deg]
-    :rtype: pandas.DataFrame
+
+        Returned together with the roughness length `z0` (in m) used
+        for the wind calculation, and the corresponding effective
+        anemometer height `ha` (in m).
+    :rtype: (pandas.DataFrame, float, float)
 
     :raises ValueError:
         If any required variable is missing in the NetCDF file.
 
     :notes:
-         The ERA5 variables expected in the input file are:
+         The CERRA variables expected in the input file are:
 
          ========= =========== ====================================
           name      unit        description
@@ -969,7 +979,7 @@ def read_cerra_nc(ncfile, lat, lon, wind_variant=None):
 # ----------------------------------------------------
 
 def get_cerra_weather(lat, lon, year, datafile=None) \
-        -> (pd.DataFrame, float):
+        -> (pd.DataFrame, float, float):
     """
     Get weather timeseries for the provided position
     from source CERRA for the year provided and calulate
@@ -984,7 +994,8 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
     :type year: int
     :param datafile: (optional) read from this CERRA data file
     :type datafile: str | None
-    :return: weather timeseries as dataframe and surface roughness in m.
+    :return: weather timeseries as dataframe, surface roughness `z0`
+        in m, and the effective anemometer height `ha` in m.
         The index of the dataframe is the measurement time as `datetime64`,
         the columns are:
 
@@ -996,6 +1007,7 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
         'dd'     degrees  wind direction
         'sp'     Pa       surface air pressure (QFE)
         't2m'    K        air temperature at 2 m height
+        'r2m'    1        relative humidity at 2 m height
         'lmcc'   1        low and medium cloud cover
         'tcc'    1        total cloud cover
         'sshf'   W/m²     surface sensible heat flux
@@ -1004,7 +1016,8 @@ def get_cerra_weather(lat, lon, year, datafile=None) \
         'tp'     mm       total precipitation per hour
         ======  ========= =============================
 
-    :rtype: (pd.DataFrame, float)
+    :rtype: (pd.DataFrame, float, float)
+    :raises ValueError: If the CERRA dataset for `year` is not available.
     """
     ds = _datasets.dataset_get(
         _datasets.name_yearly("CERRA", year)
@@ -1181,7 +1194,7 @@ def read_hostrada_nc(ncfile, lat, lon, wind_variant=None):
 # ----------------------------------------------------
 
 def get_hostrada_weather(lat, lon, year, datafile=None) \
-        -> (pd.DataFrame, float):
+        -> (pd.DataFrame, float, float):
     """
     Get weather timeseries for the provided position
     from source HOSTRADA by DWD for the year provided and calulate
@@ -1196,7 +1209,10 @@ def get_hostrada_weather(lat, lon, year, datafile=None) \
     :type year: int
     :param datafile: (optional) read from this HOSTRADA data file
     :type datafile: str | None
-    :return: weather timeseries as dataframe and surface roughness in m.
+    :return: weather timeseries as dataframe, surface roughness `z0`
+        in m (looked up from CORINE land cover, or `None` if it
+        could not be determined), and the effective anemometer
+        height `ha` in m.
         The index of the dataframe is the measurement time as `datetime64`,
         the columns are:
 
@@ -1208,11 +1224,13 @@ def get_hostrada_weather(lat, lon, year, datafile=None) \
         'dd'     degrees  wind direction
         'sp'     Pa       surface air pressure (QFE)
         't2m'    K        air temperature at 2 m height
-        'r2m'    %        relative humidity at 2 m height
+        'r2m'    1        relative humidity at 2 m height
         'tcc'    1        total cloud cover
         ======  ========= =============================
 
-    :rtype: (pd.DataFrame, float)
+    :rtype: (pd.DataFrame, float, float)
+    :raises ValueError: If the HOSTRADA dataset for `year` is not
+        available.
     """
     ds = _datasets.dataset_get(
         _datasets.name_yearly("HOSTRADA", year)
@@ -1267,7 +1285,7 @@ def get_hostrada_weather(lat, lon, year, datafile=None) \
 def get_dwd_weather(lat: float, lon: float, year:int,
                     station: int = None, datafile:str = None,
                     wind_variant: str| None = None
-                    ) -> (pd.DataFrame, float):
+                    ) -> (pd.DataFrame, float, float):
     """
     Get weather timeseries for the provided position
     from source DWD for the year provided.
@@ -1295,7 +1313,9 @@ def get_dwd_weather(lat: float, lon: float, year:int,
 
     :type wind_variant: str
 
-    :return: weather timeseries as dataframe and surface roughness in m.
+    :return: weather timeseries as dataframe, surface roughness `z0`
+        in m, and the effective (or WMO-standard) anemometer height
+        `ha` in m.
         The index of the dataframe is the measurement time as `datetime64`,
         the columns are:
 
@@ -1315,7 +1335,10 @@ def get_dwd_weather(lat: float, lon: float, year:int,
         'tp'     mm       total precipitation per hour
         ======  ========= =============================
 
-    :rtype: (pd.DataFrame, float)
+    :rtype: (pd.DataFrame, float, float)
+    :raises ValueError: If the DWD dataset is not available; if
+        `station` has no data for `year`; or if `wind_variant` is
+        neither `'as_is'`/`'model_uv10'` nor `'ustar_wmo'`.
     """
     ds = _datasets.dataset_get("DWD")
     if not ds.available:
@@ -1467,6 +1490,21 @@ def austal_weather(args, return_data_frame: bool = False):
         - prec (bool): Flag indicating whether precipitation data should be included.
         - class-scheme (str): how stability classes are derived
             from the weather data ['all', 'kms', 'kmo', 'k2s', 'pts', 'kmc', 'pgc'].
+        - wind-variant (str or None): method used to derive the 10-m
+            wind speed from ERA5 data ['as_is', 'ustar_wmo',
+            'ustar_z0', 'ustar_fsr']. Only used when `source` is
+            "ERA5".
+        - z0 (float or None): roughness length at the position of
+            the measurement, overriding the value provided by
+            `source`.
+        - read-extracted (str or None): path to a previously
+            written extracted-weather CSV (see 'write-extracted'
+            below). If given, weather data is read from this file
+            instead of being retrieved from `source`.
+        - write-extracted (str or bool or None): if truthy, also
+            write the raw extracted weather data to a CSV file. A
+            string value is used as the file name; any other truthy
+            value falls back to 'extracted_weather.csv'.
 
     :type args: dict
 
@@ -1476,7 +1514,21 @@ def austal_weather(args, return_data_frame: bool = False):
 
     :type return_data_frame: bool
 
-    :raises ValueError: If an unknown source is provided.
+    :return: `None` if `return_data_frame` is `False` (the AKTERM
+        result file(s) are written to disk instead); otherwise the
+        weather DataFrame used for the selected `class-scheme`, with
+        an added `T` column (air temperature, `NaN` if unavailable).
+    :rtype: None | pandas.DataFrame
+
+    :raises ValueError: If `return_data_frame` is `True` and
+        `class-scheme` is `'all'` or `None`; if `source` is not one
+        of the known/implemented sources; if the dataset for
+        `source` is not available; or if `return_data_frame` is
+        `True` and the selected `class-scheme` is not among the
+        schemes available for the retrieved data.
+    :raises RuntimeError: If `source` is "HOSTRADA" and the
+        roughness length cannot be determined automatically and no
+        `z0` override was provided.
     """
     logger.debug("args: %s" % format(args))
 
@@ -1546,8 +1598,16 @@ def austal_weather(args, return_data_frame: bool = False):
     logger.debug("lat: %s, lon: %s" % (lat, lon))
     logger.debug("elevation: %s" % (ele))
 
-    if args.get('write-extracted', None):
-        csv_name = args.get('write-extracted', 'extracted_weather.csv')
+    write_extracted = args.get('write-extracted', None)
+    if write_extracted:
+        # `write-extracted` is normally a filename string (argparse fills
+        # in the default via `const` when `-x` is given without one). When
+        # `main()` is called directly with a hand-built dict, callers may
+        # pass `True` instead of a filename; guard against that here, since
+        # `open(True, 'w')` silently opens file descriptor 1 (stdout)
+        # instead of a file named "True" or raising an error.
+        csv_name = (write_extracted if isinstance(write_extracted, str)
+                    else 'extracted_weather.csv')
         logger.info('writing raw weather data to: %s' % csv_name)
         with open(csv_name, 'w') as f:
             f.write('# %.4f %.4f %.1f %.1f %.3f %s, %s\n' %
@@ -1900,17 +1960,34 @@ def add_options(subparsers):
 
 def main(args):
     """
-    This is the main routine that processes the input arguments and calls the main working function `austal_weather`.
+    This is the main routine that processes the input arguments and
+    calls the main working function `austal_weather`.
+
+    Only the keys checked directly by this function are documented
+    below. All remaining keys (e.g. 'source', 'prec', 'class-scheme',
+    'wind-variant', 'z0', 'inter-variant', 'read-extracted',
+    'write-extracted', and the location options 'gk', 'ut', 'll',
+    'station') are consumed further down the call chain, by
+    `austal_weather`.
 
     :param dict args: A dictionary containing the following keys:
-        - dwd (str or None): DWD option, mutually exclusive with 'wmo' and required with 'ele'.
-        - wmo (str or None): WMO option, mutually exclusive with 'dwd' and required with 'ele'.
-        - ele (str or None): Element option, required with either 'dwd' or 'wmo'.
-        - year (int or None): Year option, required with '-L', '-G', '-U', '-D', or '-W'.
-        - output (str or None): Output name, required with '-L', '-G', '-U', '-D', or '-W'.
-        - station (str or None): Station option, only valid with 'dwd' or 'wmo'.
 
-    :raises SystemExit: If mutually exclusive options are provided or required options are missing.
+        - dwd (str or None): DWD station ID. Mutually exclusive with
+            'wmo'; both 'dwd' and 'wmo' are mutually exclusive with
+            'ele'.
+        - wmo (str or None): WMO station ID. Mutually exclusive with
+            'dwd'; both 'dwd' and 'wmo' are mutually exclusive with
+            'ele'.
+        - ele (str or None): Surface elevation. Mutually exclusive
+            with 'dwd' and 'wmo' (elevation is looked up from the
+            station instead).
+        - year (int or None): Year of interest. Required; `main`
+            exits if it is `None`.
+        - output (str or None): Output name used to build the result
+            file name. Required; `main` exits if it is `None`.
+
+    :raises SystemExit: If 'dwd' or 'wmo' is combined with 'ele', or
+        if 'year' or 'output' is `None`.
     """
     if ((args['dwd'] is not None or args['wmo'] is not None)
             and args['ele'] is not None):
