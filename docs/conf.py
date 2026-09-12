@@ -23,8 +23,21 @@ except ImportError:
 sys.path.insert(0, os.path.abspath('..'))
 sys.path.insert(0, os.path.abspath('../austaltools'))
 
-# global variable to disable external imports
-BUILDING_SPHINX = True
+# Tell austaltools submodules not to import heavy/optional runtime
+# dependencies (matplotlib, netCDF4, meteolib, readmet, the vendored
+# ecmwf datastores client, ...) and use mocked/skipped substitutes
+# instead, so autodoc can import the package without them installed.
+#
+# NOTE: the checks in austaltools/*.py are all of the form
+#   os.environ.get('BUILDING_SPHINX', 'false') == 'false'
+# i.e. they read an *environment* variable, not a plain Python name in
+# some module's namespace. A bare `BUILDING_SPHINX = True` here only
+# creates a local variable inside conf.py itself -- it is never visible
+# to austaltools, so every one of those guards silently keeps taking its
+# default ('false') branch and imports the real dependency anyway. It
+# must be set on os.environ, and before austaltools (or any submodule)
+# is imported below.
+os.environ['BUILDING_SPHINX'] = 'true'
 
 
 # Sphinx chdir()s into this file's directory (docs/) before executing it,
