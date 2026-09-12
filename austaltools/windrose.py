@@ -34,6 +34,13 @@ STAB = 'stability'
 SEAS = 'halfyear'
 QUAD = 'season'
 
+DEFAULT_STYLE = 'default'
+""" default plot style """
+DEFAULT_SECTORS = '12'
+""" default number of sectors to plot """
+DEFAULT_SCALE = BEAUF
+""" default classification scale """
+
 # -------------------------------------------------------------------------
 
 
@@ -41,15 +48,39 @@ def main(args):
     """
     This is the main working function
 
-    :param args: the command line arguments as dictionary
+    :param args: The command line arguments as a dictionary, with keys:
+
+      - ``working_dir``: The working directory where files are located
+        (i.e. where ``austal.txt`` is stored). Defaults to
+        ``_tools.DEFAULT_WORKING_DIR`` if missing or ``None``.
+      - ``weather``: name of the weather data file to read. Defaults
+        to ``None`` if missing, in which case the file name is
+        determined from ``austal.txt``.
+      - ``scale``: how to classify the values, one of ``BEAUF``,
+        ``MPERS``, ``QUANT``, ``STAB``, ``SEAS``, ``QUAD``. Defaults
+        to ``DEFAULT_SCALE`` if missing or ``None``.
+      - ``sectors``: number of sectors to plot. Defaults to
+        ``DEFAULT_SECTORS`` if missing or ``None``.
+      - ``style``: plot style, one of 'default', 'star', 'step',
+        'ring'. Defaults to ``DEFAULT_STYLE`` if missing or ``None``.
+      - ``colormap``: name of colormap to use. The default depends on
+        ``style``; defaults to ``None`` if missing.
+      - ``plot``: The plot file name. Defaults to 'windrose.png' if
+        missing or ``None``.
+
     :type args: dict
+
+    :raises ValueError: If ``scale`` is not a recognised value.
     """
     logger.debug(format(args))
 
-    working_dir = args.get('working_dir', '.')
+    working_dir = args.get('working_dir', None)
+    if working_dir is None:
+        working_dir = _tools.DEFAULT_WORKING_DIR
 
     # determine output
-    plotfile = _plotting.consolidate_plotname(args['plot'],'windrose.png')
+    plotfile = _plotting.consolidate_plotname(
+        args.get('plot', None), 'windrose.png')
 
     weather = args.get('weather', None)
     if weather is not None:
@@ -67,9 +98,14 @@ def main(args):
     # ak0 is zero-based so it can be used as field index
     ak0 = [int(x) - 1 for x in ak]
     #akstr = _dispersion.KM2021.name(int(ak))
-    scale = args['scale']
+    scale = args.get('scale', None)
+    if scale is None:
+        scale = DEFAULT_SCALE
     logger.info(f"using scale {scale}")
-    sectors = int(args['sectors'])
+    sectors = args.get('sectors', None)
+    if sectors is None:
+        sectors = DEFAULT_SECTORS
+    sectors = int(sectors)
     logger.info(f"number of sectors {scale}")
 
     d_bnds = [float(x * 360./float(sectors)) for x in range(sectors + 1)]
@@ -119,9 +155,11 @@ def main(args):
     xmid = [(xx[i] + xx[i+1]) * np.pi / 360. for i in range(len(xx) - 1)]
     nxx, nyy = np.shape(hist)
 
-    style = args['style']
+    style = args.get('style', None)
+    if style is None:
+        style = DEFAULT_STYLE
     logger.info(f"using plot style: {style}")
-    cmap = args['colormap']
+    cmap = args.get('colormap', None)
     logger.info(f"user-selected colorscale: {cmap}")
 
     mpl.rcParams.update({'font.size': 16})
@@ -203,7 +241,7 @@ def main(args):
         if os.path.sep in plotfile:
             outname = plotfile
         else:
-            outname = os.path.join(args["working_dir"], plotfile)
+            outname = os.path.join(working_dir, plotfile)
         if not outname.endswith('.png'):
             outname = outname + '.png'
         logger.info('writing plot: %s' % outname)
@@ -221,16 +259,16 @@ def add_options(subparsers):
     pars_wrs.add_argument('-k', '--kind',
                           dest='style',
                           choices=['default', 'star', 'step', 'ring'],
-                          default='default',
+                          default=DEFAULT_STYLE,
                           help='style of wind field plot [%(default)s])]')
     pars_wrs.add_argument('-n', '--sectors',
                           dest='sectors',
-                          default='12',
+                          default=DEFAULT_SECTORS,
                           help='number of sectors to plot [%(default)s])]')
     pars_wrs.add_argument('-s', '--scale',
                           dest='scale',
                           choices=[BEAUF, MPERS, QUANT, STAB, SEAS, QUAD],
-                          default=BEAUF,
+                          default=DEFAULT_SCALE,
                           help='How to classify the values '
                                '[%(default)s]:\n' +
                                ('  - `%s`: ' % BEAUF) +

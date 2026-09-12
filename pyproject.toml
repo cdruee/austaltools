@@ -48,6 +48,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# ecmwf-datastores-client's own dependencies (attrs, multiurl,
+# typing-extensions -- "requests" above already covers its "requests"
+# requirement). Only needed by the CDS data source in _fetch_cds.py;
+# austaltools otherwise works fine without them, so they are kept out
+# of the base "dependencies" list. Install with `pip install austaltools[cds]`.
+cds = [
+    "attrs>=23.1.0",
+    "multiurl>=0.3.7",
+    "typing-extensions>=4.13.0",
+]
 docs = [
     "sphinx",
     "sphinx-argparse",

@@ -72,7 +72,7 @@ Then install austaltools from Pypi:
            PATH="$HOME/.local/bin:$PATH"
        fi
 
-   or  - **if you do not already have a ``bin`` directory in your home directory** - by orgissuing the command:
+   or  - **if you do not already have a ``bin`` directory in your home directory** - by issuing the command:
 
    ::
 
@@ -115,7 +115,7 @@ Requirements:
 
 Austaltools uses the following python packages:
 
- -**ecmwf-datastores-client**:
+- **ecmwf-datastores-client**:
   The `ECMWF Data Stores Service (DSS) API Python client.
   <https://ecmwf.github.io/ecmwf-datastores-client/>`_
   is new API package with advanced features:
@@ -123,55 +123,56 @@ Austaltools uses the following python packages:
   REST API. It is Incubating and subject to ECMWF's guidelines
   on `Software Maturity
   <https://github.com/ecmwf/codex/raw/refs/heads/main/Project%20Maturity>`_.
- -**GDAL**:
+- **GDAL**:
   The
   `Geospatial Data Abstraction Library <https://gdal.org/en/stable/>`_
   is a library for translation and processing of raster and vector
   geospatial data.
- -**matplotlib**:
+- **matplotlib**:
   `Matplotlib <https://matplotlib.org/>`_ is a comprehensive
   library for creating visualizations in Python.
- -**meteolib**:
+- **meteolib**:
   `Meteolib <https://github.com/cdruee/meteolib>`_ is a Python
   that standard equations, constants and conversions fully backed by
   citable refrences and/or recommendations of the
   World meteorological Organization (WMO), for general use in meteorology.
- -**netCDF4**:
+- **netCDF4**:
   The `package netCDF4 <https://unidata.github.io/netcdf4-python/>`_
   is a Python interface to the library that implements
   access to files in the `NetCDF (Network Common Data Form)
   <https://www.unidata.ucar.edu/software/netcdf/>`_ format that
   is a community standard for sharing scientific data.
- -**numpy**:
+- **numpy**:
   `NumPy <https://numpy.org/>`_ is a widely-used Python libary
   offering comprehensive mathematical functions, etc.
- -**pandas**:
+- **pandas**:
   `Pandas <https://pandas.pydata.org/>`_ is a widely-used
   Python tool for data analysis and manipulation.
- -**PyYAML**:
+- **PyYAML**:
   `PyYAML <https://pyyaml.org/>`_ is a parser and emitter
   for Python. `YAML (yet another markup language) <https://yaml.org/>`_
   a data description and serialization language that is easy to read
   for humans.
- -**readmet**:
+- **readmet**:
   `readmet <https://github.com/cdruee/readmet>`_ is a open-source Python
   library for reading and writing a selection of data formats used
   in atmospheric sciences.
- -**requests**:
+- **requests**:
   `Requests <https://requests.readthedocs.io/en/latest/>`_
   is a simple-to-use Python library for making web-requests.
- -**setuptools**:
+- **setuptools**:
   `library <https://setuptools.pypa.io>`_
   designed to facilitate packaging Python projects.
- -**urllib3**:
+- **urllib3**:
   Is is a requirement of *requests*, but it needs to be imported
   separately for better control of the excessive warnings emitted
   by *requests*.
 
 To generate the documentation, AustalTools uses:
- -**sphinx**:
+
+- **sphinx**:
   `Sphinx <https://www.sphinx-doc.org/>`_
-   is a documentation generator written and used by the Python community.
- -**sphinx-argparse**:
+  is a documentation generator written and used by the Python community.
+- **sphinx-argparse**:
   `Sphinx extension <https://github.com/sphinx-doc/sphinx-argparse/>`_
   to automatically document argparse commands and options.

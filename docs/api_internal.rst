@@ -53,6 +53,13 @@ _metadata
    :undoc-members:
    :member-order: groupwise
 
+_mock
+-----
+.. automodule:: austaltools._mock
+   :members:
+   :undoc-members:
+   :member-order: groupwise
+
 _netcdf
 -----------
 .. automodule:: austaltools._netcdf

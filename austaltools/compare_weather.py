@@ -982,7 +982,12 @@ def main(args):
     """
     logger.debug(format(args))
 
+    if args.get('working_dir', None) is None:
+        args['working_dir'] = _tools.DEFAULT_WORKING_DIR
     working_dir = args['working_dir']
+    if args.get('files', None) is None:
+        raise ValueError('files is required (one or two timeseries '
+                         'filenames)')
     reference_file, comparison_file = _resolve_files(args['files'])
 
     austxt = _tools.find_austxt(working_dir, fail=False)
@@ -994,8 +999,10 @@ def main(args):
     reference_file = _resolve_reference_file(working_dir, conf,
                                              reference_file)
 
-    run_kwargs = dict(nodes=args['nodes'], delta=args['delta'],
-                      throw=args['throw'], height=args['height'])
+    run_kwargs = dict(nodes=args.get('nodes', DEFAULT_NODES),
+                      delta=args.get('delta', DEFAULT_DELTA),
+                      throw=args.get('throw', DEFAULT_THROW),
+                      height=args.get('height', DEFAULT_HEIGHT))
 
     #
     # third, shared temporary directory that collects the extracted

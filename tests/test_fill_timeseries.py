@@ -471,15 +471,18 @@ class TestAddOptions(unittest.TestCase):
         args = parser.parse_args(['ft', '-l'])
         self.assertEqual(args.command, 'ft')
 
-    def test_add_options_action_required(self):
-        """Test that action argument is required."""
+    def test_add_options_action_defaults_to_list(self):
+        """Test that omitting -l/-c/-w/-W defaults action to 'list'
+        instead of raising (the -l/--list flag has a real default now,
+        so the action group is no longer required=True)."""
         import argparse
         parser = argparse.ArgumentParser()
         subparsers = parser.add_subparsers(dest='command')
         fill_timeseries.add_options(subparsers)
 
-        with self.assertRaises(SystemExit):
-            parser.parse_args(['fill-timeseries'])
+        args = parser.parse_args(['fill-timeseries'])
+        self.assertEqual(args.action, fill_timeseries.DEFAULT_ACTION)
+        self.assertEqual(args.action, 'list')
 
     def test_add_options_action_list(self):
         """Test -l/--list sets action to 'list'."""
@@ -552,18 +555,27 @@ class TestCommandLine(unittest.TestCase):
     """Tests for fill-timeseries command line interface."""
 
     def test_no_param(self):
-        """Test that missing action parameter returns error."""
+        """Test that omitting the action parameter no longer causes
+        an argparse usage error: -l/--list is a real default now, so
+        the bare subcommand is valid syntax and defaults to 'list'.
+        With no zeitreihe.dmna in the current directory it still
+        fails, but with a clear, controlled FileNotFoundError instead
+        of an argparse usage error (so not exit code 2 any more)."""
         command = CMD + [COMMAND]
         out, err, exitcode = capture(command)
-        self.assertEqual(exitcode, 2)
+        self.assertNotEqual(exitcode, 0)
+        self.assertNotEqual(exitcode, 2)
+        self.assertIn('data file not found', err.decode())
 
     def test_help(self):
         """Test help displays usage."""
-        # Test help when no action given (should show error with usage)
+        # Bare invocation: action now defaults to 'list' (no longer
+        # an argparse usage error), but fails with a clear error
+        # since no zeitreihe.dmna exists in the current directory.
         command = CMD + [COMMAND]
         out, err, exitcode = capture(command)
-        self.assertEqual(exitcode, 2)
-        self.assertTrue(err.decode().startswith('usage'))
+        self.assertNotEqual(exitcode, 0)
+        self.assertIn('data file not found', err.decode())
 
         # Test explicit help request
         command = CMD + [COMMAND, '-h']
@@ -575,10 +587,12 @@ class TestCommandLine(unittest.TestCase):
         """Test week-5 action."""
         make_zeitreihe()
         try:
-            # Missing options should fail
+            # No action given: defaults to 'list' now (-l/--list has
+            # a real default), and the file exists here, so this
+            # succeeds and just lists the column IDs.
             command = CMD + ['-d', 'tests', COMMAND]
             out, err, exitcode = capture(command)
-            self.assertEqual(exitcode, 2)
+            self.assertEqual(exitcode, 0)
 
             # With output option should succeed
             command = CMD + ['-d', 'tests', COMMAND, '-w', '-o', '1.0']

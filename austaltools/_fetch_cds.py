@@ -13,28 +13,90 @@ import zipfile
 from copy import deepcopy
 from typing import Any
 
-if os.environ.get('BUILDING_SPHINX', 'false') == 'false':
-    import multiprocessing as mp
-    import ecmwf.datastores as _edsapi
+import multiprocessing as mp
+
+logger = logging.getLogger(__name__)
+
+
+class _EdsapiUnavailable:
+    """
+    Stand-in used for ``_edsapi`` whenever the real CDS client (or its
+    vendored fallback) cannot be used -- either because ``BUILDING_SPHINX``
+    is set, or because neither the real ``ecmwf-datastores-client``
+    package nor the vendored copy in ``austaltools._vendor`` could be
+    imported (e.g. because the vendored copy's own dependencies --
+    ``attrs``, ``multiurl``, ``typing-extensions``; see ``pyproject.toml``'s
+    ``cds`` extra -- are not installed).
+
+    Only provides the attributes referenced elsewhere in this module at
+    class-definition time (``Remote``, used below as a type annotation) so
+    that importing this module never fails; actually *using* the CDS data
+    source still raises a clear error via :py:func:`_require_edsapi`.
+    """
+    class Remote:
+        pass
+
+    class Client:
+        pass
+
+
+_EDSAPI_AVAILABLE = True
+
+if os.environ.get('BUILDING_SPHINX', 'false') != 'false':
+    # Sphinx only needs to inspect names/signatures for autodoc and never
+    # actually calls the CDS API -- avoid requiring any of this to be
+    # installed just to build the documentation.
+    _edsapi = _EdsapiUnavailable
+    _EDSAPI_AVAILABLE = False
 else:
-    # prevent sphinx from freakin out
-    class _edsapi:
-        Remote = str()
-        def  __init__(self):
-            pass
-try:
-    import ecmwf.datastores as _edsapi
-except ImportError:
-     import importlib
-     _edsapi = importlib.import_module(
-         f"{__package__}._vendor.ecmwf.datastores")
+    try:
+        # Prefer the real, official package if it happens to be installed.
+        import ecmwf.datastores as _edsapi
+    except ImportError:
+        try:
+            # Fall back to the copy vendored in austaltools/_vendor/,
+            # kept for platforms (e.g. Debian/Ubuntu) where
+            # python3-ecmwf-datastores-client is not (yet) packaged.
+            import importlib
+            _edsapi = importlib.import_module(
+                f"{__package__}._vendor.ecmwf.datastores")
+        except ImportError as _exc:
+            # The vendored copy has its own dependencies (attrs, multiurl,
+            # typing-extensions) that may not be installed either. Don't
+            # let that take down the whole austaltools import -- disable
+            # the CDS data source instead, and let _require_edsapi() raise
+            # a clear error only if someone actually tries to use it.
+            logger.debug(
+                "CDS data source unavailable (%s). Install "
+                "'ecmwf-datastores-client', or `pip install "
+                "austaltools[cds]`, to use it.", _exc)
+            _edsapi = _EdsapiUnavailable
+            _EDSAPI_AVAILABLE = False
+
+
+def _require_edsapi():
+    """
+    Raise a clear, actionable error if the CDS data source is not usable.
+
+    Call this at the top of any function that actually needs to talk to
+    the CDS/ecmwf-datastores API, so a missing dependency only breaks the
+    CDS-specific functionality, not the rest of austaltools.
+
+    :raises RuntimeError: if neither the real ``ecmwf-datastores-client``
+      package nor its vendored fallback could be imported.
+    """
+    if not _EDSAPI_AVAILABLE:
+        raise RuntimeError(
+            "The CDS data source requires the 'ecmwf-datastores-client' "
+            "package (or its vendored fallback's dependencies: attrs, "
+            "multiurl, typing-extensions). Install it with `pip install "
+            "ecmwf-datastores-client` or `pip install austaltools[cds]`."
+        )
 
 
 from . import _storage
 from . import _netcdf
 from . import _tools
-
-logger = logging.getLogger(__name__)
 
 WEA_WINDOW = (33, 71, -12, 36)
 """ standard lat/lon window for worldwide weather datasets 
@@ -303,6 +365,7 @@ def cds_getorder(order_args: dict[str, Any],
     :raises RuntimeError: if the ``ecmwf-datastores`` client library is
       not available.
     """
+    _require_edsapi()
     dataset = order_args["dataset"]
     request = order_args["request"]
     target = order_args["target"]
@@ -645,6 +708,7 @@ def cds_get_era5_year(year: int,
       API key must be configured (see the
       `CDS API how-to <https://cds.climate.copernicus.eu/how-to-api>`_).
     """
+    _require_edsapi()
     if subset is not None:
         logger.error("option 'subset' given with a value that is "
                      "not equal to the only allowed value: 'None'")
@@ -842,6 +906,7 @@ def cds_get_cerra_year(
       API key must be configured (see the
       `CDS API how-to <https://cds.climate.copernicus.eu/how-to-api>`_).
     """
+    _require_edsapi()
     import calendar
 
     if area is not None:

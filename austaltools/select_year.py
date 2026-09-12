@@ -40,6 +40,9 @@ from . import input_weather
 logger = logging.getLogger(__name__)
 
 SELECT_YEAR_PICKLE = 'select_year.pkl'
+""" default name of the intermediate pickle cache file """
+DEFAULT_METHOD = 'b'
+""" default representative-year selection method """
 
 
 # ---------------------------------------------------------------------------
@@ -1080,27 +1083,45 @@ def main(args, return_only: bool = False):
 
     Optionally the ranking table(s) may be plottet as a stacked-bar plot.
 
-    :param args: Command-line arguments as a dictionary.  Recognised keys:
+    :param args: Command line arguments dictionary with keys:
 
-        * ``working_dir`` *(str, default* ``'.'`` *)* – directory used
-          for the intermediate pickle cache ``select_year.pkl``.
-        * ``year`` *(str or None)* – year range such as ``'2010-2020'``;
-          ``None`` uses the last 10 calendar years.
-        * ``source`` *(str, required)* – weather-data source identifier.
-        * ``method`` *(str, required)* – one of ``'a'``/``'akjahr'``,
-          ``'b'``/``'timeseries'``, or ``'t'``/``'temperature'``.
-        * ``prec`` *(bool, default* ``False`` *)* – precipitation flag
-          passed to :func:`input_weather.austal_weather`.
+      - ``working_dir``: directory used for the intermediate pickle
+        cache (see ``cache`` below). Defaults to
+        ``_tools.DEFAULT_WORKING_DIR`` if missing or ``None``.
+      - ``year``: year range such as ``'2010-2020'``. Defaults to the
+        last 10 calendar years if missing or ``None``.
+      - ``source``: weather-data source identifier. Defaults to the
+        first of :data:`_datasets.SOURCES_WEATHER` if missing or
+        ``None``.
+      - ``method``: one of ``'a'``/``'akjahr'``, ``'b'``/``'timeseries'``,
+        or ``'t'``/``'temperature'``. Defaults to ``DEFAULT_METHOD`` if
+        missing or ``None``.
+      - ``prec``: precipitation flag passed to
+        :func:`input_weather.austal_weather`. Defaults to ``False`` if
+        missing or ``None``.
+      - ``cache``: name of the intermediate pickle cache file, relative
+        to ``working_dir``. Defaults to ``SELECT_YEAR_PICKLE`` if
+        missing or ``None``.
+      - ``plot`` and the other keys added by
+        :func:`input_weather.add_advanced_option_group`: control
+        whether/where a plot of the rankings is produced, see
+        :func:`selected_year_plot`.
 
     :type args: dict
-    :raises ValueError: If ``source`` or ``method`` is missing or
-        ``method`` is not a recognised value.
+
+    :raises ValueError: If ``method`` is not a recognised value.
     :raises EnvironmentError: If no weather data can be located.
     """
     logger.debug(format(args))
 
+    working_dir = args.get('working_dir', None)
+    if working_dir is None:
+        working_dir = _tools.DEFAULT_WORKING_DIR
 
-    working_dir = args.get('working_dir', '.')
+    cache_name = args.get('cache', None)
+    if cache_name is None:
+        cache_name = SELECT_YEAR_PICKLE
+    cache_path = os.path.join(working_dir, cache_name)
 
     yearstring = args.get('year', None)
     if yearstring is not None:
@@ -1112,12 +1133,12 @@ def main(args, return_only: bool = False):
 
     source = args.get('source', None)
     if source is None:
-        raise ValueError("argument `source` missing or empty")
+        source = _datasets.SOURCES_WEATHER[0]
     logger.info(f"using source: {source}")
 
     method = args.get('method', None)
     if method is None:
-        raise ValueError("argument `method` missing or empty")
+        method = DEFAULT_METHOD
     if method.lower() in ['a', 'akjahr']:
         method = 'a'
     elif method.lower() in ['b', 'timeseries']:
@@ -1141,15 +1162,15 @@ def main(args, return_only: bool = False):
             raise EnvironmentError("No available weather data found.")
 
     # load cache file if it exists and test if it matches
-    if os.path.exists(SELECT_YEAR_PICKLE):
-        logger.debug(f"cache file found: {SELECT_YEAR_PICKLE}")
-        df = pd.read_pickle(SELECT_YEAR_PICKLE)
+    if os.path.exists(cache_path):
+        logger.debug(f"cache file found: {cache_path}")
+        df = pd.read_pickle(cache_path)
         test_attrs = []
         for x in ["dwd", "wmo", "gk", "ut", "ll", "years", "source",
                   "class-scheme", "wind-variant"]:
             test_attrs.append(df.attrs.get(x, None) == args.get(x, None))
         if all(test_attrs):
-            logger.info(f"using data in cache file: {SELECT_YEAR_PICKLE}")
+            logger.info(f"using data in cache file: {cache_path}")
         else:
             logger.debug("chache file does not match")
             df = None
@@ -1176,8 +1197,8 @@ def main(args, return_only: bool = False):
         for x in ["dwd", "wmo", "gk", "ut", "ll", "years", "source",
                   "class-scheme", "wind-variant"]:
             df.attrs[x] = args.get(x,None)
-        df.to_pickle(SELECT_YEAR_PICKLE)
-        logger.info(f"saved data to cache file: {SELECT_YEAR_PICKLE}")
+        df.to_pickle(cache_path)
+        logger.info(f"saved data to cache file: {cache_path}")
 
     if method == 'a':
         selected_year, ranking_chi2, ranking_sigma = method_A(df)
@@ -1226,7 +1247,7 @@ def add_options(subparsers):
                           dest='method',
                           choices=['a', 'akjahr', 'b', 'timeseries',
                                    't', 'temperature'],
-                          default='b',
+                          default=DEFAULT_METHOD,
                           help="Method for selecting a representative"
                                "year:\n"
                                "``a``/``akjahr``: method A"

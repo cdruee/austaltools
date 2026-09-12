@@ -1709,19 +1709,36 @@ def main(args):
     and updates the AUSTAL configuration.
 
     :param args: Command line arguments dictionary with keys:
-    
-        - ``working_dir``: Path to working directory.
-        - ``grid``: Grid ID to evaluate.
+
+        - ``working_dir``: Path to working directory. Defaults to
+          :data:`austaltools._tools.DEFAULT_WORKING_DIR`.
+        - ``grid``: Grid ID to evaluate. Defaults to ``0``.
         - ``reference``: Reference profile method ('general', 'simple',
-          'file', or 'austal').
-        - ``overwrite``: Whether to overwrite existing files.
-        - ``max_height``: Maximum evaluation height.
-        - ``edge_nodes``: Number of edge nodes to exclude.
-        - ``min_ff``: Minimum wind speed threshold.
-        - ``height``: Target height for EAP selection.
-        - ``report``: Whether to print detailed report.
-        - ``austal``: Whether to update austal.txt.
-        - ``plot``: Plot output specification.
+          'file', or 'austal'). Defaults to ``'simple'``.
+        - ``overwrite``: Whether to overwrite existing files. Defaults
+          to ``None`` (do not force overwriting).
+        - ``max_height``: Maximum evaluation height. Defaults to
+          :data:`MAX_HEIGHT`.
+        - ``edge_nodes``: Number of edge nodes to exclude. Defaults to
+          :data:`N_EGDE_NODES`.
+        - ``min_ff``: Minimum wind speed threshold. Defaults to
+          :data:`MIN_FF`.
+        - ``height``: Target height for EAP selection. Defaults to
+          ``None``, meaning the effective anemometer height is
+          determined from the AUSTAL configuration (see
+          :func:`austaltools._windutil.read_heff`).
+        - ``report``: Whether to print detailed report. Defaults to
+          ``False``.
+        - ``austal``: Whether to update austal.txt. Defaults to
+          ``False``.
+        - ``vdi``: Whether to use linear wind-profile interpolation
+          for comparison with the VDI 3783 Part 16 reference
+          implementation (only relevant with ``reference='file'``).
+          Defaults to ``False``.
+        - ``plot`` and the other keys added by
+          :func:`austaltools._tools.add_arguents_common_plot`: control
+          whether/where a plot of the EAP quality measure is produced.
+
     :type args: dict
 
     .. seealso:: :func:`add_options`
@@ -1730,61 +1747,82 @@ def main(args):
     #
     # read the wind library data
     #
-    working_dir = args["working_dir"]
+    working_dir = args.get('working_dir', None)
+    if working_dir is None:
+        working_dir = _tools.DEFAULT_WORKING_DIR
+    args['working_dir'] = working_dir
     lib_dir = _tools.wind_library(working_dir)
     file_info = _tools.wind_files(lib_dir)
 
     args['plot'] = _plotting.consolidate_plotname(
-        args['plot'], 'eap.png')
+        args.get('plot', None), 'eap.png')
 
+    grid = args.get('grid', None)
+    if grid is None:
+        grid = 0
     directions = [float(x) * 10.
                   for x in sorted(list(set(file_info["wdir"])))]
     u_grid, v_grid, axes = _tools.read_wind(file_info,
                                             path=lib_dir,
-                                            grid=int(args['grid']),
+                                            grid=int(grid),
                                             centers=True)
     #
     # get the reference profile
     #
-    vdi = args.get('vdi', False)
+    vdi = args.get('vdi', None)
+    if vdi is None:
+        vdi = False
     overwrite = args.get('overwrite', None)
-    if args['reference'] == 'general':
+    reference = args.get('reference', None)
+    if reference is None:
+        reference = 'simple'
+    if reference == 'general':
         u_ref, v_ref = calc_ref_geostrophic(axes['z'], directions,
                                             overwrite=overwrite)
-    elif args['reference'] == 'simple':
+    elif reference == 'simple':
         u_ref, v_ref = calc_ref_adapted(axes['z'], directions,
                                         overwrite=overwrite)
-    elif args['reference'] == 'file':
+    elif reference == 'file':
         u_ref, v_ref = read_ref('Ref1d.dat', axes['z'], directions,
                                 linear_interpolation=vdi)
-    elif args['reference'] == 'austal':
+    elif reference == 'austal':
         u_ref, v_ref = austal_ref(working_dir, axes['z'], directions,
                                   tmproot=working_dir, overwrite=overwrite)
     else:
         raise ValueError(
-            'unknown kind of reference: %s' % args['reference'])
+            'unknown kind of reference: %s' % reference)
     #
     # find EAPs for each level
     #
-    mx_height = float(args['max_height'])
+    max_height = args.get('max_height', None)
+    if max_height is None:
+        max_height = MAX_HEIGHT
+    mx_height = float(max_height)
     mx_lvl = int(np.argmax(axes['z'] * (np.array(axes['z']) <= mx_height)))
     logging.info('evaluation limited to %.0fm = level %i' %
                  (mx_height, mx_lvl))
+    edge_nodes = args.get('edge_nodes', None)
+    if edge_nodes is None:
+        edge_nodes = N_EGDE_NODES
+    min_ff = args.get('min_ff', None)
+    if min_ff is None:
+        min_ff = MIN_FF
     g, gd, gf = calc_quality_measure(u_grid, v_grid, u_ref, v_ref,
-                                     nedge=args['edge_nodes'],
-                                     minff=args['min_ff'],
+                                     nedge=edge_nodes,
+                                     minff=min_ff,
                                      maxlev=mx_lvl)
     eaps, g_upper = calc_all_eap(g, mx_lvl)
 
     #
     # show results on screen
-    if args['report']:
+    if args.get('report', False):
         print_report(args, g, gd, gf, eaps, g_upper, axes)
 
     #
     # select level closest to height
     #
-    if args['height'] is None:
+    height = args.get('height', None)
+    if height is None:
         try:
             wind_height = _windutil.read_heff(working_dir)
         except (IOError, FileNotFoundError) as e:
@@ -1793,7 +1831,7 @@ def main(args):
 
             raise e
     else:
-        wind_height = float(args['height'])
+        wind_height = float(height)
     dz_old = np.nanmax(axes['z'])
     selected_level = -1
     for lvl in range(mx_lvl + 1):
@@ -1806,9 +1844,9 @@ def main(args):
     #
     # write to austal config
     #
-    if args['austal']:
+    if args.get('austal', False):
         _tools.put_austxt(
-            path=args['working_dir'] / "austal.txt",
+            path=os.path.join(working_dir, "austal.txt"),
             data={
                 'xa': [axes['x'][eaps[selected_level][0][0]]],
                 'ya': [axes['y'][eaps[selected_level][0][1]]]

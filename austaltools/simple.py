@@ -11,6 +11,32 @@ logger = logging.getLogger(__name__)
 # -------------------------------------------------------------------------
 
 def main(args):
+    """
+    This is the main working function.
+
+    :param args: The command line arguments as a dictionary, with keys:
+
+      - ``lat``: Center position latitude. Required, no default:
+        raises ``ValueError`` if missing or ``None``.
+      - ``lon``: Center position longitude. Required, no default:
+        raises ``ValueError`` if missing or ``None``.
+      - ``output``: Stem for file names. Required, no default: raises
+        ``ValueError`` if missing or ``None``.
+      - ``verb``: logging verbosity level, passed through to the
+        weather/terrain sub-calls. Defaults to ``None`` if missing.
+
+      The weather source/year and terrain source/extent used
+      internally are taken from the ``simple`` section of the
+      configuration file (see :func:`austaltools._storage.read_config`),
+      falling back to ``_storage.SIMPLE_DEFAULT_WEATHER``,
+      ``_storage.SIMPLE_DEFAULT_YEAR``, ``_storage.SIMPLE_DEFAULT_TERRAIN``,
+      and ``_storage.SIMPLE_DEFAULT_EXTENT`` respectively.
+
+    :type args: dict
+
+    :raises ValueError: If ``lat``, ``lon``, or ``output`` is missing
+      or ``None``.
+    """
     print(os.path.basename(__file__) + ' version: ' + __version__)
     #
     # sub-command-specific imports
@@ -26,6 +52,17 @@ def main(args):
         from . import input_terrain
         from . import input_weather
 
+    lat = args.get('lat', None)
+    if lat is None:
+        raise ValueError('lat is required (center position latitude)')
+    lon = args.get('lon', None)
+    if lon is None:
+        raise ValueError('lon is required (center position longitude)')
+    output = args.get('output', None)
+    if output is None:
+        raise ValueError('output is required (stem for file names)')
+    verb = args.get('verb', None)
+
     #
     # get customized defaults from config
     #
@@ -40,18 +77,19 @@ def main(args):
     t_extent = float(simple_conf.get(
         'extent', _storage.SIMPLE_DEFAULT_EXTENT))
     #
-    args['ele'] = _tools.estimate_elevation(args['lat'], args['lon'])
+    ele = _tools.estimate_elevation(lat, lon)
+    args['ele'] = ele
     #
     # call weather
     #
     print('collecting weather data')
     #
     # collect args
-    w_args = {x: args[x] for x in ['verb', 'output']}
-    for x in ['dwd', 'gk', 'ut', 'sources']:
+    w_args = {'verb': verb, 'output': output}
+    for x in ['dwd', 'wmo', 'gk', 'ut']:
         w_args[x] = None
-    w_args['ll'] = [args['lat'], args['lon']]
-    w_args['ele'] = args['ele']
+    w_args['ll'] = [lat, lon]
+    w_args['ele'] = ele
     w_args['source'] = w_source
     w_args['year'] = w_year
     w_args['prec'] = False
@@ -63,9 +101,9 @@ def main(args):
     file_to_pick = ("%s_%s_%04i_%s.%s" %
                     (w_args['source'].lower(), w_args['output'].lower(),
                      int(w_args['year']), pick, 'akterm'))
-    rename = '%s.akterm' % args['output']
+    rename = '%s.akterm' % output
     logger.info('picking output file: %s -> %s' % (file_to_pick, rename))
-    os.rename(file_to_pick, '%s.akterm' % args['output'])
+    os.rename(file_to_pick, '%s.akterm' % output)
     for x in glob.glob(file_to_pick.replace(pick, '*')):
         logger.info('discarding output file: %s' % x)
         os.remove(x)
@@ -74,24 +112,24 @@ def main(args):
     #
     print('collecting terrain data')
     # collect args
-    t_args = {x: args[x] for x in ['verb', 'output']}
-    for x in ['gk', 'ut', 'sources', 'ele']:
+    t_args = {'verb': verb, 'output': output}
+    for x in ['gk', 'ut', 'wmo', 'ele']:
         t_args[x] = None
-    t_args['ll'] = [args['lat'], args['lon']]
+    t_args['ll'] = [lat, lon]
     t_args['source'] = t_source
     t_args['extent'] = t_extent
     # call program
     input_terrain.main(t_args)
     # remove confusing extra files
     for x in ['grid.aux.xml', 'prj']:
-        file_to_remove = args['output'] + '.' + x
+        file_to_remove = output + '.' + x
         if os.path.isfile(file_to_remove):
             os.remove(file_to_remove)
     #
     # write coordinates to txt file
     #
-    with open(args['output'] + '.txt', 'w') as f:
-        lat, lon = float(args['lat']), float(args['lon'])
+    with open(output + '.txt', 'w') as f:
+        lat, lon = float(lat), float(lon)
         f.write('%s %s : Reference Position\n' % (lat, lon))
         x, y = _geo.ll2gk(lat, lon)
         f.write('%.0f %.0f : Gauss-Krueger Coordinates\n' % (x, y))

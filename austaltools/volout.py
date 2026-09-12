@@ -29,6 +29,17 @@ from . import _windutil
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_STYLE = 'default'
+""" default style of volume plot (currently the only style available) """
+DEFAULT_GRID = 1
+""" default number of the grid for which to plot the building volumes """
+DEFAULT_CLIP = 'fit'
+""" default zoom level for plotting: 'fit', 'center', or 'no' """
+DEFAULT_ANGLE = 'SW'
+""" default viewing angle """
+DEFAULT_COLOR = 'sienna'
+""" default color of the buildings """
+
 
 # -------------------------------------------------------------------------
 
@@ -221,21 +232,52 @@ def main(args):
     """
     This is the main working function
 
-    :param args: the command line arguments as dictionary
+    :param args: The command line arguments as a dictionary, with keys:
+
+      - ``working_dir``: The working directory where files are located
+        (i.e. where ``austal.txt`` is stored). Defaults to
+        ``_tools.DEFAULT_WORKING_DIR`` if missing or ``None``.
+      - ``plot``: The plot file name. Defaults to 'volout.png' if
+        missing or ``None``.
+      - ``grid``: Number of the grid for which to plot the building
+        volumes. Mutually exclusive with ``file``. Defaults to
+        ``DEFAULT_GRID`` if missing or ``None``.
+      - ``file``: Name of the file to read. Mutually exclusive with
+        ``grid``. Defaults to ``None`` if missing.
+      - ``angle``: viewing angle (see :func:`add_options` for the
+        accepted formats). Defaults to ``DEFAULT_ANGLE`` if missing
+        or ``None``.
+      - ``clip``: Zoom level for plotting ('fit', 'center', or 'no').
+        Defaults to ``DEFAULT_CLIP`` if missing or ``None``.
+      - ``color``: color of the buildings. Defaults to
+        ``DEFAULT_COLOR`` if missing or ``None``.
+      - ``style``: style of volume plot. Currently the only accepted
+        value is ``DEFAULT_STYLE``; not otherwise consumed by this
+        function.
+
     :type args: dict
+
+    :raises ValueError: If ``angle`` cannot be parsed, or has the
+      wrong type or number of components.
     """
     logger.debug(format(args))
 
-    working_dir = args.get('working_dir', '.')
+    working_dir = args.get('working_dir', None)
+    if working_dir is None:
+        working_dir = _tools.DEFAULT_WORKING_DIR
 
     # determine output
-    plotfile = _plotting.consolidate_plotname(args['plot'],'volout.png')
+    plotfile = _plotting.consolidate_plotname(
+        args.get('plot', None), 'volout.png')
 
-    grid_no = int(args['grid'])
-    if args.get('file', None):
-        volfile = args['file']
+    file = args.get('file', None)
+    if file:
+        volfile = file
     else:
-        grid_no = int(args.get('grid', 1))
+        grid_no = args.get('grid', None)
+        if grid_no is None:
+            grid_no = DEFAULT_GRID
+        grid_no = int(grid_no)
         volfile = os.path.join(working_dir, f'volout{grid_no:02d}.dmna')
     logger.info(f"reading file {volfile}")
     volume = readmet.dmna.DataFile(volfile)
@@ -245,7 +287,9 @@ def main(args):
     hh = [float(x) for x in volume.header['hh'].split()]
     grid = volume.data['']
 
-    angle = args.get('angle', 'SW')
+    angle = args.get('angle', None)
+    if angle is None:
+        angle = DEFAULT_ANGLE
     if isinstance(angle, str):
         if angle.upper() in ['N', 'E', 'S', 'W']:
             if angle.upper() == 'N':
@@ -315,9 +359,13 @@ def main(args):
     logger.debug("camera: azi = %s, ele = %s" %
                  (camera[0], camera[1]))
     clip = args.get('clip', None)
+    if clip is None:
+        clip = DEFAULT_CLIP
     logger.debug("clip = %s" % clip)
     logger.debug("zoom = %s" % zoom)
     color = args.get('color', None)
+    if color is None:
+        color = DEFAULT_COLOR
     logger.debug("color = %s" % color)
     plot_voxels(grid, xmin, ymin, delt, hh,
                 camera=camera,
@@ -333,7 +381,7 @@ def main(args):
         if os.path.sep in plotfile:
             outname = plotfile
         else:
-            outname = os.path.join(args["working_dir"], plotfile)
+            outname = os.path.join(working_dir, plotfile)
         if not outname.endswith('.png'):
             outname = outname + '.png'
         logger.info('writing plot: %s' % outname)
@@ -351,7 +399,7 @@ def add_options(subparsers):
     pars_wrs.add_argument('-k', '--kind',
                           dest='style',
                           choices=['default'],
-                          default='default',
+                          default=DEFAULT_STYLE,
                           help='style of volume plot [%(default)s])]')
     pars_wrs.add_argument('-p', '--plot',
                         metavar="FILE",
@@ -365,7 +413,7 @@ def add_options(subparsers):
     pars_wrs_vol = pars_wrs.add_mutually_exclusive_group()
     pars_wrs_vol.add_argument('-g', '--grid',
                           dest='grid',
-                          default=1,
+                          default=DEFAULT_GRID,
                           help='Number of the grid for which to plot '
                                'the building volumes [%(default)s])].')
     pars_wrs_vol.add_argument('-f', '--file',
@@ -375,7 +423,7 @@ def add_options(subparsers):
                                      '[%(default)s])].')
     pars_wrs.add_argument('-c', '--clip',
                           dest = 'clip',
-                          default='fit',
+                          default=DEFAULT_CLIP,
                           choices=['fit', 'center', 'no'],
                           help=r'Zoom level for plotting: \n'
                                r'  - "no": view full grid\n'
@@ -384,7 +432,7 @@ def add_options(subparsers):
                                r'Defaults to [%(default)s])].')
     pars_wrs.add_argument('-a', '--angle',
                           dest = 'angle',
-                          default = 'SW',
+                          default = DEFAULT_ANGLE,
                           help=r"viewing angle:\n"
                                r"  - `N`, `E`, `S`, `W`: side view"
                                r" from north, east, south, west\n"
@@ -403,7 +451,7 @@ def add_options(subparsers):
     pars_wrs.add_argument_group('advanced options')
     pars_wrs.add_argument('--color',
                           dest='color',
-                          default='sienna',
+                          default=DEFAULT_COLOR,
                           help="color of the buidlings as\n"
                                "  - color name or html color code"
                                " (a darker shade is used"

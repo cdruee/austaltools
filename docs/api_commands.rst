@@ -67,6 +67,13 @@ select-year
    :undoc-members:
    :member-order: groupwise
 
+simple
+------
+.. automodule:: austaltools.simple
+   :members:
+   :undoc-members:
+   :member-order: groupwise
+
 steepness
 ---------
 .. automodule:: austaltools.steepness

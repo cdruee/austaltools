@@ -62,6 +62,15 @@ TIMESTEP = 1
 """ model timestep in s """
 PRESSURE = 101325
 """ ambient air pressure in Pa """
+DEFAULT_HEATING_FILE = 'heating.yaml'
+""" default name of the building/heating description file """
+DEFAULT_BUILDING = 'default'
+""" default name of the building to simulate """
+DEFAULT_EXTRACTED_WEATHER = 'extracted_weather.csv'
+""" default name of the file containing the extracted weather data """
+DEFAULT_OUTPUT = 'heating'
+""" default stem for the output files: model output is written to
+``<stem>_out.csv``, the summary report to ``<stem>_report.txt`` """
 DEFAULT_WIND = 3.0
 """ default wind speed in m/s 
 mean 10-m wind speed for Europe (https://www.eea.europa.eu/publications/
@@ -2109,13 +2118,49 @@ def run_building_model(bldg: Building,
 
 def main(args):
     """
-    main routine of the module `heating`, i.e. "the command"
+    main routine of the module ``heating``, i.e. "the command"
 
-    :param args: parsed command-line arguments
+    :param args: Command line arguments dictionary with keys:
+
+        - ``heating_file``: The building/heating description file
+          (YAML). Defaults to ``'heating.yaml'``.
+        - ``building``: The name of the building to simulate, as
+          declared in ``heating_file``. Defaults to ``'default'``.
+        - ``extracted_weather``: The name of the file containing the
+          extracted weather data (see
+          :func:`austaltools._tools.read_extracted_weather`). Defaults
+          to ``'extracted_weather.csv'``.
+        - ``output``: Stem used to name the output files: the model
+          output is written to ``<output>_out.csv`` and the summary
+          report to ``<output>_report.txt``. Defaults to
+          :data:`DEFAULT_OUTPUT`.
+        - ``flush``: Whether to continuously write recorded data
+          (only relevant if ``recording`` is enabled). Defaults to
+          ``True``.
+        - ``radiation``: Whether to enable radiative heat gain on
+          outside walls. Defaults to ``True``.
+        - ``recording``: Recording interval for internal model
+          variables, as a pandas frequency string, or ``None`` for no
+          recording. Defaults to ``None``.
+        - ``slabout``: Whether to record internal model variables for
+          each individual wall slab. Defaults to ``False``.
+        - ``slabs``: How walls are partitioned into slabs: ``'even'``,
+          ``'exponential'`` (optionally followed by
+          ``,WIDTHMIN,WIDTHSTEP,WIDTHEXP``), or a number (slab
+          thickness in m). Defaults to :data:`DEFAULT_SLABS_OPT`.
+        - ``spread_out``: If given, export rooms and walls from
+          ``heating_file`` to this spreadsheet file and exit. Mutually
+          exclusive with ``spread_in``. Defaults to ``None``.
+        - ``spread_in``: If given, import rooms and walls from this
+          spreadsheet file into ``heating_file`` and exit. Mutually
+          exclusive with ``spread_out``. Defaults to ``None``.
+        - ``timestep``: The model timestep in s. Defaults to
+          :data:`TIMESTEP`.
+
     :type args: dict
     """
     # first evaluate global options
-    if (txt :=args.get('slabs', '')).startswith('exponential'):
+    if (txt := args.get('slabs', None) or '').startswith('exponential'):
         if ',' in txt:
             args['slabs'] = 'exponential'
             tupl = txt.split(',')
@@ -2161,13 +2206,17 @@ def main(args):
         logger.debug(f"set timestep option to: {TIMESTEP}")
 
     # get parameter file
-    filename = args.get('file', 'heating.yaml')
+    filename = args.get('heating_file', None)
+    if filename is None:
+        filename = DEFAULT_HEATING_FILE
     with open(filename, 'r') as f:
         dictionary = yaml.safe_load(f)
     logger.debug(f"reading parameter file: {filename}")
 
     # get and verify building name
-    name = args.get('building', 'default')
+    name = args.get('building', None)
+    if name is None:
+        name = DEFAULT_BUILDING
     if name not in dictionary['buildings'].keys():
         raise ValueError(f"building {name} not in building names")
     logger.info(f"selected building: {name}")
@@ -2189,7 +2238,9 @@ def main(args):
 
 
     # get weather data
-    csv_name = args['extracted_weather']
+    csv_name = args.get('extracted_weather', None)
+    if csv_name is None:
+        csv_name = DEFAULT_EXTRACTED_WEATHER
     lat, lon, ele, z0, source, stat_nam, obs = \
             _tools.read_extracted_weather(csv_name)
 
@@ -2212,6 +2263,23 @@ def main(args):
     else:
         raise ValueError('no building named %s' % name)
 
+    # output file stem: <stem>_out.csv and <stem>_report.txt
+    output = args.get('output', None)
+    if output is None:
+        output = DEFAULT_OUTPUT
+    output_stem = os.path.splitext(output)[0]
+
+    flush = args.get('flush', None)
+    if flush is None:
+        flush = True
+    slabout = args.get('slabout', None)
+    if slabout is None:
+        slabout = False
+    recording = args.get('recording', None)
+    radiation = args.get('radiation', None)
+    if radiation is None:
+        radiation = True
+
     # run the model
     logger.info("running model")
     model_out = run_building_model(
@@ -2219,15 +2287,15 @@ def main(args):
         tseries=t_out,
         wseries=w_out,
         cseries=c_out,
-        flush=args['flush'],
-        slabout=args['slabout'],
-        rec=args['recording'],
-        radiation=args['radiation'],
+        flush=flush,
+        slabout=slabout,
+        rec=recording,
+        radiation=radiation,
     )
 
     # write the direct output
     logger.info("writing model output")
-    model_out.to_csv("heating_model_out.csv", quoting=csv.QUOTE_NONE,
+    model_out.to_csv("%s_out.csv" % output_stem, quoting=csv.QUOTE_NONE,
                      float_format="%12.5f")
 
     # convert into emissions and write them into file
@@ -2275,7 +2343,7 @@ def main(args):
                   )
     report.append(hline)
 
-    with open("heating_report.txt", "w") as f:
+    with open("%s_report.txt" % output_stem, "w") as f:
         for l in report:
             print(l)
             f.write(l + "\n")
@@ -2289,32 +2357,37 @@ def add_options(subparsers):
         help='simulate a building with heating.',
         formatter_class = _tools.SmartFormatter
     )
-    default = {'building': 'default',
-               'heating-file': 'heating.yaml',
-               'extracted_weather': 'extracted_weather.csv',
+    default = {'building': DEFAULT_BUILDING,
+               'heating-file': DEFAULT_HEATING_FILE,
+               'extracted_weather': DEFAULT_EXTRACTED_WEATHER,
                # 'source': 'CERRA',
                # 'year': 2003,
-               'output': 'heating.csv',
+               'output': DEFAULT_OUTPUT,
                }
     pars_htg.add_argument('-f', '--heating-file',
+                          dest='heating_file',
                           metavar='FILE',
                           help='building/heating description file. ' +
-                               '[%s]' % default['heating-file'],
+                               '[%(default)s]',
                           default=default['heating-file'])
     pars_htg.add_argument('-b', '--building',
                           help='name of the building to simulate. ' +
-                               '[%s]' % default['building'],
+                               '[%(default)s]',
                           default=default['building'])
     pars_htg.add_argument('-x', '--extracted-weather',
+                          dest='extracted_weather',
                           help='name of the file containing the '
-                               'weather data ' +
-                               '[%s].' % default['extracted_weather'],
+                               'weather data '
+                               '[%(default)s].',
                           default=default['extracted_weather'])
 
-    pars_htg.add_argument('-o', '--output', nargs=1,
-                          metavar='FILE',
-                          help='name for the output file. ' +
-                               '[%s]' % default["output"],
+    pars_htg.add_argument('-o', '--output',
+                          metavar='STEM',
+                          help='stem used to name the output files: '
+                               'the model output is written to '
+                               '``STEM_out.csv`` and the summary '
+                               'report to ``STEM_report.txt``. '
+                               '[%(default)s]',
                           default=default["output"])
 
     adv_htg = pars_htg.add_argument_group('advanced options')

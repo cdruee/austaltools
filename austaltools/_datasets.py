@@ -1474,7 +1474,7 @@ def assemble_DWD(path: str, name="DWD", years: list = None,
       be downloaded and processed. The list must be continguous
       and sorted in increasing order. If None, the item `years` from
       `args` is evaluated, if present; else all available years are
-       downloaded.
+      downloaded.
     :type years: list
     :param replace: If True, an existing file is overwritten.
         If False, an error is raises if the file already exists.

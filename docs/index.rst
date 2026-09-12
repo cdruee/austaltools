@@ -31,7 +31,10 @@ Command-line scripts:
 The module contains the following scripts
 
 :doc:`austaltools`
-    The main comand that provides all user-facing functionality.
+    The main comand that provides all user-facing functionality,
+    including the ``simple`` sub-command for the quickest way to
+    create input data for AUSTAL (see `Provide input for AUSTAL
+    (or AUSTAL2000)`_ below).
 
     Additional, more detailed user guides:
 
@@ -40,14 +43,8 @@ The module contains the following scripts
     :doc:`heating`
         explains the Syntax of the cycle file ``heating.yaml``
 
-
-
-
 :doc:`configure-austaltools`
     Download dataset for use with austaltools (or assemble them from the original sources)
-
-`austal-input`_
-    Convenience command for easy creation of AUSTAL input data
 
 Licenses
 --------
@@ -95,33 +92,41 @@ See files containing `LICENSE.*` for the individual licence texts.
 Provide input for AUSTAL (or AUSTAL2000)
 ****************************************
 
-austal-input
-------------
+austaltools simple
+-------------------
 
 This is the most simple way to create input data for AUSTAL.
 For example::
 
-  austal-input 49.75 6.75 Kundelbach
+  austaltools simple 49.75 6.75 Kundelbach
 
-will produce the files ``Kundelbach.gird`` and  ``Kundelbach.akterm``.
-It calls ``austal-weather`` and ``austal-terrain`` internally,
-selcting standard options (year 2000, default sources).
+will produce the files ``Kundelbach.grid``, ``Kundelbach.akterm``,
+and ``Kundelbach.txt`` (reference coordinates and surface roughness).
+It calls the ``weather`` and ``terrain`` sub-commands internally,
+selecting standard options (year and data sources configured in the
+``simple`` section of the configuration file, see
+:doc:`configure-austaltools`).
 
-Its full command-line options are as the following:
+Its full command-line options are documented as part of the
+``simple`` sub-command in :doc:`austaltools`.
 
-.. argparse::
-   :module: austaltools.austal_input
-   :func: cli_parser
-   :prog: austal-input
+*****
+Links
+*****
+
+- `GitHub <https://github.com/cdruee/austaltools>`_
+- `Documentation (GitLab Pages) <https://TODO-fill-in-gitlab-pages-url>`_
+- `PyPI <https://pypi.org/project/austaltools/>`_
+- `GitLab (University Trier internal) <https://TODO-fill-in-internal-gitlab-url>`_
 
 **************
 Detailed info
 **************
 
-
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
+   austaltools
    install
    api_commands
    api_internal
