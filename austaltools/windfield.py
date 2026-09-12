@@ -150,8 +150,52 @@ def main(args):
     """
     This is the main working function
 
-    :param args: the command line arguments as dictionary
+    :param args: The command line arguments as a dictionary, with keys:
+
+      - ``working_dir``: The working directory where files are located
+        (i.e. where ``austal.txt`` is stored). Defaults to
+        ``_tools.DEFAULT_WORKING_DIR`` if missing or ``None``.
+      - ``style``: style of wind field plot, one of 'stream',
+        'stream-color', 'arrows', 'arrows-color', 'barbs',
+        'barbs-color'. Required, no default.
+      - ``buildings``: whether to show the buildings defined in the
+        config file. Defaults to ``True`` if missing or ``None``.
+      - ``colormap``: name of colormap to use. Defaults to
+        ``DEFAULT_WIF_COLORMAP`` if missing or ``None``.
+      - ``shade``: add hillshading in background. Defaults to
+        ``False`` if missing or ``None``.
+      - ``grid``: number of grid to plot. Defaults to ``0`` if missing
+        or ``None``.
+      - ``alt``, ``hgt``, ``lvl``: mutually exclusive; select the
+        horizontal slice by altitude above sea level, height above
+        ground level, or model level number, respectively. All
+        default to ``None`` if missing.
+      - ``vxz``, ``vyz``: select a vertical slice (side view) at the
+        given x or y index, respectively. Not currently exposed by
+        :func:`add_options` (no CLI flag sets them); default to
+        ``None``/absent, in which case only ``alt``/``hgt``/``lvl``
+        (top view) are reachable from the command line.
+      - ``time``, ``wind``, ``vector``: mutually exclusive; select the
+        reference wind by timestamp (looked up in the AKTERM data),
+        by (speed, direction, stability class), or by (u, v, stability
+        class), respectively. All default to ``None`` if missing.
+        Required: raises ``ValueError`` if none of the three is given.
+      - ``z0``: roughness length overriding the value from the data
+        source. Defaults to ``None`` if missing.
+      - ``scale``: Max value of the colour scale in m/s. Defaults to
+        autoscale if missing or ``None``.
+      - ``color``: color used for the 'stream'/'arrows'/'barbs'
+        styles. Not currently exposed by :func:`add_options`; defaults
+        to ``'blue'`` if missing or ``None``.
+      - ``plot``: The plot file name. Defaults to 'windfield.png' if
+        missing or ``None``.
+
     :type args: dict
+
+    :raises ValueError: If none of ``time``, ``wind``, or ``vector``
+      is given, if ``time`` is more than an hour away from the nearest
+      available data, or if neither a horizontal nor a vertical slice
+      selector is given.
     """
     logger.debug(format(args))
 
@@ -174,20 +218,28 @@ def main(args):
         matplotlib = None
         plt = None
 
-    working_dir = args["working_dir"]
-    grid = int(args["grid"])
-    plotfile = _plotting.consolidate_plotname(args['plot'],
+    working_dir = args.get("working_dir", None)
+    if working_dir is None:
+        working_dir = _tools.DEFAULT_WORKING_DIR
+    grid = args.get("grid", None)
+    if grid is None:
+        grid = 0
+    grid = int(grid)
+    plotfile = _plotting.consolidate_plotname(args.get('plot', None),
                                               'windfield.png')
     #
     conf = _tools.get_austxt(_tools.find_austxt(working_dir))
     # get reference wind
-    if args['vector']:
-        u, v, ak = [float(x) for x in args['vector']]
-    elif args['wind']:
-        ff, dd, ak = [float(x) for x in args['wind']]
+    vector = args.get('vector', None)
+    wind = args.get('wind', None)
+    time_arg = args.get('time', None)
+    if vector:
+        u, v, ak = [float(x) for x in vector]
+    elif wind:
+        ff, dd, ak = [float(x) for x in wind]
         u, v = meteolib.wind.dir2uv(ff, dd)
-    elif args['time']:
-        timestamp = pd.to_datetime(args['time'])
+    elif time_arg:
+        timestamp = pd.to_datetime(time_arg)
         az = _windutil.load_weather(working_dir, conf)
         time = az.index[(
                 az.index - timestamp).to_series().abs().argsort()[0]]
@@ -207,7 +259,9 @@ def main(args):
     ak0 = int(ak) - 1
     akstr = _dispersion.KM2021.num2name(int(ak))
     logger.info(f"wind: {u:.1f}, {v:.1f}, stability class: {akstr}")
-    cmap = args['colormap']
+    cmap = args.get('colormap', None)
+    if cmap is None:
+        cmap = DEFAULT_WIF_COLORMAP
     #
     # read the wind library data
     #
@@ -227,10 +281,10 @@ def main(args):
     nx, ny, nz = u_field.shape
     # try to load topography
     if grid == 0:
-        topo_path = os.path.join(args['working_dir'], "zg00.dmna")
+        topo_path = os.path.join(working_dir, "zg00.dmna")
         topo_var = ""
     else:
-        topo_path = os.path.join(args['working_dir'],
+        topo_path = os.path.join(working_dir,
                              "lib/zg%01d1.dmna" % grid)
         topo_var = "zg"
     if os.path.exists(topo_path):
@@ -245,7 +299,11 @@ def main(args):
         logger.warning('no topography: assuming zero elevation')
         topz = np.full((nx, ny), 0.)
 
-    if args['buildings']:
+    buildings_flag = args.get('buildings', None)
+    if buildings_flag is None:
+        buildings_flag = True
+    buildings = None
+    if buildings_flag:
         buildings = _tools.get_buildings(conf)
         logging.info('buildings in config: %d' % len(buildings))
 
@@ -299,8 +357,12 @@ def main(args):
     else:
         raise ValueError('no cut defined')
 
-    style = args['style']
-    color = args.get('color', 'blue')
+    style = args.get('style', None)
+    if style is None:
+        raise ValueError('style is required (style of wind field plot)')
+    color = args.get('color', None)
+    if color is None:
+        color = 'blue'
     matplotlib.rcParams.update({'font.size': 16})
     fig, ax = plt.subplots()
     fig.set_size_inches(11, 8)
@@ -422,7 +484,7 @@ def main(args):
         if os.path.sep in plotfile:
             outname = plotfile
         else:
-            outname = os.path.join(args["working_dir"], plotfile)
+            outname = os.path.join(working_dir, plotfile)
         if not outname.endswith('.png'):
             outname = outname + '.png'
         logger.info('writing plot: %s' % outname)

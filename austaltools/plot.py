@@ -105,42 +105,51 @@ def main(args):
     """
     This is the main working function
 
-    :param args: The command line arguments as a dictionary.
-    :type args: dict
-    :param args['working_dir']: The working directory where
-      files are located (i.e. where ``austal.txt`` is stored).
-    :type args['working_dir']: str
-    :param args['file']: The input file name. If it doesn't have a '.dmna'
-      extension, it will be added.
-    :type args['file']: str
-    :param args['buildings']: A flag indicating whether to plot
-      buildings from the configuration.
-    :type args['buildings']: bool
-    :param args['stdvs']: The standard deviation value to mark (additional)
-      concentrations as significant by overlaying dots..
-    :type args['stdvs']: float
-    :param args['plot']: The plot file name.
-      If None or '-', the plot will be shown interactively.
-      If '__default__', the name of the displayed data file with
-      extension `.png` will beused.
-    :type args['plot']: str or None
+    :param args: The command line arguments as a dictionary, with keys:
 
+      - ``working_dir``: The working directory where files are located
+        (i.e. where ``austal.txt`` is stored). Defaults to
+        ``_tools.DEFAULT_WORKING_DIR`` if missing or ``None``.
+      - ``file``: The input file name. If it doesn't have a '.dmna'
+        extension, it will be added. Required, no default: raises
+        ``ValueError`` if missing or ``None``.
+      - ``buildings``: A flag indicating whether to plot buildings from
+        the configuration. Defaults to ``True`` if missing or ``None``.
+      - ``stdvs``: The standard deviation value to mark (additional)
+        concentrations as significant by overlaying dots. Defaults to
+        ``0.`` if missing or ``None``.
+      - ``plot``: The plot file name. If ``None`` or '-', the plot will
+        be shown interactively. If '__default__', the name of the
+        displayed data file with extension ``.png`` will be used.
+        Defaults to ``None`` if missing.
+      - ``scale``: Max value of the colour scale in plotted value units.
+        Defaults to autoscale if missing or ``None``.
+
+    :type args: dict
+
+    :raises ValueError: If ``file`` is missing, if the data shape is not
+      understood, or if the standard deviation shape does not match the
+      data shape.
     :raises OSError: If the configuration file cannot be found or read.
-    :raises ValueError: If the data shape is not understood or if the
-      standard deviation shape does not match the data shape.
     """
     logger.debug("args: %s" % format(args))
 
+    working_dir = args.get('working_dir', None)
+    if working_dir is None:
+        working_dir = _tools.DEFAULT_WORKING_DIR
+
     # get the model configuration, if the file is present
     try:
-        austxt = _tools.find_austxt(args['working_dir'])
+        austxt = _tools.find_austxt(working_dir)
         logger.info("reading configuration file: %s" % austxt)
         conf = _tools.get_austxt(austxt)
     except OSError:
         conf = None
     logger.debug("conf: %s" % format(conf))
 
-    infile = args['file']
+    infile = args.get('file', None)
+    if infile is None:
+        raise ValueError('file is required (name of the data file to plot)')
     # make sure infile has an extension
     if not infile.endswith('.dmna'):
         infile = infile + '.dmna'
@@ -148,8 +157,11 @@ def main(args):
     info = parse_austal_outputname(infile)
     logger.debug("info: %s" % format(info))
 
+    buildings_flag = args.get('buildings', None)
+    if buildings_flag is None:
+        buildings_flag = True
     buildings = None
-    if args['buildings'] and conf:
+    if buildings_flag and conf:
         buildings = _tools.get_buildings(conf)
         logging.info('buildings in config: %d' % len(buildings))
 
@@ -158,11 +170,12 @@ def main(args):
         logger.warning(
             'file does not contain load distribution: %s' % infile)
 
-    infile_path = os.path.join(args['working_dir'], infile)
+    infile_path = os.path.join(working_dir, infile)
 
     # configure output (path)
     args['plot'] = _plotting.consolidate_plotname(
-        args['plot'], os.path.splitext(os.path.basename(infile_path))[0])
+        args.get('plot', None),
+        os.path.splitext(os.path.basename(infile_path))[0])
 
     logger.info('reading data from %s' % infile_path)
     datafile = readmet.dmna.DataFile(infile_path)
@@ -179,11 +192,14 @@ def main(args):
 
     unit = bytes(datafile.header["unit"], "latin-1").decode()
 
-    stdvs = float(args["stdvs"])
+    stdvs = args.get('stdvs', None)
+    if stdvs is None:
+        stdvs = 0.
+    stdvs = float(stdvs)
     if stdvs > 0:
         stdfile = re.sub(r'(.+-...)[az]([0-9]{0,2}\.dmna)',
                          r'\1s\2', infile)
-        stdfile_path = os.path.join(args['working_dir'], stdfile)
+        stdfile_path = os.path.join(working_dir, stdfile)
         logger.info('reading stdev from %s' % infile_path)
         errorfile = readmet.dmna.DataFile(stdfile_path)
         std = errorfile.data[errorfile.variables[0]]
@@ -197,7 +213,7 @@ def main(args):
         dots = None
 
     # try to load topography
-    topo_path = os.path.join(args['working_dir'],
+    topo_path = os.path.join(working_dir,
                              "zg0%01d.dmna" % info["grid"])
     if os.path.exists(topo_path):
         logger.info('reading terrain from %s' % infile_path)

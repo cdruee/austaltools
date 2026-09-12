@@ -98,6 +98,43 @@ def in_bounds(lat, lon, crs):
 # -------------------------------------------------------------------------
 
 def main(args):
+    """
+    This is the main working function.
+
+    :param args: The command line arguments as a dictionary, with keys:
+
+      - ``xy``: Position given in model coordinates [x, y] (relative
+        to the model origin), to be converted into geographic
+        coordinates. Mutually exclusive with ``gk``, ``ut``, ``ll``,
+        ``dwd``, and ``wmo``. Defaults to ``None`` if missing.
+      - ``dwd``: DWD station ID. Defaults to ``None`` if missing.
+      - ``wmo``: WMO station ID. Defaults to ``None`` if missing.
+      - ``gk``: Gauß-Krüger coordinates as a list of two floats
+        [rechts, hoch]. Defaults to ``None`` if missing.
+      - ``ut``: UTM coordinates as a list of two floats [east, north].
+        Defaults to ``None`` if missing.
+      - ``ll``: Latitude and longitude as a list of two floats
+        [lat, lon]. Defaults to ``None`` if missing.
+      - ``decimals``: if true, print UTM and Gauss-Krüger coordinates
+        as floating-point numbers with decimals. Defaults to ``False``
+        if missing or ``None``.
+
+      Exactly one of ``xy``, ``dwd``, ``wmo``, ``gk``, ``ut``, ``ll``
+      must be given.
+
+    :type args: dict
+
+    :raises ValueError: If none of ``xy``, ``dwd``, ``wmo``, ``gk``,
+      ``ut``, or ``ll`` is given, if ``xy`` is combined with any of
+      ``gk``, ``ut``, ``ll``, ``dwd``, or ``wmo``, or on various
+      internal/configuration errors (see messages).
+    """
+    xy = args.get('xy', None)
+    dwd = args.get('dwd', None)
+    wmo = args.get('wmo', None)
+    gk = args.get('gk', None)
+    ut = args.get('ut', None)
+    ll = args.get('ll', None)
 
     GK_REFS = {x: osr.SpatialReference() for x in [1,2,3,4,5]}
     # DHDN / 3-degree Gauss-Kruger zone 1 (E-N), https://epsg.io/5680
@@ -117,18 +154,17 @@ def main(args):
     east = north = None
     rx, ry, rs = model_origin()
 
-    if args["xy"] is not None:
-        if any([(args[x] is not None)
-                for x in ["gk", "ut", "ll", "dwd", "wmo"]]):
-            
+    if xy is not None:
+        if any(x is not None for x in [gk, ut, ll, dwd, wmo]):
+
             raise ValueError('-M is mutaually exclusive with -D, -G, -L, '
                              '-U, and -W')
-        mx, my = [float(x) for x in args["xy"]]
+        mx, my = [float(x) for x in xy]
         if rs is None:
-            
+
             raise ValueError('no AUSTAL configuration file')
         elif rs == 'ND':
-            
+
             raise ValueError('no reference position defined in '
                              'AUSTAL configuration file')
         elif rs == 'GK':
@@ -144,36 +180,40 @@ def main(args):
         else:
             raise ValueError(f'internal error rs={rs}')
 
-    if args["dwd"] is not None:
+    if dwd is not None:
         storage_dwd = _datasets.dataset_get("DWD").path
         if storage_dwd is None:
-            
+
             raise ValueError("Dataset DWD is not available, "
                        "download or assemble it.")
-        station = int(args["dwd"])
+        station = int(dwd)
         with _fetch_dwd.DWDStationinfo(storage_dwd) as si:
             lat, lon, ele = si.position(station)
         rechts, hoch = _geo.ll2gk(lat, lon)
         east, north = _geo.ll2ut(lat, lon)
-    elif args["wmo"] is not None:
-        lat, lon, ele, nam = _wmo_metadata.wmo_stationinfo(args["wmo"])
+    elif wmo is not None:
+        lat, lon, ele, nam = _wmo_metadata.wmo_stationinfo(wmo)
         rechts, hoch = _geo.ll2gk(lat, lon)
         east, north = _geo.ll2ut(lat, lon)
-    elif args["gk"] is not None:
-        rechts, hoch = [float(x) for x in args['gk']]
+    elif gk is not None:
+        rechts, hoch = [float(x) for x in gk]
         lat, lon = _geo.gk2ll(rechts, hoch)
         east, north = _geo.gk2ut(rechts, hoch)
-    elif args["ut"] is not None:
-        east, north = [float(x) for x in args['ut']]
+    elif ut is not None:
+        east, north = [float(x) for x in ut]
         rechts, hoch, _ = _geo.ut2gk(east, north)
         lat, lon = _geo.ut2ll(rechts, hoch)
-    elif args["ll"] is not None:
-        lat, lon = [float(x) for x in args['ll']]
+    elif ll is not None:
+        lat, lon = [float(x) for x in ll]
         rechts, hoch = _geo.ll2gk(lat, lon)
         east, north = _geo.ll2ut(lat, lon)
+    elif xy is None:
+        raise ValueError('a location is required: one of '
+                         '-M, -D, -W, -G, -U, -L')
 
-
-    decimals = args.get('decimals', False)
+    decimals = args.get('decimals', None)
+    if decimals is None:
+        decimals = False
     if decimals:
         number_format = ' %-10.2f  %-10.2f'
     else:

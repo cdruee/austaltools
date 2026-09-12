@@ -24,18 +24,19 @@ Options ``-b`` and ``-e`` describe the start and end times of the
 emission on each day the source is active:
 
 ``-b``, ``--hour-begin`` defines the first active hour
-(0-23)  and defaults to 8.
+(0-23) and defaults to 8. Only relevant with -w or -W.
 
-Only relevant with -w or -W. [08]
 ``-e``, ``--hour-end`` defines the last active hour
-(0-23) and defaults to 16.
+(0-23) and defaults to 17. Only relevant with -w or -W.
 
 Options ``-u`` and ``-U`` can be used to define
 weeks or months in which the source does not emit.
-``-u``,/``--holiday-week`` can be given followed by one or multiple
-week numbers (0-52).
+``-u``/``--holiday-week`` can be given followed by one or multiple
+week numbers (0-52) and defaults to the last week of June and the
+first three weeks of July, plus the last week of the year
+(25, 26, 27, 28, 29, 30, 52).
 ``-U``/``--holiday-month`` can be given followed by one or multiple
-month numbers (1-12).
+month numbers (1-12) and defaults to July (7).
 Options ``-u`` and ``-U`` may be used together
 to describe more complex patterns.
 
@@ -262,9 +263,9 @@ These identifiers must match the ``source`` entries in ``cycle.yaml``.
 Each identifier needs exactly one cycle entry in ``cycle.yaml``.
 If necessary, ``cycle.yaml`` must be adapted.
 
-Then call (``-c`` = "take the cycle file", ``.`` = "everything in the current directory"): ::
+Then call (``-d .`` = "work in the current directory", ``-c`` = "take the cycle file"): ::
 
-  austal-fill-timeseries -c .
+  austaltools -d . fill-timeseries -c
 
 This will overwrite ``zeitreihe.dmna`` with a new version **with** emission data.
 

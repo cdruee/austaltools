@@ -1478,33 +1478,42 @@ def austal_weather(args, return_data_frame: bool = False):
 
     :param args: A dictionary containing the following keys:
 
-        - dwd (str or None): DWD station ID, used to retrieve station information.
-        - wmo (str or None): WMO station ID, used to retrieve station information.
-        - gk (list of float or None): Gauss-Krüger coordinates [rechts, hoch].
-        - ut (list of float or None): UTM coordinates.
-        - ll (list of float or None): Latitude and longitude coordinates.
-        - ele (float or None): Elevation information.
-        - year (int): Year for which the weather data is required.
-        - output (str): Output name for the results.
-        - source (str): Source of the weather data (e.g., "ERA5", "CERRA", "DWD").
-        - prec (bool): Flag indicating whether precipitation data should be included.
-        - class-scheme (str): how stability classes are derived
-            from the weather data ['all', 'kms', 'kmo', 'k2s', 'pts', 'kmc', 'pgc'].
-        - wind-variant (str or None): method used to derive the 10-m
-            wind speed from ERA5 data ['as_is', 'ustar_wmo',
-            'ustar_z0', 'ustar_fsr']. Only used when `source` is
-            "ERA5".
-        - z0 (float or None): roughness length at the position of
-            the measurement, overriding the value provided by
-            `source`.
-        - read-extracted (str or None): path to a previously
-            written extracted-weather CSV (see 'write-extracted'
-            below). If given, weather data is read from this file
-            instead of being retrieved from `source`.
-        - write-extracted (str or bool or None): if truthy, also
-            write the raw extracted weather data to a CSV file. A
-            string value is used as the file name; any other truthy
-            value falls back to 'extracted_weather.csv'.
+      - ``dwd``: DWD station ID, used to retrieve station information.
+      - ``wmo``: WMO station ID, used to retrieve station information.
+      - ``gk``: Gauss-Krüger coordinates [rechts, hoch].
+      - ``ut``: UTM coordinates.
+      - ``ll``: Latitude and longitude coordinates.
+      - ``ele``: Elevation information.
+      - ``year``: Year for which the weather data is required.
+        Required, no default: raises ``ValueError`` if missing or
+        ``None`` (unless ``read-extracted`` is given).
+      - ``output``: Output name for the results. Defaults to
+        ``'unnamed'`` if missing or ``None``.
+      - ``source``: Source of the weather data (e.g., "ERA5", "CERRA",
+        "DWD"). Defaults to the first of
+        :data:`_datasets.SOURCES_WEATHER` if missing or ``None``
+        (unless ``read-extracted`` is given).
+      - ``prec``: Flag indicating whether precipitation data should be
+        included. Defaults to ``False`` if missing.
+      - ``class-scheme``: how stability classes are derived from the
+        weather data ['all', 'kms', 'kmo', 'k2s', 'pts', 'kmc', 'pgc'].
+        Defaults to ``DEFAULT_CLASS_SCHEME`` if missing.
+      - ``wind-variant``: method used to derive the 10-m wind speed
+        from ERA5 data ['as_is', 'ustar_wmo', 'ustar_z0', 'ustar_fsr'].
+        Only used when ``source`` is "ERA5". Defaults to ``None`` if
+        missing.
+      - ``z0``: roughness length at the position of the measurement,
+        overriding the value provided by ``source``. Defaults to
+        ``None`` if missing.
+      - ``read-extracted``: path to a previously written
+        extracted-weather CSV (see ``write-extracted`` below). If
+        given, weather data is read from this file instead of being
+        retrieved from ``source``. Defaults to ``None`` if missing.
+      - ``write-extracted``: if truthy, also write the raw extracted
+        weather data to a CSV file. A string value is used as the
+        file name; any other truthy value falls back to
+        'extracted_weather.csv'. Defaults to ``None`` (falsy) if
+        missing.
 
     :type args: dict
 
@@ -1551,10 +1560,15 @@ def austal_weather(args, return_data_frame: bool = False):
         logging.info('selected position: %.2f %.2f (%s)' %
                      (lat, lon, format(stat_nam)))
 
-        year = int(args['year'])
+        year = args.get('year', None)
+        if year is None:
+            raise ValueError('year is required (year of interest)')
+        year = int(year)
         logger.debug("year: %s" % year)
 
-        source = args['source']
+        source = args.get('source', None)
+        if source is None:
+            source = _datasets.SOURCES_WEATHER[0]
         if source == "ERA5":
             wind_variant = args.get('wind-variant', None)
             obs, z0, ha = get_era5_weather(lat, lon, year, wind_variant)
@@ -1562,7 +1576,7 @@ def austal_weather(args, return_data_frame: bool = False):
             obs, z0, ha = get_cerra_weather(lat, lon, year)
         elif source == "HOSTRADA":
             obs, z0, ha = get_hostrada_weather(lat, lon, year)
-            if z0 is None and args.get('z0, None') is None:
+            if z0 is None and args.get('z0', None) is None:
                 raise RuntimeError(f'cannot determine roughness lenght '
                                    f'automatically.\n'
                                    f'Use option `--z0` to provide '
@@ -1578,7 +1592,7 @@ def austal_weather(args, return_data_frame: bool = False):
             raise ValueError("source not implemented: %s" % source)
 
         # override roughness length if given
-        if (user_z0 := args.get('z0, None')) is not None:
+        if (user_z0 := args.get('z0', None)) is not None:
             logger.warning('Roughness length provided '
                            'by the source ({z0}m) is overridden '
                            'by user-provided value ({user_z0}m).')
@@ -1765,7 +1779,7 @@ def austal_weather(args, return_data_frame: bool = False):
     for method in methods_available:
         if selected_scheme in [method, 'all']:
             logger.debug('generating output for: ' + method)
-            if args['prec']:
+            if args.get('prec', False):
                 df = pd.DataFrame({'FF': data['ff'],
                                    'DD': data['dd'],
                                    'KM': data[method],
@@ -1963,45 +1977,48 @@ def main(args):
     This is the main routine that processes the input arguments and
     calls the main working function `austal_weather`.
 
-    Only the keys checked directly by this function are documented
-    below. All remaining keys (e.g. 'source', 'prec', 'class-scheme',
-    'wind-variant', 'z0', 'inter-variant', 'read-extracted',
-    'write-extracted', and the location options 'gk', 'ut', 'll',
-    'station') are consumed further down the call chain, by
-    `austal_weather`.
+    :param args: Command line arguments dictionary with keys:
 
-    :param dict args: A dictionary containing the following keys:
+      - ``dwd``: DWD station ID. Mutually exclusive with ``wmo``; both
+        ``dwd`` and ``wmo`` are mutually exclusive with ``ele``.
+      - ``wmo``: WMO station ID. Mutually exclusive with ``dwd``; both
+        ``dwd`` and ``wmo`` are mutually exclusive with ``ele``.
+      - ``ele``: Surface elevation. Mutually exclusive with ``dwd``
+        and ``wmo`` (elevation is looked up from the station instead).
+      - ``year``: Year of interest. Required, no default: raises
+        ``SystemExit`` if missing or ``None``.
+      - ``output``: Output name used to build the result file name.
+        Required, no default: raises ``SystemExit`` if missing or
+        ``None``.
+      - ``source``, ``prec``, ``class-scheme``, ``wind-variant``,
+        ``z0``, ``inter-variant``, ``read-extracted``,
+        ``write-extracted``, and the location options ``gk``, ``ut``,
+        ``ll``, ``station``: consumed further down the call chain by
+        :func:`austal_weather`, which applies their own defaults.
 
-        - dwd (str or None): DWD station ID. Mutually exclusive with
-            'wmo'; both 'dwd' and 'wmo' are mutually exclusive with
-            'ele'.
-        - wmo (str or None): WMO station ID. Mutually exclusive with
-            'dwd'; both 'dwd' and 'wmo' are mutually exclusive with
-            'ele'.
-        - ele (str or None): Surface elevation. Mutually exclusive
-            with 'dwd' and 'wmo' (elevation is looked up from the
-            station instead).
-        - year (int or None): Year of interest. Required; `main`
-            exits if it is `None`.
-        - output (str or None): Output name used to build the result
-            file name. Required; `main` exits if it is `None`.
+    :type args: dict
 
-    :raises SystemExit: If 'dwd' or 'wmo' is combined with 'ele', or
-        if 'year' or 'output' is `None`.
+    :raises SystemExit: If ``dwd`` or ``wmo`` is combined with ``ele``,
+      or if ``year`` or ``output`` is missing or ``None``.
     """
-    if ((args['dwd'] is not None or args['wmo'] is not None)
-            and args['ele'] is not None):
+    dwd = args.get('dwd', None)
+    wmo = args.get('wmo', None)
+    ele = args.get('ele', None)
+    year = args.get('year', None)
+    output = args.get('output', None)
+
+    if (dwd is not None or wmo is not None) and ele is not None:
 
         logger.critical("options -D and -W are mutually exclusive with -e")
         sys.exit(1)
-    # if ((args['dwd'] is None and args['wmo'] is None)
-    #         and args['station'] is not None):
+    # if ((dwd is None and wmo is None)
+    #         and args.get('station', None) is not None):
     #     logger.critical("options -w is only valid with -D or -W")
     #     sys.exit(1)
-    if args['year'] is None:
+    if year is None:
         logger.critical("options -y is required with -L, -G, -U, -D or -W")
         sys.exit(1)
-    if args['output'] is None:
+    if output is None:
         logger.critical("options NAME is required with -L, -G, -U, -D or -W")
         sys.exit(1)
 

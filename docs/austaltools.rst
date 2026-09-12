@@ -1,4 +1,3 @@
-:orphan:
 :tocdepth: 3
 
 -----------
@@ -38,8 +37,14 @@ austaltools
         Detailed userguide see: :doc:`fill-timeseries`
 
    heating
-        For a description fo the heating description file ``
-        see: :doc:`heating`
+        For a description of the heating description file
+        ``heating.yaml`` see: :doc:`heating`
+
+   simple
+        The quickest way to create input data for AUSTAL from just a
+        position and a name -- see `Provide input for AUSTAL (or
+        AUSTAL2000) <index.html#provide-input-for-austal-or-austal2000>`_
+        in the introduction.
 
    plot
         A simple plot for a quick overview (click to enlarge)

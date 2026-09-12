@@ -546,6 +546,10 @@ def plot_building_shapes(args: dict, polygons: list[tuple],
     import matplotlib.pyplot as plt
     import readmet
 
+    working_dir = args.get('working_dir', None)
+    if working_dir is None:
+        working_dir = _tools.DEFAULT_WORKING_DIR
+
     matplotlib.rcParams.update({'font.size': 16})
     fig, ax = plt.subplots()
     fig.set_size_inches(11, 8)
@@ -558,8 +562,8 @@ def plot_building_shapes(args: dict, polygons: list[tuple],
         logger.debug('... from file: %s' % topo)
         if os.path.exists(topo):
             topo_path = topo
-        elif os.path.exists(os.path.join(args['working_dir'], topo)):
-            topo_path = os.path.join(args['working_dir'], topo)
+        elif os.path.exists(os.path.join(working_dir, topo)):
+            topo_path = os.path.join(working_dir, topo)
         else:
             raise ValueError('topography file not found: %s' % topo)
         logger.info('reading topography from %s' % topo_path)
@@ -615,14 +619,15 @@ def plot_building_shapes(args: dict, polygons: list[tuple],
     ax.set_xlim([np.mean(xrange) - spread / 2, np.mean(xrange) + spread / 2])
     ax.set_ylim([np.mean(yrange) - spread / 2, np.mean(yrange) + spread / 2])
 
-    if args["plot"] == "-":
+    plot = args.get('plot', None)
+    if plot == "-":
         logger.info('showing plot')
         plt.show()
-    elif args["plot"] not in [None, ""]:
-        if os.path.sep in args["plot"]:
-            outname = args["plot"]
+    elif plot not in [None, ""]:
+        if os.path.sep in plot:
+            outname = plot
         else:
-            outname = os.path.join(args["wdir"], args["plot"])
+            outname = os.path.join(working_dir, plot)
         if not outname.endswith('.png'):
             outname = outname + '.png'
         logger.info('writing plot: %s' % outname)
@@ -634,33 +639,49 @@ def plot_building_shapes(args: dict, polygons: list[tuple],
 
 def main(args):
     """
-    Main entry point: extract buildings from a GeoJSON file and write them to the config file 'austal.txt'.
+    Main entry point: extract buildings from a GeoJSON file and write
+    them to the config file ``austal.txt``.
 
-    This function processes a GeoJSON file containing building data, extracts the relevant information,
-    and writes it to a configuration file for further use. The function also supports optional plotting
-    of building shapes.
+    This function processes a GeoJSON file containing building data,
+    extracts the relevant information, and writes it to a
+    configuration file for further use. The function also supports
+    optional plotting of building shapes.
 
-    :param args: A dictionary containing the following keys:
-        - 'zvalue': (optional) The name of the JSON variable denoting building height.
-        - 'height': (optional) A fixed height value for all buildings.
-        - 'tolerance': The tolerance value for checking if the points form a rectangle.
-        - 'wdir': The working directory where the 'austal.txt' file is located.
-        - 'file': The name of the GeoJSON file containing building data.
-        - 'dry_run': A boolean flag indicating whether to perform a dry run (no file output).
-        - 'plot': A boolean flag indicating whether to plot the building shapes.
+    :param args: Command line arguments dictionary with keys:
+
+        - ``working_dir``: The working directory where the
+          ``austal.txt`` file is located. Defaults to
+          :data:`austaltools._tools.DEFAULT_WORKING_DIR`.
+        - ``file``: The name of the GeoJSON file containing building
+          data. Defaults to :data:`DEFAULT_FILE`.
+        - ``tolerance``: The tolerance value for checking if the
+          points form a rectangle. Defaults to :data:`DEFT_TOLRANCE`.
+        - ``zvalue``: The name of the JSON property denoting building
+          height. Mutually exclusive with ``height``. Defaults to
+          :data:`DEFAULT_ZVALUE`.
+        - ``height``: A fixed height value for all buildings.
+          Mutually exclusive with ``zvalue``. Defaults to ``None``.
+        - ``dry_run``: A boolean flag indicating whether to perform a
+          dry run (no file output). Defaults to ``False``.
+        - ``plot`` and the other keys added by
+          :func:`austaltools._tools.add_arguents_common_plot`: control
+          whether/where a plot of the building shapes is produced.
 
     :type args: dict
 
-    :raises ValueError: If the GeoJSON file is not of type 'FeatureCollection' or if the CRS is not 'EPSG:31463'.
-    :raises ValueError: If neither GaussKrueger nor UTM coordinates are found in the configuration.
-    :raises ValueError: If no height information is available for a building.
+    :raises ValueError: If the GeoJSON file is not of type
+        'FeatureCollection' or if the CRS is not 'EPSG:31463'.
+    :raises ValueError: If neither GaussKrueger nor UTM coordinates
+        are found in the configuration.
+    :raises ValueError: If no height information is available for a
+        building.
 
     :example:
         >>> args = {
         >>>     'zvalue': 'height',
         >>>     'height': None,
         >>>     'tolerance': 0.1,
-        >>>     'wdir': '/path/to/working/directory',
+        >>>     'working_dir': '/path/to/working/directory',
         >>>     'file': 'buildings.geojson',
         >>>     'dry_run': True,
         >>>     'plot': False
@@ -669,18 +690,20 @@ def main(args):
     """
 
     # name of the json variable denoting building height
-    if 'zvalue' in args:
-        zvalue = args['zvalue']
-    else:
-        zvalue = None
-    if 'height' in args:
-        height = args['height']
-    else:
-        height = None
-    rect_tolerance = float(args['tolerance'])
+    zvalue = args.get('zvalue', None)
+    if zvalue is None:
+        zvalue = DEFAULT_ZVALUE
+    height = args.get('height', None)
+    tolerance = args.get('tolerance', None)
+    if tolerance is None:
+        tolerance = DEFT_TOLRANCE
+    rect_tolerance = float(tolerance)
+    working_dir = args.get('working_dir', None)
+    if working_dir is None:
+        working_dir = _tools.DEFAULT_WORKING_DIR
     #
     # read austal config and get gauss-krüger position of model origin
-    ausfile = _tools.find_austxt(args['working_dir'])
+    ausfile = _tools.find_austxt(working_dir)
     austxt = _tools.get_austxt(ausfile)
     if 'gx' in austxt and 'gy' in austxt:
         gx = austxt['gx'][0]
@@ -691,10 +714,13 @@ def main(args):
         raise ValueError('neither GaussKrueger nor UTM in config')
     origin = np.array((gx, gy))
 
-    if os.path.sep in args['file']:
-        buildings_file = args['file']
+    file = args.get('file', None)
+    if file is None:
+        file = DEFAULT_FILE
+    if os.path.sep in file:
+        buildings_file = file
     else:
-        buildings_file = os.path.join(args['working_dir'], args['file'])
+        buildings_file = os.path.join(working_dir, file)
     if not os.path.exists(buildings_file):
         raise IOError(f"file not found: {buildings_file}")
     logger.info('reading: %s' % buildings_file)
@@ -751,18 +777,18 @@ def main(args):
                               for x in buildings])
     #
     # output
-    if args["dry_run"]:
+    if args.get('dry_run', False):
         for k, v in data.items():
             print("%s %s" % (k, v))
     else:
         _tools.put_austxt(ausfile, data=data)
 
-    if args["plot"]:
+    if args.get('plot', None):
         if ('gh' in austxt):
             topo = austxt['gh']
         else:
             topo = None
-        plot_building_shapes(args, polygons, buildings)
+        plot_building_shapes(args, polygons, buildings, topo=topo)
 # -------------------------------------------------------------------------
 
 def add_options(subparsers):

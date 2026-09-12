@@ -985,6 +985,9 @@ def main(args):
     if args.get('working_dir', None) is None:
         args['working_dir'] = _tools.DEFAULT_WORKING_DIR
     working_dir = args['working_dir']
+    if args.get('files', None) is None:
+        raise ValueError('files is required (one or two timeseries '
+                         'filenames)')
     reference_file, comparison_file = _resolve_files(args['files'])
 
     austxt = _tools.find_austxt(working_dir, fail=False)

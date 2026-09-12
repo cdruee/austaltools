@@ -37,6 +37,28 @@ Default end hour for a workday
 (last hour during which emsssions are created)
 """
 
+DEFAULT_ACTION = 'list'
+"""
+Default action if none of -l/-c/-w/-W is given: list the column IDs
+in the file and exit without modifying it.
+"""
+
+DEFAULT_CYCLE_FILE = 'cycle.yaml'
+"""
+Default name of the emission-cycle description file, used with the
+'cycle' action.
+"""
+
+DEFAULT_HOLIDAY_WEEK = [25, 26, 27, 28, 29, 30, 52]
+"""
+Default work-free weeks (1-52), used with the 'week-5'/'week-6' actions.
+"""
+
+DEFAULT_HOLIDAY_MONTH = [7]
+"""
+Default work-free months (1-12), used with the 'week-5'/'week-6' actions.
+"""
+
 
 # ----------------------------------------------------
 
@@ -665,40 +687,40 @@ def main(args):
     r"""
     Process the data file based on the provided arguments.
 
-    :param args: Dictionary containing the following keys:
-    :type args: dict
-    :param args["action"]: (str) -- The action to perform.
-      Possible values are 'list', 'week-5', 'week-6', or 'cycle'.
-    :param args["cycle_file"]: (str) -- The name of the cycle file
-     (required for 'cycle' action).
-    :param args["holiday_month"]: (\*list, optional) --
-      List of months (1-12) considered as holidays.
-    :param args["holiday_week"]: (\*list, optional) -- List of weeks
-      (1-52) considered as holidays.
-    :param args["hour_begin"]: (int, optional) --
-      The daily start of the working time,
-      i.e. the first hour of each working day
-      the source emits pollutants
-      (evaluated for 'week-5' and 'week-6' actions).
-      Defaults to :py:const:`DEFAULT__BEGIN`.
-    :param args["hour_end"]: (int, optional) --
-      The daily end of the working time,
-      i.e. the last hour of each working day
-      the source emits pollutants
-      (evaluated for 'week-5' and 'week-6' actions).
-      Defaults to :py:const:`DEFAULT_END` .
-    :param args["column_id"]: (str) -- The column ID to process
-      (required for 'week-5' and 'week-6' actions).
-    :param args["output"]: (list) -- The source strength (in g/s)
-      when the source is emitting
-      (required for 'week-5' and 'week-6' actions).
-    :param args["working_dir"]: (str) -- The path
-      to the directory containing the data file.
-      The datafile is named ``zeitreihe.dmna`` or
-      ``timeseries.dmna``, depending on the language setting
-      of the AUSTAL model.
+    :param args: Command line arguments dictionary with keys:
 
-    :raises ValueError: If the data file is not in DMNA timeseries format.
+        - ``working_dir``: The path to the directory containing the
+          data file. The datafile is named ``zeitreihe.dmna`` or
+          ``timeseries.dmna``, depending on the language setting of
+          the AUSTAL model. Defaults to
+          :data:`austaltools._tools.DEFAULT_WORKING_DIR`.
+        - ``action``: The action to perform, one of ``'list'``,
+          ``'week-5'``, ``'week-6'``, or ``'cycle'``. Defaults to
+          :data:`DEFAULT_ACTION`.
+        - ``cycle_file``: The name of the cycle file, relevant only
+          for the ``'cycle'`` action. Defaults to
+          :data:`DEFAULT_CYCLE_FILE`.
+        - ``column_id``: The column ID to process, required for the
+          ``'week-5'`` and ``'week-6'`` actions (unless the file
+          contains only a single column, which is then used).
+        - ``output``: The source strength (in g/s) when the source is
+          emitting; required for the ``'week-5'`` and ``'week-6'``
+          actions.
+        - ``hour_begin``, ``hour_end``: The daily start/end of the
+          working time, i.e. the first/last hour of each working day
+          the source emits pollutants (evaluated for the ``'week-5'``
+          and ``'week-6'`` actions). Default to :data:`DEFAULT_BEGIN`
+          and :data:`DEFAULT_END`, respectively.
+        - ``holiday_month``, ``holiday_week``: Months (1-12) / weeks
+          (1-52) considered as holidays, evaluated for the
+          ``'week-5'``/``'week-6'`` actions. Default to
+          :data:`DEFAULT_HOLIDAY_MONTH` and
+          :data:`DEFAULT_HOLIDAY_WEEK`, respectively.
+
+    :type args: dict
+
+    :raises ValueError: If the data file is not in DMNA timeseries
+        format.
     :raises ValueError: If the action is unknown.
     :raises ValueError: If required arguments are missing or invalid.
 
@@ -708,7 +730,19 @@ def main(args):
     #
     logger.debug('args: %s' % args)
     #
-    name = os.path.join(args["working_dir"], 'zeitreihe.dmna')
+    working_dir = args.get('working_dir', None)
+    if working_dir is None:
+        working_dir = _tools.DEFAULT_WORKING_DIR
+    action = args.get('action', None)
+    if action is None:
+        action = DEFAULT_ACTION
+    #
+    name = os.path.join(working_dir, 'zeitreihe.dmna')
+    if not os.path.exists(name):
+        raise FileNotFoundError(
+            'data file not found: %s\n'
+            'It must be created by invoking AUSTAL with parameter '
+            '"-z" first.' % name)
     bck = name + '~'
     logger.info(f"creating backup copy {bck}")
     shutil.copyfile(name, bck)
@@ -724,40 +758,48 @@ def main(args):
         if x not in ['te', 'ra', 'ua', 'lm']:
             sids.append(x)
     values = zeitreihe.data
-    if args["action"] == 'list':
+    if action == 'list':
         logger.info('listing columns in file')
         print('column IDs: ' + ' '.join(sids))
         return
-    elif args["action"] in ['week-5', 'week-6']:
-        logger.info('filling work weeks for column: %s' % args["column_id"])
-        if args["output"] is None:
-            
+    elif action in ['week-5', 'week-6']:
+        column_id = args.get('column_id', None)
+        output = args.get('output', None)
+        hour_begin = args.get('hour_begin', None)
+        if hour_begin is None:
+            hour_begin = DEFAULT_BEGIN
+        hour_end = args.get('hour_end', None)
+        if hour_end is None:
+            hour_end = DEFAULT_END
+        holiday_month = args.get('holiday_month', None)
+        if holiday_month is None:
+            holiday_month = DEFAULT_HOLIDAY_MONTH
+        holiday_week = args.get('holiday_week', None)
+        if holiday_week is None:
+            holiday_week = DEFAULT_HOLIDAY_WEEK
+        logger.info('filling work weeks for column: %s' % column_id)
+        if output is None:
             raise ValueError('-o is required with -w or -W')
-        if args["column_id"] not in sids:
+        if column_id not in sids:
             if len(sids) == 1:
-                args["column_id"] = sids[0]
+                column_id = sids[0]
             else:
-                
-                raise ValueError('column ID not in file: %s' % args["column_id"])
-        if None in [args["hour_begin"], args["hour_end"], args["output"]]:
-            raise ValueError('hour_begin, hour_end, or output is None')
-        if args["holiday_month"] is None:
-            args["holiday_month"] = []
-        if args["holiday_week"] is None:
-            args["holiday_week"] = []
+                raise ValueError('column ID not in file: %s' % column_id)
         time = pd.to_datetime(values['te'])
         for i, t in enumerate(_tools.progress(time, desc="work weeks")):
-            if t.month in args["holiday_month"]:
+            if t.month in holiday_month:
                 continue
-            if t.week in args["holiday_week"]:
+            if t.week in holiday_week:
                 continue
-            if ((args["action"] == 'week-5' and 0 <= t.weekday() < 5) or
-                    (args["action"] == 'week-6' and 0 <= t.weekday() < 6)):
-                if args["hour_begin"] <= t.hour <= args["hour_end"]:
-                    values.loc[i, args["column_id"]] = float(
-                        args["output"][0])
-    elif args["action"] in ['cycle']:
-        cyclefile = os.path.join(args["working_dir"], args["cycle_file"])
+            if ((action == 'week-5' and 0 <= t.weekday() < 5) or
+                    (action == 'week-6' and 0 <= t.weekday() < 6)):
+                if hour_begin <= t.hour <= hour_end:
+                    values.loc[i, column_id] = float(output[0])
+    elif action in ['cycle']:
+        cycle_file = args.get('cycle_file', None)
+        if cycle_file is None:
+            cycle_file = DEFAULT_CYCLE_FILE
+        cyclefile = os.path.join(working_dir, cycle_file)
         logger.info('filling cycles from: %s' % cyclefile)
         tss = get_timeseries(cyclefile, zeitreihe.data['te'])
         for c in _tools.progress(tss.columns, desc="applying cycle"):
@@ -766,7 +808,7 @@ def main(args):
             else:
                 raise ValueError('column not in zeitreihe: %s' % c)
     else:
-        raise ValueError('unknown action: %s' % args["action"])
+        raise ValueError('unknown action: %s' % action)
     zeitreihe.data = values
 
     logger.info(f"writing new file {name}")
@@ -780,18 +822,19 @@ def add_options(subparsers):
         aliases=['ft'],
         help='fill source-strength columns in "zeitreihe.dmna"'
     )
-    default = {'hour-begin': 8,
-               'hour-end': 16,
-               'cycle-file': 'cycle.yaml',
-               'holiday-week': [25, 26, 27, 28, 29, 30, 52],
-               'holiday-month': [7],
+    default = {'hour-begin': DEFAULT_BEGIN,
+               'hour-end': DEFAULT_END,
+               'cycle-file': DEFAULT_CYCLE_FILE,
+               'holiday-week': DEFAULT_HOLIDAY_WEEK,
+               'holiday-month': DEFAULT_HOLIDAY_MONTH,
                }
-    sched = pars_fts.add_mutually_exclusive_group(required=True)
+    sched = pars_fts.add_mutually_exclusive_group(required=False)
     sched.add_argument('-l', '--list',
                        action='store_const', dest='action', const='list',
-                       help='list column column IDs in file' +
-                            'and exit without modifying ' +
-                            '"zeitreihe.dmna". [default]')
+                       default=DEFAULT_ACTION,
+                       help='list column IDs in file '
+                            'and exit without modifying '
+                            '"zeitreihe.dmna". [%(default)s]')
     sched.add_argument('-c', '--cycle',
                        action='store_const', dest='action', const='cycle',
                        help='use production cycle from file')
@@ -802,13 +845,13 @@ def add_options(subparsers):
                        action='store_const', dest='action', const='week-6',
                        help='source active Mon-Sat')
     pars_fts.add_argument('-b', '--hour-begin', metavar='HOUR',
-                          nargs=1,
+                          type=int,
                           help='daily work begin time in hours 0-23. ' +
                                'Only relevant with -w or -W. ' +
                                '[%02i]' % DEFAULT_BEGIN,
                           default=DEFAULT_BEGIN)
     pars_fts.add_argument('-e', '--hour-end', metavar='HOUR',
-                          nargs=1,
+                          type=int,
                           help='daily work end time in hours, ' +
                                '0-23. Only relevant with -w or -W .' +
                                '[%02i]' % DEFAULT_END,

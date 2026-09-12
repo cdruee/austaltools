@@ -42,6 +42,12 @@ STORAGE_AUX_FILES = resources.files(__title__ + '.data')
 location where auxiliary files (e.g. license texts and dataset definitions)
 that are part of the module are stored
 """
+DEFAULT_DEM = 'GTOPO30'
+""" default source digital elevation model (DEM) code """
+DEFAULT_EXTENT = 5.
+""" default extent of the extracted area in km (side length of the square) """
+DEFAULT_CRS = 'ut'
+""" default coordinate reference system of the output ('ut' or 'gk') """
 
 
 # -------------------------------------------------------------------------
@@ -75,34 +81,35 @@ def main(args: dict):
     """
     This is the main working function.
 
-    :param args: The command line arguments as a dictionary.
+    :param args: The command line arguments as a dictionary, with keys:
+
+      - ``gk``: Gauß-Krüger coordinates as a list of two floats
+        [rechts, hoch]. Mutually exclusive with ``ut`` and ``ll``.
+      - ``ut``: UTM coordinates as a list of three floats
+        [rechts, hoch, zone]. Mutually exclusive with ``gk`` and ``ll``.
+      - ``ll``: Latitude and longitude as a list of two floats
+        [lat, lon]. Mutually exclusive with ``gk`` and ``ut``.
+      - ``source``: The source of the terrain data, must be one of the
+        available source IDs. Defaults to ``DEFAULT_DEM`` if missing or
+        ``None``.
+      - ``extent``: The extent of the area to be extracted in
+        kilometers. Defaults to ``DEFAULT_EXTENT`` if missing or
+        ``None``.
+      - ``crs``: coordinate reference system of the output, 'gk' or
+        'ut'. Defaults to ``DEFAULT_CRS`` if missing or ``None``.
+      - ``output``: The output file name without extension. Required,
+        no default: raises ``ValueError`` if missing or ``None``.
+
     :type args: dict
-    :param args["gk"]: Gauß-Krüger coordinates
-      as a list of two floats [rechts, hoch].
-    :type args["gk"]: list[float, float]
-    :param args["ut"]: UTM coordinates
-      as a list of three floats [rechts, hoch, zone].
-    :type args["ut"]: list[float, float]
-    :param args["ll"]: Latitude and longitude
-      as a list of two floats [lat, lon].
-    :type args["ll"]: list[float, float]
-    :param args["source"]: The source of the terrain data,
-      must be one of the available source IDs.
-    :type args["source"]: str
-    :param args["extent"]: The extent of the area
-      to be extracted in kilometers.
-    :type args["extent"]: float
-    :param args["output"]: The output file name without extension.
-    :type args["output"]: str
 
-    :note:
-
-    - ``args["gk"]``, ``args["ut"]``, and ``args["ll"]``
-      are mutally exclusive.
-
-    :raises ValueError: If the source is not one of the available sources.
+    :raises ValueError: If ``output`` is missing, or if ``source`` or
+      ``crs`` is not one of the available/valid values.
     """
     logger.debug("args: %s" % format(args))
+
+    output = args.get('output', None)
+    if output is None:
+        raise ValueError('output is required (file name to store data in)')
 
     lat, lon, ele, stat_no, stat_nam = _geo.evaluate_location_opts(args)
 
@@ -116,8 +123,10 @@ def main(args: dict):
         if len(available_dems) == 0:
             logger.error("No available terrain data found.")
             sys.exit(1)
-            
-    ds_name = args['source']
+
+    ds_name = args.get('source', None)
+    if ds_name is None:
+        ds_name = DEFAULT_DEM
     if ds_name not in available_dems:
         logger.critical(f"Dataset not available: {ds_name}")
         sys.exit(1)
@@ -125,7 +134,10 @@ def main(args: dict):
     storage_path = available_dems[ds_name]
 
     logger.debug("lon: %s, lat: %s" % (lon, lat))
-    size = float(args['extent']) * 1000  # km -> m
+    extent = args.get('extent', None)
+    if extent is None:
+        extent = DEFAULT_EXTENT
+    size = float(extent) * 1000  # km -> m
     logger.debug("size: %s m" % size)
     #
     # show notice
@@ -156,14 +168,17 @@ def main(args: dict):
     os.close(tif_handle)
     logger.debug("tempfile: %s" % tif_name)
 
-    if args['crs'] in [None, 'gk']:
+    crs = args.get('crs', None)
+    if crs is None:
+        crs = DEFAULT_CRS
+    if crs == 'gk':
         rechts, hoch = _geo.ll2gk(lat, lon)
         epsg_code = f"EPSG:{_geo.GK.GetAuthorityCode(None)}"
-    elif args['crs'] == 'ut':
+    elif crs == 'ut':
         rechts, hoch = _geo.ll2ut(lat, lon)
         epsg_code = f"EPSG:{_geo.UT.GetAuthorityCode(None)}"
     else:
-        raise ValueError("Unknown CRS: %s" % args['crs'])
+        raise ValueError("Unknown CRS: %s" % crs)
 
     bounds = (rechts - size / 2.,  # minX
               hoch - size / 2.,  # minY
@@ -175,7 +190,7 @@ def main(args: dict):
 
     gdal.Warp(tif_name, dataset, dstSRS=epsg_code, outputBounds=bounds)
 
-    out_name = '%s.grid' % args['output']
+    out_name = '%s.grid' % output
     logger.info("writing output to: %s" % out_name)
     gdal.Translate(out_name, tif_name,
                    noData=-9999.,
@@ -194,9 +209,6 @@ def main(args: dict):
 
 def add_options(subparsers):
 
-    default_dem = 'GTOPO30'
-    default_extent = 5.
-
     pars_ter = subparsers.add_parser(
         name=SUBCOMMAND,
         help='generate terrain input for AUSTAL'
@@ -211,7 +223,7 @@ def add_options(subparsers):
                           metavar='CODE',
                           nargs=None,
                           choices=['ut', 'gk'],
-                          default='ut',
+                          default=DEFAULT_CRS,
                           help="coordinate reference system of the output: "
                                "gk: Gauss-Krüger (zone 3), "
                                "ut: UTM (zone 32U).  "
@@ -219,7 +231,7 @@ def add_options(subparsers):
     pars_ter.add_argument('-e', '--extent',
                           metavar='KM',
                           nargs=None,
-                          default=default_extent,
+                          default=DEFAULT_EXTENT,
                           help="extent of the extracted area in km "
                                "(side length of the sqare)"
                                "Defaults to %(default)s")
@@ -227,8 +239,8 @@ def add_options(subparsers):
                           metavar='CODE',
                           nargs=None,
                           # choices=AVAILABLE_DEMS,
-                          default=default_dem,
-                          help="code for the source digital elevation " 
+                          default=DEFAULT_DEM,
+                          help="code for the source digital elevation "
                                "model (DEM). "
                                " Defaults to %(default)s"
                           )
