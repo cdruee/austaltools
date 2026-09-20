@@ -557,6 +557,29 @@ def main(args):
     else:
         ref_h = ref_ff = ref_dd = None
 
+    altitude_flag = args.get('altitude', False)
+    ground_elev = 0.
+    if altitude_flag:
+        # try to load topography, same file naming as `windfield`
+        if grid == 0:
+            topo_path = os.path.join(working_dir, "zg00.dmna")
+            topo_var = ""
+        else:
+            topo_path = os.path.join(working_dir,
+                                     "lib/zg%01d1.dmna" % grid)
+            topo_var = "zg"
+        if os.path.exists(topo_path):
+            logger.info('reading terrain from %s' % topo_path)
+            topz = _tools.load_topo(topo_path, topo_var)[2]
+            ground_elev = float(topz[ix, iy])
+        else:
+            if conf and "gh" in conf:
+                logging.warning('file not found: %s' % topo_path)
+            logger.warning('no topography: assuming zero elevation')
+        heights = heights + ground_elev
+        if ref_h is not None:
+            ref_h = np.array(ref_h) + ground_elev
+
     #
     # plot
     #
@@ -567,8 +590,15 @@ def main(args):
     ax_ff.plot(speed, heights, marker='o', color='tab:blue',
               label='model')
     ax_ff.set_xlabel('wind speed [m/s]')
-    ax_ff.set_ylabel('height above ground [m]')
-    ax_ff.set_xlim(left=0)
+    if altitude_flag:
+        ax_ff.set_ylabel('altitude [m]')
+    else:
+        ax_ff.set_ylabel('height above ground [m]')
+    scale = args.get('scale', None)
+    if scale:
+        ax_ff.set_xlim(0, float(scale))
+    else:
+        ax_ff.set_xlim(left=0)
     ax_ff.grid(True, alpha=0.3)
 
     dd_plot, h_plot = _break_wrap(wdir, heights)
@@ -581,10 +611,10 @@ def main(args):
     ax_dd.tick_params(axis='y', labelleft=False)
 
     if ref_h is not None:
-        ax_ff.plot(ref_ff, ref_h, marker='x', linestyle='--',
+        ax_ff.plot(ref_ff, ref_h, linestyle='--',
                   color='black', label='reference')
         ref_dd_plot, ref_h_plot = _break_wrap(ref_dd, ref_h)
-        ax_dd.plot(ref_dd_plot, ref_h_plot, marker='x', linestyle='--',
+        ax_dd.plot(ref_dd_plot, ref_h_plot, linestyle='--',
                   color='black', label='reference')
         ax_ff.legend(loc='best', fontsize=12)
 
@@ -697,6 +727,15 @@ def add_options(subparsers):
                               'missing, the file name defaults to ' +
                               '`windprofile.png`'
                          )
+    pars_wip.add_argument('--altitude',
+                         dest='altitude',
+                         action='store_true',
+                         default=False,
+                         help='display height above sea level (altitude) '
+                              'instead of height above ground. Requires '
+                              'a topography file; if none is found, '
+                              'zero ground elevation is assumed and a '
+                              'warning is shown.')
     pars_adv_wip = pars_wip.add_argument_group('advanced options')
     pars_adv_wip.add_argument('--z0',
                          dest='z0',
@@ -708,5 +747,12 @@ def add_options(subparsers):
                               f"data source. Ignored if value is None. "
                               f"[%(default)s]"
                          )
+    pars_adv_wip.add_argument('--scale',
+                              metavar="VALUE",
+                              nargs='?',
+                              default=None,
+                              help='Max value of the wind speed axis in '
+                                   'm/s. '
+                                   'Default is autoscale.')
 
     return pars_wip

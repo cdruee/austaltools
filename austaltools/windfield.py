@@ -6,7 +6,6 @@ This module ...
 import itertools
 import logging
 import os
-from typing import Tuple
 
 import numpy as np
 import pandas as pd
@@ -34,24 +33,12 @@ DEFAULT_WIF_COLORMAP = 'plasma'
 
 # -------------------------------------------------------------------------
 
-def load_topo(path: str, variable: str = ''
-              ) -> Tuple[list, list, np.ndarray]:
-    """
-    Get the AUSTAL model topography from the file `topo_path`
-
-    :param path: file name of the topography file
-    :type path: str
-    :param variable: variable name, defaults to empty string
-    :type variable: str
-    :return: axes coordinates and topography grid
-    :rtype: (list, list, np.ndarray)
-    """
-    logger.info('reading topography from %s' % path)
-    topofile = readmet.dmna.DataFile(path)
-    topz = topofile.data[variable]
-    topx = topofile.axes(ax="x")
-    topy = topofile.axes(ax="y")
-    return topx, topy, topz
+# NOTE: `load_topo()` used to live here. It has been moved to
+# `_tools.py` (as `_tools.load_topo`), since `windprofile` needs the
+# same topography lookup (for its `--altitude` option) without
+# creating a mutual import between the two subcommand modules -- see
+# `_tools.superpose` for the same reasoning. Call it as
+# `_tools.load_topo(...)`.
 
 # -------------------------------------------------------------------------
 # NOTE: `superpose()` used to live here. It has been moved to `_tools.py`
@@ -215,7 +202,7 @@ def main(args):
             logging.warning('file not found: %s' % topo_path)
         topo_path = None
     if topo_path:
-        topx, topy, topz = load_topo(topo_path, topo_var)
+        topx, topy, topz = _tools.load_topo(topo_path, topo_var)
     else:
         logger.warning('no topography: assuming zero elevation')
         topz = np.full((nx, ny), 0.)

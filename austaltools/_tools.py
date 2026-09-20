@@ -1291,6 +1291,33 @@ def superpose(u_grid: "np.ndarray", v_grid: "np.ndarray", axes: dict,
 
 # -------------------------------------------------------------------------
 
+def load_topo(path: str, variable: str = ''
+             ) -> typing.Tuple[list, list, "np.ndarray"]:
+    """
+    Get the AUSTAL model topography from the file `path`
+
+    .. note::
+        This function is used by both the ``windfield`` and the
+        ``windprofile`` subcommands. It lives here, rather than in
+        either of those modules, so that neither has to import the
+        other.
+
+    :param path: file name of the topography file
+    :type path: str
+    :param variable: variable name, defaults to empty string
+    :type variable: str
+    :return: axes coordinates and topography grid
+    :rtype: (list, list, np.ndarray)
+    """
+    logger.info('reading topography from %s' % path)
+    topofile = readmet.dmna.DataFile(path)
+    topz = topofile.data[variable]
+    topx = topofile.axes(ax="x")
+    topy = topofile.axes(ax="y")
+    return topx, topy, topz
+
+# -------------------------------------------------------------------------
+
 def add_arguents_common_plot(parser: argparse.ArgumentParser
                              ) -> argparse.ArgumentParser:
     """
