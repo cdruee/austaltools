@@ -26,35 +26,10 @@ logger = logging.getLogger(__name__)
 
 # -------------------------------------------------------------------------
 
-def model_origin(path=None):
-    try:
-        austxt = _tools.get_austxt(path)
-        xy_count = sum([x in austxt for x in ["gx", "gy", "ux", "uy"]])
-    except FileNotFoundError:
-        austxt = {}
-        xy_count = None
-
-    if xy_count is None:
-        rx = ry = rs = None
-    elif xy_count == 0:
-        rx = ry = None
-        rs = 'ND'
-    elif xy_count > 2:
-        
-        raise ValueError('error in reference coodinates in %s' %
-                         os.path.basename(path))
-    else:
-        if ("gx" in austxt) and ("gy" in austxt):
-            rx = austxt["gx"][0]
-            ry = austxt["gy"][0]
-            rs = 'GK'
-        elif ("ux" in austxt) and ("uy" in austxt):
-            rx = austxt["ux"][0]
-            ry = austxt["uy"][0]
-            rs = 'UT'
-        else:
-            raise ValueError('internal error')
-    return rx, ry, rs
+# NOTE: `model_origin()` used to live here. It has been moved to
+# `_geo.py` (as `_geo.model_origin`), since the same origin lookup is
+# also needed by other subcommands (e.g. `windprofile`) via
+# `_geo.resolve_position`. Call it as `_geo.model_origin(...)`.
 
 # -------------------------------------------------------------------------
 
@@ -152,7 +127,7 @@ def main(args):
     lat = lon = None
     rechts = hoch = None
     east = north = None
-    rx, ry, rs = model_origin()
+    rx, ry, rs = _geo.model_origin()
 
     if xy is not None:
         if any(x is not None for x in [gk, ut, ll, dwd, wmo]):

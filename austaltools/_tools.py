@@ -1193,6 +1193,104 @@ def read_wind(file_info: dict, path: str = '.', grid: int = 0,
 
 # -------------------------------------------------------------------------
 
+def superpose(u_grid: "np.ndarray", v_grid: "np.ndarray", axes: dict,
+             dirs: list,
+             ua: float, va: float, xa: float, ya: float, ha: float,
+             ak: int):
+    """
+    Calculate the wind field by superposition of `u_grid` and `v_grid`
+
+    .. note::
+        This function is used by both the ``windfield`` and the
+        ``windprofile`` subcommands. It lives here, rather than in
+        either of those modules, so that neither has to import the
+        other.
+
+    :param u_grid: wind field for eastward flow,
+        eastward (u) and northward (v) components
+    :type u_grid: np.ndarray
+    :param v_grid: wind field for northward flow
+    :type v_grid: np.ndarray
+    :param axes: x and y axes
+    :type axes: dict[str, list[float]]
+    :param dirs: list of wind directions in lib
+    :type dirs: list
+    :param ua: anemometer eastward wind component
+    :type ua: float
+    :param va: anemometer northward wind component
+    :type va: float
+    :param xa: anemometer position
+    :type xa: float
+    :param ya: anemometer position
+    :type ya: float
+    :param ha: anemometer height
+    :type ha: float
+    :param ak: Klug/Manier stability class
+    :type ak: int
+    :return: superposed wind field eastward (u) and northward (v) components
+    :rtype: (np.ndarray[float], np.ndarray[float])
+    """
+    # anemometer position index
+    ix = np.argmin(abs(np.array(axes['x']) - xa))
+    iy = np.argmin(abs(np.array(axes['y']) - ya))
+
+    # components of unit vector in direction of anomemeter wind
+    fa = np.sqrt(ua * ua + va * va)
+    sia = -ua / fa
+    coa = -va / fa
+
+
+    n_dir = u_grid.shape[4]
+    ui = np.full(n_dir, np.nan)
+    vi = np.full(n_dir, np.nan)
+    dr = np.full(n_dir, np.nan)
+    rot = np.full(n_dir, np.nan)
+    for i in range(n_dir):
+        ui[i] = np.interp(ha, axes['z'], u_grid[ix, iy, :, ak, i])
+        vi[i] = np.interp(ha, axes['z'], v_grid[ix, iy, :, ak, i])
+        # unit vector components
+        fi = (ui[i] * ui[i] + vi[i] * vi[i])
+        si = -ui[i] / fi
+        co = -vi[i] / fi
+        # caculate directional distance:
+        dr[i] = (si - sia) * (si - sia) + (co - coa) * (co - coa)
+        rot[i] = va * vi[i] - va * ui[i]
+
+    # select wind field with the closest wind direction
+    i0 = dr.argmin()
+    # select wind field with the closest wind direction on the other side
+    other_side = np.ma.array(dr, mask=(np.sign(rot) == np.sign(rot[i0])))
+    if other_side.count() > 0:
+        # if there are values on the other side, take the closest one
+        i1 = other_side.argmin()
+    else:
+        # if there are none take 2nd closest on same side
+        i1 = dr.argsort()[1]
+
+    # solve equation so that u, v = linea combi of ui,vi at anemometer
+    det = (vi[i0] * ui[i1] - ui[i0] * vi[i1])
+    if det == 0:
+        raise ValueError('wind fields in the wind library '
+                         'are not linearily independent')
+    f0 = (va * ui[i1] - ua * vi[i1]) / (vi[i0] * ui[i1] - ui[i0] * vi[i1])
+    f1 = (ua * vi[i0] - va * ui[i0]) / (vi[i0] * ui[i1] - ui[i0] * vi[i1])
+    # if vi[i1] > ui[i1]:
+    #     f1 = (va - a * vi[i0]) / vi[i1]
+    # else:
+    #     f1 = (ua - a * ui[i0]) / ui[i1]
+    logger.debug(f'selected directions  : i0:{dirs[i0]}, i1={dirs[i1]}')
+    logger.debug(f'superposition factors: f0={f0}, f1={f1}')
+    # calculate wind field
+    u_field = (f0 * u_grid[:, :, :, ak, i0] +
+               f1 * u_grid[:, :, :, ak, i1])
+    v_field = (f0 * v_grid[:, :, :, ak, i0] +
+               f1 * v_grid[:, :, :, ak, i1])
+    logger.debug('  umin=%f, umax=%f' % (np.min(u_field), np.max(u_field)))
+    logger.debug('  vmin=%f, vmax=%f' % (np.min(v_field), np.max(v_field)))
+    return u_field, v_field
+
+# -------------------------------------------------------------------------
+
 def add_arguents_common_plot(parser: argparse.ArgumentParser
                              ) -> argparse.ArgumentParser:
     """
