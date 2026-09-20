@@ -129,8 +129,8 @@ def check_position(x: float, y: float, axes: dict):
 # -------------------------------------------------------------------------
 
 
-def read_reference_profile(path: str
-                           ) -> (np.ndarray, np.ndarray, np.ndarray):
+def _read_reference_ascii(path: str
+                          ) -> (np.ndarray, np.ndarray, np.ndarray):
     """
     Read a reference wind profile from a plain ASCII file.
 
@@ -147,11 +147,8 @@ def read_reference_profile(path: str
     :return: height (m), wind speed (m/s), wind direction (deg),
         sorted by height
     :rtype: (np.ndarray, np.ndarray, np.ndarray)
-    :raises IOError: if `path` does not exist
     :raises ValueError: if no data lines could be parsed from the file
     """
-    if not os.path.exists(path):
-        raise IOError('reference profile file not found: %s' % path)
     heights = []
     speeds = []
     dirs = []
@@ -178,6 +175,208 @@ def read_reference_profile(path: str
     speeds = np.array(speeds)[order]
     dirs = np.array(dirs)[order] % 360.
     return heights, speeds, dirs
+
+# -------------------------------------------------------------------------
+
+#: units (lower-case) accepted as marking a Scintec1 variable as a wind
+#: speed or wind direction column, respectively, when auto-detecting
+#: which variable is which (see `_read_reference_scintec1`)
+_SCINTEC_SPEED_UNITS = {'m/s'}
+_SCINTEC_DIR_UNITS = {'deg', 'degree', 'degrees', 'grad', '°'}
+#: label substrings (lower-case) that exclude a variable from being
+#: picked as the plain wind speed/direction (e.g. a standard deviation
+#: or error/quality variable that happens to share the same unit)
+_SCINTEC_EXCLUDE_LABELS = ('sigma', 'std', 'deviation', 'error', 'quality')
+
+
+def _read_reference_scintec1(path: str, target_time=None
+                             ) -> (np.ndarray, np.ndarray, np.ndarray):
+    """
+    Read a reference wind profile from a Scintec FORMAT-1/1.1 sodar
+    file (see :mod:`readmet.scintec1`).
+
+    Such a file can hold many timestamped profile scans; one of them
+    is picked as described for `target_time`. The wind speed and wind
+    direction variables are identified among the file's own
+    (device-/configuration-dependent) variable symbols by their unit
+    (``m/s`` for speed, degrees for direction), excluding variables
+    whose label looks like a standard deviation, error or quality
+    variable.
+
+    :param path: file name of the Scintec1 reference profile
+    :type path: str
+    :param target_time: if given, the profile scan closest to this
+        time is used; if omitted, the last scan in the file is used
+    :type target_time: datetime-like, optional
+    :return: height (m), wind speed (m/s), wind direction (deg),
+        sorted by height
+    :rtype: (np.ndarray, np.ndarray, np.ndarray)
+    :raises ValueError: if the file has no profile data, or if the
+        wind speed or wind direction variable cannot be identified
+        unambiguously among the file's variables
+    """
+    data = readmet.scintec1.DataFile(path)
+    if not data.profile:
+        raise ValueError('no profile data found in Scintec file: %s' %
+                         path)
+
+    def _find_variable(units, kind):
+        candidates = []
+        for sym in data.profile.keys():
+            if sym not in data.vars.index:
+                continue
+            unit = str(data.vars.loc[sym, 'unit']).strip().lower()
+            label = str(data.vars.loc[sym, 'label']).strip().lower()
+            if unit not in units:
+                continue
+            if any(x in label for x in _SCINTEC_EXCLUDE_LABELS):
+                continue
+            candidates.append(sym)
+        if len(candidates) == 0:
+            raise ValueError(
+                f'could not identify a wind {kind} variable (by unit) '
+                f'in Scintec file: {path}')
+        elif len(candidates) > 1:
+            raise ValueError(
+                f'found several candidate wind {kind} variables '
+                f'({", ".join(candidates)}) in Scintec file: {path}; '
+                f'cannot pick one automatically')
+        return candidates[0]
+
+    speed_sym = _find_variable(_SCINTEC_SPEED_UNITS, 'speed')
+    dir_sym = _find_variable(_SCINTEC_DIR_UNITS, 'direction')
+
+    speed_df = data.profile[speed_sym]
+    dir_df = data.profile[dir_sym].reindex(columns=speed_df.columns)
+
+    if target_time is not None:
+        target_time = pd.to_datetime(target_time)
+        # NOTE: deliberately not `.to_series().argsort()[0]` (an idiom
+        # used elsewhere in this codebase, e.g. windfield.py's own
+        # `-t` handling): `argsort()` on a Series keeps the original
+        # (here: TimedeltaIndex) as its index rather than a plain
+        # positional one, so `[0]` becomes a *label* lookup and raises
+        # on current pandas unless a literal zero-length timedelta
+        # happens to be present. `np.argmin` on the plain array avoids
+        # the ambiguity by returning an unambiguous integer position.
+        pos = int(np.argmin(np.abs((speed_df.index -
+                                    target_time).to_numpy())))
+        idx = speed_df.index[pos]
+        logger.info('Scintec reference profile: using scan at %s '
+                   '(nearest to %s)' % (idx, target_time))
+    else:
+        idx = speed_df.index[-1]
+        logger.info('Scintec reference profile: using last scan at %s' %
+                   idx)
+
+    heights = np.array(speed_df.columns, dtype=float)
+    speeds = speed_df.loc[idx].to_numpy(dtype=float)
+    dirs = dir_df.loc[idx].to_numpy(dtype=float)
+
+    order = np.argsort(heights)
+    heights = heights[order]
+    speeds = speeds[order]
+    dirs = dirs[order] % 360.
+    return heights, speeds, dirs
+
+# -------------------------------------------------------------------------
+
+
+def _read_reference_hpl(path: str) -> (np.ndarray, np.ndarray, np.ndarray):
+    """
+    Read a reference wind profile from a Halo Photonics lidar
+    "Processed Wind Profile" ``.hpl`` file (see :mod:`readmet.hpl`).
+
+    :param path: file name of the HPL reference profile
+    :type path: str
+    :return: height (m), wind speed (m/s), wind direction (deg),
+        sorted by height
+    :rtype: (np.ndarray, np.ndarray, np.ndarray)
+    :raises ValueError: if `path` is a regular (per-ray) ``.hpl`` scan
+        file rather than a "Processed Wind Profile" file
+    """
+    data = readmet.hpl.DataFile(path)
+    if data.profile is None:
+        raise ValueError('not an HPL "Processed Wind Profile" file '
+                         '(looks like a regular scan file): %s' % path)
+    profile = data.profile.sort_index()
+    heights = profile.index.to_numpy(dtype=float)
+    speeds = profile['speed'].to_numpy(dtype=float)
+    dirs = profile['direction'].to_numpy(dtype=float) % 360.
+    return heights, speeds, dirs
+
+# -------------------------------------------------------------------------
+
+
+def read_reference_profile(path: str, target_time=None
+                           ) -> (np.ndarray, np.ndarray, np.ndarray):
+    """
+    Read a reference wind profile, auto-detecting its file format:
+
+    - a Scintec FORMAT-1 or FORMAT-1.1 sodar file (recognised by its
+      first line, the format's own magic string), see
+      :func:`_read_reference_scintec1`;
+    - a Halo Photonics lidar "Processed Wind Profile" file (recognised
+      by its first line being a single bare integer, the header-less
+      format's level count), see :func:`_read_reference_hpl`; a
+      regular (per-ray) ``.hpl`` scan file is not a reference profile
+      and raises a clear error instead of being misread;
+    - otherwise, a plain ASCII file (see :func:`_read_reference_ascii`).
+
+    :param path: file name of the reference profile
+    :type path: str
+    :param target_time: for a Scintec1 file (which can hold many
+        timestamped scans), the scan closest to this time is used; if
+        omitted, the last scan in the file is used. Ignored for the
+        other formats, which hold a single profile.
+    :type target_time: datetime-like, optional
+    :return: height (m), wind speed (m/s), wind direction (deg),
+        sorted by height
+    :rtype: (np.ndarray, np.ndarray, np.ndarray)
+    :raises IOError: if `path` does not exist
+    :raises ValueError: if no data lines could be parsed from the file
+    """
+    if not os.path.exists(path):
+        raise IOError('reference profile file not found: %s' % path)
+
+    with open(path, 'r') as f:
+        first_line = f.readline().rstrip('\n')
+    first_stripped = first_line.strip()
+
+    if first_stripped in ('FORMAT-1', 'FORMAT-1.1'):
+        logger.info('reference profile %s: detected Scintec %s format' %
+                   (path, first_stripped))
+        return _read_reference_scintec1(path, target_time=target_time)
+
+    # a header-less HPL "Processed Wind Profile" file starts with a
+    # single bare integer (the number of levels); try it, and fall
+    # back to plain ASCII if that doesn't pan out
+    tokens = first_stripped.split()
+    if len(tokens) == 1:
+        try:
+            int(tokens[0])
+        except ValueError:
+            pass
+        else:
+            try:
+                logger.debug('reference profile %s: first line looks '
+                             'like an HPL "Processed Wind Profile" '
+                             'level count, trying that format' % path)
+                return _read_reference_hpl(path)
+            except Exception as e:
+                logger.debug('reference profile %s: not a usable HPL '
+                             'profile (%s), falling back to plain '
+                             'ASCII' % (path, e))
+
+    if path.lower().endswith('.hpl') and ':' in first_line:
+        raise ValueError(
+            'file looks like a regular (per-ray) HPL scan file; only '
+            'the "Processed Wind Profile" export is supported as a '
+            'reference profile: %s' % path)
+
+    logger.debug('reference profile %s: assuming plain ASCII format' %
+                path)
+    return _read_reference_ascii(path)
 
 # -------------------------------------------------------------------------
 
@@ -238,9 +437,11 @@ def main(args):
         Required: raises ``ValueError`` if none of the three is given.
       - ``z0``: roughness length overriding the value from the data
         source. Defaults to ``None`` if missing.
-      - ``reference``: file name of a plain ASCII reference wind
-        profile to overplot. Defaults to ``None`` if missing (no
-        reference profile is shown).
+      - ``reference``: file name of a reference wind profile to
+        overplot. Its format (plain ASCII, Scintec FORMAT-1/1.1 sodar,
+        or Halo Photonics lidar "Processed Wind Profile") is detected
+        automatically; see :func:`read_reference_profile`. Defaults to
+        ``None`` if missing (no reference profile is shown).
       - ``plot``: The plot file name. Defaults to ``'windprofile.png'``
         if missing or ``None``.
 
@@ -287,6 +488,10 @@ def main(args):
     vector = args.get('vector', None)
     wind = args.get('wind', None)
     time_arg = args.get('time', None)
+    # if a timestamp was used to select the wind reference, reuse it
+    # (see below) to pick the closest scan from a multi-time Scintec1
+    # reference profile file, if one is given
+    ref_time = None
     if vector:
         u, v, ak = [float(x) for x in vector]
     elif wind:
@@ -294,9 +499,13 @@ def main(args):
         u, v = meteolib.wind.dir2uv(ff, dd)
     elif time_arg:
         timestamp = pd.to_datetime(time_arg)
+        ref_time = timestamp
         az = _windutil.load_weather(working_dir, conf)
-        time = az.index[(
-                az.index - timestamp).to_series().abs().argsort()[0]]
+        # see the NOTE in `_read_reference_scintec1` on why this isn't
+        # the `.to_series().argsort()[0]` idiom used in windfield.py
+        nearest_pos = int(np.argmin(np.abs(
+            (az.index - timestamp).to_numpy())))
+        time = az.index[nearest_pos]
         if abs(time - timestamp) > pd.Timedelta('1H'):
             raise ValueError('time outside data: %s' % str(timestamp))
         else:
@@ -343,7 +552,8 @@ def main(args):
 
     reference = args.get('reference', None)
     if reference:
-        ref_h, ref_ff, ref_dd = read_reference_profile(reference)
+        ref_h, ref_ff, ref_dd = read_reference_profile(
+            reference, target_time=ref_time)
     else:
         ref_h = ref_ff = ref_dd = None
 
@@ -464,13 +674,18 @@ def add_options(subparsers):
                          metavar='FILE',
                          default=None,
                          help='overplot a reference wind profile read '
-                              'from the plain ASCII file `FILE`. The '
-                              'file must contain three columns: height '
-                              'above ground in m, wind speed in m/s, '
-                              'and wind direction in degrees. Leading '
-                              'header lines that do not parse as three '
-                              'numbers are skipped automatically. '
-                              'Defaults to `None` (no reference '
+                              'from `FILE`. The format is detected '
+                              'automatically: a plain ASCII file with '
+                              'three columns (height above ground in '
+                              'm, wind speed in m/s, wind direction in '
+                              'degrees; leading header lines that do '
+                              'not parse as three numbers are skipped '
+                              'automatically), a Scintec FORMAT-1/1.1 '
+                              'sodar file (the scan closest to the '
+                              'time given by -t is used, or the last '
+                              'scan in the file), or a Halo Photonics '
+                              'lidar "Processed Wind Profile" `.hpl` '
+                              'file. Defaults to `None` (no reference '
                               'profile shown)')
 
     pars_wip.add_argument('-p', '--plot',

@@ -155,8 +155,15 @@ def main(args):
     elif time_arg:
         timestamp = pd.to_datetime(time_arg)
         az = _windutil.load_weather(working_dir, conf)
-        time = az.index[(
-                az.index - timestamp).to_series().abs().argsort()[0]]
+        # NOTE: not `.to_series().argsort()[0]`: argsort() on a Series
+        # keeps the original (here: TimedeltaIndex) as its index rather
+        # than a plain positional one, so `[0]` becomes a *label*
+        # lookup and raises on current pandas unless a literal
+        # zero-length timedelta happens to be present. np.argmin on
+        # the plain array gives an unambiguous integer position.
+        nearest_pos = int(np.argmin(np.abs(
+            (az.index - timestamp).to_numpy())))
+        time = az.index[nearest_pos]
         if abs(time -timestamp) > pd.Timedelta('1H'):
             raise ValueError('time outside data: %s' % str(timestamp))
         else:
