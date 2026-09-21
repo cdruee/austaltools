@@ -1,34 +1,9 @@
-Auto-merging austaltools/__init__.py
-Auto-merging austaltools/_datasets.py
-Auto-merging austaltools/_fetch_cds.py
-Auto-merging austaltools/compare_weather.py
-Auto-merging austaltools/eap.py
-Auto-merging austaltools/fill_timeseries.py
-CONFLICT (add/add): Merge conflict in austaltools/fill_timeseries.py
-Auto-merging austaltools/heating.py
-Auto-merging austaltools/import_buildings.py
-CONFLICT (add/add): Merge conflict in austaltools/import_buildings.py
-Auto-merging austaltools/input_terrain.py
-CONFLICT (add/add): Merge conflict in austaltools/input_terrain.py
-Auto-merging austaltools/input_weather.py
-Auto-merging austaltools/plot.py
-CONFLICT (add/add): Merge conflict in austaltools/plot.py
-Auto-merging austaltools/select_year.py
-Auto-merging austaltools/simple.py
-Auto-merging austaltools/steepness.py
-CONFLICT (add/add): Merge conflict in austaltools/steepness.py
+Auto-merging austaltools/_geo.py
+Auto-merging austaltools/_tools.py
+Auto-merging austaltools/command_line.py
 Auto-merging austaltools/transform.py
-Auto-merging austaltools/volout.py
 Auto-merging austaltools/windfield.py
-Auto-merging austaltools/windrose.py
 Auto-merging docs/api_commands.rst
-Auto-merging docs/api_internal.rst
 Auto-merging docs/austaltools.rst
-Auto-merging docs/conf.py
-Auto-merging docs/fill-timeseries.rst
-Auto-merging docs/index.rst
-Auto-merging docs/install.rst
-Auto-merging pyproject.toml
-Auto-merging tests/test_fill_timeseries.py
+Automatic merge went well; stopped before committing as requested
 Squash commit -- not updating HEAD
-Automatic merge failed; fix conflicts and then commit the result.

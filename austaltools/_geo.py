@@ -20,6 +20,7 @@ if os.getenv('BUILDING_SPHINX', 'false') == 'false':
 
 from . import _fetch_dwd
 from . import _storage
+from . import _tools
 from . import _wmo_metadata
 
 logger = logging.getLogger()
@@ -202,6 +203,123 @@ def evaluate_location_opts(args: dict):
     else:
         lat, lon = None, None
     return lat, lon, ele, station, nam
+
+# -------------------------------------------------------------------------
+
+def model_origin(conf: dict = None, path: str = None):
+    """
+    Determine the model origin, i.e. the geo-referenced position of
+    the AUSTAL model coordinate x=0, y=0, from an AUSTAL configuration.
+
+    Either `conf` (an already-parsed configuration, as returned by
+    :func:`austaltools._tools.get_austxt`) or `path` (the file name of
+    an ``austal.txt``/``austal2000.txt`` to read) may be given; if
+    both are omitted, the configuration is read from ``austal.txt`` in
+    the current directory (the default of
+    :func:`austaltools._tools.get_austxt`). Passing an already-parsed
+    `conf` avoids reading the configuration file a second time when
+    the caller has already loaded it for other purposes.
+
+    :param conf: AUSTAL configuration as returned by
+        :func:`austaltools._tools.get_austxt`
+    :type conf: dict, optional
+    :param path: file name of the AUSTAL configuration file. Only used
+        if `conf` is not given.
+    :type path: str, optional
+    :return: reference x, reference y, and reference coordinate system
+        (``'GK'`` for Gauß-Krüger, ``'UT'`` for UTM, ``'ND'`` if the
+        configuration does not define a reference position). If no
+        configuration could be found at all (only possible if `conf`
+        is not given), all three are ``None``.
+    :rtype: (float|None, float|None, str|None)
+    :raises ValueError: if the configuration contains an inconsistent
+        or incomplete set of reference-position keys.
+    """
+    if conf is None:
+        try:
+            conf = _tools.get_austxt(path)
+        except FileNotFoundError:
+            return None, None, None
+    xy_count = sum(x in conf for x in ["gx", "gy", "ux", "uy"])
+    if xy_count == 0:
+        return None, None, 'ND'
+    elif xy_count > 2:
+        raise ValueError('error in reference coordinates in austal.txt')
+    if ("gx" in conf) and ("gy" in conf):
+        return conf["gx"][0], conf["gy"][0], 'GK'
+    elif ("ux" in conf) and ("uy" in conf):
+        return conf["ux"][0], conf["uy"][0], 'UT'
+    else:
+        raise ValueError('inconsistent reference coordinates '
+                         'in austal.txt')
+
+# -------------------------------------------------------------------------
+
+def resolve_position(args: dict, conf: dict = None, path: str = None):
+    """
+    Determine the model-grid position (x, y in m east-/northward of
+    the model coordinate origin) requested on the command line, either
+    from directly given model coordinates (``-M``/``--model``, parsed
+    into ``args['xy']``) or from one of the location options added by
+    :func:`austaltools._tools.add_location_opts` (``-L``, ``-G``,
+    ``-U``, and, if enabled, ``-D``/``-W``).
+
+    This centralises the position-resolution logic shared by the
+    subcommands that accept a single point either as model coordinates
+    or as a location (e.g. ``windprofile``, ``transform``), so it only
+    needs to be maintained in one place.
+
+    :param args: parsed command line arguments
+    :type args: dict
+    :param conf: AUSTAL configuration as returned by
+        :func:`austaltools._tools.get_austxt`, if already available
+    :type conf: dict, optional
+    :param path: file name of the AUSTAL configuration file, used to
+        determine the model origin if `conf` is not given
+    :type path: str, optional
+    :return: position as model coordinates x, y in m
+    :rtype: (float, float)
+    :raises ValueError: if neither or both kinds of position
+        specification are given, or if a location is given but the
+        AUSTAL configuration does not define a model-to-geographic
+        reference position.
+    """
+    xy = args.get('xy', None)
+    have_loc = any(args.get(k, None) is not None
+                   for k in ('ll', 'gk', 'ut', 'dwd', 'wmo'))
+
+    if xy is not None and have_loc:
+        raise ValueError('position must be given either as model '
+                         'coordinates (-M/--model) or as a location, '
+                         'not both')
+
+    if xy is not None:
+        x, y = (float(v) for v in xy)
+        return x, y
+
+    if have_loc:
+        lat, lon, ele, stat_no, stat_nam = evaluate_location_opts(args)
+        rx, ry, rs = model_origin(conf=conf, path=path)
+        if rs in (None, 'ND'):
+            raise ValueError('no reference position (gx/gy or ux/uy) '
+                             'defined in the AUSTAL configuration; '
+                             'cannot convert a geographic location '
+                             'into model coordinates. Use -M/--model '
+                             'to give the position directly instead.')
+        elif rs == 'GK':
+            rechts, hoch = ll2gk(lat, lon)
+            x = rechts - rx
+            y = hoch - ry
+        elif rs == 'UT':
+            east, north = ll2ut(lat, lon)
+            x = east - rx
+            y = north - ry
+        else:
+            raise ValueError(f'internal error: rs={rs}')
+        return x, y
+
+    raise ValueError('no position given: use -M/--model or one of '
+                     'the location options')
 
 # -------------------------------------------------------------------------
 

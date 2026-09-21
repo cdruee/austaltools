@@ -26,6 +26,7 @@ from . import transform
 from . import plot
 from . import volout
 from . import windfield
+from . import windprofile
 from . import windrose
 
 # ----------------------------------------------------
@@ -170,6 +171,7 @@ def cli_parser():
         input_weather,
         volout,
         windfield,
+        windprofile,
         windrose,
     ]:
         _ = subcmd.add_options(subparsers)
@@ -269,6 +271,8 @@ def main(args=None):
             input_weather.main(args)
         elif args['command'] == 'windfield':
             windfield.main(args)
+        elif args['command'] == 'windprofile':
+            windprofile.main(args)
         elif args['command'] == 'windrose':
             windrose.main(args)
         #else:
