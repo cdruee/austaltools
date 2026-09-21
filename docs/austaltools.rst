@@ -58,6 +58,14 @@ austaltools
         Example plot of a windfield (click to enlarge)
         |plotwindfield|
 
+   windprofile
+        Plots a vertical profile of wind speed and wind direction at
+        a given position in the model domain (given by model
+        coordinates or by one of the location options), optionally
+        overlaid with a measured reference profile read from a plain
+        ASCII file, a Scintec FORMAT-1/1.1 sodar file, or a Halo
+        Photonics lidar "Processed Wind Profile" ``.hpl`` file.
+
    windrose
         Example plot of a windrose classified by wind speed quantiles         (click to enlarge)
         |plotwindrose|

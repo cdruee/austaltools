@@ -102,6 +102,13 @@ windfield
    :undoc-members:
    :member-order: groupwise
 
+windprofile
+-----------
+.. automodule:: austaltools.windprofile
+   :members:
+   :undoc-members:
+   :member-order: groupwise
+
 windrose
 ---------
 .. automodule:: austaltools.windrose
