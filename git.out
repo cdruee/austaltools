@@ -1,9 +1,3 @@
-Auto-merging austaltools/_geo.py
-Auto-merging austaltools/_tools.py
-Auto-merging austaltools/command_line.py
-Auto-merging austaltools/transform.py
-Auto-merging austaltools/windfield.py
-Auto-merging docs/api_commands.rst
-Auto-merging docs/austaltools.rst
+Auto-merging austaltools/windrose.py
 Automatic merge went well; stopped before committing as requested
 Squash commit -- not updating HEAD
