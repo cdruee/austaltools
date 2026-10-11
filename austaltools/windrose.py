@@ -1,11 +1,16 @@
 #!/bin/env python3
 # -*- coding: utf-8 -*-
 """
-This module ...
+This module plots wind roses.
+
+The functions :func:`windrose_histogram` and :func:`plot_windrose`
+can also be used by other code, :func:`main` implements the
+command ``windrose``.
 """
 import logging
 import os
 import sys
+from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -34,12 +39,80 @@ STAB = 'stability'
 SEAS = 'halfyear'
 QUAD = 'season'
 
+SCALES = [BEAUF, MPERS, QUANT, STAB, SEAS, QUAD]
+""" all known classification scales """
+
+STYLES = ['default', 'star', 'step', 'ring']
+""" all known plot styles """
+
+UNITS = ['hours', 'percent']
+""" units of the radial axis """
+
 DEFAULT_STYLE = 'default'
 """ default plot style """
 DEFAULT_SECTORS = '12'
 """ default number of sectors to plot """
 DEFAULT_SCALE = BEAUF
 """ default classification scale """
+DEFAULT_UNIT = 'hours'
+""" default unit of the radial axis """
+
+DEFAULT_CMAPS = {
+    'default': 'Paired',
+    'star': 'Pastel1',
+    'step': 'Set1',
+    'ring': None,  # matplotlib color cycle
+}
+""" default colormap for each plot style """
+
+STAB_CMAP = 'RdYlBu_r'
+""" default colormap for scale ``stability``
+(class I = very stable = blue ... class V = very unstable = red) """
+
+# -------------------------------------------------------------------------
+
+
+class RoseHistogram(NamedTuple):
+    """
+    Wind rose histogram as returned by :func:`windrose_histogram`.
+    """
+    hist: np.ndarray
+    """ number of hours, shape (sectors, classes) """
+    labels: list
+    """ label of each class """
+    calm: int
+    """ number of calm hours (not contained in `hist`) """
+    total: int
+    """ number of hours with valid wind data (including calms) """
+    scale: str
+    """ classification scale used """
+
+    @property
+    def sectors(self) -> int:
+        """ number of direction sectors """
+        return int(np.shape(self.hist)[0])
+
+    @property
+    def borders(self) -> list[float]:
+        """ direction boundaries of the sectors in degrees
+        (``sectors + 1`` values from 0 to 360) """
+        return [float(x * 360. / float(self.sectors))
+                for x in range(self.sectors + 1)]
+
+# -------------------------------------------------------------------------
+
+
+def _colors(cmap: str, n: int) -> list:
+    """
+    Get (at least) `n` colors from colormap `cmap`.
+    Qualitative colormaps (listed, up to 20 colors) are used color
+    by color if they contain enough colors, otherwise the colormap
+    is sampled evenly.
+    """
+    cm = mpl.colormaps[cmap]
+    if hasattr(cm, 'colors') and n <= len(cm.colors) <= 20:
+        return cm.colors
+    return [cm(x) for x in np.linspace(0.05, 0.95, n)]
 
 # -------------------------------------------------------------------------
 
@@ -65,6 +138,8 @@ def main(args):
         'ring'. Defaults to ``DEFAULT_STYLE`` if missing or ``None``.
       - ``colormap``: name of colormap to use. The default depends on
         ``style``; defaults to ``None`` if missing.
+      - ``unit``: unit of the radial axis, one of ``UNITS``.
+        Defaults to ``DEFAULT_UNIT`` if missing or ``None``.
       - ``plot``: The plot file name. Defaults to 'windrose.png' if
         missing or ``None``.
 
@@ -89,6 +164,63 @@ def main(args):
         conf = _tools.get_austxt(_tools.find_austxt(working_dir))
         az = _windutil.load_weather(working_dir, conf=conf)
 
+    rose = windrose_histogram(az, scale=args.get('scale', None),
+                              sectors=args.get('sectors', None))
+
+    style = args.get('style', None)
+    if style is None:
+        style = DEFAULT_STYLE
+    logger.info(f"using plot style: {style}")
+    cmap = args.get('colormap', None)
+    logger.info(f"user-selected colorscale: {cmap}")
+
+    mpl.rcParams.update({'font.size': 16})
+    fig = plt.figure(figsize=(11, 8))
+    ax = fig.add_subplot(projection='polar')
+    plot_windrose(ax, rose, style=style, cmap=cmap,
+                  unit=args.get('unit', None))
+    # save space
+    fig.tight_layout()
+
+    if plotfile == "__show__":
+        logger.info('showing plot')
+        plt.show()
+    else:
+        if os.path.sep in plotfile:
+            outname = plotfile
+        else:
+            outname = os.path.join(working_dir, plotfile)
+        if not outname.endswith('.png'):
+            outname = outname + '.png'
+        logger.info('writing plot: %s' % outname)
+        plt.savefig(outname, dpi=180)
+
+# -------------------------------------------------------------------------
+
+
+def windrose_histogram(az: pd.DataFrame, scale: str | None = None,
+                       sectors: int | str | None = None
+                       ) -> RoseHistogram:
+    """
+    Sort wind data into direction sectors and classes.
+
+    :param az: weather data with columns ``FF`` (wind speed in m/s),
+      ``DD`` (wind direction in degrees), ``KM`` (stability class
+      1...6) and the time as index, as returned by
+      :func:`austaltools._windutil.load_weather`. Hours with
+      ``FF`` and ``DD`` both 0 are calms and are not sorted
+      into the histogram.
+    :type az: pandas.DataFrame
+    :param scale: how to classify the values, one of :data:`SCALES`.
+      Defaults to :data:`DEFAULT_SCALE` if ``None``.
+    :type scale: str | None
+    :param sectors: number of sectors to plot. Defaults to
+      :data:`DEFAULT_SECTORS` if ``None``.
+    :type sectors: int | str | None
+    :return: histogram
+    :rtype: RoseHistogram
+    :raises ValueError: If ``scale`` is not a recognised value.
+    """
     ff = az['FF'].mask((az['FF'] == 0) & (az['DD'] == 0), np.nan)
     dd = az['DD'].mask((az['FF'] == 0) & (az['DD'] == 0), np.nan)
     ak = az['KM']
@@ -98,11 +230,9 @@ def main(args):
     # ak0 is zero-based so it can be used as field index
     ak0 = [int(x) - 1 for x in ak]
     #akstr = _dispersion.KM2021.name(int(ak))
-    scale = args.get('scale', None)
     if scale is None:
         scale = DEFAULT_SCALE
     logger.info(f"using scale {scale}")
-    sectors = args.get('sectors', None)
     if sectors is None:
         sectors = DEFAULT_SECTORS
     sectors = int(sectors)
@@ -134,7 +264,7 @@ def main(args):
     elif scale == STAB:
         r_bnds = [0. + i for i in range(7)]
         labels = [_dispersion.KM2021.num2name(j+1) for j in range(6)]
-        hist,xx,yy = np.histogram2d(dd,ff, bins=[d_bnds, r_bnds])
+        hist,xx,yy = np.histogram2d(dd,ak0, bins=[d_bnds, r_bnds])
     elif scale in [SEAS, QUAD]:
         if scale == SEAS:
             r_bnds = [0., 1., 2.]
@@ -152,31 +282,72 @@ def main(args):
         sys.tracebacklimit=0
         raise ValueError(f"unkonwn scale `{scale}`")
 
+    calm = int(((az['FF'] == 0) & (az['DD'] == 0)).sum())
+    total = int((az['FF'].notna() & az['DD'].notna()).sum())
+
+    return RoseHistogram(hist=hist, labels=labels, calm=calm,
+                         total=total, scale=scale)
+
+# -------------------------------------------------------------------------
+
+
+def plot_windrose(ax, rose: RoseHistogram,
+                  style: str | None = None,
+                  cmap: str | None = None,
+                  unit: str | None = None,
+                  legend: bool = True):
+    """
+    Draw a wind rose into a polar axes.
+
+    :param ax: polar axes to draw into
+      (e.g. ``fig.add_subplot(projection='polar')``)
+    :type ax: matplotlib.projections.polar.PolarAxes
+    :param rose: histogram as returned by :func:`windrose_histogram`
+    :type rose: RoseHistogram
+    :param style: plot style, one of :data:`STYLES`.
+      Defaults to :data:`DEFAULT_STYLE` if ``None``.
+    :type style: str | None
+    :param cmap: name of colormap to use. The default depends on
+      `style` (see :data:`DEFAULT_CMAPS`) and is :data:`STAB_CMAP`
+      for scale ``stability``. Not used by style ``ring``.
+    :type cmap: str | None
+    :param unit: unit of the radial axis, one of :data:`UNITS`.
+      ``percent`` is relative to all hours with valid wind data,
+      including calms. Defaults to :data:`DEFAULT_UNIT` if ``None``.
+    :type unit: str | None
+    :param legend: if a legend is added
+    :type legend: bool
+    :return: the axes
+    """
+    hist = rose.hist
+    xx = rose.borders
+    labels = rose.labels
+    sectors = rose.sectors
+    if unit is None:
+        unit = DEFAULT_UNIT
+    if unit == 'percent':
+        hist = hist / float(rose.total) * 100.
+
     xmid = [(xx[i] + xx[i+1]) * np.pi / 360. for i in range(len(xx) - 1)]
     nxx, nyy = np.shape(hist)
 
-    style = args.get('style', None)
     if style is None:
         style = DEFAULT_STYLE
-    logger.info(f"using plot style: {style}")
-    cmap = args.get('colormap', None)
-    logger.info(f"user-selected colorscale: {cmap}")
+    if cmap is None and rose.scale == STAB:
+        cmap = STAB_CMAP
 
-    mpl.rcParams.update({'font.size': 16})
-    fig = plt.figure(figsize=(11, 8))
-    ax = fig.add_subplot(projection='polar')
     # display degrees clockwise from north
     ax.set_theta_zero_location('N')
     ax.set_theta_direction(-1)
 
     if style == 'default':
         # default colors
-        cmap = 'Paired' if cmap is None else cmap
+        cmap = DEFAULT_CMAPS[style] if cmap is None else cmap
         # sum up histogram classes for each sector
         bottom = [0.] * sectors
         for cls in range(nyy):
             ax.bar(xmid, hist[:, cls], bottom=bottom,
-                   color=mpl.colormaps[cmap].colors[cls],
+                   color=_colors(cmap, nyy)[cls],
                    width=0.8 * 2. * np.pi / float(sectors),
                    edgecolor='black',
                    label=labels[cls])
@@ -190,11 +361,11 @@ def main(args):
         nyy = np.shape(hist)[1]
         stacks = [hist[:,j] for j in range(nyy)]
         # default colors
-        cmap = 'Pastel1' if cmap is None else cmap
+        cmap = DEFAULT_CMAPS[style] if cmap is None else cmap
         # plot
         ax.stackplot(
             xmid, *stacks,
-            colors=mpl.colormaps[cmap].colors,
+            colors=_colors(cmap, nyy),
             linestyle='-',
             edgecolor='black',
             linewidth=0.75,
@@ -205,16 +376,15 @@ def main(args):
         hist = np.vstack([hist, hist[0,:]])
         stacks = [hist[:,j] for j in range(nyy)]
         # default colors
-        cmap = 'Set1' if cmap is None else cmap
+        cmap = DEFAULT_CMAPS[style] if cmap is None else cmap
         # repeat last element before first avoid gap
         # between 0° and the first step
         xs = np.array([0, *xx[1:], 360.])
-        ss = [[stacks[-1][j], *stacks[:][j]] for j in range(nyy)]
+        ss = [[stacks[j][0], *stacks[j]] for j in range(nyy)]
         # plot
-        print (len(xs), len(ss), xs, ss)
         ax.stackplot(
             np.deg2rad(xs), *ss, step='pre',
-            colors=mpl.colormaps[cmap].colors,
+            colors=_colors(cmap, nyy),
             linestyle='-',
             edgecolor='black',
             linewidth=0.75,
@@ -227,25 +397,15 @@ def main(args):
         # plot
         for i,stack in enumerate(stacks):
             ax.plot(np.deg2rad(xx), stack, linewidth=2., label=labels[i])
-    # place legend (lower left corner at outer endhge at angle `angl`
-    langl = np.deg2rad(90)
-    ax.legend(loc="lower left",
-              bbox_to_anchor=(.5 + np.sin(langl)/2, .5 + np.cos(langl)/2))
-    # save space
-    fig.tight_layout()
-
-    if plotfile == "__show__":
-        logger.info('showing plot')
-        plt.show()
-    else:
-        if os.path.sep in plotfile:
-            outname = plotfile
-        else:
-            outname = os.path.join(working_dir, plotfile)
-        if not outname.endswith('.png'):
-            outname = outname + '.png'
-        logger.info('writing plot: %s' % outname)
-        plt.savefig(outname, dpi=180)
+    if unit == 'percent':
+        ax.yaxis.set_major_formatter(
+            mpl.ticker.FuncFormatter(lambda v, _: f"{v:g} %"))
+    if legend:
+        # place legend (lower left corner at outer endhge at angle `angl`
+        langl = np.deg2rad(90)
+        ax.legend(loc="lower left",
+                  bbox_to_anchor=(.5 + np.sin(langl)/2, .5 + np.cos(langl)/2))
+    return ax
 
 # ----------------------------------------------------
 
@@ -258,7 +418,7 @@ def add_options(subparsers):
     )
     pars_wrs.add_argument('-k', '--kind',
                           dest='style',
-                          choices=['default', 'star', 'step', 'ring'],
+                          choices=STYLES,
                           default=DEFAULT_STYLE,
                           help='style of wind field plot [%(default)s])]')
     pars_wrs.add_argument('-n', '--sectors',
@@ -267,7 +427,7 @@ def add_options(subparsers):
                           help='number of sectors to plot [%(default)s])]')
     pars_wrs.add_argument('-s', '--scale',
                           dest='scale',
-                          choices=[BEAUF, MPERS, QUANT, STAB, SEAS, QUAD],
+                          choices=SCALES,
                           default=DEFAULT_SCALE,
                           help='How to classify the values '
                                '[%(default)s]:\n' +
@@ -284,6 +444,13 @@ def add_options(subparsers):
                                ('  - `%s`: ' % QUAD) +
                                 'meteorological season\n',
                           )
+    pars_wrs.add_argument('-u', '--unit',
+                          dest='unit',
+                          choices=UNITS,
+                          default=DEFAULT_UNIT,
+                          help='unit of the radial axis. `percent` '
+                               'is relative to all hours with valid '
+                               'wind data [%(default)s]')
     pars_wrs.add_argument('-c', '--colormap',
                          default=None,
                          help='name of colormap to use. '
