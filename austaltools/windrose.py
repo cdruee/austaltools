@@ -205,8 +205,10 @@ def windrose_histogram(az: pd.DataFrame, scale: str | None = None,
     Sort wind data into direction sectors and classes.
 
     :param az: weather data with columns ``FF`` (wind speed in m/s),
-      ``DD`` (wind direction in degrees), ``KM`` (stability class
-      1...6) and the time as index, as returned by
+      ``DD`` (wind direction in degrees), optionally ``KM``
+      (stability class 1...6; treated as all 0 if missing, which
+      leaves the histogram for scale ``stability`` empty),
+      and the time as index, as returned by
       :func:`austaltools._windutil.load_weather`. Hours with
       ``FF`` and ``DD`` both 0 are calms and are not sorted
       into the histogram.
@@ -223,7 +225,11 @@ def windrose_histogram(az: pd.DataFrame, scale: str | None = None,
     """
     ff = az['FF'].mask((az['FF'] == 0) & (az['DD'] == 0), np.nan)
     dd = az['DD'].mask((az['FF'] == 0) & (az['DD'] == 0), np.nan)
-    ak = az['KM']
+    if 'KM' in az.columns:
+        ak = az['KM']
+    else:
+        # no stability classes given: treat as all 0
+        ak = pd.Series(0, index=az.index)
     mo = pd.to_datetime(az.index).month
 
     # AK (ak) in file and command line is 1-based,
@@ -273,8 +279,9 @@ def windrose_histogram(az: pd.DataFrame, scale: str | None = None,
             hist, xx, yy = np.histogram2d(dd, seas, bins=[d_bnds, r_bnds])
         elif scale == QUAD:
             r_bnds = [0., 1., 2., 3., 4.]
-            labels = ['Spring', 'Summe', 'Fall', 'Winte']
-            seas = [float((x - 4) % 12) / 3.  for x in mo]
+            # meteorological seasons: DJF, MAM, JJA, SON
+            labels = ['Winter', 'Spring', 'Summer', 'Fall']
+            seas = [float((x % 12) // 3)  for x in mo]
             hist, xx, yy = np.histogram2d(dd, seas, bins=[d_bnds, r_bnds])
         else:
             raise ValueError(f"scale out of range: {scale}")
